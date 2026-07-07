@@ -27,7 +27,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PhoneTestoAudioProcessor::cr
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { outputParamId, 1 }, "Output",
-        juce::NormalisableRange<float> (-24.0f, 24.0f), 0.0f, "dB"));
+        juce::NormalisableRange<float> (0.0f, 100.0f), 70.0f, "%"));
 
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID { monoParamId, 1 }, "Mono Sum", false));
@@ -148,8 +148,8 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     }
 
     const float mix = apvts.getRawParameterValue (mixParamId)->load() / 100.0f;
-    const float outputGainDb = apvts.getRawParameterValue (outputParamId)->load();
-    const float outputGain = juce::Decibels::decibelsToGain (outputGainDb);
+    // Output is a phone-style 0-100% volume control (100% = unity), not a dB trim.
+    const float outputGain = apvts.getRawParameterValue (outputParamId)->load() / 100.0f;
 
     if (! bypassed && mix < 1.0f)
     {

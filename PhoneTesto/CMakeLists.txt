@@ -50,8 +50,7 @@ target_sources(PhoneTesto
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/FloatingDeviceView2D.cpp
-        Source/FloatingDeviceView3D.cpp
+        Source/PhoneUILookAndFeel.cpp
 )
 
 target_compile_definitions(PhoneTesto
@@ -65,7 +64,6 @@ target_link_libraries(PhoneTesto
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
-        juce::juce_opengl
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
