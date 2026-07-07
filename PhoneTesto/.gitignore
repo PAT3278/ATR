@@ -1,0 +1,7 @@
+build/
+*.o
+*.a
+*.vst3
+*.component
+*.aaxplugin
+.DS_Store
