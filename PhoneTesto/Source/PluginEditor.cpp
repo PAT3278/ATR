@@ -86,7 +86,10 @@ void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
     const auto& profile = profiles[(size_t) juce::jlimit (0, (int) profiles.size() - 1, deviceIndex)];
 
     accentColour = juce::Colour (profile.accentColor);
+    currentChrome = profile.chrome;
     mixLnf.setAccentColour (accentColour);
+
+    resized(); // bezel proportions differ by chrome style (e.g. SE's thicker bezels)
     repaint();
 }
 
@@ -124,23 +127,74 @@ void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
 
     // screen
     g.setColour (juce::Colour (0xff05060a));
-    g.fillRoundedRectangle (screenBounds, corner * 0.55f);
+    g.fillRoundedRectangle (screenBounds, corner * 0.5f);
     g.setColour (juce::Colours::white.withAlpha (0.06f));
-    g.drawRoundedRectangle (screenBounds, corner * 0.55f, 1.0f);
+    g.drawRoundedRectangle (screenBounds, corner * 0.5f, 1.0f);
 
-    // camera notch
-    const float notchW = body.getWidth() * 0.24f;
-    auto notch = juce::Rectangle<float> (notchW, 7.0f)
-                     .withCentre ({ body.getCentreX(), body.getY() + 16.0f });
-    g.setColour (juce::Colours::black);
-    g.fillRoundedRectangle (notch, 3.5f);
+    // top chrome: real iPhones vary here -- the SE has no notch/island at all,
+    // 11/13-14 have a notch cut into the top edge (11's noticeably wider),
+    // 15/16 Pro have a Dynamic Island that floats clear of the top edge.
+    switch (currentChrome)
+    {
+        case PhoneChromeStyle::notchWide:
+        case PhoneChromeStyle::notchNarrow:
+        {
+            const float widthScale = (currentChrome == PhoneChromeStyle::notchWide) ? 0.34f : 0.22f;
+            auto notch = juce::Rectangle<float> (body.getWidth() * widthScale, 9.0f)
+                             .withCentre ({ body.getCentreX(), screenBounds.getY() + 1.0f });
+            g.setColour (juce::Colours::black);
+            g.fillRoundedRectangle (notch, 4.5f);
+            break;
+        }
 
-    // home indicator
-    const float homeW = body.getWidth() * 0.28f;
-    auto home = juce::Rectangle<float> (homeW, 4.0f)
-                    .withCentre ({ body.getCentreX(), body.getBottom() - 9.0f });
-    g.setColour (juce::Colours::white.withAlpha (0.35f));
-    g.fillRoundedRectangle (home, 2.0f);
+        case PhoneChromeStyle::dynamicIsland:
+        {
+            auto island = juce::Rectangle<float> (body.getWidth() * 0.17f, 8.0f)
+                              .withCentre ({ body.getCentreX(), screenBounds.getY() + 14.0f });
+            g.setColour (juce::Colours::black);
+            g.fillRoundedRectangle (island, island.getHeight() * 0.5f);
+            break;
+        }
+
+        case PhoneChromeStyle::plain:
+        {
+            auto dot = juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ body.getCentreX(), body.getY() + 16.0f });
+            g.setColour (juce::Colours::black.withAlpha (0.7f));
+            g.fillEllipse (dot);
+            break;
+        }
+
+        case PhoneChromeStyle::homeButton:
+        {
+            // SE: no notch/island -- just a small camera dot in the thick top bezel
+            auto dot = juce::Rectangle<float> (5.0f, 5.0f)
+                           .withCentre ({ body.getCentreX(), (body.getY() + screenBounds.getY()) * 0.5f });
+            g.setColour (juce::Colours::black.withAlpha (0.6f));
+            g.fillEllipse (dot);
+            break;
+        }
+    }
+
+    // bottom chrome: gesture home-indicator bar on Face ID phones, a physical
+    // Touch ID button in the SE's thick bottom bezel
+    if (currentChrome == PhoneChromeStyle::homeButton)
+    {
+        const float buttonD = juce::jmin (body.getWidth() * 0.16f, 46.0f);
+        auto buttonBounds = juce::Rectangle<float> (buttonD, buttonD)
+                                 .withCentre ({ body.getCentreX(), (screenBounds.getBottom() + body.getBottom()) * 0.5f });
+        g.setColour (juce::Colours::black.withAlpha (0.3f));
+        g.drawEllipse (buttonBounds, 1.5f);
+        g.setColour (juce::Colours::white.withAlpha (0.12f));
+        g.fillEllipse (buttonBounds.reduced (2.0f));
+    }
+    else
+    {
+        const float homeW = body.getWidth() * 0.28f;
+        auto home = juce::Rectangle<float> (homeW, 4.0f)
+                        .withCentre ({ body.getCentreX(), body.getBottom() - 9.0f });
+        g.setColour (juce::Colours::white.withAlpha (0.35f));
+        g.fillRoundedRectangle (home, 2.0f);
+    }
 }
 
 void PhoneTestoAudioProcessorEditor::resized()
@@ -153,16 +207,28 @@ void PhoneTestoAudioProcessorEditor::resized()
     phoneBodyBounds = full.reduced (14.0f, 6.0f);
     phoneBodyBounds.removeFromBottom (14.0f);
 
+    // the SE's Touch ID design has much thicker bezels than the notch/island phones
+    const bool hasHomeButton = (currentChrome == PhoneChromeStyle::homeButton);
+
     screenBounds = phoneBodyBounds.reduced (14.0f);
-    screenBounds.removeFromTop (28.0f);
-    screenBounds.removeFromBottom (20.0f);
+    screenBounds.removeFromTop (hasHomeButton ? 30.0f : 26.0f);
+    screenBounds.removeFromBottom (hasHomeButton ? 46.0f : 20.0f);
 
     auto content = screenBounds.toNearestInt();
 
-    auto deviceRow = content.removeFromTop (30);
-    deviceBox.setBounds (deviceRow.reduced (10, 3));
+    // Header row: device picker on the left, volume HUD pinned to the right.
+    // Keeping the HUD confined to this fixed-height row (rather than free-
+    // floating over the whole screen) is what stops it overlapping the mix
+    // slider below.
+    auto headerRow = content.removeFromTop (128);
+    auto hudColumn = headerRow.removeFromRight (32);
+    outputHudSlider.setBounds (hudColumn.reduced (1, 4));
 
-    content.removeFromTop (14);
+    headerRow.removeFromRight (8);
+    auto deviceRow = headerRow.removeFromTop (30);
+    deviceBox.setBounds (deviceRow.reduced (2, 3));
+
+    content.removeFromTop (16);
 
     auto bottomRow = content.removeFromBottom (36);
     monoButton.setBounds (bottomRow.removeFromLeft (bottomRow.getWidth() / 2).reduced (8, 4));
@@ -176,12 +242,6 @@ void PhoneTestoAudioProcessorEditor::resized()
     content.removeFromTop (10);
     auto mixSliderRow = content.removeFromTop (34);
     mixSlider.setBounds (mixSliderRow.reduced (6, 0));
-
-    // volume HUD floats over the top-right of the screen, like the real iOS overlay
-    juce::Rectangle<int> hud (0, 0, 30, 118);
-    hud.setPosition (screenBounds.toNearestInt().getRight() - 30 - 10,
-                      screenBounds.toNearestInt().getY() + 10);
-    outputHudSlider.setBounds (hud);
 }
 
 } // namespace phonetesto

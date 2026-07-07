@@ -42,6 +42,7 @@ private:
 
     juce::Rectangle<float> phoneBodyBounds, screenBounds;
     juce::Colour accentColour { 0xff2d3a4a };
+    PhoneChromeStyle currentChrome = PhoneChromeStyle::notchNarrow;
     int lastDeviceIndex = -1;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
