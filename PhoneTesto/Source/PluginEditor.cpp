@@ -11,6 +11,19 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     titleLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (titleLabel);
 
+    addChildComponent (preview2D);
+    addChildComponent (preview3D);
+
+    view2DButton.setClickingTogglesState (true);
+    view3DButton.setClickingTogglesState (true);
+    view2DButton.setRadioGroupId (1001, juce::dontSendNotification);
+    view3DButton.setRadioGroupId (1001, juce::dontSendNotification);
+    view2DButton.onClick = [this] { setPreviewMode (false); };
+    view3DButton.onClick = [this] { setPreviewMode (true); };
+    addAndMakeVisible (view2DButton);
+    addAndMakeVisible (view3DButton);
+    setPreviewMode (false);
+
     deviceLabel.setText ("Device", juce::dontSendNotification);
     addAndMakeVisible (deviceLabel);
 
@@ -18,6 +31,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     addAndMakeVisible (deviceBox);
     deviceAttachment = std::make_unique<ComboBoxAttachment> (
         processor.apvts, PhoneTestoAudioProcessor::deviceParamId, deviceBox);
+    deviceBox.onChange = [this] { updateDevicePreview(); };
 
     mixLabel.setText ("Mix", juce::dontSendNotification);
     addAndMakeVisible (mixLabel);
@@ -43,10 +57,47 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     bypassAttachment = std::make_unique<ButtonAttachment> (
         processor.apvts, PhoneTestoAudioProcessor::bypassParamId, bypassButton);
 
-    setSize (420, 260);
+    updateDevicePreview();
+    startTimerHz (10); // catches host-automated device changes that bypass onChange
+
+    setSize (420, 420);
 }
 
-PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor() = default;
+PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
+{
+    stopTimer();
+}
+
+void PhoneTestoAudioProcessorEditor::timerCallback()
+{
+    updateDevicePreview();
+}
+
+void PhoneTestoAudioProcessorEditor::setPreviewMode (bool use3D)
+{
+    showing3D = use3D;
+    preview2D.setVisible (! use3D);
+    preview3D.setVisible (use3D);
+    view2DButton.setToggleState (! use3D, juce::dontSendNotification);
+    view3DButton.setToggleState (use3D, juce::dontSendNotification);
+}
+
+void PhoneTestoAudioProcessorEditor::updateDevicePreview()
+{
+    const int deviceIndex = (int) processor.apvts.getRawParameterValue (PhoneTestoAudioProcessor::deviceParamId)->load();
+
+    if (deviceIndex == lastPreviewDeviceIndex)
+        return;
+
+    lastPreviewDeviceIndex = deviceIndex;
+
+    const auto& profiles = getSpeakerProfiles();
+    const auto& profile = profiles[(size_t) juce::jlimit (0, (int) profiles.size() - 1, deviceIndex)];
+    const auto accent = juce::Colour (profile.accentColor);
+
+    preview2D.setDevice (profile.shape, accent);
+    preview3D.setDevice (profile.shape, accent);
+}
 
 void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
 {
@@ -62,6 +113,16 @@ void PhoneTestoAudioProcessorEditor::resized()
 
     titleLabel.setBounds (area.removeFromTop (32));
     area.removeFromTop (8);
+
+    auto previewArea = area.removeFromTop (150);
+    auto toggleColumn = previewArea.removeFromRight (44);
+    view2DButton.setBounds (toggleColumn.removeFromTop (24));
+    toggleColumn.removeFromTop (4);
+    view3DButton.setBounds (toggleColumn.removeFromTop (24));
+    preview2D.setBounds (previewArea);
+    preview3D.setBounds (previewArea);
+
+    area.removeFromTop (12);
 
     auto deviceRow = area.removeFromTop (28);
     deviceLabel.setBounds (deviceRow.removeFromLeft (70));

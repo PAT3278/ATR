@@ -2,11 +2,14 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include "FloatingDeviceView2D.h"
+#include "FloatingDeviceView3D.h"
 
 namespace phonetesto
 {
 
-class PhoneTestoAudioProcessorEditor : public juce::AudioProcessorEditor
+class PhoneTestoAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                        private juce::Timer
 {
 public:
     explicit PhoneTestoAudioProcessorEditor (PhoneTestoAudioProcessor&);
@@ -16,9 +19,20 @@ public:
     void resized() override;
 
 private:
+    void timerCallback() override;
+    void updateDevicePreview();
+    void setPreviewMode (bool use3D);
+
     PhoneTestoAudioProcessor& processor;
 
     juce::Label titleLabel;
+
+    FloatingDeviceView2D preview2D;
+    FloatingDeviceView3D preview3D;
+    juce::TextButton view2DButton { "2D" };
+    juce::TextButton view3DButton { "3D" };
+    bool showing3D = false;
+    int lastPreviewDeviceIndex = -1;
 
     juce::Label deviceLabel;
     juce::ComboBox deviceBox;

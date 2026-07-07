@@ -19,6 +19,12 @@ applies that device's approximate speaker coloration in real time:
   toggle this to sum L/R before the speaker chain.
 - **Mix** and **Output** — blend wet/dry and compensate output level.
 
+The editor shows a floating device preview above the controls (bobbing
+silhouette + drop shadow) that updates its shape/colour with the selected
+device. A **2D / 3D** toggle in the top-right of the preview switches
+between a flat illustrated silhouette and a spinning OpenGL model — both
+are stylised, not exact reproductions of any real product's geometry.
+
 This is **not** a calibrated impulse-response model — the filter/drive
 values in `Source/SpeakerProfiles.h` are hand-tuned approximations. If real
 measured impulse responses become available (device + mic + calibrated

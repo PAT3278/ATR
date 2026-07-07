@@ -2,11 +2,22 @@
 
 #include <array>
 #include <juce_core/juce_core.h>
+#include <juce_graphics/juce_graphics.h>
 
 namespace phonetesto
 {
 
-/** Static description of how a given device's small speaker colours sound.
+/** Broad visual/physical category used to pick a silhouette or 3D shape
+    for the device preview -- a slim slab for phones/laptops, a bud+stem
+    shape for earphones. */
+enum class DeviceShape
+{
+    phone = 0,
+    laptop,
+    earphone
+};
+
+/** Static description of how a given device's small driver colours sound.
     Values are hand-tuned approximations of measured small-driver behaviour
     (aggressive bass roll-off, a mid/high resonance bump from the enclosure,
     a high-frequency roll-off, and a drive amount standing in for the
@@ -24,6 +35,9 @@ struct SpeakerProfile
 
     float driveAmount;   // 0 = clean, 1 = heavy saturation
     float makeupGainDb;  // compensates for level lost to filtering
+
+    DeviceShape shape;
+    juce::uint32 accentColor; // 0xAARRGGBB, used by the 2D/3D device preview
 };
 
 enum class SpeakerId
@@ -34,6 +48,7 @@ enum class SpeakerId
     iphone15,
     androidBudget,
     laptop,
+    earPodsWired,
 
     count
 };
@@ -41,13 +56,14 @@ enum class SpeakerId
 inline const std::array<SpeakerProfile, (size_t) SpeakerId::count>& getSpeakerProfiles()
 {
     static const std::array<SpeakerProfile, (size_t) SpeakerId::count> profiles { {
-        // name                  HP      peakHz  Q     peakDb  LP       drive  makeup
-        { "iPhone SE",            700.0f, 3500.0f, 1.8f,  4.5f,  9000.0f, 0.65f, 9.0f },
-        { "iPhone 11",             500.0f, 3000.0f, 1.6f,  3.5f, 11000.0f, 0.45f, 7.0f },
-        { "iPhone 13/14",          400.0f, 2800.0f, 1.5f,  2.5f, 12000.0f, 0.30f, 5.5f },
-        { "iPhone 15/16 Pro",      300.0f, 2500.0f, 1.4f,  2.0f, 13000.0f, 0.20f, 4.0f },
-        { "Android Budget",        850.0f, 3800.0f, 2.0f,  5.5f,  8000.0f, 0.80f, 10.5f },
-        { "Laptop Speakers",       200.0f, 2000.0f, 1.2f,  1.5f, 14000.0f, 0.15f, 3.0f },
+        // name                  HP      peakHz   Q     peakDb  LP        drive  makeup  shape                 accent
+        { "iPhone SE",            700.0f, 3500.0f, 1.8f,  4.5f,  9000.0f, 0.65f, 9.0f,  DeviceShape::phone,    0xffd0d3d9 },
+        { "iPhone 11",             500.0f, 3000.0f, 1.6f,  3.5f, 11000.0f, 0.45f, 7.0f,  DeviceShape::phone,    0xff2d3a4a },
+        { "iPhone 13/14",          400.0f, 2800.0f, 1.5f,  2.5f, 12000.0f, 0.30f, 5.5f,  DeviceShape::phone,    0xff394a3d },
+        { "iPhone 15/16 Pro",      300.0f, 2500.0f, 1.4f,  2.0f, 13000.0f, 0.20f, 4.0f,  DeviceShape::phone,    0xff4a4034 },
+        { "Android Budget",        850.0f, 3800.0f, 2.0f,  5.5f,  8000.0f, 0.80f, 10.5f, DeviceShape::phone,    0xff23262b },
+        { "Laptop Speakers",       200.0f, 2000.0f, 1.2f,  1.5f, 14000.0f, 0.15f, 3.0f,  DeviceShape::laptop,   0xff8a8f98 },
+        { "Apple EarPods (Wired)", 150.0f, 4500.0f, 1.3f,  3.0f, 16500.0f, 0.10f, 2.0f,  DeviceShape::earphone, 0xffe8e9ec },
     } };
     return profiles;
 }
