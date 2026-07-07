@@ -56,36 +56,43 @@ void MixSliderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, in
                                               float sliderPos, float /*minSliderPos*/, float /*maxSliderPos*/,
                                               const juce::Slider::SliderStyle, juce::Slider&)
 {
+    // Drawn as a vertical mixer-style fader: a rounded track filling from
+    // the bottom in the device's accent colour, with a wide horizontal cap
+    // marking the handle position (rather than a plain round thumb).
     juce::Rectangle<float> bounds ((float) x, (float) y, (float) width, (float) height);
-    const float corner = bounds.getHeight() * 0.5f;
+    const float trackWidth = juce::jmin (bounds.getWidth() * 0.34f, 14.0f);
+    auto track = bounds.withSizeKeepingCentre (trackWidth, bounds.getHeight());
+    const float corner = trackWidth * 0.5f;
 
     g.setColour (juce::Colours::black.withAlpha (0.30f));
-    g.fillRoundedRectangle (bounds, corner);
+    g.fillRoundedRectangle (track, corner);
 
-    const float fillRight = juce::jlimit (bounds.getX(), bounds.getRight(), sliderPos);
-    if (fillRight > bounds.getX())
+    const float fillTop = juce::jlimit (track.getY(), track.getBottom(), sliderPos);
+    if (fillTop < track.getBottom())
     {
-        auto fillBounds = bounds.withRight (fillRight);
+        auto fillBounds = track.withTop (fillTop);
         juce::ColourGradient grad (accentColour.brighter (0.3f), fillBounds.getX(), fillBounds.getY(),
-                                    accentColour.darker (0.1f), fillBounds.getRight(), fillBounds.getY(), false);
+                                    accentColour.darker (0.15f), fillBounds.getX(), fillBounds.getBottom(), false);
         g.setGradientFill (grad);
         g.fillRoundedRectangle (fillBounds, corner);
     }
 
     g.setColour (juce::Colours::white.withAlpha (0.10f));
-    g.drawRoundedRectangle (bounds.reduced (0.75f), corner, 1.0f);
+    g.drawRoundedRectangle (track.reduced (0.75f), corner, 1.0f);
 
-    const float thumbD = bounds.getHeight() * 0.86f;
-    juce::Rectangle<float> thumb (fillRight - thumbD * 0.5f, bounds.getCentreY() - thumbD * 0.5f, thumbD, thumbD);
-    thumb = thumb.constrainedWithin (bounds.expanded (thumbD * 0.5f, 0.0f));
+    // fader cap, wider than the track so it reads as a grabbable handle
+    const float capH = 11.0f;
+    auto cap = juce::Rectangle<float> (bounds.getWidth(), capH).withCentre ({ bounds.getCentreX(), sliderPos });
 
-    juce::DropShadow thumbShadow (juce::Colours::black.withAlpha (0.35f), 4, {});
-    juce::Path thumbPath;
-    thumbPath.addEllipse (thumb);
-    thumbShadow.drawForPath (g, thumbPath);
+    juce::DropShadow capShadow (juce::Colours::black.withAlpha (0.4f), 5, {});
+    juce::Path capPath;
+    capPath.addRoundedRectangle (cap, capH * 0.5f);
+    capShadow.drawForPath (g, capPath);
 
     g.setColour (juce::Colours::white);
-    g.fillEllipse (thumb);
+    g.fillRoundedRectangle (cap, capH * 0.5f);
+    g.setColour (accentColour.darker (0.2f));
+    g.fillRoundedRectangle (cap.withSizeKeepingCentre (cap.getWidth() * 0.4f, capH * 0.4f), capH * 0.2f);
 }
 
 } // namespace phonetesto

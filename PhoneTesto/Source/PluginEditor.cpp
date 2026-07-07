@@ -24,7 +24,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     mixValueLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
     addAndMakeVisible (mixValueLabel);
 
-    mixSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    mixSlider.setSliderStyle (juce::Slider::LinearVertical);
     mixSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
     mixSlider.setLookAndFeel (&mixLnf);
     addAndMakeVisible (mixSlider);
@@ -219,29 +219,35 @@ void PhoneTestoAudioProcessorEditor::resized()
     // Header row: device picker on the left, volume HUD pinned to the right.
     // Keeping the HUD confined to this fixed-height row (rather than free-
     // floating over the whole screen) is what stops it overlapping the mix
-    // slider below.
-    auto headerRow = content.removeFromTop (128);
-    auto hudColumn = headerRow.removeFromRight (32);
-    outputHudSlider.setBounds (hudColumn.reduced (1, 4));
+    // fader below.
+    auto headerRow = content.removeFromTop (134);
+    auto hudColumn = headerRow.removeFromRight (34);
+    outputHudSlider.setBounds (hudColumn.reduced (2, 8));
 
-    headerRow.removeFromRight (8);
-    auto deviceRow = headerRow.removeFromTop (30);
-    deviceBox.setBounds (deviceRow.reduced (2, 3));
+    headerRow.removeFromRight (14);
+    auto deviceRow = headerRow.removeFromTop (32);
+    deviceBox.setBounds (deviceRow.reduced (4, 4));
+
+    content.removeFromTop (14);
+
+    // bottom toggle row, with room around it so it doesn't crowd the edge
+    content.removeFromBottom (16);
+    auto bottomRow = content.removeFromBottom (40);
+    auto monoArea = bottomRow.removeFromLeft (bottomRow.getWidth() / 2);
+    monoButton.setBounds (monoArea.reduced (12, 6));
+    bypassButton.setBounds (bottomRow.reduced (12, 6));
+
+    content.removeFromBottom (20);
+
+    // mix label sits just above a vertical fader, which fills the remaining
+    // space -- matches the portrait layout better than a cramped horizontal bar
+    auto mixLabelRow = content.removeFromTop (26);
+    mixValueLabel.setBounds (mixLabelRow);
 
     content.removeFromTop (16);
 
-    auto bottomRow = content.removeFromBottom (36);
-    monoButton.setBounds (bottomRow.removeFromLeft (bottomRow.getWidth() / 2).reduced (8, 4));
-    bypassButton.setBounds (bottomRow.reduced (8, 4));
-
-    content.removeFromBottom (12);
-
-    auto mixLabelRow = content.removeFromTop (24);
-    mixValueLabel.setBounds (mixLabelRow);
-
-    content.removeFromTop (10);
-    auto mixSliderRow = content.removeFromTop (34);
-    mixSlider.setBounds (mixSliderRow.reduced (6, 0));
+    const int faderWidth = 70;
+    mixSlider.setBounds (content.withSizeKeepingCentre (faderWidth, content.getHeight()));
 }
 
 } // namespace phonetesto
