@@ -44,6 +44,7 @@ private:
     juce::Colour accentColour { 0xff2d3a4a };
     PhoneChromeStyle currentChrome = PhoneChromeStyle::notchNarrow;
     int lastDeviceIndex = -1;
+    double glowPhase = 0.0; // drives the slow pulsing neon glow
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;

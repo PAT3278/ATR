@@ -6,21 +6,25 @@ namespace phonetesto
 PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
+    const juce::String hudFontName = juce::Font::getDefaultMonospacedFontName();
+
     titleLabel.setText ("PhoneTesto", juce::dontSendNotification);
-    titleLabel.setFont (juce::Font (15.0f, juce::Font::bold));
+    titleLabel.setFont (juce::Font (hudFontName, 14.0f, juce::Font::bold));
     titleLabel.setJustificationType (juce::Justification::centred);
     titleLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.55f));
     addAndMakeVisible (titleLabel);
 
     deviceBox.addItemList (getSpeakerNames(), 1);
     deviceBox.setJustificationType (juce::Justification::centred);
+    deviceBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff05060a).withAlpha (0.7f));
+    deviceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white.withAlpha (0.9f));
     addAndMakeVisible (deviceBox);
     deviceAttachment = std::make_unique<ComboBoxAttachment> (
         processor.apvts, PhoneTestoAudioProcessor::deviceParamId, deviceBox);
     deviceBox.onChange = [this] { updateDeviceVisuals(); };
 
     mixValueLabel.setJustificationType (juce::Justification::centred);
-    mixValueLabel.setFont (juce::Font (14.0f, juce::Font::bold));
+    mixValueLabel.setFont (juce::Font (hudFontName, 14.0f, juce::Font::bold));
     mixValueLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
     addAndMakeVisible (mixValueLabel);
 
@@ -56,7 +60,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     mixValueLabel.setText ("MIX  " + juce::String ((int) std::round (mixSlider.getValue())) + "%",
                             juce::dontSendNotification);
     updateDeviceVisuals();
-    startTimerHz (8); // catches host-automated device changes that bypass onChange
+    startTimerHz (24); // drives the pulsing glow and catches host-automated device changes
 
     setSize (320, 640);
 }
@@ -70,7 +74,12 @@ PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
 
 void PhoneTestoAudioProcessorEditor::timerCallback()
 {
+    glowPhase += 0.045;
+    if (glowPhase > juce::MathConstants<double>::twoPi * 1000.0)
+        glowPhase = 0.0;
+
     updateDeviceVisuals();
+    repaint();
 }
 
 void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
@@ -88,6 +97,8 @@ void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
     accentColour = juce::Colour (profile.accentColor);
     currentChrome = profile.chrome;
     mixLnf.setAccentColour (accentColour);
+    deviceBox.setColour (juce::ComboBox::outlineColourId, accentColour.brighter (0.5f).withAlpha (0.6f));
+    deviceBox.setColour (juce::ComboBox::arrowColourId, accentColour.brighter (0.6f));
 
     resized(); // bezel proportions differ by chrome style (e.g. SE's thicker bezels)
     repaint();
@@ -106,10 +117,17 @@ void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
     g.fillEllipse (body.getCentreX() - shadowW * 0.5f, body.getBottom() + 6.0f, shadowW, 12.0f);
 
     // phone body
-    juce::DropShadow bodyShadow (juce::Colours::black.withAlpha (0.5f), 22, { 0, 8 });
     juce::Path bodyPath;
     bodyPath.addRoundedRectangle (body, corner);
+
+    juce::DropShadow bodyShadow (juce::Colours::black.withAlpha (0.5f), 22, { 0, 8 });
     bodyShadow.drawForPath (g, bodyPath);
+
+    // slow-pulsing neon glow for a bit of a futuristic edge
+    const float pulse = 0.5f + 0.5f * (float) std::sin (glowPhase);
+    auto glowColour = accentColour.brighter (0.7f).withAlpha (0.30f + 0.22f * pulse);
+    juce::DropShadow neonGlow (glowColour, (int) (14.0f + 8.0f * pulse), {});
+    neonGlow.drawForPath (g, bodyPath);
 
     juce::ColourGradient bodyGrad (accentColour.brighter (0.15f), body.getX(), body.getY(),
                                     accentColour.darker (0.55f), body.getX(), body.getBottom(), false);
@@ -128,8 +146,40 @@ void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
     // screen
     g.setColour (juce::Colour (0xff05060a));
     g.fillRoundedRectangle (screenBounds, corner * 0.5f);
+
+    // faint scanlines for a HUD/sci-fi readout feel
+    {
+        juce::Graphics::ScopedSaveState clipState (g);
+        g.reduceClipRegion (screenBounds.toNearestInt());
+        g.setColour (juce::Colours::white.withAlpha (0.028f));
+        for (float sy = screenBounds.getY(); sy < screenBounds.getBottom(); sy += 4.0f)
+            g.drawHorizontalLine ((int) sy, screenBounds.getX(), screenBounds.getRight());
+    }
+
     g.setColour (juce::Colours::white.withAlpha (0.06f));
     g.drawRoundedRectangle (screenBounds, corner * 0.5f, 1.0f);
+
+    // bright accent hairline + corner brackets, like a targeting HUD frame
+    const float glowPulse = 0.5f + 0.5f * (float) std::sin (glowPhase);
+    auto edgeGlow = accentColour.brighter (0.8f).withAlpha (0.35f + 0.2f * glowPulse);
+    g.setColour (edgeGlow);
+    g.drawRoundedRectangle (screenBounds.reduced (0.5f), corner * 0.5f, 1.2f);
+
+    const float cornerLen = 13.0f;
+    auto drawCorner = [&] (juce::Point<float> p, float dx, float dy)
+    {
+        juce::Path c;
+        c.startNewSubPath (p.x, p.y + dy);
+        c.lineTo (p.x, p.y);
+        c.lineTo (p.x + dx, p.y);
+        g.strokePath (c, juce::PathStrokeType (1.4f));
+    };
+
+    g.setColour (edgeGlow.withAlpha (0.7f));
+    drawCorner (screenBounds.getTopLeft(), cornerLen, cornerLen);
+    drawCorner ({ screenBounds.getRight(), screenBounds.getY() }, -cornerLen, cornerLen);
+    drawCorner (screenBounds.getBottomLeft(), cornerLen, -cornerLen);
+    drawCorner ({ screenBounds.getRight(), screenBounds.getBottom() }, -cornerLen, -cornerLen);
 
     // top chrome: real iPhones vary here -- the SE has no notch/island at all,
     // 11/13-14 have a notch cut into the top edge (11's noticeably wider),
@@ -225,6 +275,7 @@ void PhoneTestoAudioProcessorEditor::resized()
     outputHudSlider.setBounds (hudColumn.reduced (2, 8));
 
     headerRow.removeFromRight (14);
+    headerRow.removeFromTop (22); // nudge the preset picker down from the very top edge
     auto deviceRow = headerRow.removeFromTop (32);
     deviceBox.setBounds (deviceRow.reduced (4, 4));
 
