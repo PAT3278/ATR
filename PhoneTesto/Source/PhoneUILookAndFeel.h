@@ -5,20 +5,27 @@
 namespace phonetesto
 {
 
-/** Vertical slider styled like the iOS volume HUD: a tall rounded pill,
-    dark translucent track, white fill rising from the bottom, small
-    speaker glyph near the base. Used for the Output control. */
+/** Vertical slider styled like the iOS volume HUD, refined towards a
+    boutique-plugin "instrument panel" finish: a tall metallic pill, dark
+    recessed track, glowing fill rising from the bottom, small speaker
+    glyph near the base. Used for the Output control. */
 class VolumeHudLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
+    void setAccentColour (juce::Colour newColour) { accentColour = newColour; }
+
     void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
                             float sliderPos, float minSliderPos, float maxSliderPos,
                             const juce::Slider::SliderStyle, juce::Slider&) override;
+
+private:
+    juce::Colour accentColour { 0xff4fa3ff };
 };
 
-/** Horizontal slider styled as a flat "app" control living on the phone's
-    on-screen area: rounded track, accent-coloured fill from the left, no
-    JUCE-default thumb. Used for the Mix control. */
+/** Vertical mixer-fader-style slider embedded in the phone's "screen":
+    recessed metal track, glowing accent-coloured fill, a wide metallic cap
+    with a centre groove line standing in for a real fader handle. Used for
+    the Mix control. */
 class MixSliderLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
@@ -27,6 +34,22 @@ public:
     void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
                             float sliderPos, float minSliderPos, float maxSliderPos,
                             const juce::Slider::SliderStyle, juce::Slider&) override;
+
+private:
+    juce::Colour accentColour { 0xff4fa3ff };
+};
+
+/** Compact "lab equipment" toggle switch: a small glowing LED dot plus an
+    uppercase monospace caption, with a faint capsule outline -- used for
+    Mono Sum / Bypass instead of a default checkbox, to match the
+    instrument-panel look of the rest of the phone's screen. */
+class LabToggleLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    void setAccentColour (juce::Colour newColour) { accentColour = newColour; }
+
+    void drawToggleButton (juce::Graphics&, juce::ToggleButton&,
+                            bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
 private:
     juce::Colour accentColour { 0xff4fa3ff };
