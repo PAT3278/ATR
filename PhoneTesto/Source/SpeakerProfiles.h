@@ -55,7 +55,7 @@ enum class SpeakerId
     phone13,
     phone15,
     androidBudget,
-    androidStandard,
+    android,
     laptop,
     wiredBuds,
 
@@ -71,9 +71,9 @@ inline const std::array<SpeakerProfile, (size_t) SpeakerId::count>& getSpeakerPr
         { "Phone 13/14",           400.0f, 2800.0f, 1.5f,  2.5f, 12000.0f, 0.30f, 5.5f,  PhoneChromeStyle::notchNarrow,    0xff394a3d },
         { "Phone 15/16 Pro",       300.0f, 2500.0f, 1.4f,  2.0f, 13000.0f, 0.20f, 4.0f,  PhoneChromeStyle::dynamicIsland,  0xff4a4034 },
         { "Android Budget",        850.0f, 3800.0f, 2.0f,  5.5f,  8000.0f, 0.80f, 10.5f, PhoneChromeStyle::plain,          0xff23262b },
-        { "Android Standard",      450.0f, 3300.0f, 1.6f,  3.2f, 11500.0f, 0.38f, 6.5f,  PhoneChromeStyle::plain,          0xff2c4a3a },
+        { "Android",               450.0f, 3300.0f, 1.6f,  3.2f, 11500.0f, 0.38f, 6.5f,  PhoneChromeStyle::plain,          0xff2c4a3a },
         { "Laptop Speakers",       200.0f, 2000.0f, 1.2f,  1.5f, 14000.0f, 0.15f, 3.0f,  PhoneChromeStyle::plain,          0xff8a8f98 },
-        { "Apple Wired Buds",      150.0f, 4500.0f, 1.3f,  3.0f, 16500.0f, 0.10f, 2.0f,  PhoneChromeStyle::plain,          0xffe8e9ec },
+        { "Apple Buds Wired",      150.0f, 4500.0f, 1.3f,  3.0f, 16500.0f, 0.10f, 2.0f,  PhoneChromeStyle::plain,          0xffe8e9ec },
     } };
     return profiles;
 }
