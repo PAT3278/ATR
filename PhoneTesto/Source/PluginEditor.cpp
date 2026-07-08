@@ -14,10 +14,16 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     titleLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.55f));
     addAndMakeVisible (titleLabel);
 
+    presetCaptionLabel.setText ("PRESET", juce::dontSendNotification);
+    presetCaptionLabel.setJustificationType (juce::Justification::centredLeft);
+    presetCaptionLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
+    presetCaptionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
+    addAndMakeVisible (presetCaptionLabel);
+
     deviceBox.addItemList (getSpeakerNames(), 1);
     deviceBox.setJustificationType (juce::Justification::centred);
-    deviceBox.setColour (juce::ComboBox::backgroundColourId, juce::Colour (0xff05060a).withAlpha (0.7f));
-    deviceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white.withAlpha (0.9f));
+    deviceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white.withAlpha (0.92f));
+    deviceBox.setLookAndFeel (&presetLnf);
     addAndMakeVisible (deviceBox);
     deviceAttachment = std::make_unique<ComboBoxAttachment> (
         processor.apvts, PhoneTestoAudioProcessor::deviceParamId, deviceBox);
@@ -80,6 +86,7 @@ PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
     outputHudSlider.setLookAndFeel (nullptr);
     monoButton.setLookAndFeel (nullptr);
     bypassButton.setLookAndFeel (nullptr);
+    deviceBox.setLookAndFeel (nullptr);
 }
 
 void PhoneTestoAudioProcessorEditor::timerCallback()
@@ -109,8 +116,8 @@ void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
     mixLnf.setAccentColour (accentColour);
     volumeLnf.setAccentColour (accentColour);
     toggleLnf.setAccentColour (accentColour);
-    deviceBox.setColour (juce::ComboBox::outlineColourId, accentColour.brighter (0.5f).withAlpha (0.6f));
-    deviceBox.setColour (juce::ComboBox::arrowColourId, accentColour.brighter (0.6f));
+    presetLnf.setAccentColour (accentColour);
+    deviceBox.repaint();
 
     resized(); // bezel proportions differ by chrome style (e.g. SE's thicker bezels)
     repaint();
@@ -187,15 +194,49 @@ void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
     drawSideButton (body.getX() - 3.0f, body.getY() + body.getHeight() * 0.24f, 3.0f, body.getHeight() * 0.065f);
     drawSideButton (body.getRight(), body.getY() + body.getHeight() * 0.19f, 3.0f, body.getHeight() * 0.09f);
 
-    // screen
-    g.setColour (juce::Colour (0xff05060a));
-    g.fillRoundedRectangle (screenBounds, corner * 0.5f);
+    // screen -- an abstract blurred-blob "wallpaper" tinted from the
+    // selected device's accent colour, echoing a default lock-screen
+    // wallpaper rather than a flat panel
+    juce::Path screenPath;
+    screenPath.addRoundedRectangle (screenBounds, corner * 0.5f);
 
-    // faint scanlines for a HUD/sci-fi readout feel
     {
-        juce::Graphics::ScopedSaveState clipState (g);
-        g.reduceClipRegion (screenBounds.toNearestInt());
-        g.setColour (juce::Colours::white.withAlpha (0.026f));
+        juce::Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (screenPath);
+
+        g.setColour (juce::Colour (0xff05060a));
+        g.fillRect (screenBounds);
+
+        auto wallpaperBlob = [&] (juce::Point<float> blobCentre, float radius, juce::Colour colour, float alpha)
+        {
+            juce::ColourGradient grad (colour.withAlpha (alpha), blobCentre.x, blobCentre.y,
+                                        colour.withAlpha (0.0f), blobCentre.x, blobCentre.y + radius, true);
+            g.setGradientFill (grad);
+            g.fillEllipse (juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (blobCentre));
+        };
+
+        auto hueA = accentColour.withRotatedHue (0.06f).brighter (0.25f);
+        auto hueB = accentColour.withRotatedHue (-0.14f).brighter (0.05f);
+        auto hueC = accentColour.withRotatedHue (0.32f).brighter (0.15f);
+
+        wallpaperBlob ({ screenBounds.getX() + screenBounds.getWidth() * 0.22f, screenBounds.getY() + screenBounds.getHeight() * 0.18f },
+                       screenBounds.getWidth() * 0.62f, hueA, 0.6f);
+        wallpaperBlob ({ screenBounds.getRight() - screenBounds.getWidth() * 0.15f, screenBounds.getY() + screenBounds.getHeight() * 0.5f },
+                       screenBounds.getWidth() * 0.55f, hueB, 0.5f);
+        wallpaperBlob ({ screenBounds.getCentreX(), screenBounds.getBottom() - screenBounds.getHeight() * 0.1f },
+                       screenBounds.getWidth() * 0.68f, hueC, 0.5f);
+
+        // darken towards the edges so the controls drawn on top stay legible
+        const float legibilityRadius = juce::Point<float> (screenBounds.getWidth() * 0.5f, screenBounds.getHeight() * 0.5f)
+                                            .getDistanceFromOrigin() * 0.85f;
+        juce::ColourGradient legibility (juce::Colours::transparentBlack, screenBounds.getCentreX(), screenBounds.getCentreY(),
+                                          juce::Colours::black.withAlpha (0.55f),
+                                          screenBounds.getCentreX() + legibilityRadius, screenBounds.getCentreY(), true);
+        g.setGradientFill (legibility);
+        g.fillRect (screenBounds);
+
+        // faint scanlines for a HUD/sci-fi readout feel
+        g.setColour (juce::Colours::white.withAlpha (0.02f));
         for (float sy = screenBounds.getY(); sy < screenBounds.getBottom(); sy += 4.0f)
             g.drawHorizontalLine ((int) sy, screenBounds.getX(), screenBounds.getRight());
     }
@@ -317,9 +358,14 @@ void PhoneTestoAudioProcessorEditor::resized()
     outputCaptionLabel.setBounds (hudCaptionArea);
 
     headerRow.removeFromLeft (16);
-    headerRow.removeFromTop (26); // nudge the preset picker down from the very top edge
-    auto deviceRow = headerRow.removeFromTop (32);
-    deviceBox.setBounds (deviceRow.reduced (4, 4));
+
+    // preset caption + picker, vertically centred in the remaining header
+    // space so it balances against the taller HUD column beside it
+    constexpr int presetBlockHeight = 14 + 4 + 32;
+    auto presetBlock = headerRow.withSizeKeepingCentre (headerRow.getWidth(), presetBlockHeight);
+    presetCaptionLabel.setBounds (presetBlock.removeFromTop (14));
+    presetBlock.removeFromTop (4);
+    deviceBox.setBounds (presetBlock.reduced (4, 0));
 
     content.removeFromTop (18);
 

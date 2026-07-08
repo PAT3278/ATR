@@ -33,6 +33,7 @@ private:
     juce::Label titleLabel;
 
     juce::ComboBox deviceBox;
+    juce::Label presetCaptionLabel;
     juce::Label mixValueLabel;
     juce::Slider mixSlider;
     juce::Slider outputHudSlider;
@@ -43,6 +44,7 @@ private:
     MixSliderLookAndFeel mixLnf;
     VolumeHudLookAndFeel volumeLnf;
     LabToggleLookAndFeel toggleLnf;
+    PresetBoxLookAndFeel presetLnf;
 
     juce::Rectangle<float> phoneBodyBounds, screenBounds;
     juce::Colour accentColour { 0xff2d3a4a };

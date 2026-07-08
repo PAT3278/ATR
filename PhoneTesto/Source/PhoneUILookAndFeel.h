@@ -55,4 +55,21 @@ private:
     juce::Colour accentColour { 0xff4fa3ff };
 };
 
+/** Preset picker styled to match the rest of the instrument panel: a
+    recessed metal well, glowing accent-tinted outline, monospace label, and
+    a small triangular caret instead of the default OS-styled combo box. */
+class PresetBoxLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    void setAccentColour (juce::Colour newColour) { accentColour = newColour; }
+
+    void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
+                        int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
+
+    juce::Font getComboBoxFont (juce::ComboBox&) override;
+
+private:
+    juce::Colour accentColour { 0xff4fa3ff };
+};
+
 } // namespace phonetesto

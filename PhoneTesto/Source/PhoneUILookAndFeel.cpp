@@ -145,4 +145,39 @@ void LabToggleLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButt
     g.drawRoundedRectangle (bounds.reduced (0.5f), bounds.getHeight() * 0.5f, 1.0f);
 }
 
+void PresetBoxLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
+                                          int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
+                                          juce::ComboBox&)
+{
+    juce::Rectangle<float> bounds (0.0f, 0.0f, (float) width, (float) height);
+    const float corner = bounds.getHeight() * 0.26f;
+
+    // recessed metal well, matching the sliders' track treatment
+    juce::ColourGradient bgGrad (juce::Colours::black.withAlpha (0.5f), bounds.getX(), bounds.getY(),
+                                  juce::Colour (0xff1c1e24).withAlpha (0.5f), bounds.getX(), bounds.getBottom(), false);
+    g.setGradientFill (bgGrad);
+    g.fillRoundedRectangle (bounds, corner);
+
+    g.setColour (accentColour.brighter (0.6f).withAlpha (0.5f));
+    g.drawRoundedRectangle (bounds.reduced (0.75f), corner, 1.1f);
+
+    // small triangular caret on the right, in place of the OS arrow glyph
+    auto arrowArea = bounds.removeFromRight (bounds.getHeight());
+    const auto ac = arrowArea.getCentre();
+    const float aw = arrowArea.getHeight() * 0.16f;
+
+    juce::Path arrow;
+    arrow.addTriangle (ac.x - aw, ac.y - aw * 0.55f, ac.x + aw, ac.y - aw * 0.55f, ac.x, ac.y + aw * 0.8f);
+    g.setColour (accentColour.brighter (0.75f));
+    g.fillPath (arrow);
+
+    g.setColour (juce::Colours::white.withAlpha (0.08f));
+    g.drawLine (arrowArea.getX(), bounds.getY() + 4.0f, arrowArea.getX(), bounds.getBottom() - 4.0f, 1.0f);
+}
+
+juce::Font PresetBoxLookAndFeel::getComboBoxFont (juce::ComboBox&)
+{
+    return juce::Font (juce::Font::getDefaultMonospacedFontName(), 13.0f, juce::Font::plain);
+}
+
 } // namespace phonetesto
