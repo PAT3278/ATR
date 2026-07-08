@@ -22,27 +22,28 @@ private:
     juce::Colour accentColour { 0xff4fa3ff };
 };
 
-/** Vertical mixer-fader-style slider embedded in the phone's "screen":
-    recessed metal track, glowing accent-coloured fill, a wide metallic cap
-    with a centre groove line standing in for a real fader handle. Used for
-    the Mix control. */
+/** Rotary knob embedded in the phone's "screen" for the Mix control,
+    modelled on the clean dark dial style of plugins like Soundly's "Place
+    It": a thin background track ring, a glowing accent-coloured value arc,
+    a dark recessed dial face with a faint dotted grip texture, and a
+    pointer line -- rather than a fader. */
 class MixSliderLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     void setAccentColour (juce::Colour newColour) { accentColour = newColour; }
 
-    void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
-                            float sliderPos, float minSliderPos, float maxSliderPos,
-                            const juce::Slider::SliderStyle, juce::Slider&) override;
+    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
+                            float sliderPosProportional, float rotaryStartAngle,
+                            float rotaryEndAngle, juce::Slider&) override;
 
 private:
     juce::Colour accentColour { 0xff4fa3ff };
 };
 
-/** Compact "lab equipment" toggle switch: a small glowing LED dot plus an
-    uppercase monospace caption, with a faint capsule outline -- used for
-    Mono Sum / Bypass instead of a default checkbox, to match the
-    instrument-panel look of the rest of the phone's screen. */
+/** Compact circular "power toggle" with a glowing ring when active and an
+    uppercase monospace caption underneath -- used for Mono Sum / Bypass
+    instead of a default checkbox, echoing the round power buttons seen in
+    plugins like Soundly's "Place It". */
 class LabToggleLookAndFeel : public juce::LookAndFeel_V4
 {
 public:

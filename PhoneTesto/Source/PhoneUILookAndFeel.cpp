@@ -57,92 +57,111 @@ void VolumeHudLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, in
     g.fillPath (speaker);
 }
 
-void MixSliderLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
-                                              float sliderPos, float /*minSliderPos*/, float /*maxSliderPos*/,
-                                              const juce::Slider::SliderStyle, juce::Slider&)
+void MixSliderLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                                              float sliderPosProportional, float rotaryStartAngle,
+                                              float rotaryEndAngle, juce::Slider&)
 {
-    // Drawn as a boutique mixer-style fader: a recessed metal track, a
-    // glowing accent-coloured fill, and a metallic cap with a centre groove
-    // standing in for a real fader handle.
-    juce::Rectangle<float> bounds ((float) x, (float) y, (float) width, (float) height);
-    const float trackWidth = juce::jmin (bounds.getWidth() * 0.30f, 12.0f);
-    auto track = bounds.withSizeKeepingCentre (trackWidth, bounds.getHeight());
-    const float corner = trackWidth * 0.5f;
+    // Clean dark dial: thin background track ring, glowing value arc,
+    // recessed disc face with a faint dotted grip texture and a pointer --
+    // modelled on plugins like Soundly's "Place It" rather than a fader.
+    auto bounds = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height).reduced (4.0f);
+    const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
+    const auto centre = bounds.getCentre();
+    const float angle = rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
+    const float ringThickness = juce::jmax (3.0f, radius * 0.09f);
+    const float ringRadius = radius - ringThickness * 0.5f;
 
-    juce::ColourGradient trackGrad (juce::Colours::black.withAlpha (0.55f), track.getX(), track.getY(),
-                                     juce::Colour (0xff1a1c22).withAlpha (0.55f), track.getX(), track.getBottom(), false);
-    g.setGradientFill (trackGrad);
-    g.fillRoundedRectangle (track, corner);
+    juce::Path track;
+    track.addCentredArc (centre.x, centre.y, ringRadius, ringRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
+    g.setColour (juce::Colours::white.withAlpha (0.10f));
+    g.strokePath (track, juce::PathStrokeType (ringThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    const float fillTop = juce::jlimit (track.getY(), track.getBottom(), sliderPos);
-    if (fillTop < track.getBottom())
+    juce::Path valueArc;
+    valueArc.addCentredArc (centre.x, centre.y, ringRadius, ringRadius, 0.0f, rotaryStartAngle, angle, true);
+    g.setColour (accentColour.brighter (0.3f));
+    g.strokePath (valueArc, juce::PathStrokeType (ringThickness, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // recessed dial face
+    const float faceRadius = radius * 0.72f;
+    auto faceBounds = juce::Rectangle<float> (faceRadius * 2.0f, faceRadius * 2.0f).withCentre (centre);
+
+    juce::Path facePath;
+    facePath.addEllipse (faceBounds);
+    juce::DropShadow faceShadow (juce::Colours::black.withAlpha (0.5f), 8, { 0, 3 });
+    faceShadow.drawForPath (g, facePath);
+
+    juce::ColourGradient faceGrad (juce::Colour (0xff3a3d45), faceBounds.getX(), faceBounds.getY(),
+                                    juce::Colour (0xff15161a), faceBounds.getX(), faceBounds.getBottom(), false);
+    g.setGradientFill (faceGrad);
+    g.fillEllipse (faceBounds);
+
+    // faint dotted grip ring
     {
-        auto fillBounds = track.withTop (fillTop);
-        juce::ColourGradient grad (accentColour.brighter (0.5f), fillBounds.getX(), fillBounds.getY(),
-                                    accentColour.darker (0.2f), fillBounds.getX(), fillBounds.getBottom(), false);
-        g.setGradientFill (grad);
-        g.fillRoundedRectangle (fillBounds, corner);
+        juce::Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (facePath);
+        constexpr int numDots = 26;
+        const float dotRadius = faceRadius * 0.84f;
+        for (int i = 0; i < numDots; ++i)
+        {
+            const float a = (float) i / (float) numDots * juce::MathConstants<float>::twoPi;
+            const auto p = centre.getPointOnCircumference (dotRadius, a);
+            g.setColour (juce::Colours::white.withAlpha (0.05f));
+            g.fillEllipse (juce::Rectangle<float> (2.2f, 2.2f).withCentre (p));
+        }
     }
 
-    g.setColour (juce::Colours::white.withAlpha (0.12f));
-    g.drawRoundedRectangle (track.reduced (0.75f), corner, 1.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.10f));
+    g.drawEllipse (faceBounds.reduced (0.5f), 1.0f);
 
-    // metallic fader cap, wider than the track so it reads as a grabbable handle
-    const float capH = 12.0f;
-    auto cap = juce::Rectangle<float> (bounds.getWidth(), capH).withCentre ({ bounds.getCentreX(), sliderPos });
+    // pointer
+    const auto tip = centre.getPointOnCircumference (faceRadius * 0.72f, angle);
+    g.setColour (juce::Colours::white.withAlpha (0.85f));
+    g.drawLine (centre.x, centre.y, tip.x, tip.y, 2.4f);
 
-    juce::DropShadow capShadow (juce::Colours::black.withAlpha (0.45f), 5, {});
-    juce::Path capPath;
-    capPath.addRoundedRectangle (cap, capH * 0.35f);
-    capShadow.drawForPath (g, capPath);
-
-    juce::ColourGradient capGrad (juce::Colour (0xfff4f5f7), cap.getX(), cap.getY(),
-                                   juce::Colour (0xffb9bcc4), cap.getX(), cap.getBottom(), false);
-    g.setGradientFill (capGrad);
-    g.fillRoundedRectangle (cap, capH * 0.35f);
-
-    g.setColour (juce::Colours::black.withAlpha (0.3f));
-    g.drawLine (cap.getX() + 5.0f, cap.getCentreY(), cap.getRight() - 5.0f, cap.getCentreY(), 1.2f);
-    g.setColour (accentColour.brighter (0.4f));
-    g.fillRoundedRectangle (cap.withSizeKeepingCentre (6.0f, capH * 0.5f), 2.0f);
+    g.setColour (accentColour.brighter (0.6f));
+    g.fillEllipse (juce::Rectangle<float> (5.5f, 5.5f).withCentre (centre));
 }
 
 void LabToggleLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& button,
-                                              bool shouldDrawButtonAsHighlighted, bool /*shouldDrawButtonAsDown*/)
+                                              bool /*shouldDrawButtonAsHighlighted*/, bool /*shouldDrawButtonAsDown*/)
 {
+    // Circular power-style toggle with a glowing ring when active, and an
+    // uppercase caption underneath -- echoes the round power buttons in
+    // plugins like Soundly's "Place It".
     auto bounds = button.getLocalBounds().toFloat();
     const bool on = button.getToggleState();
 
-    const float ledD = juce::jmin (bounds.getHeight() * 0.46f, 11.0f);
-    juce::Rectangle<float> led (ledD, ledD);
-    led.setCentre (bounds.getX() + ledD * 0.5f + 3.0f, bounds.getCentreY());
+    const float d = juce::jmin (bounds.getWidth(), bounds.getHeight() * 0.62f, 32.0f);
+    auto circle = juce::Rectangle<float> (d, d).withCentre ({ bounds.getCentreX(), bounds.getY() + d * 0.5f + 2.0f });
 
     if (on)
     {
-        juce::DropShadow glow (accentColour.withAlpha (0.85f), (int) (ledD * 1.6f), {});
-        juce::Path ledPath;
-        ledPath.addEllipse (led);
-        glow.drawForPath (g, ledPath);
-
-        juce::ColourGradient ledGrad (accentColour.brighter (0.7f), led.getX(), led.getY(),
-                                       accentColour.darker (0.1f), led.getX(), led.getBottom(), false);
-        g.setGradientFill (ledGrad);
+        juce::Path glowPath;
+        glowPath.addEllipse (circle);
+        juce::DropShadow glow (accentColour.withAlpha (0.6f), (int) (d * 0.55f), {});
+        glow.drawForPath (g, glowPath);
     }
-    else
-    {
-        g.setColour (juce::Colours::white.withAlpha (0.16f));
-    }
-    g.fillEllipse (led);
-    g.setColour (juce::Colours::black.withAlpha (0.4f));
-    g.drawEllipse (led, 1.0f);
 
-    auto textArea = bounds.withTrimmedLeft (led.getRight() + 8.0f).toNearestInt();
-    g.setColour (juce::Colours::white.withAlpha (on ? 0.92f : 0.5f));
-    g.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 11.5f, juce::Font::plain));
-    g.drawFittedText (button.getButtonText().toUpperCase(), textArea, juce::Justification::centredLeft, 1);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.fillEllipse (circle);
 
-    g.setColour (juce::Colours::white.withAlpha (shouldDrawButtonAsHighlighted ? 0.16f : 0.08f));
-    g.drawRoundedRectangle (bounds.reduced (0.5f), bounds.getHeight() * 0.5f, 1.0f);
+    g.setColour (on ? accentColour.brighter (0.5f) : juce::Colours::white.withAlpha (0.16f));
+    g.drawEllipse (circle.reduced (1.0f), 2.0f);
+
+    // simple power glyph: an open arc with a short vertical tick through the top
+    const float iconR = d * 0.26f;
+    const auto iconCentre = circle.getCentre();
+    juce::Path power;
+    power.addArc (iconCentre.x - iconR, iconCentre.y - iconR, iconR * 2.0f, iconR * 2.0f,
+                  juce::MathConstants<float>::pi * 0.28f, juce::MathConstants<float>::pi * 1.72f, true);
+    g.setColour (on ? juce::Colours::white.withAlpha (0.95f) : juce::Colours::white.withAlpha (0.4f));
+    g.strokePath (power, juce::PathStrokeType (1.6f));
+    g.drawLine (iconCentre.x, iconCentre.y - iconR * 1.2f, iconCentre.x, iconCentre.y - iconR * 0.1f, 1.6f);
+
+    auto textArea = bounds.withTrimmedTop (circle.getBottom() - bounds.getY() + 4.0f).toNearestInt();
+    g.setColour (juce::Colours::white.withAlpha (on ? 0.85f : 0.45f));
+    g.setFont (juce::Font (juce::Font::getDefaultMonospacedFontName(), 10.5f, juce::Font::plain));
+    g.drawFittedText (button.getButtonText().toUpperCase(), textArea, juce::Justification::centredTop, 1);
 }
 
 void PresetBoxLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
