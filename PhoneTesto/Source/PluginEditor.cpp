@@ -347,25 +347,31 @@ void PhoneTestoAudioProcessorEditor::resized()
 
     auto content = screenBounds.toNearestInt();
 
-    // Header row: volume HUD pinned to the LEFT (matching the real hardware
-    // buttons' side), device picker filling the rest. Keeping the HUD
-    // confined to this fixed-height row is what stops it overlapping the
-    // mix fader below.
-    auto headerRow = content.removeFromTop (140);
+    // Header row: preset picker sits at the TOP; the volume HUD is pinned to
+    // the LEFT (matching the real hardware buttons' side) and starts lower
+    // down, its top edge aligned with the preset picker's bottom edge, so
+    // the two read as a single top-to-bottom flow rather than two
+    // mismatched columns. Keeping the HUD confined to this fixed-height row
+    // is what stops it overlapping the mix fader below.
+    auto headerRow = content.removeFromTop (200);
     auto hudColumn = headerRow.removeFromLeft (38);
-    auto hudCaptionArea = hudColumn.removeFromBottom (14);
-    outputHudSlider.setBounds (hudColumn.reduced (3, 6));
-    outputCaptionLabel.setBounds (hudCaptionArea);
-
     headerRow.removeFromLeft (16);
+    auto presetColumn = headerRow;
 
-    // preset caption + picker, vertically centred in the remaining header
-    // space so it balances against the taller HUD column beside it
+    constexpr int topMargin = 16;
     constexpr int presetBlockHeight = 14 + 4 + 32;
-    auto presetBlock = headerRow.withSizeKeepingCentre (headerRow.getWidth(), presetBlockHeight);
-    presetCaptionLabel.setBounds (presetBlock.removeFromTop (14));
-    presetBlock.removeFromTop (4);
-    deviceBox.setBounds (presetBlock.reduced (4, 0));
+    constexpr int alignedTop = topMargin + presetBlockHeight;
+
+    auto presetArea = presetColumn;
+    presetArea.removeFromTop (topMargin);
+    presetCaptionLabel.setBounds (presetArea.removeFromTop (14));
+    presetArea.removeFromTop (4);
+    deviceBox.setBounds (presetArea.removeFromTop (32).reduced (4, 0));
+
+    auto hudArea = hudColumn;
+    hudArea.removeFromTop (alignedTop);
+    outputCaptionLabel.setBounds (hudArea.removeFromTop (14));
+    outputHudSlider.setBounds (hudArea.reduced (3, 6));
 
     content.removeFromTop (18);
 
