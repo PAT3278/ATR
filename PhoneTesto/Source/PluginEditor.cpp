@@ -71,9 +71,53 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     bypassAttachment = std::make_unique<ButtonAttachment> (
         processor.apvts, PhoneTestoAudioProcessor::bypassParamId, bypassButton);
 
+    liveButton.setLookAndFeel (&toggleLnf);
+    addAndMakeVisible (liveButton);
+    liveButton.onClick = [this]
+    {
+        if (liveButton.getToggleState())
+        {
+            const bool ok = processor.startLiveMonitor();
+            liveButton.setToggleState (ok, juce::dontSendNotification);
+
+            if (ok)
+            {
+                const auto addresses = PhoneTestoAudioProcessor::getLiveMonitorLocalAddresses();
+                const juce::String host = addresses.isEmpty() ? "this-computer" : addresses[0];
+                cachedLiveUrl = "http://" + host + ":" + juce::String (processor.getLiveMonitorPort());
+            }
+            else
+            {
+                cachedLiveUrl = "Couldn't open the network port";
+            }
+        }
+        else
+        {
+            processor.stopLiveMonitor();
+            cachedLiveUrl.clear();
+        }
+
+        updateLiveStatusText();
+    };
+
+    liveStatusLabel.setJustificationType (juce::Justification::centred);
+    liveStatusLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
+    liveStatusLabel.setMinimumHorizontalScale (1.0f);
+    addAndMakeVisible (liveStatusLabel);
+
     mixValueLabel.setText ("MIX  " + juce::String ((int) std::round (mixSlider.getValue())) + "%",
                             juce::dontSendNotification);
     updateDeviceVisuals();
+
+    liveButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
+    if (processor.isLiveMonitorRunning())
+    {
+        const auto addresses = PhoneTestoAudioProcessor::getLiveMonitorLocalAddresses();
+        const juce::String host = addresses.isEmpty() ? "this-computer" : addresses[0];
+        cachedLiveUrl = "http://" + host + ":" + juce::String (processor.getLiveMonitorPort());
+    }
+    updateLiveStatusText();
+
     startTimerHz (24); // drives the pulsing glow and catches host-automated device changes
 
     setSize (340, 680);
@@ -86,6 +130,7 @@ PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
     outputHudSlider.setLookAndFeel (nullptr);
     monoButton.setLookAndFeel (nullptr);
     bypassButton.setLookAndFeel (nullptr);
+    liveButton.setLookAndFeel (nullptr);
     deviceBox.setLookAndFeel (nullptr);
 }
 
@@ -96,7 +141,29 @@ void PhoneTestoAudioProcessorEditor::timerCallback()
         glowPhase = 0.0;
 
     updateDeviceVisuals();
+    updateLiveStatusText();
     repaint();
+}
+
+void PhoneTestoAudioProcessorEditor::updateLiveStatusText()
+{
+    if (! processor.isLiveMonitorRunning())
+    {
+        liveStatusLabel.setText ("Live Monitor off", juce::dontSendNotification);
+        liveStatusLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
+        return;
+    }
+
+    juce::String status;
+    if (processor.isLiveMonitorClientConnected())
+        status = "Connected: " + processor.getLiveMonitorClientAddress();
+    else
+        status = "Open in Safari on your phone (same Wi-Fi)";
+
+    liveStatusLabel.setText (cachedLiveUrl + "\n" + status, juce::dontSendNotification);
+    liveStatusLabel.setColour (juce::Label::textColourId,
+                                 (processor.isLiveMonitorClientConnected() ? accentColour.brighter (0.6f)
+                                                                            : juce::Colours::white.withAlpha (0.6f)));
 }
 
 void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
@@ -334,23 +401,33 @@ void PhoneTestoAudioProcessorEditor::resized()
     content.removeFromTop (18);
 
     // bottom toggle row: circular power-style buttons need room for the
-    // caption drawn underneath each one
-    content.removeFromBottom (18);
+    // caption drawn underneath each one. Three-way split now that Live
+    // Monitor joins Mono Sum / Bypass.
+    content.removeFromBottom (14);
     auto bottomRow = content.removeFromBottom (50);
-    auto monoArea = bottomRow.removeFromLeft (bottomRow.getWidth() / 2);
-    monoButton.setBounds (monoArea.reduced (20, 0));
-    bypassButton.setBounds (bottomRow.reduced (20, 0));
+    const int thirdWidth = bottomRow.getWidth() / 3;
+    auto monoArea = bottomRow.removeFromLeft (thirdWidth);
+    auto bypassArea = bottomRow.removeFromLeft (thirdWidth);
+    auto liveArea = bottomRow;
+    monoButton.setBounds (monoArea.reduced (12, 0));
+    bypassButton.setBounds (bypassArea.reduced (12, 0));
+    liveButton.setBounds (liveArea.reduced (12, 0));
 
-    content.removeFromBottom (22);
+    content.removeFromBottom (6);
+
+    // "type this into Safari" status line for Live Monitor
+    liveStatusLabel.setBounds (content.removeFromBottom (32));
+
+    content.removeFromBottom (10);
 
     // mix label sits just above the rotary knob, which is centred in the
     // remaining space
     auto mixLabelRow = content.removeFromTop (26);
     mixValueLabel.setBounds (mixLabelRow);
 
-    content.removeFromTop (18);
+    content.removeFromTop (14);
 
-    const int knobSize = juce::jmin (content.getWidth() - 20, 190);
+    const int knobSize = juce::jmin (content.getWidth() - 20, 170);
     mixSlider.setBounds (content.withSizeKeepingCentre (knobSize, knobSize));
 }
 

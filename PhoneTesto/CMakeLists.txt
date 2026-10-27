@@ -51,6 +51,7 @@ target_sources(PhoneTesto
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PhoneUILookAndFeel.cpp
+        Source/LiveMonitorServer.cpp
 )
 
 target_compile_definitions(PhoneTesto
@@ -79,5 +80,17 @@ target_link_libraries(PhoneTestoDspTest
         PhoneTesto
         juce::juce_audio_processors
         juce::juce_dsp
+)
+
+# --- Offline Live Monitor sanity test ------------------------------------
+# Headless check that the embedded HTTP/WAV streaming server actually
+# accepts a connection and streams a valid header + PCM payload, using a
+# plain socket client standing in for Safari (see Tests/LiveServerTest.cpp).
+add_executable(PhoneTestoLiveServerTest Tests/LiveServerTest.cpp)
+target_link_libraries(PhoneTestoLiveServerTest
+    PRIVATE
+        PhoneTesto
+        juce::juce_audio_basics
+        juce::juce_core
 )
 

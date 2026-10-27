@@ -60,10 +60,34 @@ void PhoneTestoAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     cachedDeviceIndex = -1;
     cachedDrive = -1.0f;
     updateFilters();
+
+    // If the host changed sample rate/channel count while Live Monitor was
+    // already running, restart it with the new format so the WAV header it
+    // sends to the phone stays correct.
+    if (liveMonitorActive.load())
+    {
+        const int port = liveServer.getPort() > 0 ? liveServer.getPort() : defaultLiveMonitorPort;
+        liveServer.start (port, sampleRate, getTotalNumOutputChannels());
+    }
 }
 
 void PhoneTestoAudioProcessor::releaseResources()
 {
+    liveServer.stop();
+    liveMonitorActive = false;
+}
+
+bool PhoneTestoAudioProcessor::startLiveMonitor (int port)
+{
+    const bool ok = liveServer.start (port, currentSampleRate, getTotalNumOutputChannels());
+    liveMonitorActive = ok;
+    return ok;
+}
+
+void PhoneTestoAudioProcessor::stopLiveMonitor()
+{
+    liveMonitorActive = false;
+    liveServer.stop();
 }
 
 bool PhoneTestoAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -113,7 +137,11 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     for (auto i = getTotalNumInputChannels(); i < numChannels; ++i)
         buffer.clear (i, 0, numSamples);
 
-    const bool bypassed = apvts.getRawParameterValue (bypassParamId)->load() > 0.5f;
+    // In Live Monitor mode the real phone does the speaker colouring, so
+    // the DSP emulation is skipped (same code path as Bypass) and a clean
+    // copy goes out over the network instead.
+    const bool bypassed = apvts.getRawParameterValue (bypassParamId)->load() > 0.5f
+                              || liveMonitorActive.load();
 
     updateFilters();
 
@@ -164,6 +192,9 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     }
 
     buffer.applyGain (outputGain);
+
+    if (liveMonitorActive.load())
+        liveServer.pushAudio (buffer);
 }
 
 juce::AudioProcessorEditor* PhoneTestoAudioProcessor::createEditor()

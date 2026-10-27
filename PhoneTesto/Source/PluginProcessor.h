@@ -4,6 +4,7 @@
 #include <juce_dsp/juce_dsp.h>
 
 #include "SpeakerProfiles.h"
+#include "LiveMonitorServer.h"
 
 namespace phonetesto
 {
@@ -51,6 +52,22 @@ public:
     static constexpr const char* monoParamId    = "monoSum";
     static constexpr const char* bypassParamId  = "bypass";
 
+    static constexpr int defaultLiveMonitorPort = 51813;
+
+    // --- Live Monitor: stream audio to a real phone over the network ----
+    // instead of emulating one with DSP (see LiveMonitorServer). Driven
+    // directly by the editor's toggle rather than an apvts parameter --
+    // opening a network listener isn't something a host should be able to
+    // automate -- so it isn't saved/restored across sessions either: the
+    // server always starts off, and the user switches it on deliberately.
+    bool startLiveMonitor (int port = defaultLiveMonitorPort);
+    void stopLiveMonitor();
+    bool isLiveMonitorRunning() const noexcept { return liveMonitorActive.load(); }
+    bool isLiveMonitorClientConnected() const { return liveServer.hasClient(); }
+    juce::String getLiveMonitorClientAddress() const { return liveServer.getClientAddress(); }
+    int getLiveMonitorPort() const noexcept { return liveServer.getPort(); }
+    static juce::StringArray getLiveMonitorLocalAddresses() { return LiveMonitorServer::getLocalAddresses(); }
+
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void updateFilters();
@@ -69,6 +86,9 @@ private:
     };
 
     SpeakerChain chain;
+
+    LiveMonitorServer liveServer;
+    std::atomic<bool> liveMonitorActive { false };
 
     juce::AudioBuffer<float> dryBuffer;
     double currentSampleRate = 44100.0;

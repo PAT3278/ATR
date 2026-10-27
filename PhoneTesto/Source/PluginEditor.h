@@ -27,6 +27,7 @@ public:
 private:
     void timerCallback() override;
     void updateDeviceVisuals();
+    void updateLiveStatusText();
 
     PhoneTestoAudioProcessor& processor;
 
@@ -40,6 +41,14 @@ private:
     juce::Label outputCaptionLabel;
     juce::ToggleButton monoButton { "Mono Sum" };
     juce::ToggleButton bypassButton { "Bypass" };
+
+    // Live Monitor: streams audio to a real phone over Wi-Fi instead of
+    // emulating one with DSP. Not an apvts parameter/attachment -- starting
+    // a network listener is a deliberate user action, not something a host
+    // should automate -- so this talks to the processor directly.
+    juce::ToggleButton liveButton { "Live" };
+    juce::Label liveStatusLabel;
+    juce::String cachedLiveUrl; // local IP/port only re-queried when Live is switched on, not every timer tick
 
     MixSliderLookAndFeel mixLnf;
     VolumeHudLookAndFeel volumeLnf;
