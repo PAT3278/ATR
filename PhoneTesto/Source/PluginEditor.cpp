@@ -75,28 +75,21 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     addAndMakeVisible (liveButton);
     liveButton.onClick = [this]
     {
+        liveStartFailed = false;
+
         if (liveButton.getToggleState())
         {
-            const bool ok = processor.startLiveMonitor();
-            liveButton.setToggleState (ok, juce::dontSendNotification);
-
-            if (ok)
-            {
-                const auto addresses = PhoneTestoAudioProcessor::getLiveMonitorLocalAddresses();
-                const juce::String host = addresses.isEmpty() ? "this-computer" : addresses[0];
-                cachedLiveUrl = "http://" + host + ":" + juce::String (processor.getLiveMonitorPort());
-            }
-            else
-            {
-                cachedLiveUrl = "Couldn't open the network port";
-            }
+            liveStartFailed = ! processor.startLiveMonitor();
+            liveButton.setToggleState (! liveStartFailed, juce::dontSendNotification);
         }
         else
         {
             processor.stopLiveMonitor();
-            cachedLiveUrl.clear();
         }
 
+        cachedLiveUrl = processor.getLiveMonitorUrl();
+        qrCode.setText (cachedLiveUrl);
+        updateLiveModeVisibility();
         updateLiveStatusText();
     };
 
@@ -105,17 +98,36 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     liveStatusLabel.setMinimumHorizontalScale (1.0f);
     addAndMakeVisible (liveStatusLabel);
 
+    addChildComponent (qrCode);
+
+    // Optional password phones must enter; saved with the project. Shown in
+    // plain text on purpose: it's typically read out to whoever is listening.
+    passwordEditor.setFont (juce::Font (hudFontName, 12.0f, juce::Font::plain));
+    passwordEditor.setJustification (juce::Justification::centred);
+    passwordEditor.setTextToShowWhenEmpty ("PASSWORD (OPTIONAL)", juce::Colours::white.withAlpha (0.3f));
+    passwordEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha (0.45f));
+    passwordEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white.withAlpha (0.9f));
+    passwordEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::white.withAlpha (0.12f));
+    passwordEditor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::white.withAlpha (0.4f));
+    passwordEditor.setInputRestrictions (32);
+    passwordEditor.setText (processor.getLivePassword(), juce::dontSendNotification);
+    passwordEditor.onTextChange = [this] { processor.setLivePassword (passwordEditor.getText().trim()); };
+    addChildComponent (passwordEditor);
+
+    passwordCaptionLabel.setText ("PASSWORD", juce::dontSendNotification);
+    passwordCaptionLabel.setJustificationType (juce::Justification::centred);
+    passwordCaptionLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
+    passwordCaptionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
+    addChildComponent (passwordCaptionLabel);
+
     mixValueLabel.setText ("MIX  " + juce::String ((int) std::round (mixSlider.getValue())) + "%",
                             juce::dontSendNotification);
     updateDeviceVisuals();
 
     liveButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
-    if (processor.isLiveMonitorRunning())
-    {
-        const auto addresses = PhoneTestoAudioProcessor::getLiveMonitorLocalAddresses();
-        const juce::String host = addresses.isEmpty() ? "this-computer" : addresses[0];
-        cachedLiveUrl = "http://" + host + ":" + juce::String (processor.getLiveMonitorPort());
-    }
+    cachedLiveUrl = processor.getLiveMonitorUrl();
+    qrCode.setText (cachedLiveUrl);
+    updateLiveModeVisibility();
     updateLiveStatusText();
 
     startTimerHz (24); // drives the pulsing glow and catches host-automated device changes
@@ -149,21 +161,42 @@ void PhoneTestoAudioProcessorEditor::updateLiveStatusText()
 {
     if (! processor.isLiveMonitorRunning())
     {
-        liveStatusLabel.setText ("Live Monitor off", juce::dontSendNotification);
-        liveStatusLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
+        liveStatusLabel.setText (liveStartFailed ? "Couldn't open a network port\n(another app may be using it)"
+                                                 : "Live Monitor off",
+                                 juce::dontSendNotification);
+        liveStatusLabel.setColour (juce::Label::textColourId, liveStartFailed ? juce::Colour (0xffff7a7a)
+                                                                              : juce::Colours::white.withAlpha (0.35f));
         return;
     }
 
-    juce::String status;
-    if (processor.isLiveMonitorClientConnected())
-        status = "Connected: " + processor.getLiveMonitorClientAddress();
-    else
-        status = "Open in Safari on your phone (same Wi-Fi)";
+    const int listeners = processor.getLiveListenerCount();
+    const auto status = listeners == 0 ? juce::String ("Scan or open on your phone (same Wi-Fi)")
+                      : listeners == 1 ? juce::String ("1 phone listening")
+                                       : juce::String (listeners) + " phones listening";
 
-    liveStatusLabel.setText (cachedLiveUrl + "\n" + status, juce::dontSendNotification);
-    liveStatusLabel.setColour (juce::Label::textColourId,
-                                 (processor.isLiveMonitorClientConnected() ? accentColour.brighter (0.6f)
-                                                                            : juce::Colours::white.withAlpha (0.6f)));
+    liveStatusLabel.setText (cachedLiveUrl.trimCharactersAtEnd ("/") + "\n" + status, juce::dontSendNotification);
+    liveStatusLabel.setColour (juce::Label::textColourId, listeners > 0 ? accentColour.brighter (0.8f)
+                                                                         : juce::Colours::white.withAlpha (0.6f));
+}
+
+void PhoneTestoAudioProcessorEditor::updateLiveModeVisibility()
+{
+    const bool live = processor.isLiveMonitorRunning();
+
+    // In Live mode the real phone does the colouring, so the emulation
+    // controls step back and the screen shows how to connect instead.
+    mixSlider.setVisible (! live);
+    mixValueLabel.setVisible (! live);
+    qrCode.setVisible (live);
+    passwordEditor.setVisible (live);
+    passwordCaptionLabel.setVisible (live);
+
+    for (auto* c : { (juce::Component*) &deviceBox, (juce::Component*) &presetCaptionLabel,
+                     (juce::Component*) &monoButton, (juce::Component*) &bypassButton })
+    {
+        c->setEnabled (! live);
+        c->setAlpha (live ? 0.3f : 1.0f);
+    }
 }
 
 void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
@@ -425,10 +458,16 @@ void PhoneTestoAudioProcessorEditor::resized()
     auto mixLabelRow = content.removeFromTop (26);
     mixValueLabel.setBounds (mixLabelRow);
 
+    // Live mode reuses the same slots: password field where the mix label
+    // sits, QR code where the knob sits.
+    passwordEditor.setBounds (mixLabelRow.withSizeKeepingCentre (juce::jmin (mixLabelRow.getWidth(), 190), 26));
+    passwordCaptionLabel.setBounds (passwordEditor.getBounds().translated (0, -16).withHeight (14));
+
     content.removeFromTop (14);
 
     const int knobSize = juce::jmin (content.getWidth() - 20, 170);
     mixSlider.setBounds (content.withSizeKeepingCentre (knobSize, knobSize));
+    qrCode.setBounds (content.withSizeKeepingCentre (knobSize, knobSize));
 }
 
 } // namespace phonetesto

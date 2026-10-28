@@ -3,86 +3,116 @@
 #include <juce_core/juce_core.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <atomic>
-#include <vector>
+#include <memory>
 
 namespace phonetesto
 {
 
-/** Streams the plugin's audio to a real phone over the local network so it
-    can be monitored on the device's actual speaker, instead of emulating
-    one with DSP.
+/** Single-producer / multi-consumer ring of interleaved stereo float frames.
+    The audio thread writes; each listener thread reads from its own cursor.
+    The writer never waits: a listener that falls too far behind skips ahead
+    (an audible drop on that one phone, never a glitch in the DAW). Samples
+    are relaxed atomics so concurrent reads of slots being overwritten are
+    well-defined; torn frames are detected and discarded by re-checking the
+    write position after copying. */
+class BroadcastRing
+{
+public:
+    static constexpr int numChannels = 2;
 
-    Mechanism: a tiny embedded HTTP server. When a browser (e.g. Safari on
-    an iPhone, on the same Wi-Fi network) requests the server's URL, it
-    replies with a WAV header declaring an open-ended ("unknown-length")
-    data size and then keeps writing raw PCM as it arrives -- the same
-    trick classic Icecast/Shoutcast live-radio streams use, so no app or
-    codec license is needed on either end. Native browser support for an
-    indefinite-length WAV stream varies, so this is best-effort: it has
-    been verified in this repo by connecting a plain socket client and
-    checking the bytes (see Tests/LiveServerTest.cpp), not against a real
-    phone's browser -- if Safari doesn't play it smoothly, try VLC (free,
-    App Store) pointed at the same URL instead.
+    void prepare (int capacityFramesPowerOfTwo);
 
-    Only one phone is expected to connect at a time (that's the use case:
-    "listen on my own phone"); a new connection replaces the previous one. */
+    /** Audio thread only. Mono input is duplicated to both channels; extra
+        input channels beyond two are ignored. */
+    void write (const juce::AudioBuffer<float>& buffer) noexcept;
+
+    juce::uint64 getWritePosition() const noexcept { return writePos.load (std::memory_order_acquire); }
+
+    /** Copies up to `maxFrames` frames starting at `readPosition` into
+        `dest` (interleaved) and advances it. Returns the number of frames
+        copied; 0 if nothing new (or if the reader had fallen behind and was
+        moved up to near the live edge). */
+    int read (juce::uint64& readPosition, float* dest, int maxFrames) const noexcept;
+
+private:
+    std::unique_ptr<std::atomic<float>[]> data;
+    juce::uint64 capacity = 0, mask = 0;
+    std::atomic<juce::uint64> writePos { 0 };
+};
+
+/** Streams the plugin's audio to real phones over the local network so the
+    mix can be heard on their actual speakers.
+
+    An embedded HTTP server; the phone needs nothing but a browser:
+      GET /           the player page (Resources/player.html)
+      GET /info       JSON: stream format + whether a password is required
+      GET /auth?key=  204 if the password is right, 401 if not
+      GET /stream?fmt=opus|pcm16|pcm24&br=<kbps>&key=
+                      low-latency framed stream for the page's Web Audio player
+      GET /live.wav?key=
+                      an endless 16-bit WAV for the page's background mode
+                      (a plain <audio> element, which phones keep playing with
+                      the screen off), or for players like VLC
+
+    Up to `maxListeners` phones can listen at once, each choosing its own
+    format. Everything is sent at 48 kHz regardless of the host's rate. */
 class LiveMonitorServer : private juce::Thread
 {
 public:
+    static constexpr int maxListeners = 32;
+    static constexpr int ringCapacityFrames = 1 << 19; // ~2.7 s even at 192 kHz
+
     LiveMonitorServer();
     ~LiveMonitorServer() override;
 
-    /** Starts listening on `port`. `sampleRate`/`numChannels` describe the
-        audio that will be passed to pushAudio() and are baked into the WAV
-        header sent to each connecting client. Returns false if the port
-        could not be bound (e.g. already in use). */
-    bool start (int port, double sampleRate, int numChannels);
-
-    /** Stops the server and disconnects any client. Safe to call even if
-        not running. */
+    /** Starts listening on `preferredPort`, or the next free port within
+        `portSearchRange` if that one is taken. Returns false if none could
+        be opened. Port 0 lets the OS pick (used by tests). */
+    bool start (int preferredPort, double inputSampleRate, int portSearchRange = 10);
     void stop();
 
-    bool isRunning() const noexcept { return listening.load(); }
-    bool hasClient() const noexcept { return clientConnected.load(); }
+    bool isRunning() const noexcept { return running.load(); }
     int getPort() const noexcept { return boundPort.load(); }
 
-    /** The connecting client's address, or an empty string if none is
-        connected. */
-    juce::String getClientAddress() const;
+    /** May be called at any time (e.g. from prepareToPlay): listeners keep
+        playing, their encoders just pick up the new input rate. */
+    void setInputSampleRate (double newRate) noexcept { if (newRate > 0.0) inputSampleRate.store (newRate); }
+    double getInputSampleRate() const noexcept { return inputSampleRate.load(); }
 
-    /** Non-loopback IPv4 addresses this machine is reachable on, for
-        display as "type this into Safari" candidates. */
+    /** Empty = no password. Takes effect for new requests. */
+    void setPassword (const juce::String&);
+    bool hasPassword() const;
+    bool checkPassword (const juce::String& candidate) const;
+
+    int getNumListeners() const;
+    juce::StringArray getListenerAddresses() const;
+
+    /** Non-loopback IPv4 addresses, most likely home-Wi-Fi address first. */
     static juce::StringArray getLocalAddresses();
 
-    /** Called from the audio thread once per block. Realtime-safe: never
-        allocates or blocks: converts to 16-bit PCM into a preallocated
-        scratch buffer and pushes it into a lock-free ring buffer that the
-        network thread drains. If the network thread can't keep up, or the
-        block is larger than the (generous) preallocated scratch size, the
-        block is dropped rather than risking a glitch on the audio thread. */
-    void pushAudio (const juce::AudioBuffer<float>& buffer);
+    /** Audio thread. Realtime-safe: no allocation, no locks, never blocks. */
+    void pushAudio (const juce::AudioBuffer<float>& buffer) noexcept;
 
 private:
+    class Connection;
+    friend class Connection;
+
     void run() override;
-    static void writeLiveWavHeader (juce::OutputStream&, double sampleRate, int numChannels);
+    void reapFinishedConnections();
 
     std::unique_ptr<juce::StreamingSocket> listener;
-    std::unique_ptr<juce::StreamingSocket> client;
-    mutable juce::CriticalSection clientLock;
-
-    std::atomic<bool> listening { false };
-    std::atomic<bool> clientConnected { false };
+    std::atomic<bool> running { false };
     std::atomic<int> boundPort { 0 };
+    std::atomic<double> inputSampleRate { 48000.0 };
+    std::atomic<int> numStreaming { 0 };
 
-    double streamSampleRate = 44100.0;
-    int streamNumChannels = 2;
+    BroadcastRing ring;
 
-    static constexpr int fifoCapacitySamples = 1 << 20; // interleaved int16 samples, several seconds of slack
-    static constexpr int maxScratchSamples = 16384 * 8;  // generous headroom for large blocks/channel counts
+    mutable juce::CriticalSection passwordLock;
+    juce::String password;
 
-    juce::AbstractFifo fifo { fifoCapacitySamples };
-    std::vector<juce::int16> fifoBuffer;
-    std::vector<juce::int16> scratch;
+    mutable juce::CriticalSection connectionsLock;
+    juce::OwnedArray<Connection> connections;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LiveMonitorServer)
 };

@@ -54,21 +54,30 @@ public:
 
     static constexpr int defaultLiveMonitorPort = 51813;
 
-    // --- Live Monitor: stream audio to a real phone over the network ----
+    // --- Live Monitor: stream audio to real phones over the network ----
     // instead of emulating one with DSP (see LiveMonitorServer). Driven
     // directly by the editor's toggle rather than an apvts parameter --
     // opening a network listener isn't something a host should be able to
-    // automate -- so it isn't saved/restored across sessions either: the
-    // server always starts off, and the user switches it on deliberately.
+    // automate -- so its on/off state isn't restored with the project: the
+    // server always starts off and the user switches it on deliberately.
+    // The optional password *is* saved with the project.
     bool startLiveMonitor (int port = defaultLiveMonitorPort);
     void stopLiveMonitor();
     bool isLiveMonitorRunning() const noexcept { return liveMonitorActive.load(); }
-    bool isLiveMonitorClientConnected() const { return liveServer.hasClient(); }
-    juce::String getLiveMonitorClientAddress() const { return liveServer.getClientAddress(); }
     int getLiveMonitorPort() const noexcept { return liveServer.getPort(); }
-    static juce::StringArray getLiveMonitorLocalAddresses() { return LiveMonitorServer::getLocalAddresses(); }
+    int getLiveListenerCount() const { return liveServer.getNumListeners(); }
+    juce::StringArray getLiveListenerAddresses() const { return liveServer.getListenerAddresses(); }
+
+    /** The URL a phone should open, using this machine's most likely Wi-Fi
+        address. Empty when Live Monitor is off. */
+    juce::String getLiveMonitorUrl() const;
+
+    void setLivePassword (const juce::String&);
+    juce::String getLivePassword() const;
 
 private:
+    static constexpr const char* livePasswordProperty = "livePassword";
+
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void updateFilters();
 

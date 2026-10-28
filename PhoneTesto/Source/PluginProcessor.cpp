@@ -61,25 +61,22 @@ void PhoneTestoAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     cachedDrive = -1.0f;
     updateFilters();
 
-    // If the host changed sample rate/channel count while Live Monitor was
-    // already running, restart it with the new format so the WAV header it
-    // sends to the phone stays correct.
-    if (liveMonitorActive.load())
-    {
-        const int port = liveServer.getPort() > 0 ? liveServer.getPort() : defaultLiveMonitorPort;
-        liveServer.start (port, sampleRate, getTotalNumOutputChannels());
-    }
+    // The stream to phones is always 48 kHz, so a host rate change only needs
+    // the listeners' resamplers to pick up the new input rate -- nobody gets
+    // disconnected.
+    liveServer.setInputSampleRate (sampleRate);
 }
 
 void PhoneTestoAudioProcessor::releaseResources()
 {
-    liveServer.stop();
-    liveMonitorActive = false;
+    // Deliberately leaves Live Monitor running: some hosts call this on
+    // transport/engine changes, and phones shouldn't be dropped for that.
 }
 
 bool PhoneTestoAudioProcessor::startLiveMonitor (int port)
 {
-    const bool ok = liveServer.start (port, currentSampleRate, getTotalNumOutputChannels());
+    liveServer.setPassword (getLivePassword());
+    const bool ok = liveServer.start (port, currentSampleRate);
     liveMonitorActive = ok;
     return ok;
 }
@@ -88,6 +85,27 @@ void PhoneTestoAudioProcessor::stopLiveMonitor()
 {
     liveMonitorActive = false;
     liveServer.stop();
+}
+
+juce::String PhoneTestoAudioProcessor::getLiveMonitorUrl() const
+{
+    if (! isLiveMonitorRunning())
+        return {};
+
+    const auto addresses = LiveMonitorServer::getLocalAddresses();
+    const auto host = addresses.isEmpty() ? juce::String ("localhost") : addresses[0];
+    return "http://" + host + ":" + juce::String (liveServer.getPort()) + "/";
+}
+
+void PhoneTestoAudioProcessor::setLivePassword (const juce::String& newPassword)
+{
+    apvts.state.setProperty (livePasswordProperty, newPassword, nullptr);
+    liveServer.setPassword (newPassword);
+}
+
+juce::String PhoneTestoAudioProcessor::getLivePassword() const
+{
+    return apvts.state.getProperty (livePasswordProperty).toString();
 }
 
 bool PhoneTestoAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -216,7 +234,10 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
 
     if (xml != nullptr && xml->hasTagName (apvts.state.getType()))
+    {
         apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        liveServer.setPassword (getLivePassword());
+    }
 }
 
 } // namespace phonetesto

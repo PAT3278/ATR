@@ -17,6 +17,36 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# --- Live Monitor dependencies -------------------------------------------
+# libopus (BSD-3-Clause): compressed streaming to the phone's browser.
+# Built static + PIC so it can be linked into the plugin's shared module.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    opus
+    GIT_REPOSITORY https://github.com/xiph/opus.git
+    GIT_TAG        v1.4
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(opus)
+
+# Nayuki QR Code generator (MIT): draws the "scan to listen" code in the
+# editor. The repo has no CMake project, so its single C++ source is
+# compiled directly into the plugin below.
+FetchContent_Declare(
+    qrcodegen
+    GIT_REPOSITORY https://github.com/nayuki/QR-Code-generator.git
+    GIT_TAG        v1.8.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(qrcodegen)
+
+# The browser player page served to the phone, embedded as BinaryData.
+juce_add_binary_data(PhoneTestoAssets SOURCES Resources/player.html)
+
 # --- AAX ------------------------------------------------------------------
 # AAX requires Avid's proprietary SDK, which cannot be redistributed here.
 # If you obtain the AAX SDK from https://developer.avid.com, point
@@ -52,7 +82,12 @@ target_sources(PhoneTesto
         Source/PluginEditor.cpp
         Source/PhoneUILookAndFeel.cpp
         Source/LiveMonitorServer.cpp
+        Source/LiveStreamEncoder.cpp
+        Source/QrCodeComponent.cpp
+        ${qrcodegen_SOURCE_DIR}/cpp/qrcodegen.cpp
 )
+
+target_include_directories(PhoneTesto PRIVATE ${qrcodegen_SOURCE_DIR}/cpp)
 
 target_compile_definitions(PhoneTesto
     PUBLIC
@@ -65,6 +100,8 @@ target_link_libraries(PhoneTesto
     PRIVATE
         juce::juce_audio_utils
         juce::juce_dsp
+        PhoneTestoAssets
+        opus
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -92,5 +129,28 @@ target_link_libraries(PhoneTestoLiveServerTest
         PhoneTesto
         juce::juce_audio_basics
         juce::juce_core
+        opus
+)
+
+# --- Live Monitor demo server --------------------------------------------
+# Runs the streaming server on its own with a test tone, so the browser
+# player can be exercised without a DAW (used by Tests/browser/player_test.mjs).
+add_executable(PhoneTestoLiveDemo Tests/LiveDemo.cpp)
+target_link_libraries(PhoneTestoLiveDemo
+    PRIVATE
+        PhoneTesto
+        juce::juce_audio_basics
+        juce::juce_core
+)
+
+# --- Editor snapshot ------------------------------------------------------
+# Renders the plugin editor (Emulate and Live states) to PNGs for layout
+# checks without a DAW. Needs a display (use xvfb-run on headless Linux).
+add_executable(PhoneTestoEditorSnapshot Tests/EditorSnapshot.cpp)
+target_link_libraries(PhoneTestoEditorSnapshot
+    PRIVATE
+        PhoneTesto
+        juce::juce_audio_processors
+        juce::juce_dsp
 )
 

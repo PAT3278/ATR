@@ -3,6 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "PhoneUILookAndFeel.h"
+#include "QrCodeComponent.h"
 
 namespace phonetesto
 {
@@ -28,6 +29,7 @@ private:
     void timerCallback() override;
     void updateDeviceVisuals();
     void updateLiveStatusText();
+    void updateLiveModeVisibility();
 
     PhoneTestoAudioProcessor& processor;
 
@@ -48,7 +50,11 @@ private:
     // should automate -- so this talks to the processor directly.
     juce::ToggleButton liveButton { "Live" };
     juce::Label liveStatusLabel;
-    juce::String cachedLiveUrl; // local IP/port only re-queried when Live is switched on, not every timer tick
+    QrCodeComponent qrCode;
+    juce::TextEditor passwordEditor;
+    juce::Label passwordCaptionLabel;
+    juce::String cachedLiveUrl; // local IP/port only re-queried when Live is toggled, not every timer tick
+    bool liveStartFailed = false;
 
     MixSliderLookAndFeel mixLnf;
     VolumeHudLookAndFeel volumeLnf;

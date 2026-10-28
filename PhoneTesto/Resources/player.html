@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>PhoneTesto Live</title>
+<style>
+  :root {
+    --bg: #0b0c10;
+    --panel: #15171d;
+    --panel-2: #1c1f27;
+    --line: rgba(255,255,255,0.08);
+    --text: rgba(255,255,255,0.92);
+    --muted: rgba(255,255,255,0.5);
+    --accent: #5fb8ff;
+    --accent-2: #8ad1ff;
+    --ok: #4cd08a;
+    --warn: #f2b84b;
+    --bad: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font-family: var(--mono); font-weight: 700; letter-spacing: 0.04em; font-size: 15px; }
+  .brand span { color: var(--accent); margin-left: 6px; }
+  .pill {
+    font: 12px var(--mono); padding: 5px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .pill.ok { color: var(--ok); border-color: rgba(76,208,138,0.35); }
+  .pill.bad { color: var(--bad); border-color: rgba(255,107,107,0.35); }
+
+  .hero {
+    background: radial-gradient(120% 90% at 50% 20%, #1d2a38 0%, var(--panel) 60%);
+    border: 1px solid var(--line); border-radius: 22px;
+    padding: 28px 20px 22px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  .play {
+    width: 132px; height: 132px; border-radius: 50%; border: 0; cursor: pointer;
+    background: radial-gradient(circle at 50% 35%, #2a3240, #12151b 70%);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.08) inset, 0 10px 30px rgba(0,0,0,0.55);
+    display: grid; place-items: center; transition: transform 0.12s ease, box-shadow 0.2s ease;
+  }
+  .play:active { transform: scale(0.97); }
+  .play svg { width: 46px; height: 46px; fill: var(--text); }
+  .play.on { box-shadow: 0 0 0 2px var(--accent) inset, 0 0 32px rgba(95,184,255,0.45), 0 10px 30px rgba(0,0,0,0.55); }
+  .play.on svg { fill: var(--accent-2); }
+  #status { font-size: 16px; font-weight: 600; text-align: center; min-height: 1.45em; }
+  #substatus { font: 12px var(--mono); color: var(--muted); text-align: center; min-height: 1.2em; margin-top: -10px; }
+  .meter { width: 100%; height: 10px; border-radius: 6px; background: rgba(0,0,0,0.45); overflow: hidden; border: 1px solid var(--line); }
+  .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--ok), var(--accent) 70%, var(--warn)); transition: width 0.06s linear; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .card h2 { margin: 0; font: 600 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: rgba(0,0,0,0.35); border-radius: 12px; padding: 4px; gap: 4px; }
+  .seg button {
+    border: 0; border-radius: 9px; padding: 10px 8px; font: inherit; font-size: 14px; color: var(--muted);
+    background: transparent; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 8px rgba(0,0,0,0.4); }
+  select, input[type="password"] {
+    width: 100%; font: inherit; font-size: 16px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; outline: none;
+  }
+  select:focus, input:focus { border-color: rgba(95,184,255,0.6); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch { position: relative; width: 50px; height: 30px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,0.14); transition: background 0.2s; }
+  .switch span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+  .btn { border: 0; border-radius: 12px; padding: 11px 16px; font: inherit; font-weight: 600; background: var(--accent); color: #06121e; cursor: pointer; }
+  .auth-row { display: flex; gap: 8px; }
+  .error { color: var(--bad); font-size: 13px; min-height: 1.2em; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stat { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px; text-align: center; }
+  .stat b { display: block; font: 600 14px var(--mono); }
+  .stat small { color: var(--muted); font-size: 11px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">PhoneTesto<span>LIVE</span></div>
+    <div id="conn" class="pill">…</div>
+  </header>
+
+  <section class="hero">
+    <button id="play" class="play" aria-label="Play">
+      <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
+      <svg id="icon-stop" viewBox="0 0 24 24" hidden><path d="M7 7h10v10H7z"/></svg>
+    </button>
+    <div id="status"></div>
+    <div id="substatus"></div>
+    <div class="meter" aria-hidden="true"><div id="meter"></div></div>
+  </section>
+
+  <section id="authBox" class="card" hidden>
+    <h2 data-i18n="passwordTitle"></h2>
+    <p class="note" data-i18n="passwordHint"></p>
+    <form id="authForm" class="auth-row">
+      <input id="password" type="password" autocomplete="current-password" enterkeyhint="go">
+      <button class="btn" type="submit" data-i18n="unlock"></button>
+    </form>
+    <div id="authError" class="error"></div>
+  </section>
+
+  <section class="card">
+    <h2 data-i18n="modeLabel"></h2>
+    <div class="seg" role="group">
+      <button id="modeLow" type="button" aria-pressed="true" data-i18n="modeLow"></button>
+      <button id="modeBg" type="button" aria-pressed="false" data-i18n="modeBg"></button>
+    </div>
+    <p id="modeNote" class="note"></p>
+
+    <div id="qualityRow">
+      <h2 data-i18n="qualityLabel" style="margin-bottom:8px"></h2>
+      <select id="quality">
+        <option value="pcm24" data-i18n="qPcm24"></option>
+        <option value="pcm16" data-i18n="qPcm16" selected></option>
+        <option value="opus-320">Opus 320 kbps</option>
+        <option value="opus-256">Opus 256 kbps</option>
+        <option value="opus-192">Opus 192 kbps</option>
+        <option value="opus-128">Opus 128 kbps</option>
+        <option value="opus-96">Opus 96 kbps</option>
+      </select>
+      <p id="qualityNote" class="note" style="margin-top:8px"></p>
+    </div>
+
+    <div id="wakeRow" class="row">
+      <span data-i18n="wake"></span>
+      <label class="switch"><input id="wake" type="checkbox" checked><span></span></label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="stats">
+      <div class="stat"><b id="sFormat">–</b><small data-i18n="format"></small></div>
+      <div class="stat"><b id="sLatency">–</b><small data-i18n="latency"></small></div>
+      <div class="stat"><b id="sLevel">–</b><small data-i18n="level"></small></div>
+      <div class="stat"><b id="sDrops">0</b><small data-i18n="drops"></small></div>
+    </div>
+    <p class="note" data-i18n="hintIos"></p>
+  </section>
+
+  <audio id="bg" playsinline preload="none"></audio>
+</main>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------
+// Strings
+const I18N = {
+  en: {
+    tapToListen: "Tap to listen", connecting: "Connecting…", playing: "Playing",
+    reconnecting: "Reconnecting…", stopped: "Stopped", offline: "Plugin not reachable",
+    full: "Too many listeners right now", serverStopped: "The plugin stopped streaming",
+    passwordTitle: "Password", passwordHint: "This stream is password-protected.",
+    unlock: "Unlock", wrongPassword: "Wrong password", needPassword: "Enter the password first",
+    modeLabel: "Mode", modeLow: "Low latency", modeBg: "Screen-off",
+    noteLow: "Lowest delay (≈0.1–0.3 s). Keep this page open and the screen on.",
+    noteBg: "Keeps playing with the screen locked, using the phone's media player. Adds ≈1–3 s of delay; 16-bit only.",
+    qualityLabel: "Quality", qPcm24: "PCM 24-bit (lossless)", qPcm16: "PCM 16-bit (lossless, default)",
+    opusNote: "Opus uses less Wi-Fi; pick it if the sound drops out.",
+    opusUnsupported: "This browser can't decode Opus — PCM only.",
+    wake: "Keep screen on", format: "Format", latency: "Latency", level: "Level", drops: "Drops",
+    hintIos: "iPhone: if you hear nothing, turn the volume up and check the silent switch.",
+    listening: n => `${n} listening`, connected: "Connected",
+  },
+  ja: {
+    tapToListen: "タップして再生", connecting: "接続中…", playing: "再生中",
+    reconnecting: "再接続中…", stopped: "停止", offline: "プラグインに接続できません",
+    full: "接続数が上限に達しています", serverStopped: "プラグイン側で配信が停止されました",
+    passwordTitle: "パスワード", passwordHint: "この配信はパスワードで保護されています。",
+    unlock: "解除", wrongPassword: "パスワードが違います", needPassword: "先にパスワードを入力してください",
+    modeLabel: "モード", modeLow: "低遅延", modeBg: "画面オフ",
+    noteLow: "遅延が最小（約0.1〜0.3秒）。このページを開いたまま画面をつけておいてください。",
+    noteBg: "スマホのメディアプレーヤーで再生するため、画面ロック中も鳴り続けます。遅延は約1〜3秒、16bitのみ。",
+    qualityLabel: "音質", qPcm24: "PCM 24bit（ロスレス）", qPcm16: "PCM 16bit（ロスレス・標準）",
+    opusNote: "OpusはWi-Fiの帯域を節約します。音が途切れる場合に選んでください。",
+    opusUnsupported: "このブラウザはOpusに非対応のため、PCMのみ使えます。",
+    wake: "画面をつけたままにする", format: "形式", latency: "遅延", level: "レベル", drops: "途切れ",
+    hintIos: "iPhoneで音が出ない場合：音量を上げ、消音スイッチを確認してください。",
+    listening: n => `${n}台が受信中`, connected: "接続済み",
+  },
+};
+const T = (navigator.language || "en").toLowerCase().startsWith("ja") ? I18N.ja : I18N.en;
+document.documentElement.lang = T === I18N.ja ? "ja" : "en";
+document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = T[el.dataset.i18n]; });
+
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("pt-" + k); return v === null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("pt-" + k, v); } catch {} },
+};
+
+// Exposed for automated tests; harmless otherwise.
+const stats = { state: "idle", format: "", packets: 0, frames: 0, underruns: 0, dropped: 0, latencyMs: 0, levelDb: -Infinity, reconnects: 0 };
+window.__pt = { stats };
+
+let info = null;
+let key = (() => { try { return sessionStorage.getItem("pt-key") || ""; } catch { return ""; } })();
+let mode = store.get("mode", "low");
+let wantPlaying = false;
+let player = null;
+let reconnectTimer = null;
+let wakeLock = null;
+let opusOK = false;
+
+class AuthError extends Error {}
+class FullError extends Error {}
+
+// ---------------------------------------------------------------------------
+// Low latency: fetch() the framed stream and schedule it with Web Audio.
+class StreamPlayer {
+  constructor(fmt, br, onEnd) {
+    this.fmt = fmt; this.br = br; this.onEnd = onEnd;
+    this.stopped = false; this.nextTime = 0; this.target = 0.12; this.lastUnderrun = 0;
+    this.pending = []; this.pendingFrames = 0; this.ts = 0;
+  }
+
+  async start() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC({ latencyHint: "interactive" });
+    this.out = this.ctx.createGain();
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this.out.connect(this.analyser);
+    this.analyser.connect(this.ctx.destination);
+    if (this.ctx.state !== "running") await this.ctx.resume();
+
+    this.abort = new AbortController();
+    const url = `/stream?fmt=${this.fmt}&br=${this.br || 0}&key=${encodeURIComponent(key)}&t=${Date.now()}`;
+    const res = await fetch(url, { signal: this.abort.signal, cache: "no-store" });
+    if (res.status === 401) throw new AuthError();
+    if (res.status === 503) throw new FullError();
+    if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+    this.pump(res.body.getReader());
+  }
+
+  async pump(reader) {
+    let buf = new Uint8Array(0);
+    let header = false;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done || this.stopped) break;
+        const merged = new Uint8Array(buf.length + value.length);
+        merged.set(buf); merged.set(value, buf.length);
+        buf = merged;
+
+        let off = 0;
+        if (!header) {
+          if (buf.length < 16) continue;
+          if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== "PTS1") throw new Error("bad stream");
+          this.wireFormat = buf[4];
+          this.setupDecoder();
+          header = true; off = 16;
+        }
+        while (buf.length - off >= 4) {
+          const len = buf[off] | (buf[off + 1] << 8) | (buf[off + 2] << 16) | (buf[off + 3] << 24);
+          if (buf.length - off - 4 < len) break;
+          if (len > 0) this.onPacket(buf.slice(off + 4, off + 4 + len));
+          off += 4 + len;
+        }
+        buf = buf.slice(off);
+      }
+    } catch (e) {
+      if (this.stopped || e.name === "AbortError") return;
+    }
+    if (!this.stopped) this.onEnd();
+  }
+
+  setupDecoder() {
+    if (this.wireFormat !== 2) return;
+    this.decoder = new AudioDecoder({
+      output: ad => this.onAudioData(ad),
+      error: () => { if (!this.stopped) this.onEnd(); },
+    });
+    this.decoder.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 });
+  }
+
+  onPacket(p) {
+    stats.packets++;
+    if (this.wireFormat === 2) {
+      this.decoder.decode(new EncodedAudioChunk({ type: "key", timestamp: this.ts, data: p }));
+      this.ts += 20000;
+      return;
+    }
+    const bytes = this.wireFormat === 1 ? 3 : 2;
+    const frames = Math.floor(p.length / (bytes * 2));
+    const L = new Float32Array(frames), R = new Float32Array(frames);
+    if (bytes === 2) {
+      const dv = new DataView(p.buffer, p.byteOffset, p.byteLength);
+      for (let i = 0; i < frames; i++) {
+        L[i] = dv.getInt16(i * 4, true) / 32768;
+        R[i] = dv.getInt16(i * 4 + 2, true) / 32768;
+      }
+    } else {
+      const s24 = o => { const v = p[o] | (p[o + 1] << 8) | (p[o + 2] << 16); return (v & 0x800000 ? v - 0x1000000 : v) / 8388608; };
+      for (let i = 0; i < frames; i++) { L[i] = s24(i * 6); R[i] = s24(i * 6 + 3); }
+    }
+    this.enqueue(L, R);
+  }
+
+  onAudioData(ad) {
+    const n = ad.numberOfFrames, ch = ad.numberOfChannels;
+    const planes = [];
+    try {
+      for (let c = 0; c < ch; c++) {
+        const a = new Float32Array(n);
+        ad.copyTo(a, { planeIndex: c, format: "f32-planar" });
+        planes.push(a);
+      }
+    } catch {
+      // Older WebCodecs builds can't convert on copy: read the native layout.
+      planes.length = 0;
+      const f = ad.format || "";
+      const planar = f.endsWith("-planar");
+      const isS16 = f.startsWith("s16");
+      const plane = i => {
+        const size = ad.allocationSize({ planeIndex: i });
+        const raw = isS16 ? new Int16Array(size / 2) : new Float32Array(size / 4);
+        ad.copyTo(raw, { planeIndex: i });
+        return raw;
+      };
+      const scale = isS16 ? 1 / 32768 : 1;
+      if (planar) {
+        for (let c = 0; c < ch; c++) planes.push(Float32Array.from(plane(c), v => v * scale));
+      } else {
+        const all = plane(0);
+        for (let c = 0; c < ch; c++) {
+          const a = new Float32Array(n);
+          for (let i = 0; i < n; i++) a[i] = all[i * ch + c] * scale;
+          planes.push(a);
+        }
+      }
+    }
+    ad.close();
+    this.enqueue(planes[0], planes[1] || planes[0]);
+  }
+
+  enqueue(L, R) {
+    this.pending.push([L, R]);
+    this.pendingFrames += L.length;
+    if (this.pendingFrames < 960) return; // schedule in >= 20 ms blocks
+
+    const total = this.pendingFrames;
+    const outL = new Float32Array(total), outR = new Float32Array(total);
+    let o = 0;
+    for (const [l, r] of this.pending) { outL.set(l, o); outR.set(r, o); o += l.length; }
+    this.pending = []; this.pendingFrames = 0;
+    this.schedule(outL, outR);
+  }
+
+  schedule(L, R) {
+    if (this.stopped) return;
+    const ctx = this.ctx, frames = L.length;
+    const now = ctx.currentTime;
+    const ahead = this.nextTime - now;
+
+    if (ahead < 0.01) {
+      if (this.nextTime > 0) {
+        stats.underruns++;
+        this.target = Math.min(0.5, this.target + 0.03); // grow the cushion after a dropout
+        this.lastUnderrun = now;
+      }
+      this.nextTime = now + this.target;
+    } else if (ahead > this.target + 0.35) {
+      stats.dropped++; // arrived in a burst far behind real time: skip to catch up
+      return;
+    } else if (now - this.lastUnderrun > 15 && this.target > 0.08) {
+      this.target -= 0.01; // stable for a while: creep back towards low latency
+      this.lastUnderrun = now;
+    }
+
+    const b = ctx.createBuffer(2, frames, 48000);
+    b.getChannelData(0).set(L);
+    b.getChannelData(1).set(R);
+    const src = ctx.createBufferSource();
+    src.buffer = b;
+    src.connect(this.out);
+    src.start(this.nextTime);
+    this.nextTime += frames / 48000;
+
+    stats.frames += frames;
+    stats.latencyMs = Math.round((this.nextTime - now + (ctx.outputLatency || ctx.baseLatency || 0)) * 1000);
+  }
+
+  level() {
+    if (!this.analyser) return -Infinity;
+    const a = new Float32Array(this.analyser.fftSize);
+    this.analyser.getFloatTimeDomainData(a);
+    let sum = 0;
+    for (const v of a) sum += v * v;
+    const rms = Math.sqrt(sum / a.length);
+    return rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+  }
+
+  stop() {
+    this.stopped = true;
+    try { this.abort && this.abort.abort(); } catch {}
+    try { this.decoder && this.decoder.state !== "closed" && this.decoder.close(); } catch {}
+    try { this.ctx && this.ctx.close(); } catch {}
+  }
+}
+
+// Screen-off: hand an endless WAV to the phone's own media player, which
+// (unlike Web Audio) keeps playing while the screen is locked.
+class ElementPlayer {
+  constructor(onEnd) { this.onEnd = onEnd; this.el = $("bg"); }
+  async start() {
+    this.handler = () => { if (!this.stopped) this.onEnd(); };
+    this.el.addEventListener("error", this.handler);
+    this.el.addEventListener("ended", this.handler);
+    this.el.src = `/live.wav?key=${encodeURIComponent(key)}&t=${Date.now()}`;
+    await this.el.play();
+    stats.latencyMs = 0;
+  }
+  level() { return -Infinity; }
+  stop() {
+    this.stopped = true;
+    this.el.removeEventListener("error", this.handler);
+    this.el.removeEventListener("ended", this.handler);
+    this.el.pause();
+    this.el.removeAttribute("src");
+    this.el.load();
+  }
+}
+
+// ---------------------------------------------------------------------------
+function setStatus(text, sub = "") { $("status").textContent = text; $("substatus").textContent = sub; }
+
+function setPlayingUi(on) {
+  $("play").classList.toggle("on", on);
+  // SVG elements have no .hidden property, so toggle the attribute itself.
+  $("icon-play").toggleAttribute("hidden", on);
+  $("icon-stop").toggleAttribute("hidden", !on);
+  $("play").setAttribute("aria-label", on ? "Stop" : "Play");
+}
+
+function selectedStream() {
+  const q = $("quality").value;
+  if (mode === "bg") return { fmt: "pcm16", br: 0, label: "WAV 16" };
+  if (q.startsWith("opus") && opusOK) { const br = +q.split("-")[1]; return { fmt: "opus", br, label: `Opus ${br}` }; }
+  if (q === "pcm24") return { fmt: "pcm24", br: 0, label: "PCM 24" };
+  return { fmt: "pcm16", br: 0, label: "PCM 16" };
+}
+
+async function requestWakeLock() {
+  if (mode !== "low" || !$("wake").checked || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+}
+function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
+
+async function startPlayback() {
+  clearTimeout(reconnectTimer);
+  if (info && info.auth && !key) { wantPlaying = false; setPlayingUi(false); showAuth(T.needPassword); return; }
+
+  // Lets Web Audio play even with the iPhone's silent switch on (Safari 17+).
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+
+  const s = selectedStream();
+  stats.format = s.label; stats.state = "connecting";
+  $("sFormat").textContent = s.label;
+  setStatus(stats.reconnects ? T.reconnecting : T.connecting);
+  setPlayingUi(true);
+
+  const onEnd = () => scheduleReconnect();
+  player = mode === "bg" ? new ElementPlayer(onEnd) : new StreamPlayer(s.fmt, s.br, onEnd);
+
+  try {
+    await player.start();
+    if (!wantPlaying) { player.stop(); return; }
+    stats.state = "playing";
+    setStatus(T.playing, s.label);
+    requestWakeLock();
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: "PhoneTesto Live", artist: "DAW" });
+        navigator.mediaSession.setActionHandler("pause", () => togglePlay(false));
+        navigator.mediaSession.setActionHandler("play", () => togglePlay(true));
+      } catch {}
+    }
+  } catch (e) {
+    try { player.stop(); } catch {}
+    player = null;
+    if (e instanceof AuthError) { wantPlaying = false; setPlayingUi(false); stats.state = "auth"; showAuth(T.wrongPassword); setStatus(T.tapToListen); return; }
+    if (e instanceof FullError) { setStatus(T.full); }
+    scheduleReconnect();
+  }
+}
+
+function scheduleReconnect() {
+  if (!wantPlaying) return;
+  if (player) { try { player.stop(); } catch {} player = null; }
+  stats.state = "reconnecting"; stats.reconnects++;
+  setStatus(T.reconnecting);
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => { if (wantPlaying) startPlayback(); }, 1500);
+}
+
+function stopPlayback() {
+  clearTimeout(reconnectTimer);
+  if (player) { try { player.stop(); } catch {} player = null; }
+  releaseWakeLock();
+  stats.state = "idle"; stats.latencyMs = 0;
+  setPlayingUi(false);
+  setStatus(T.tapToListen);
+  $("meter").style.width = "0%";
+}
+
+function togglePlay(force) {
+  const next = typeof force === "boolean" ? force : !wantPlaying;
+  if (next === wantPlaying) return;
+  wantPlaying = next;
+  stats.reconnects = 0;
+  if (wantPlaying) startPlayback(); else stopPlayback();
+}
+
+function restartIfPlaying() { if (wantPlaying) { if (player) { try { player.stop(); } catch {} player = null; } startPlayback(); } }
+
+// ---------------------------------------------------------------------------
+function showAuth(message) { $("authBox").hidden = false; $("authError").textContent = message || ""; $("password").focus(); }
+
+$("authForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const candidate = $("password").value;
+  $("authError").textContent = "";
+  try {
+    const r = await fetch(`/auth?key=${encodeURIComponent(candidate)}`, { cache: "no-store" });
+    if (r.status === 204) {
+      key = candidate;
+      try { sessionStorage.setItem("pt-key", key); } catch {}
+      $("authBox").hidden = true;
+      $("authError").textContent = "";
+    } else {
+      $("authError").textContent = T.wrongPassword;
+    }
+  } catch { $("authError").textContent = T.offline; }
+});
+
+function applyMode() {
+  $("modeLow").setAttribute("aria-pressed", String(mode === "low"));
+  $("modeBg").setAttribute("aria-pressed", String(mode === "bg"));
+  $("modeNote").textContent = mode === "low" ? T.noteLow : T.noteBg;
+  $("qualityRow").hidden = mode !== "low";
+  $("wakeRow").hidden = mode !== "low";
+}
+$("modeLow").addEventListener("click", () => { mode = "low"; store.set("mode", mode); applyMode(); restartIfPlaying(); });
+$("modeBg").addEventListener("click", () => { mode = "bg"; store.set("mode", mode); applyMode(); releaseWakeLock(); restartIfPlaying(); });
+$("quality").addEventListener("change", () => { store.set("quality", $("quality").value); restartIfPlaying(); });
+$("wake").addEventListener("change", () => { store.set("wake", $("wake").checked ? "1" : "0"); if ($("wake").checked) requestWakeLock(); else releaseWakeLock(); });
+$("play").addEventListener("click", () => togglePlay());
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wantPlaying) requestWakeLock(); });
+
+async function pollInfo() {
+  try {
+    const r = await fetch("/info", { cache: "no-store" });
+    info = await r.json();
+    const pill = $("conn");
+    pill.className = "pill ok";
+    pill.textContent = info.listeners > 0 ? T.listening(info.listeners) : T.connected;
+    if (info.auth && !key && $("authBox").hidden) showAuth();
+  } catch {
+    $("conn").className = "pill bad";
+    $("conn").textContent = T.offline;
+  }
+}
+
+function meterLoop() {
+  if (player && stats.state === "playing") {
+    const db = player.level();
+    stats.levelDb = db;
+    const pct = Number.isFinite(db) ? Math.max(0, Math.min(100, (db + 60) / 60 * 100)) : 0;
+    $("meter").style.width = pct.toFixed(1) + "%";
+    $("sLevel").textContent = Number.isFinite(db) ? `${Math.round(db)} dB` : "–";
+  }
+  $("sLatency").textContent = stats.state !== "playing" ? "–"
+    : mode === "bg" ? "≈1–3 s" : `${stats.latencyMs} ms`;
+  $("sDrops").textContent = String(stats.underruns + stats.dropped);
+  requestAnimationFrame(meterLoop);
+}
+
+(async function init() {
+  $("quality").value = store.get("quality", "pcm16");
+  $("wake").checked = store.get("wake", "1") === "1";
+  setStatus(T.tapToListen);
+
+  try {
+    opusOK = "AudioDecoder" in window && "EncodedAudioChunk" in window &&
+      !!(await AudioDecoder.isConfigSupported({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 })).supported;
+  } catch { opusOK = false; }
+  document.querySelectorAll('#quality option[value^="opus"]').forEach(o => { o.disabled = !opusOK; });
+  if (!opusOK && $("quality").value.startsWith("opus")) $("quality").value = "pcm16";
+  $("qualityNote").textContent = opusOK ? T.opusNote : T.opusUnsupported;
+
+  applyMode();
+  await pollInfo();
+  setInterval(pollInfo, 3000);
+  requestAnimationFrame(meterLoop);
+})();
+</script>
+</body>
+</html>
