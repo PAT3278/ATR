@@ -54,7 +54,14 @@ FetchContent_Declare(
     GIT_TAG        v1.4
     GIT_SHALLOW    TRUE
 )
+# libopus 1.4 declares cmake_minimum_required(VERSION 3.1). CMake 4 refuses
+# anything below 3.5, and under it opus would ignore CMAKE_MSVC_RUNTIME_LIBRARY
+# (policy CMP0091), linking the DLL runtime against our static one on Windows.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 FetchContent_MakeAvailable(opus)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
+unset(CMAKE_POLICY_DEFAULT_CMP0091)
 
 # Nayuki QR Code generator (MIT): draws the "scan to listen" code in the
 # editor. The repo has no CMake project, so its single C++ source is

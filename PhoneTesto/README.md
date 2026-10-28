@@ -145,7 +145,7 @@ time against it.
 
 ## Building
 
-Requires CMake ≥ 3.22 and a C++17 compiler. JUCE is fetched automatically
+Requires CMake ≥ 3.22 (CMake 4 works too) and a C++17 compiler. JUCE is fetched automatically
 via `FetchContent` — no manual JUCE install or submodule needed.
 
 ```sh
@@ -239,6 +239,28 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
 
 The VST3 build also passes Steinberg's VST3 validator (all 47 tests) and
 [pluginval](https://github.com/Tracktion/pluginval) at strictness 10.
+
+### Automatic builds (GitHub Actions)
+
+Every push that touches `PhoneTesto/` builds the plugin on **Windows,
+macOS and Linux** (`.github/workflows/phonetesto.yml`) and runs on each:
+the DSP and Live Monitor tests, pluginval at strictness 10, and editor
+snapshots. macOS also runs Apple's `auval` on the Audio Unit. Linux also
+runs the phone-page browser tests and checks that the QR code decodes.
+
+**Downloading a build** without compiling: repository → **Actions** →
+**PhoneTesto** → the latest run with a green tick → **Artifacts** at the
+bottom:
+
+- `PhoneTesto-Windows` — `PhoneTesto.vst3` (copy to
+  `C:\Program Files\Common Files\VST3\`) and the standalone `PhoneTesto.exe`.
+- `PhoneTesto-macOS` — VST3, AU and standalone app as zips. They aren't
+  code-signed yet, so macOS quarantines them after download; clear that with
+  `xattr -dr com.apple.quarantine <path to the .vst3/.component/.app>`.
+- `PhoneTesto-Linux` — VST3 and standalone.
+- `snapshots-*` — the editor (and, on Linux, the phone page) as PNGs.
+
+Artifacts are kept for 30 days.
 
 ## Project layout
 
