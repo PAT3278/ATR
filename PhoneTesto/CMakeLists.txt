@@ -44,8 +44,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qrcodegen)
 
-# The browser player page served to the phone, embedded as BinaryData.
-juce_add_binary_data(PhoneTestoAssets SOURCES Resources/player.html)
+# The phone player page and the Barlow fonts (SIL OFL, see
+# Resources/fonts/OFL.txt) used by both the editor and that page.
+juce_add_binary_data(PhoneTestoAssets SOURCES
+    Resources/player.html
+    Resources/fonts/BarlowCondensed-Bold.ttf
+    Resources/fonts/BarlowCondensed-SemiBold.ttf
+    Resources/fonts/Barlow-Medium.ttf
+    Resources/fonts/Barlow-SemiBold.ttf
+    Resources/fonts/Barlow-Bold.ttf
+)
 
 # --- AAX ------------------------------------------------------------------
 # AAX requires Avid's proprietary SDK, which cannot be redistributed here.
@@ -70,7 +78,7 @@ juce_add_plugin(PhoneTesto
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     VST3_CATEGORIES Fx
     AU_MAIN_TYPE kAudioUnitType_Effect
     COPY_PLUGIN_AFTER_BUILD TRUE
@@ -80,7 +88,9 @@ target_sources(PhoneTesto
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/PhoneUILookAndFeel.cpp
+        Source/HardwareStyle.cpp
+        Source/VuMeter.cpp
+        Source/DisplayWindow.cpp
         Source/LiveMonitorServer.cpp
         Source/LiveStreamEncoder.cpp
         Source/QrCodeComponent.cpp

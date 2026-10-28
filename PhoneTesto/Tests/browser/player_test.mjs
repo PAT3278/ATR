@@ -73,9 +73,11 @@ try {
       await sleep(3000);
       const s = await stats(page);
       if (q === "pcm16") {
-        const icons = await page.evaluate(() => [getComputedStyle(document.getElementById("icon-play")).display,
-                                                getComputedStyle(document.getElementById("icon-stop")).display]);
-        check(icons[0] === "none" && icons[1] !== "none", `button shows the stop icon while playing (play:${icons[0]}, stop:${icons[1]})`);
+        const btn = await page.evaluate(() => [document.getElementById("play").getAttribute("aria-pressed"),
+                                              document.getElementById("playText").textContent]);
+        check(btn[0] === "true" && btn[1] === "Listening", `LISTEN lamp lit while playing (aria-pressed=${btn[0]}, "${btn[1]}")`);
+        const fontsOk = await page.evaluate(() => document.fonts.check('700 20px "Barlow Condensed"'));
+        check(fontsOk, "Barlow fonts load from the plugin");
       }
       check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6,
         `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s scheduled, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms, underruns ${s.underruns}, dropped ${s.dropped}`);

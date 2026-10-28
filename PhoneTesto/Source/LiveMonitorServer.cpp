@@ -313,13 +313,13 @@ private:
     }
 
     bool sendResponse (int code, const juce::String& contentType, const void* body, size_t bodySize,
-                       bool headOnly = false)
+                       bool headOnly = false, const char* cacheControl = "no-store")
     {
         juce::String header;
         header << "HTTP/1.1 " << statusLine (code) << "\r\n"
                << "Content-Type: " << contentType << "\r\n"
                << "Content-Length: " << (juce::int64) bodySize << "\r\n"
-               << "Cache-Control: no-store\r\n"
+               << "Cache-Control: " << cacheControl << "\r\n"
                << "Connection: close\r\n\r\n";
 
         if (! sendAll (header.toRawUTF8(), header.getNumBytesAsUTF8()))
@@ -385,6 +385,24 @@ private:
             sendResponse (200, "text/html; charset=utf-8", BinaryData::player_html,
                           (size_t) BinaryData::player_htmlSize, head);
             return;
+        }
+
+        // The same Barlow fonts the plugin's faceplate uses, for the page.
+        struct FontFile { const char* path; const char* data; int size; };
+        const FontFile fonts[] = {
+            { "/fonts/BarlowCondensed-Bold.ttf",     BinaryData::BarlowCondensedBold_ttf,     BinaryData::BarlowCondensedBold_ttfSize },
+            { "/fonts/BarlowCondensed-SemiBold.ttf", BinaryData::BarlowCondensedSemiBold_ttf, BinaryData::BarlowCondensedSemiBold_ttfSize },
+            { "/fonts/Barlow-Medium.ttf",            BinaryData::BarlowMedium_ttf,            BinaryData::BarlowMedium_ttfSize },
+            { "/fonts/Barlow-SemiBold.ttf",          BinaryData::BarlowSemiBold_ttf,          BinaryData::BarlowSemiBold_ttfSize },
+        };
+
+        for (auto& f : fonts)
+        {
+            if (path == f.path)
+            {
+                sendResponse (200, "font/ttf", f.data, (size_t) f.size, head, "public, max-age=86400");
+                return;
+            }
         }
 
         if (path == "/info")

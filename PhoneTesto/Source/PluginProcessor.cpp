@@ -211,6 +211,11 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
 
     buffer.applyGain (outputGain);
 
+    float rms = 0.0f;
+    for (int ch = 0; ch < numChannels; ++ch)
+        rms = juce::jmax (rms, buffer.getRMSLevel (ch, 0, numSamples));
+    outputRms.store (rms, std::memory_order_relaxed);
+
     if (liveMonitorActive.load())
         liveServer.pushAudio (buffer);
 }

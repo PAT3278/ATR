@@ -5,31 +5,41 @@
 namespace phonetesto
 {
 
+namespace
+{
+    constexpr int quietZone = 4; // modules, per the QR spec
+}
+
 void QrCodeComponent::setText (const juce::String& text)
 {
     if (text == currentText)
         return;
 
     currentText = text;
-    modules.clear();
-    size = 0;
+    codeImage = {};
 
     if (text.isNotEmpty())
     {
         try
         {
             const auto qr = qrcodegen::QrCode::encodeText (text.toRawUTF8(), qrcodegen::QrCode::Ecc::MEDIUM);
-            size = qr.getSize();
-            modules.resize ((size_t) (size * size));
+            const int size = qr.getSize();
+
+            // One pixel per module, quiet zone included; scaled up with
+            // nearest-neighbour sampling when drawn so module edges stay hard
+            // at any window size or display scaling (anti-aliased grey edges
+            // at e.g. 125%/150% make codes much harder to scan).
+            codeImage = juce::Image (juce::Image::RGB, size + 2 * quietZone, size + 2 * quietZone, false);
+            codeImage.clear (codeImage.getBounds(), juce::Colours::white);
 
             for (int y = 0; y < size; ++y)
                 for (int x = 0; x < size; ++x)
-                    modules[(size_t) (y * size + x)] = qr.getModule (x, y);
+                    if (qr.getModule (x, y))
+                        codeImage.setPixelAt (x + quietZone, y + quietZone, juce::Colours::black);
         }
         catch (const std::exception&)
         {
-            size = 0;
-            modules.clear();
+            codeImage = {};
         }
     }
 
@@ -38,30 +48,23 @@ void QrCodeComponent::setText (const juce::String& text)
 
 void QrCodeComponent::paint (juce::Graphics& g)
 {
-    if (size == 0)
+    if (! codeImage.isValid())
         return;
 
-    constexpr int quietZone = 3;
-    const int available = juce::jmin (getWidth(), getHeight());
-    const int modulePx = available / (size + 2 * quietZone);
+    const int modules = codeImage.getWidth();
+    const int modulePx = juce::jmin (getWidth(), getHeight()) / modules;
 
     if (modulePx < 1)
         return;
 
-    const int cardPx = modulePx * (size + 2 * quietZone);
+    const int cardPx = modulePx * modules;
     const auto card = juce::Rectangle<int> (cardPx, cardPx).withCentre (getLocalBounds().getCentre());
 
     g.setColour (juce::Colours::white);
     g.fillRoundedRectangle (card.toFloat(), (float) modulePx * 1.5f);
 
-    g.setColour (juce::Colour (0xff0a0b10));
-    const int originX = card.getX() + quietZone * modulePx;
-    const int originY = card.getY() + quietZone * modulePx;
-
-    for (int y = 0; y < size; ++y)
-        for (int x = 0; x < size; ++x)
-            if (modules[(size_t) (y * size + x)])
-                g.fillRect (originX + x * modulePx, originY + y * modulePx, modulePx, modulePx);
+    g.setImageResamplingQuality (juce::Graphics::lowResamplingQuality);
+    g.drawImage (codeImage, card.toFloat(), juce::RectanglePlacement::stretchToFit);
 }
 
 } // namespace phonetesto

@@ -34,21 +34,35 @@ values in `Source/SpeakerProfiles.h` are hand-tuned approximations. If real
 measured impulse responses become available (device + mic + calibrated
 level), adding a convolution stage per profile is the natural next step.
 
-The editor is drawn as a phone body (device-specific notch/Dynamic
-Island/home-button chrome, accent colour per profile) with an iOS-style
-volume HUD on the left and the Mix control as a knob set into the "screen".
+## The panel
+
+The editor is laid out like a rack unit, left to right:
+
+- **VU meter** — a backlit analogue meter on the output, 0 VU = −18 dBFS
+  RMS, with standard ~300 ms needle ballistics and a PEAK lamp.
+- **MODEL** — an 8-position selector switch. Turn it, or click a printed
+  position to jump straight there.
+- **MIX** / **OUTPUT** knobs — hover or drag to see the value; double-click
+  to reset.
+- **Display** — plots the selected model's frequency response; with Live on
+  it shows the QR code, address, password and how many phones are listening.
+- **MONO**, **BYPASS** and **ON AIR** (Live) lamp buttons.
+
+Drag the window's corner to resize; the whole panel scales. Fonts are
+Barlow / Barlow Condensed, embedded in the plugin.
 
 ## Live Monitor mode
 
-Insert PhoneTesto as the **last plugin on your master bus**, toggle **Live**
-(bottom-right of the panel), and the plugin's screen turns into a QR code:
+Insert PhoneTesto as the **last plugin on your master bus**, press **ON AIR**
+(bottom-right of the panel), and the display shows a QR code:
 
 1. A small server starts inside the plugin (port `51813`, or the next free
    one).
 2. **Scan the QR code** with the phone's camera (or type the URL shown under
    it). The phone must be on the **same Wi-Fi** as the computer.
 3. The player page opens in the phone's browser — no app to install. Tap
-   ▶ to listen.
+   **LISTEN**. The page has the same look as the plugin, including a VU
+   meter showing what the phone is receiving.
 
 What you get:
 
@@ -61,14 +75,15 @@ What you get:
     screen on" option. Needs the page open and the screen on.
   - *Screen-off*: hands the stream to the phone's own media player so it
     keeps playing with the screen locked. About 1–3 s behind; 16-bit only.
-- **Optional password** (field above the QR code, saved with the project).
+- **Optional password** (field in the display, saved with the project).
   Phones are asked for it before they can listen. Leave it empty for no
   password.
 - **Listener count** in the plugin, and automatic reconnect on the phone if
   the plugin restarts.
 - While Live is on, the Emulate DSP is skipped (the real phone does the
   speaker colouring itself), so your monitors and the phones hear the same
-  clean signal. Mix/preset/mono/bypass are dimmed because they don't apply.
+  clean signal. MODEL, MIX, MONO and BYPASS are dimmed because they don't
+  apply.
 
 **Status of testing.** The streaming server is tested with plain socket
 clients that decode every format and check pitch and level, and the player
@@ -154,11 +169,14 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
 CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps
 Resources/
   player.html              The phone-side player page (embedded into the plugin)
+  fonts/                   Barlow fonts + their licence (OFL.txt)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
-  PluginEditor.h/.cpp      Phone-body panel: presets, mix, volume, toggles, Live QR screen
-  PhoneUILookAndFeel.h/.cpp  Custom-styled controls (volume HUD, mix knob, toggles, preset box)
-  SpeakerProfiles.h        Per-device filter/drive tables + editor chrome style
+  PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
+  HardwareStyle.h/.cpp     Fonts, palette, powder coat, screws, knobs, lamp buttons
+  VuMeter.h/.cpp           Analogue VU meter
+  DisplayWindow.h/.cpp     Amber display: response curve / Live QR, address, password
+  SpeakerProfiles.h        Per-device filter/drive tables
   LiveMonitorServer.h/.cpp Embedded HTTP server, listener threads, lock-free broadcast ring
   LiveStreamEncoder.h/.cpp Per-listener 48 kHz resampling + PCM16/PCM24/Opus packetising
   QrCodeComponent.h/.cpp   Draws the "scan to listen" QR code
@@ -176,8 +194,11 @@ Tests/
 - [libopus](https://opus-codec.org) — BSD 3-Clause.
 - [QR Code generator](https://www.nayuki.io/page/qr-code-generator-library)
   by Project Nayuki — MIT.
+- [Barlow](https://github.com/jpt/barlow) fonts — SIL Open Font License 1.1
+  (`Resources/fonts/OFL.txt`); these are included in the repo and embedded in
+  the plugin.
 
-All are fetched at configure time; nothing is vendored in this repo.
+The code libraries are fetched at configure time rather than vendored.
 
 ## Roadmap
 

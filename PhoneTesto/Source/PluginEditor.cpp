@@ -3,471 +3,327 @@
 namespace phonetesto
 {
 
+namespace layout
+{
+    constexpr float earWidth = 42.0f;
+    constexpr float contentLeft = 66.0f, contentRight = 914.0f;
+
+    const juce::Rectangle<int> vuMeter { 66, 100, 240, 172 };
+    const juce::Rectangle<int> display { 648, 100, 268, 236 };
+
+    constexpr juce::Point<float> modelCentre { 432.0f, 222.0f };
+    constexpr float modelKnobSize = 132.0f;
+    constexpr float modelLegendRadius = 93.0f;
+    constexpr float modelDotRadius = 71.0f;
+
+    constexpr juce::Point<float> mixCentre { 584.0f, 168.0f };
+    constexpr juce::Point<float> outputCentre { 584.0f, 300.0f };
+    constexpr float knobSize = 92.0f;
+
+    constexpr juce::Point<float> monoCentre { 128.0f, 352.0f };
+    constexpr juce::Point<float> bypassCentre { 244.0f, 352.0f };
+    constexpr juce::Point<float> onAirCentre { 782.0f, 364.0f };
+
+    constexpr float knobStart = juce::MathConstants<float>::pi * 1.25f;
+    constexpr float knobEnd = juce::MathConstants<float>::pi * 2.75f;
+} // namespace layout
+
+namespace
+{
+    juce::Rectangle<int> centredBox (juce::Point<float> centre, float w, float h)
+    {
+        return juce::Rectangle<float> (w, h).withCentre (centre).toNearestInt();
+    }
+
+    juce::Rectangle<float> legendBelow (juce::Point<float> centre, float offset, float width = 120.0f)
+    {
+        return juce::Rectangle<float> (width, 16.0f).withCentre (centre.translated (0.0f, offset));
+    }
+} // namespace
+
+//==============================================================================
 PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioProcessor& p)
     : AudioProcessorEditor (&p), processor (p)
 {
-    const juce::String hudFontName = juce::Font::getDefaultMonospacedFontName();
+    setLookAndFeel (&lookAndFeel);
+    addAndMakeVisible (faceplate);
+    faceplate.onPaint = [this] (juce::Graphics& g) { paintFaceplate (g); };
+    faceplate.onMouseDown = [this] (const juce::MouseEvent& e) { selectModelAt (e.position); };
 
-    titleLabel.setText ("PhoneTesto", juce::dontSendNotification);
-    titleLabel.setFont (juce::Font (hudFontName, 14.0f, juce::Font::bold));
-    titleLabel.setJustificationType (juce::Justification::centred);
-    titleLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.55f));
-    addAndMakeVisible (titleLabel);
+    faceplate.addAndMakeVisible (vuMeter);
+    faceplate.addAndMakeVisible (display);
 
-    presetCaptionLabel.setText ("PRESET", juce::dontSendNotification);
-    presetCaptionLabel.setJustificationType (juce::Justification::centredLeft);
-    presetCaptionLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
-    presetCaptionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
-    addAndMakeVisible (presetCaptionLabel);
+    // MODEL: an 8-position stepped switch with a chicken-head knob
+    modelSelector.getProperties().set (hw::selectorKnobProperty, true);
+    modelSelector.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    modelSelector.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+    modelSelector.setRotaryParameters (layout::knobStart, layout::knobEnd, true);
+    modelSelector.setMouseDragSensitivity (160);
+    faceplate.addAndMakeVisible (modelSelector);
+    modelAttachment = std::make_unique<SliderAttachment> (processor.apvts, PhoneTestoAudioProcessor::deviceParamId, modelSelector);
+    modelSelector.onValueChange = [this] { faceplate.repaint(); };
 
-    deviceBox.addItemList (getSpeakerNames(), 1);
-    deviceBox.setJustificationType (juce::Justification::centred);
-    deviceBox.setColour (juce::ComboBox::textColourId, juce::Colours::white.withAlpha (0.92f));
-    deviceBox.setLookAndFeel (&presetLnf);
-    addAndMakeVisible (deviceBox);
-    deviceAttachment = std::make_unique<ComboBoxAttachment> (
-        processor.apvts, PhoneTestoAudioProcessor::deviceParamId, deviceBox);
-    deviceBox.onChange = [this] { updateDeviceVisuals(); };
-
-    mixValueLabel.setJustificationType (juce::Justification::centred);
-    mixValueLabel.setFont (juce::Font (hudFontName, 14.0f, juce::Font::bold));
-    mixValueLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
-    addAndMakeVisible (mixValueLabel);
-
-    mixSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    mixSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
-    mixSlider.setLookAndFeel (&mixLnf);
-    addAndMakeVisible (mixSlider);
-    mixAttachment = std::make_unique<SliderAttachment> (
-        processor.apvts, PhoneTestoAudioProcessor::mixParamId, mixSlider);
-    mixSlider.onValueChange = [this]
+    for (auto* knob : { &mixKnob, &outputKnob })
     {
-        mixValueLabel.setText ("MIX  " + juce::String ((int) std::round (mixSlider.getValue())) + "%",
-                                juce::dontSendNotification);
+        knob->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+        knob->setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+        knob->setRotaryParameters (layout::knobStart, layout::knobEnd, true);
+        knob->setPopupDisplayEnabled (true, true, &faceplate, 900);
+        faceplate.addAndMakeVisible (*knob);
+    }
+
+    mixAttachment = std::make_unique<SliderAttachment> (processor.apvts, PhoneTestoAudioProcessor::mixParamId, mixKnob);
+    outputAttachment = std::make_unique<SliderAttachment> (processor.apvts, PhoneTestoAudioProcessor::outputParamId, outputKnob);
+    mixKnob.setDoubleClickReturnValue (true, 100.0);
+    outputKnob.setDoubleClickReturnValue (true, 70.0);
+    mixKnob.textFromValueFunction = [] (double v) { return "MIX  " + juce::String (juce::roundToInt (v)) + "%"; };
+    outputKnob.textFromValueFunction = [] (double v)
+    {
+        return v <= 0.0 ? juce::String ("OUTPUT  -INF dB")
+                        : "OUTPUT  " + juce::String (juce::Decibels::gainToDecibels (v / 100.0), 1) + " dB";
     };
 
-    // Output's HUD sits on the left of the screen, matching where the real
-    // hardware volume buttons live on an iPhone.
-    outputHudSlider.setSliderStyle (juce::Slider::LinearVertical);
-    outputHudSlider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
-    outputHudSlider.setLookAndFeel (&volumeLnf);
-    addAndMakeVisible (outputHudSlider);
-    outputAttachment = std::make_unique<SliderAttachment> (
-        processor.apvts, PhoneTestoAudioProcessor::outputParamId, outputHudSlider);
+    monoButton.getProperties().set (hw::lampColourProperty, (int) hw::colours::lampAmber.getARGB());
+    bypassButton.getProperties().set (hw::lampColourProperty, (int) hw::colours::lampAmber.getARGB());
+    onAirButton.getProperties().set (hw::lampColourProperty, (int) hw::colours::lampRed.getARGB());
+    onAirButton.getProperties().set (hw::lensTextProperty, "ON AIR");
 
-    outputCaptionLabel.setText ("VOL", juce::dontSendNotification);
-    outputCaptionLabel.setJustificationType (juce::Justification::centred);
-    outputCaptionLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
-    outputCaptionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
-    addAndMakeVisible (outputCaptionLabel);
+    for (auto* b : { &monoButton, &bypassButton, &onAirButton })
+        faceplate.addAndMakeVisible (*b);
 
-    monoButton.setLookAndFeel (&toggleLnf);
-    addAndMakeVisible (monoButton);
-    monoAttachment = std::make_unique<ButtonAttachment> (
-        processor.apvts, PhoneTestoAudioProcessor::monoParamId, monoButton);
+    monoAttachment = std::make_unique<ButtonAttachment> (processor.apvts, PhoneTestoAudioProcessor::monoParamId, monoButton);
+    bypassAttachment = std::make_unique<ButtonAttachment> (processor.apvts, PhoneTestoAudioProcessor::bypassParamId, bypassButton);
+    onAirButton.onClick = [this] { toggleLive(); };
 
-    bypassButton.setLookAndFeel (&toggleLnf);
-    addAndMakeVisible (bypassButton);
-    bypassAttachment = std::make_unique<ButtonAttachment> (
-        processor.apvts, PhoneTestoAudioProcessor::bypassParamId, bypassButton);
+    auto& password = display.getPasswordEditor();
+    password.setText (processor.getLivePassword(), juce::dontSendNotification);
+    password.onTextChange = [this] { processor.setLivePassword (display.getPasswordEditor().getText().trim()); };
 
-    liveButton.setLookAndFeel (&toggleLnf);
-    addAndMakeVisible (liveButton);
-    liveButton.onClick = [this]
-    {
-        liveStartFailed = false;
+    vuMeter.setBounds (layout::vuMeter);
+    display.setBounds (layout::display);
+    modelSelector.setBounds (centredBox (layout::modelCentre, layout::modelKnobSize, layout::modelKnobSize));
+    mixKnob.setBounds (centredBox (layout::mixCentre, layout::knobSize, layout::knobSize));
+    outputKnob.setBounds (centredBox (layout::outputCentre, layout::knobSize, layout::knobSize));
+    monoButton.setBounds (centredBox (layout::monoCentre, 88.0f, 56.0f));
+    bypassButton.setBounds (centredBox (layout::bypassCentre, 88.0f, 56.0f));
+    onAirButton.setBounds (centredBox (layout::onAirCentre, 150.0f, 60.0f));
+    faceplate.setBounds (0, 0, faceWidth, faceHeight);
 
-        if (liveButton.getToggleState())
-        {
-            liveStartFailed = ! processor.startLiveMonitor();
-            liveButton.setToggleState (! liveStartFailed, juce::dontSendNotification);
-        }
-        else
-        {
-            processor.stopLiveMonitor();
-        }
+    liveUrl = processor.getLiveMonitorUrl();
+    onAirButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
+    updateLiveState();
 
-        cachedLiveUrl = processor.getLiveMonitorUrl();
-        qrCode.setText (cachedLiveUrl);
-        updateLiveModeVisibility();
-        updateLiveStatusText();
-    };
+    setResizable (true, true);
+    setResizeLimits (faceWidth * 7 / 10, faceHeight * 7 / 10, faceWidth * 8 / 5, faceHeight * 8 / 5);
+    getConstrainer()->setFixedAspectRatio ((double) faceWidth / (double) faceHeight);
+    setSize (faceWidth, faceHeight);
 
-    liveStatusLabel.setJustificationType (juce::Justification::centred);
-    liveStatusLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
-    liveStatusLabel.setMinimumHorizontalScale (1.0f);
-    addAndMakeVisible (liveStatusLabel);
-
-    addChildComponent (qrCode);
-
-    // Optional password phones must enter; saved with the project. Shown in
-    // plain text on purpose: it's typically read out to whoever is listening.
-    passwordEditor.setFont (juce::Font (hudFontName, 12.0f, juce::Font::plain));
-    passwordEditor.setJustification (juce::Justification::centred);
-    passwordEditor.setTextToShowWhenEmpty ("PASSWORD (OPTIONAL)", juce::Colours::white.withAlpha (0.3f));
-    passwordEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colours::black.withAlpha (0.45f));
-    passwordEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white.withAlpha (0.9f));
-    passwordEditor.setColour (juce::TextEditor::outlineColourId, juce::Colours::white.withAlpha (0.12f));
-    passwordEditor.setColour (juce::TextEditor::focusedOutlineColourId, juce::Colours::white.withAlpha (0.4f));
-    passwordEditor.setInputRestrictions (32);
-    passwordEditor.setText (processor.getLivePassword(), juce::dontSendNotification);
-    passwordEditor.onTextChange = [this] { processor.setLivePassword (passwordEditor.getText().trim()); };
-    addChildComponent (passwordEditor);
-
-    passwordCaptionLabel.setText ("PASSWORD", juce::dontSendNotification);
-    passwordCaptionLabel.setJustificationType (juce::Justification::centred);
-    passwordCaptionLabel.setFont (juce::Font (hudFontName, 9.5f, juce::Font::plain));
-    passwordCaptionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.35f));
-    addChildComponent (passwordCaptionLabel);
-
-    mixValueLabel.setText ("MIX  " + juce::String ((int) std::round (mixSlider.getValue())) + "%",
-                            juce::dontSendNotification);
-    updateDeviceVisuals();
-
-    liveButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
-    cachedLiveUrl = processor.getLiveMonitorUrl();
-    qrCode.setText (cachedLiveUrl);
-    updateLiveModeVisibility();
-    updateLiveStatusText();
-
-    startTimerHz (24); // drives the pulsing glow and catches host-automated device changes
-
-    setSize (340, 680);
+    lastTimerSeconds = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    startTimerHz (30);
 }
 
 PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
 {
     stopTimer();
-    mixSlider.setLookAndFeel (nullptr);
-    outputHudSlider.setLookAndFeel (nullptr);
-    monoButton.setLookAndFeel (nullptr);
-    bypassButton.setLookAndFeel (nullptr);
-    liveButton.setLookAndFeel (nullptr);
-    deviceBox.setLookAndFeel (nullptr);
-}
-
-void PhoneTestoAudioProcessorEditor::timerCallback()
-{
-    glowPhase += 0.045;
-    if (glowPhase > juce::MathConstants<double>::twoPi * 1000.0)
-        glowPhase = 0.0;
-
-    updateDeviceVisuals();
-    updateLiveStatusText();
-    repaint();
-}
-
-void PhoneTestoAudioProcessorEditor::updateLiveStatusText()
-{
-    if (! processor.isLiveMonitorRunning())
-    {
-        liveStatusLabel.setText (liveStartFailed ? "Couldn't open a network port\n(another app may be using it)"
-                                                 : "Live Monitor off",
-                                 juce::dontSendNotification);
-        liveStatusLabel.setColour (juce::Label::textColourId, liveStartFailed ? juce::Colour (0xffff7a7a)
-                                                                              : juce::Colours::white.withAlpha (0.35f));
-        return;
-    }
-
-    const int listeners = processor.getLiveListenerCount();
-    const auto status = listeners == 0 ? juce::String ("Scan or open on your phone (same Wi-Fi)")
-                      : listeners == 1 ? juce::String ("1 phone listening")
-                                       : juce::String (listeners) + " phones listening";
-
-    liveStatusLabel.setText (cachedLiveUrl.trimCharactersAtEnd ("/") + "\n" + status, juce::dontSendNotification);
-    liveStatusLabel.setColour (juce::Label::textColourId, listeners > 0 ? accentColour.brighter (0.8f)
-                                                                         : juce::Colours::white.withAlpha (0.6f));
-}
-
-void PhoneTestoAudioProcessorEditor::updateLiveModeVisibility()
-{
-    const bool live = processor.isLiveMonitorRunning();
-
-    // In Live mode the real phone does the colouring, so the emulation
-    // controls step back and the screen shows how to connect instead.
-    mixSlider.setVisible (! live);
-    mixValueLabel.setVisible (! live);
-    qrCode.setVisible (live);
-    passwordEditor.setVisible (live);
-    passwordCaptionLabel.setVisible (live);
-
-    for (auto* c : { (juce::Component*) &deviceBox, (juce::Component*) &presetCaptionLabel,
-                     (juce::Component*) &monoButton, (juce::Component*) &bypassButton })
-    {
-        c->setEnabled (! live);
-        c->setAlpha (live ? 0.3f : 1.0f);
-    }
-}
-
-void PhoneTestoAudioProcessorEditor::updateDeviceVisuals()
-{
-    const int deviceIndex = (int) processor.apvts.getRawParameterValue (PhoneTestoAudioProcessor::deviceParamId)->load();
-
-    if (deviceIndex == lastDeviceIndex)
-        return;
-
-    lastDeviceIndex = deviceIndex;
-
-    const auto& profiles = getSpeakerProfiles();
-    const auto& profile = profiles[(size_t) juce::jlimit (0, (int) profiles.size() - 1, deviceIndex)];
-
-    accentColour = juce::Colour (profile.accentColor);
-    currentChrome = profile.chrome;
-    mixLnf.setAccentColour (accentColour);
-    volumeLnf.setAccentColour (accentColour);
-    toggleLnf.setAccentColour (accentColour);
-    presetLnf.setAccentColour (accentColour);
-    deviceBox.repaint();
-
-    resized(); // bezel proportions differ by chrome style (e.g. SE's thicker bezels)
-    repaint();
-}
-
-void PhoneTestoAudioProcessorEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (juce::Colour (0xff101116));
-
-    // faint vignette behind the phone, like a test-bench backdrop
-    const auto centre = getLocalBounds().getCentre().toFloat();
-    const float radius = centre.getDistanceFrom (getLocalBounds().getBottomRight().toFloat()) * 1.15f;
-    juce::ColourGradient vignette (juce::Colour (0xff1a1c22), centre.x, centre.y,
-                                    juce::Colour (0xff0a0b0e), centre.x, centre.y + radius, true);
-    g.setGradientFill (vignette);
-    g.fillRect (getLocalBounds());
-
-    const auto& body = phoneBodyBounds;
-    const float corner = body.getWidth() * 0.14f;
-    const float pulse = 0.5f + 0.5f * (float) std::sin (glowPhase);
-
-    // ground shadow
-    const float shadowW = body.getWidth() * 0.72f;
-    g.setColour (juce::Colours::black.withAlpha (0.4f));
-    g.fillEllipse (body.getCentreX() - shadowW * 0.5f, body.getBottom() + 6.0f, shadowW, 12.0f);
-
-    juce::Path bodyPath;
-    bodyPath.addRoundedRectangle (body, corner);
-
-    juce::DropShadow bodyShadow (juce::Colours::black.withAlpha (0.55f), 24, { 0, 9 });
-    bodyShadow.drawForPath (g, bodyPath);
-
-    // tight, precise backlit edge rather than a soft cartoon blur
-    auto glowColour = accentColour.brighter (0.85f).withAlpha (0.28f + 0.16f * pulse);
-    juce::DropShadow neonGlow (glowColour, (int) (7.0f + 4.0f * pulse), {});
-    neonGlow.drawForPath (g, bodyPath);
-
-    // multi-stop glass/metal panel gradient
-    juce::ColourGradient bodyGrad (accentColour.brighter (0.6f), body.getX(), body.getY(),
-                                    accentColour.darker (0.65f), body.getX(), body.getBottom(), false);
-    bodyGrad.addColour (0.14, accentColour.brighter (0.18f));
-    bodyGrad.addColour (0.55, accentColour.darker (0.12f));
-    bodyGrad.addColour (0.90, accentColour.darker (0.5f));
-    g.setGradientFill (bodyGrad);
-    g.fillRoundedRectangle (body, corner);
-
-    // specular sheen band near the top, clipped to the body shape
-    {
-        juce::Graphics::ScopedSaveState clip (g);
-        g.reduceClipRegion (bodyPath);
-        juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.16f), body.getX(), body.getY(),
-                                     juce::Colours::white.withAlpha (0.0f), body.getX(), body.getY() + body.getHeight() * 0.22f, false);
-        g.setGradientFill (sheen);
-        g.fillRect (body.withHeight (body.getHeight() * 0.3f));
-    }
-
-    g.setColour (juce::Colours::white.withAlpha (0.12f));
-    g.drawRoundedRectangle (body.reduced (1.0f), corner, 1.3f);
-    g.setColour (accentColour.brighter (0.7f).withAlpha (0.18f + 0.1f * pulse));
-    g.drawRoundedRectangle (body.reduced (1.0f), corner, 1.0f);
-
-    // decorative hardware buttons: volume rocker on the LEFT edge, power on
-    // the RIGHT -- matches real iPhone placement
-    auto drawSideButton = [&] (float bx, float by, float bw, float bh)
-    {
-        juce::Rectangle<float> btn (bx, by, bw, bh);
-        g.setColour (juce::Colours::black.withAlpha (0.4f));
-        g.fillRoundedRectangle (btn, 1.5f);
-        g.setColour (juce::Colours::white.withAlpha (0.15f));
-        g.fillRoundedRectangle (btn.removeFromTop (juce::jmax (1.0f, bh * 0.28f)), 1.0f);
-    };
-
-    drawSideButton (body.getX() - 3.0f, body.getY() + body.getHeight() * 0.15f, 3.0f, body.getHeight() * 0.065f);
-    drawSideButton (body.getX() - 3.0f, body.getY() + body.getHeight() * 0.24f, 3.0f, body.getHeight() * 0.065f);
-    drawSideButton (body.getRight(), body.getY() + body.getHeight() * 0.19f, 3.0f, body.getHeight() * 0.09f);
-
-    // screen -- a clean recessed dark panel with a single soft accent-tinted
-    // glow (rather than a busy multi-hue wallpaper), echoing the calmer
-    // dark-panel language of plugins like Soundly's "Place It"
-    juce::Path screenPath;
-    screenPath.addRoundedRectangle (screenBounds, corner * 0.5f);
-
-    {
-        juce::Graphics::ScopedSaveState clip (g);
-        g.reduceClipRegion (screenPath);
-
-        g.setColour (juce::Colour (0xff0a0b10));
-        g.fillRect (screenBounds);
-
-        const auto glowCentre = juce::Point<float> (screenBounds.getCentreX(), screenBounds.getY() + screenBounds.getHeight() * 0.32f);
-        const float glowRadius = screenBounds.getWidth() * 0.95f;
-        juce::ColourGradient screenGlow (accentColour.brighter (0.3f).withAlpha (0.30f), glowCentre.x, glowCentre.y,
-                                          accentColour.withAlpha (0.0f), glowCentre.x, glowCentre.y + glowRadius, true);
-        g.setGradientFill (screenGlow);
-        g.fillRect (screenBounds);
-    }
-
-    // single clean accent hairline around the screen edge
-    auto edgeGlow = accentColour.brighter (0.85f).withAlpha (0.28f + 0.14f * pulse);
-    g.setColour (edgeGlow);
-    g.drawRoundedRectangle (screenBounds.reduced (0.5f), corner * 0.5f, 1.1f);
-
-    // top chrome: real iPhones vary here -- the SE has no notch/island at all,
-    // 11/13-14 have a notch cut into the top edge (11's noticeably wider),
-    // 15/16 Pro have a Dynamic Island that floats clear of the top edge.
-    switch (currentChrome)
-    {
-        case PhoneChromeStyle::notchWide:
-        case PhoneChromeStyle::notchNarrow:
-        {
-            const float widthScale = (currentChrome == PhoneChromeStyle::notchWide) ? 0.34f : 0.22f;
-            auto notch = juce::Rectangle<float> (body.getWidth() * widthScale, 9.0f)
-                             .withCentre ({ body.getCentreX(), screenBounds.getY() + 1.0f });
-            g.setColour (juce::Colours::black);
-            g.fillRoundedRectangle (notch, 4.5f);
-            break;
-        }
-
-        case PhoneChromeStyle::dynamicIsland:
-        {
-            auto island = juce::Rectangle<float> (body.getWidth() * 0.17f, 8.0f)
-                              .withCentre ({ body.getCentreX(), screenBounds.getY() + 14.0f });
-            g.setColour (juce::Colours::black);
-            g.fillRoundedRectangle (island, island.getHeight() * 0.5f);
-            break;
-        }
-
-        case PhoneChromeStyle::plain:
-        {
-            auto dot = juce::Rectangle<float> (6.0f, 6.0f).withCentre ({ body.getCentreX(), body.getY() + 16.0f });
-            g.setColour (juce::Colours::black.withAlpha (0.7f));
-            g.fillEllipse (dot);
-            break;
-        }
-
-        case PhoneChromeStyle::homeButton:
-        {
-            // SE: no notch/island -- just a small camera dot in the thick top bezel
-            auto dot = juce::Rectangle<float> (5.0f, 5.0f)
-                           .withCentre ({ body.getCentreX(), (body.getY() + screenBounds.getY()) * 0.5f });
-            g.setColour (juce::Colours::black.withAlpha (0.6f));
-            g.fillEllipse (dot);
-            break;
-        }
-    }
-
-    // bottom chrome: gesture home-indicator bar on Face ID phones, a physical
-    // Touch ID button in the SE's thick bottom bezel
-    if (currentChrome == PhoneChromeStyle::homeButton)
-    {
-        const float buttonD = juce::jmin (body.getWidth() * 0.16f, 46.0f);
-        auto buttonBounds = juce::Rectangle<float> (buttonD, buttonD)
-                                 .withCentre ({ body.getCentreX(), (screenBounds.getBottom() + body.getBottom()) * 0.5f });
-        g.setColour (juce::Colours::black.withAlpha (0.3f));
-        g.drawEllipse (buttonBounds, 1.5f);
-        g.setColour (juce::Colours::white.withAlpha (0.12f));
-        g.fillEllipse (buttonBounds.reduced (2.0f));
-    }
-    else
-    {
-        const float homeW = body.getWidth() * 0.28f;
-        auto home = juce::Rectangle<float> (homeW, 4.0f)
-                        .withCentre ({ body.getCentreX(), body.getBottom() - 9.0f });
-        g.setColour (juce::Colours::white.withAlpha (0.35f));
-        g.fillRoundedRectangle (home, 2.0f);
-    }
+    setLookAndFeel (nullptr);
 }
 
 void PhoneTestoAudioProcessorEditor::resized()
 {
-    auto full = getLocalBounds().toFloat();
+    faceplate.setTransform (juce::AffineTransform::scale ((float) getWidth() / (float) faceWidth));
+}
 
-    auto titleArea = full.removeFromTop (22.0f);
-    titleLabel.setBounds (titleArea.toNearestInt());
+//==============================================================================
+float PhoneTestoAudioProcessorEditor::modelAngle (int index) const
+{
+    const int last = (int) getSpeakerProfiles().size() - 1;
+    return layout::knobStart + (layout::knobEnd - layout::knobStart) * (float) index / (float) last;
+}
 
-    phoneBodyBounds = full.reduced (18.0f, 10.0f);
-    phoneBodyBounds.removeFromBottom (18.0f);
+juce::Point<float> PhoneTestoAudioProcessorEditor::modelLegendCentre (int index) const
+{
+    return layout::modelCentre.getPointOnCircumference (layout::modelLegendRadius, modelAngle (index));
+}
 
-    // the SE's Touch ID design has much thicker bezels than the notch/island phones
-    const bool hasHomeButton = (currentChrome == PhoneChromeStyle::homeButton);
+void PhoneTestoAudioProcessorEditor::selectModelAt (juce::Point<float> pos)
+{
+    if (! modelSelector.isEnabled())
+        return;
 
-    screenBounds = phoneBodyBounds.reduced (17.0f);
-    screenBounds.removeFromTop (hasHomeButton ? 32.0f : 28.0f);
-    screenBounds.removeFromBottom (hasHomeButton ? 48.0f : 22.0f);
+    for (int i = 0; i < (int) getSpeakerProfiles().size(); ++i)
+    {
+        if (juce::Rectangle<float> (70.0f, 22.0f).withCentre (modelLegendCentre (i)).contains (pos))
+        {
+            if (auto* param = processor.apvts.getParameter (PhoneTestoAudioProcessor::deviceParamId))
+            {
+                param->beginChangeGesture();
+                param->setValueNotifyingHost (param->convertTo0to1 ((float) i));
+                param->endChangeGesture();
+            }
+            return;
+        }
+    }
+}
 
-    auto content = screenBounds.toNearestInt();
+void PhoneTestoAudioProcessorEditor::toggleLive()
+{
+    liveStartFailed = false;
 
-    // Header row: preset picker sits at the TOP; the volume HUD is pinned to
-    // the LEFT (matching the real hardware buttons' side) and starts lower
-    // down, its top edge aligned with the preset picker's bottom edge, so
-    // the two read as a single top-to-bottom flow rather than two
-    // mismatched columns. Keeping the HUD confined to this fixed-height row
-    // is what stops it overlapping the mix fader below.
-    auto headerRow = content.removeFromTop (200);
-    auto hudColumn = headerRow.removeFromLeft (38);
-    headerRow.removeFromLeft (16);
-    auto presetColumn = headerRow;
+    if (onAirButton.getToggleState())
+    {
+        liveStartFailed = ! processor.startLiveMonitor();
+        onAirButton.setToggleState (! liveStartFailed, juce::dontSendNotification);
+    }
+    else
+    {
+        processor.stopLiveMonitor();
+    }
 
-    constexpr int topMargin = 16;
-    constexpr int presetBlockHeight = 14 + 4 + 32;
-    constexpr int alignedTop = topMargin + presetBlockHeight;
+    liveUrl = processor.getLiveMonitorUrl();
+    updateLiveState();
+}
 
-    auto presetArea = presetColumn;
-    presetArea.removeFromTop (topMargin);
-    presetCaptionLabel.setBounds (presetArea.removeFromTop (14));
-    presetArea.removeFromTop (4);
-    deviceBox.setBounds (presetArea.removeFromTop (32).reduced (4, 0));
+void PhoneTestoAudioProcessorEditor::updateLiveState()
+{
+    const bool live = processor.isLiveMonitorRunning();
 
-    auto hudArea = hudColumn;
-    hudArea.removeFromTop (alignedTop);
-    outputCaptionLabel.setBounds (hudArea.removeFromTop (14));
-    outputHudSlider.setBounds (hudArea.reduced (3, 6));
+    // Live may have been started before this editor was opened.
+    if (live && liveUrl.isEmpty())
+        liveUrl = processor.getLiveMonitorUrl();
+    else if (! live)
+        liveUrl.clear();
 
-    content.removeFromTop (18);
+    if (onAirButton.getToggleState() != live && ! liveStartFailed)
+        onAirButton.setToggleState (live, juce::dontSendNotification);
 
-    // bottom toggle row: circular power-style buttons need room for the
-    // caption drawn underneath each one. Three-way split now that Live
-    // Monitor joins Mono Sum / Bypass.
-    content.removeFromBottom (14);
-    auto bottomRow = content.removeFromBottom (50);
-    const int thirdWidth = bottomRow.getWidth() / 3;
-    auto monoArea = bottomRow.removeFromLeft (thirdWidth);
-    auto bypassArea = bottomRow.removeFromLeft (thirdWidth);
-    auto liveArea = bottomRow;
-    monoButton.setBounds (monoArea.reduced (12, 0));
-    bypassButton.setBounds (bypassArea.reduced (12, 0));
-    liveButton.setBounds (liveArea.reduced (12, 0));
+    // Reflect a password restored with the project (unless it's being typed).
+    auto& password = display.getPasswordEditor();
+    const auto stored = processor.getLivePassword();
+    if (! password.hasKeyboardFocus (true) && password.getText() != stored)
+        password.setText (stored, juce::dontSendNotification);
 
-    content.removeFromBottom (6);
+    display.setLive (live || liveStartFailed, liveUrl, live ? processor.getLiveListenerCount() : 0, liveStartFailed);
 
-    // "type this into Safari" status line for Live Monitor
-    liveStatusLabel.setBounds (content.removeFromBottom (32));
+    // With Live on, the real phone does the colouring, so the emulation
+    // controls don't apply: grey them out the way a hardware unit would
+    // simply ignore them.
+    for (auto* c : { (juce::Component*) &modelSelector, (juce::Component*) &mixKnob,
+                     (juce::Component*) &monoButton, (juce::Component*) &bypassButton })
+    {
+        if (c->isEnabled() == live)
+        {
+            c->setEnabled (! live);
+            c->setAlpha (live ? 0.45f : 1.0f);
+            faceplate.repaint();
+        }
+    }
+}
 
-    content.removeFromBottom (10);
+void PhoneTestoAudioProcessorEditor::timerCallback()
+{
+    const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    const auto dt = (float) juce::jlimit (0.001, 0.2, now - lastTimerSeconds);
+    lastTimerSeconds = now;
 
-    // mix label sits just above the rotary knob, which is centred in the
-    // remaining space
-    auto mixLabelRow = content.removeFromTop (26);
-    mixValueLabel.setBounds (mixLabelRow);
+    vuMeter.update (processor.getOutputRms(), dt);
+    display.setProfile (juce::roundToInt (modelSelector.getValue()));
+    updateLiveState();
+}
 
-    // Live mode reuses the same slots: password field where the mix label
-    // sits, QR code where the knob sits.
-    passwordEditor.setBounds (mixLabelRow.withSizeKeepingCentre (juce::jmin (mixLabelRow.getWidth(), 190), 26));
-    passwordCaptionLabel.setBounds (passwordEditor.getBounds().translated (0, -16).withHeight (14));
+//==============================================================================
+void PhoneTestoAudioProcessorEditor::paintFaceplate (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace c = hw::colours;
 
-    content.removeFromTop (14);
+    const auto full = Rectangle<float> (0.0f, 0.0f, (float) faceWidth, (float) faceHeight);
+    hw::fillPowderCoat (g, full, c::panelTop, c::panelBottom);
 
-    const int knobSize = juce::jmin (content.getWidth() - 20, 170);
-    mixSlider.setBounds (content.withSizeKeepingCentre (knobSize, knobSize));
-    qrCode.setBounds (content.withSizeKeepingCentre (knobSize, knobSize));
+    // rack ears with slotted mounting holes
+    int screwIndex = 0;
+    for (auto ear : { full.withWidth (layout::earWidth), full.withLeft (full.getRight() - layout::earWidth) })
+    {
+        hw::fillPowderCoat (g, ear, c::earTop, c::earBottom);
+
+        for (float y : { 50.0f, full.getBottom() - 50.0f })
+        {
+            const auto slot = Rectangle<float> (15.0f, 26.0f).withCentre ({ ear.getCentreX(), y });
+            g.setColour (Colours::black.withAlpha (0.75f));
+            g.fillRoundedRectangle (slot, 7.5f);
+            g.setColour (Colours::white.withAlpha (0.07f));
+            g.drawRoundedRectangle (slot.translated (0.0f, 1.0f), 7.5f, 1.0f);
+            hw::drawScrew (g, slot.getCentre().translated (0.0f, y < 100.0f ? -3.0f : 3.0f), 6.5f,
+                           0.35f + 0.9f * (float) screwIndex++);
+        }
+    }
+
+    for (float x : { layout::earWidth, full.getRight() - layout::earWidth })
+    {
+        g.setColour (Colours::black.withAlpha (0.6f));
+        g.drawVerticalLine ((int) x, 0.0f, full.getBottom());
+        g.setColour (Colours::white.withAlpha (0.06f));
+        g.drawVerticalLine ((int) x + 1, 0.0f, full.getBottom());
+    }
+
+    g.setColour (Colours::white.withAlpha (0.10f));
+    g.drawHorizontalLine (0, 0.0f, full.getRight());
+    g.setColour (Colours::black.withAlpha (0.5f));
+    g.drawHorizontalLine (faceHeight - 1, 0.0f, full.getRight());
+
+    // header: maker's mark, model badge, description
+    const auto logoFont = hw::font (hw::Type::condensedBold, 42.0f, 0.03f);
+    const float logoWidth = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO");
+    hw::drawLegend (g, "PHONETESTO", { layout::contentLeft, 22.0f, logoWidth + 4.0f, 44.0f }, Justification::centredLeft, logoFont);
+
+    const auto badge = Rectangle<float> (layout::contentLeft + logoWidth + 14.0f, 31.0f, 46.0f, 24.0f);
+    g.setColour (c::legend);
+    g.fillRoundedRectangle (badge, 3.0f);
+    g.setColour (c::panelBottom);
+    g.setFont (hw::font (hw::Type::condensedBold, 19.0f, 0.04f));
+    g.drawText ("PT-1", badge, Justification::centred, false);
+
+    hw::drawLegend (g, "SPEAKER REFERENCE MONITOR", { badge.getRight() + 14.0f, 31.0f, 300.0f, 24.0f },
+                    Justification::centredLeft, hw::font (hw::Type::condensedSemiBold, 16.0f, 0.16f), c::legendDim);
+
+    hw::drawLegend (g, "EMULATE  /  LIVE TO PHONES", { layout::contentRight - 300.0f, 31.0f, 300.0f, 24.0f },
+                    Justification::centredRight, hw::font (hw::Type::condensedSemiBold, 14.0f, 0.16f), c::legendDim);
+
+    hw::drawRule (g, layout::contentLeft, layout::contentRight, 80.0f);
+
+    const auto sectionFont = hw::font (hw::Type::condensedBold, 16.0f, 0.14f);
+
+    hw::drawLegend (g, "OUTPUT LEVEL", legendBelow (layout::vuMeter.toFloat().getCentre(), 106.0f, 200.0f),
+                    Justification::centred, sectionFont);
+
+    // MODEL selector: printed positions and dots
+    hw::drawLegend (g, "MODEL", legendBelow (layout::modelCentre, -122.0f), Justification::centred, sectionFont);
+
+    const int selected = roundToInt (modelSelector.getValue());
+    const auto positionFont = hw::font (hw::Type::condensedBold, 14.0f, 0.06f);
+
+    for (int i = 0; i < (int) getSpeakerProfiles().size(); ++i)
+    {
+        const auto dot = layout::modelCentre.getPointOnCircumference (layout::modelDotRadius, modelAngle (i));
+        g.setColour (c::legend.withAlpha (i == selected ? 1.0f : 0.55f));
+        g.fillEllipse (Rectangle<float> (4.0f, 4.0f).withCentre (dot));
+
+        hw::drawLegend (g, getSpeakerProfiles()[(size_t) i].shortName,
+                        Rectangle<float> (70.0f, 18.0f).withCentre (modelLegendCentre (i)),
+                        Justification::centred, positionFont,
+                        i == selected ? c::legend : c::legendDim.withAlpha (0.85f));
+    }
+
+    // knob scales
+    for (auto [centre, label] : { std::pair<Point<float>, const char*> { layout::mixCentre, "MIX" },
+                                   { layout::outputCentre, "OUTPUT" } })
+    {
+        hw::drawKnobScale (g, centre, 44.0f, 50.0f, 11, layout::knobStart, layout::knobEnd, "0", "10");
+        hw::drawLegend (g, label, legendBelow (centre, 60.0f), Justification::centred, sectionFont);
+    }
+
+    hw::drawLegend (g, "MONO", legendBelow (layout::monoCentre, 36.0f), Justification::centred, sectionFont);
+    hw::drawLegend (g, "BYPASS", legendBelow (layout::bypassCentre, 36.0f), Justification::centred, sectionFont);
+    hw::drawLegend (g, "LIVE TO PHONES", legendBelow (layout::onAirCentre, 37.0f, 200.0f), Justification::centred, sectionFont);
 }
 
 } // namespace phonetesto

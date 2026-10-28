@@ -3,158 +3,210 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0b0c10">
+<meta name="theme-color" content="#26272b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PhoneTesto Live</title>
 <style>
+  @font-face { font-family: "Barlow Condensed"; font-weight: 700; font-display: swap; src: url(/fonts/BarlowCondensed-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(/fonts/BarlowCondensed-SemiBold.ttf) format("truetype"); }
+  @font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url(/fonts/Barlow-Medium.ttf) format("truetype"); }
+  @font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url(/fonts/Barlow-SemiBold.ttf) format("truetype"); }
+
+  /* Same palette as the plugin's faceplate (Source/HardwareStyle.h). */
   :root {
-    --bg: #0b0c10;
-    --panel: #15171d;
-    --panel-2: #1c1f27;
-    --line: rgba(255,255,255,0.08);
-    --text: rgba(255,255,255,0.92);
-    --muted: rgba(255,255,255,0.5);
-    --accent: #5fb8ff;
-    --accent-2: #8ad1ff;
-    --ok: #4cd08a;
-    --warn: #f2b84b;
-    --bad: #ff6b6b;
-    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --panel-top: #36373c;
+    --panel-bottom: #26272b;
+    --legend: #ebe3ce;
+    --legend-dim: #a39c8a;
+    --amber: #ffb53d;
+    --amber-dim: #6e4c16;
+    --glass: #0e0c09;
+    --cond: "Barlow Condensed", "Arial Narrow", sans-serif;
+    --sans: "Barlow", -apple-system, "Hiragino Sans", "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  html, body { margin: 0; background: var(--panel-bottom); color: var(--legend); }
   body {
-    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", Roboto, sans-serif;
+    font: 500 15px/1.45 var(--sans);
     min-height: 100vh;
-    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    /* powder-coat: fine speckle over a vertical gradient */
+    background:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.16 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+      linear-gradient(var(--panel-top), var(--panel-bottom)) fixed;
   }
-  main { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .brand { font-family: var(--mono); font-weight: 700; letter-spacing: 0.04em; font-size: 15px; }
-  .brand span { color: var(--accent); margin-left: 6px; }
-  .pill {
-    font: 12px var(--mono); padding: 5px 10px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  main {
+    max-width: 460px; margin: 0 auto;
+    padding: max(18px, env(safe-area-inset-top)) 18px max(26px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 18px;
   }
-  .pill.ok { color: var(--ok); border-color: rgba(76,208,138,0.35); }
-  .pill.bad { color: var(--bad); border-color: rgba(255,107,107,0.35); }
 
-  .hero {
-    background: radial-gradient(120% 90% at 50% 20%, #1d2a38 0%, var(--panel) 60%);
-    border: 1px solid var(--line); border-radius: 22px;
-    padding: 28px 20px 22px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  .legend {
+    font: 700 14px var(--cond); letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--legend); text-shadow: 0 1px 0 rgba(0,0,0,0.45);
   }
-  .play {
-    width: 132px; height: 132px; border-radius: 50%; border: 0; cursor: pointer;
-    background: radial-gradient(circle at 50% 35%, #2a3240, #12151b 70%);
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.08) inset, 0 10px 30px rgba(0,0,0,0.55);
-    display: grid; place-items: center; transition: transform 0.12s ease, box-shadow 0.2s ease;
-  }
-  .play:active { transform: scale(0.97); }
-  .play svg { width: 46px; height: 46px; fill: var(--text); }
-  .play.on { box-shadow: 0 0 0 2px var(--accent) inset, 0 0 32px rgba(95,184,255,0.45), 0 10px 30px rgba(0,0,0,0.55); }
-  .play.on svg { fill: var(--accent-2); }
-  #status { font-size: 16px; font-weight: 600; text-align: center; min-height: 1.45em; }
-  #substatus { font: 12px var(--mono); color: var(--muted); text-align: center; min-height: 1.2em; margin-top: -10px; }
-  .meter { width: 100%; height: 10px; border-radius: 6px; background: rgba(0,0,0,0.45); overflow: hidden; border: 1px solid var(--line); }
-  .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--ok), var(--accent) 70%, var(--warn)); transition: width 0.06s linear; }
+  .legend.dim { color: var(--legend-dim); font-weight: 600; }
+  .rule { height: 2px; background: linear-gradient(rgba(0,0,0,0.55) 50%, rgba(255,255,255,0.07) 50%); }
 
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .card h2 { margin: 0; font: 600 12px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-  .seg { display: grid; grid-template-columns: 1fr 1fr; background: rgba(0,0,0,0.35); border-radius: 12px; padding: 4px; gap: 4px; }
-  .seg button {
-    border: 0; border-radius: 9px; padding: 10px 8px; font: inherit; font-size: 14px; color: var(--muted);
-    background: transparent; cursor: pointer;
+  header { display: flex; align-items: center; gap: 10px; }
+  .logo { font: 700 34px/1 var(--cond); letter-spacing: 0.03em; color: var(--legend); text-shadow: 0 1px 0 rgba(0,0,0,0.45); }
+  .badge { font: 700 16px/1 var(--cond); letter-spacing: 0.04em; color: var(--panel-bottom); background: var(--legend); border-radius: 3px; padding: 4px 7px 3px; }
+  .conn { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: #3a2a10; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.6); }
+  .conn.ok .led { background: radial-gradient(circle at 40% 35%, #ffe3a8, var(--amber) 60%); box-shadow: 0 0 8px rgba(255,181,61,0.6); }
+  .conn.bad .led { background: radial-gradient(circle at 40% 35%, #ff9a90, #ff3a2c 60%); box-shadow: 0 0 8px rgba(255,58,44,0.6); }
+  .sub { margin-top: -12px; }
+
+  /* recessed bezel shared by the VU meter and the amber display */
+  .bezel {
+    padding: 9px; border-radius: 10px;
+    background: linear-gradient(#3a3b40, #0f0f11);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.1);
   }
-  .seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 8px rgba(0,0,0,0.4); }
-  select, input[type="password"] {
-    width: 100%; font: inherit; font-size: 16px; color: var(--text); background: var(--panel-2);
-    border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; outline: none;
+  #vu { display: block; width: 100%; aspect-ratio: 240 / 160; border-radius: 4px; }
+  .center { text-align: center; }
+
+  /* illuminated push buttons (same construction as the plugin's) */
+  .lamp {
+    --lamp: 255,166,50;
+    appearance: none; border: 0; margin: 0; padding: 5px; cursor: pointer; font: inherit;
+    border-radius: 7px; background: linear-gradient(#45464b, #121214);
+    box-shadow: 0 2px 0 rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.12);
+    transition: transform 0.06s;
   }
-  select:focus, input:focus { border-color: rgba(95,184,255,0.6); }
+  .lamp:active { transform: translateY(1px); }
+  .lamp .lens {
+    position: relative; display: grid; place-items: center; height: 100%; min-height: 30px; border-radius: 4px; overflow: hidden;
+    font: 700 15px var(--cond); letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(var(--lamp), 0.55);
+    background: radial-gradient(circle, rgba(var(--lamp), 0.20), rgba(var(--lamp), 0.07)) #0d0b09;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.65);
+  }
+  .lamp .lens::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 55%;
+    background: linear-gradient(rgba(255,255,255,0.14), rgba(255,255,255,0));
+  }
+  .lamp[aria-pressed="true"] .lens {
+    color: #fff;
+    background: radial-gradient(circle, rgb(255,230,190) 0%, rgb(var(--lamp)) 55%, rgba(var(--lamp), 0.8) 100%);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5), 0 0 18px rgba(var(--lamp), 0.55);
+  }
+  .lamp[aria-pressed="true"] .lens::after { background: linear-gradient(rgba(255,255,255,0.38), rgba(255,255,255,0)); }
+  .lamp[disabled] { opacity: 0.45; cursor: default; }
+  #play { width: 100%; height: 78px; }
+  #play .lens { font-size: 26px; letter-spacing: 0.16em; }
+
+  /* amber display */
+  .display {
+    border-radius: 4px; padding: 12px 14px;
+    background: radial-gradient(120% 100% at 50% 40%, #1a140c, #060504);
+    color: var(--amber); font: 700 15px var(--cond); letter-spacing: 0.05em;
+  }
+  .display .label { color: rgba(255,181,61,0.55); font-weight: 600; letter-spacing: 0.1em; font-size: 12px; text-transform: uppercase; }
+  .display .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  #status { font: 700 22px var(--cond); letter-spacing: 0.04em; color: var(--amber); }
+  #substatus { font-size: 13px; color: rgba(255,181,61,0.6); min-height: 1.2em; }
+  .readouts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,181,61,0.12); }
+  .readouts b { display: block; font: 700 19px var(--cond); color: var(--amber); }
+
+  .panel { display: flex; flex-direction: column; gap: 10px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pair .lamp { height: 52px; }
+  .pair .lens { font-size: 14px; }
+  .note { margin: 0; font: 500 13px/1.45 var(--sans); color: var(--legend-dim); }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .switch { position: relative; width: 50px; height: 30px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .switch span { position: absolute; inset: 0; border-radius: 999px; background: rgba(255,255,255,0.14); transition: background 0.2s; }
-  .switch span::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: transform 0.2s; }
-  .switch input:checked + span { background: var(--accent); }
-  .switch input:checked + span::after { transform: translateX(20px); }
-  .btn { border: 0; border-radius: 12px; padding: 11px 16px; font: inherit; font-weight: 600; background: var(--accent); color: #06121e; cursor: pointer; }
-  .auth-row { display: flex; gap: 8px; }
-  .error { color: var(--bad); font-size: 13px; min-height: 1.2em; }
-  .note { color: var(--muted); font-size: 12.5px; margin: 0; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .stat { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px; text-align: center; }
-  .stat b { display: block; font: 600 14px var(--mono); }
-  .stat small { color: var(--muted); font-size: 11px; }
+  #wake { width: 64px; height: 40px; }
+
+  .lcd {
+    width: 100%; appearance: none; -webkit-appearance: none; outline: none;
+    font: 700 18px var(--cond); letter-spacing: 0.05em; color: var(--amber);
+    background: var(--glass); border: 1px solid var(--amber-dim); border-radius: 4px; padding: 11px 12px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+  select.lcd {
+    padding-right: 36px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%23ffb53d'/></svg>");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+  .lcd:focus { border-color: rgba(255,181,61,0.8); }
+  .lcd option { background: #14110c; color: var(--amber); }
+  .lcd option:disabled { color: #6e5a3a; }
+  .auth-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+  .auth-row .lamp { width: 104px; }
+  .error { color: #ff7a6e; font: 600 13px var(--sans); min-height: 1.2em; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <div class="brand">PhoneTesto<span>LIVE</span></div>
-    <div id="conn" class="pill">…</div>
+    <div class="logo">PHONETESTO</div>
+    <span class="badge">PT-1</span>
+    <div id="conn" class="conn"><span class="led"></span><span id="connText" class="legend dim">…</span></div>
   </header>
+  <div class="legend dim sub">Live receiver</div>
+  <div class="rule"></div>
 
-  <section class="hero">
-    <button id="play" class="play" aria-label="Play">
-      <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></svg>
-      <svg id="icon-stop" viewBox="0 0 24 24" hidden><path d="M7 7h10v10H7z"/></svg>
-    </button>
-    <div id="status"></div>
-    <div id="substatus"></div>
-    <div class="meter" aria-hidden="true"><div id="meter"></div></div>
+  <section>
+    <div class="bezel"><canvas id="vu" aria-hidden="true"></canvas></div>
+    <div class="legend center" style="margin-top:10px">Output level</div>
   </section>
 
-  <section id="authBox" class="card" hidden>
-    <h2 data-i18n="passwordTitle"></h2>
+  <button id="play" class="lamp" aria-pressed="false"><span class="lens"><span id="playText">Listen</span></span></button>
+
+  <div class="bezel">
+    <div class="display">
+      <div class="row"><span class="label">Status</span><span id="status"></span></div>
+      <div id="substatus"></div>
+      <div class="readouts">
+        <div><span class="label">Format</span><b id="sFormat">–</b></div>
+        <div><span class="label">Latency</span><b id="sLatency">–</b></div>
+        <div><span class="label">Level</span><b id="sLevel">–</b></div>
+        <div><span class="label">Drops</span><b id="sDrops">0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="authBox" class="panel" hidden>
+    <div class="legend">Password</div>
     <p class="note" data-i18n="passwordHint"></p>
     <form id="authForm" class="auth-row">
-      <input id="password" type="password" autocomplete="current-password" enterkeyhint="go">
-      <button class="btn" type="submit" data-i18n="unlock"></button>
+      <input id="password" class="lcd" type="password" autocomplete="current-password" enterkeyhint="go">
+      <button class="lamp" type="submit"><span class="lens">Unlock</span></button>
     </form>
     <div id="authError" class="error"></div>
   </section>
 
-  <section class="card">
-    <h2 data-i18n="modeLabel"></h2>
-    <div class="seg" role="group">
-      <button id="modeLow" type="button" aria-pressed="true" data-i18n="modeLow"></button>
-      <button id="modeBg" type="button" aria-pressed="false" data-i18n="modeBg"></button>
+  <section class="panel">
+    <div class="legend">Mode</div>
+    <div class="pair">
+      <button id="modeLow" class="lamp" type="button" aria-pressed="true"><span class="lens">Low latency</span></button>
+      <button id="modeBg" class="lamp" type="button" aria-pressed="false"><span class="lens">Screen-off</span></button>
     </div>
     <p id="modeNote" class="note"></p>
-
-    <div id="qualityRow">
-      <h2 data-i18n="qualityLabel" style="margin-bottom:8px"></h2>
-      <select id="quality">
-        <option value="pcm24" data-i18n="qPcm24"></option>
-        <option value="pcm16" data-i18n="qPcm16" selected></option>
-        <option value="opus-320">Opus 320 kbps</option>
-        <option value="opus-256">Opus 256 kbps</option>
-        <option value="opus-192">Opus 192 kbps</option>
-        <option value="opus-128">Opus 128 kbps</option>
-        <option value="opus-96">Opus 96 kbps</option>
-      </select>
-      <p id="qualityNote" class="note" style="margin-top:8px"></p>
-    </div>
-
-    <div id="wakeRow" class="row">
-      <span data-i18n="wake"></span>
-      <label class="switch"><input id="wake" type="checkbox" checked><span></span></label>
-    </div>
   </section>
 
-  <section class="card">
-    <div class="stats">
-      <div class="stat"><b id="sFormat">–</b><small data-i18n="format"></small></div>
-      <div class="stat"><b id="sLatency">–</b><small data-i18n="latency"></small></div>
-      <div class="stat"><b id="sLevel">–</b><small data-i18n="level"></small></div>
-      <div class="stat"><b id="sDrops">0</b><small data-i18n="drops"></small></div>
-    </div>
-    <p class="note" data-i18n="hintIos"></p>
+  <section id="qualityRow" class="panel">
+    <div class="legend">Quality</div>
+    <select id="quality" class="lcd">
+      <option value="pcm24">PCM 24-bit</option>
+      <option value="pcm16" selected>PCM 16-bit</option>
+      <option value="opus-320">Opus 320 kbps</option>
+      <option value="opus-256">Opus 256 kbps</option>
+      <option value="opus-192">Opus 192 kbps</option>
+      <option value="opus-128">Opus 128 kbps</option>
+      <option value="opus-96">Opus 96 kbps</option>
+    </select>
+    <p id="qualityNote" class="note"></p>
   </section>
+
+  <div id="wakeRow" class="row">
+    <span class="legend">Keep screen on</span>
+    <button id="wake" class="lamp" type="button" aria-pressed="true"><span class="lens" id="wakeText">On</span></button>
+  </div>
+
+  <div class="rule"></div>
+  <p class="note" data-i18n="hintIos"></p>
 
   <audio id="bg" playsinline preload="none"></audio>
 </main>
@@ -163,37 +215,32 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
-// Strings
+// Strings. Panel legends stay in English like printed hardware; messages and
+// notes follow the phone's language.
 const I18N = {
   en: {
-    tapToListen: "Tap to listen", connecting: "Connecting…", playing: "Playing",
-    reconnecting: "Reconnecting…", stopped: "Stopped", offline: "Plugin not reachable",
-    full: "Too many listeners right now", serverStopped: "The plugin stopped streaming",
-    passwordTitle: "Password", passwordHint: "This stream is password-protected.",
-    unlock: "Unlock", wrongPassword: "Wrong password", needPassword: "Enter the password first",
-    modeLabel: "Mode", modeLow: "Low latency", modeBg: "Screen-off",
+    tapToListen: "Tap LISTEN", connecting: "Connecting…", playing: "Playing",
+    reconnecting: "Reconnecting…", offline: "Plugin not reachable",
+    full: "Too many listeners right now",
+    passwordHint: "This stream is password-protected.",
+    wrongPassword: "Wrong password", needPassword: "Enter the password first",
     noteLow: "Lowest delay (≈0.1–0.3 s). Keep this page open and the screen on.",
     noteBg: "Keeps playing with the screen locked, using the phone's media player. Adds ≈1–3 s of delay; 16-bit only.",
-    qualityLabel: "Quality", qPcm24: "PCM 24-bit (lossless)", qPcm16: "PCM 16-bit (lossless, default)",
-    opusNote: "Opus uses less Wi-Fi; pick it if the sound drops out.",
+    opusNote: "PCM is lossless. Opus uses less Wi-Fi — pick it if the sound drops out.",
     opusUnsupported: "This browser can't decode Opus — PCM only.",
-    wake: "Keep screen on", format: "Format", latency: "Latency", level: "Level", drops: "Drops",
     hintIos: "iPhone: if you hear nothing, turn the volume up and check the silent switch.",
     listening: n => `${n} listening`, connected: "Connected",
   },
   ja: {
     tapToListen: "タップして再生", connecting: "接続中…", playing: "再生中",
-    reconnecting: "再接続中…", stopped: "停止", offline: "プラグインに接続できません",
-    full: "接続数が上限に達しています", serverStopped: "プラグイン側で配信が停止されました",
-    passwordTitle: "パスワード", passwordHint: "この配信はパスワードで保護されています。",
-    unlock: "解除", wrongPassword: "パスワードが違います", needPassword: "先にパスワードを入力してください",
-    modeLabel: "モード", modeLow: "低遅延", modeBg: "画面オフ",
+    reconnecting: "再接続中…", offline: "プラグインに接続できません",
+    full: "接続数が上限に達しています",
+    passwordHint: "この配信はパスワードで保護されています。",
+    wrongPassword: "パスワードが違います", needPassword: "先にパスワードを入力してください",
     noteLow: "遅延が最小（約0.1〜0.3秒）。このページを開いたまま画面をつけておいてください。",
     noteBg: "スマホのメディアプレーヤーで再生するため、画面ロック中も鳴り続けます。遅延は約1〜3秒、16bitのみ。",
-    qualityLabel: "音質", qPcm24: "PCM 24bit（ロスレス）", qPcm16: "PCM 16bit（ロスレス・標準）",
-    opusNote: "OpusはWi-Fiの帯域を節約します。音が途切れる場合に選んでください。",
+    opusNote: "PCMはロスレス。OpusはWi-Fiの帯域を節約します。音が途切れる場合に選んでください。",
     opusUnsupported: "このブラウザはOpusに非対応のため、PCMのみ使えます。",
-    wake: "画面をつけたままにする", format: "形式", latency: "遅延", level: "レベル", drops: "途切れ",
     hintIos: "iPhoneで音が出ない場合：音量を上げ、消音スイッチを確認してください。",
     listening: n => `${n}台が受信中`, connected: "接続済み",
   },
@@ -401,14 +448,13 @@ class StreamPlayer {
     stats.latencyMs = Math.round((this.nextTime - now + (ctx.outputLatency || ctx.baseLatency || 0)) * 1000);
   }
 
-  level() {
-    if (!this.analyser) return -Infinity;
+  rms() {
+    if (!this.analyser) return 0;
     const a = new Float32Array(this.analyser.fftSize);
     this.analyser.getFloatTimeDomainData(a);
     let sum = 0;
     for (const v of a) sum += v * v;
-    const rms = Math.sqrt(sum / a.length);
-    return rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+    return Math.sqrt(sum / a.length);
   }
 
   stop() {
@@ -431,7 +477,7 @@ class ElementPlayer {
     await this.el.play();
     stats.latencyMs = 0;
   }
-  level() { return -Infinity; }
+  rms() { return 0; }
   stop() {
     this.stopped = true;
     this.el.removeEventListener("error", this.handler);
@@ -443,26 +489,106 @@ class ElementPlayer {
 }
 
 // ---------------------------------------------------------------------------
+// Analogue VU meter, drawn like the plugin's (Source/VuMeter.cpp): scale
+// linear in voltage, 0 VU = -18 dBFS RMS, ~300 ms needle ballistics.
+const vu = { canvas: $("vu"), needle: 0, peak: 0, last: performance.now(), drawn: -1 };
+
+function vuPosition(v) { return Math.min(1.06, Math.max(0, Math.pow(10, v / 20) / Math.pow(10, 3 / 20))); }
+
+function drawVu() {
+  const c = vu.canvas, dpr = window.devicePixelRatio || 1;
+  const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+  if (!w || !h) return;
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+  const g = c.getContext("2d");
+  const s = dpr;
+
+  const face = g.createRadialGradient(w / 2, h * 0.35, 0, w / 2, h * 0.35, w * 0.75);
+  face.addColorStop(0, "#fcf2d6"); face.addColorStop(1, "#d2b77d");
+  g.fillStyle = face; g.fillRect(0, 0, w, h);
+
+  const ink = "#1e1b16", red = "#c22a1c";
+  const pivot = { x: w / 2, y: h + h * 0.32 };
+  const R = h * 1.02;
+  // span chosen so the outermost numerals (not just the arc) fit the face
+  const half = Math.asin(Math.min(0.86, (w / 2 - 22 * s) / (R + h * 0.16)));
+  const ang = p => -half + 2 * half * p;            // clockwise from 12 o'clock
+  const pt = (r, a) => ({ x: pivot.x + r * Math.sin(a), y: pivot.y - r * Math.cos(a) });
+  const arc = (from, to, r, lw, col) => {
+    g.beginPath(); g.arc(pivot.x, pivot.y, r, ang(from) - Math.PI / 2, ang(to) - Math.PI / 2);
+    g.strokeStyle = col; g.lineWidth = lw; g.stroke();
+  };
+
+  const zero = vuPosition(0);
+  arc(vuPosition(-20), zero, R, 1.5 * s, ink);
+  arc(zero, 1, R + 2.5 * s, 5 * s, red);
+  arc(zero, 1, R, 1.5 * s, red);
+
+  for (let pct = 0; pct <= 100; pct += 20) {
+    const a = ang(zero * pct / 100), p1 = pt(R - 9 * s, a), p2 = pt(R - 3 * s, a);
+    g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokeStyle = "rgba(30,27,22,0.7)"; g.lineWidth = s; g.stroke();
+  }
+
+  const marks = [[-20, "20", 1], [-10, "10", 1], [-7, "7", 1], [-5, "5", 1], [-3, "3", 1], [-2, "2", 0], [-1, "1", 0], [0, "0", 1], [1, "1", 0], [2, "2", 0], [3, "3", 1]];
+  g.font = `700 ${Math.max(10 * s, h * 0.115)}px "Barlow Condensed", sans-serif`;
+  g.textAlign = "center"; g.textBaseline = "middle";
+  for (const [v, label, major] of marks) {
+    const a = ang(vuPosition(v)), col = v > 0 ? red : ink;
+    const p1 = pt(R, a), p2 = pt(R + (major ? 9 : 6) * s, a), t = pt(R + h * 0.16, a);
+    g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.strokeStyle = col; g.lineWidth = (major ? 1.6 : 1.1) * s; g.stroke();
+    g.fillStyle = col; g.fillText(label, t.x, t.y);
+  }
+
+  g.fillStyle = ink;
+  g.font = `700 ${h * 0.24}px "Barlow Condensed", sans-serif`;
+  g.fillText("VU", w / 2, h * 0.6);
+
+  // PEAK lamp
+  const lx = w - 16 * s, ly = 15 * s;
+  if (vu.peak > 0) { g.beginPath(); g.arc(lx, ly, 9 * s, 0, Math.PI * 2); g.fillStyle = `rgba(255,58,44,${0.35 * vu.peak})`; g.fill(); }
+  g.beginPath(); g.arc(lx, ly, 4 * s, 0, Math.PI * 2);
+  g.fillStyle = vu.peak > 0 ? `rgb(${Math.round(74 + 181 * vu.peak)},${Math.round(18 + 56 * vu.peak)},${Math.round(12 + 42 * vu.peak)})` : "#4a120c"; g.fill();
+  g.font = `700 ${10 * s}px "Barlow Condensed", sans-serif`; g.textAlign = "right"; g.fillStyle = "rgba(30,27,22,0.8)";
+  g.fillText("PEAK", lx - 9 * s, ly + 0.5 * s);
+
+  // needle + its shadow on the card
+  const a = ang(vu.needle), tip = pt(R + 12 * s, a);
+  g.lineCap = "round";
+  g.beginPath(); g.moveTo(pivot.x + 3 * s, pivot.y + 3 * s); g.lineTo(tip.x + 3 * s, tip.y + 3 * s); g.strokeStyle = "rgba(0,0,0,0.2)"; g.lineWidth = 1.8 * s; g.stroke();
+  g.beginPath(); g.moveTo(pivot.x, pivot.y); g.lineTo(tip.x, tip.y); g.strokeStyle = "#141210"; g.lineWidth = 1.6 * s; g.stroke();
+
+  // pivot housing, bezel lip shadow, glass glare
+  const hub = g.createLinearGradient(0, h * 0.84, 0, h * 1.2);
+  hub.addColorStop(0, "#3b3833"); hub.addColorStop(1, "#0d0c0b");
+  g.beginPath(); g.ellipse(w / 2, h * 1.02, w * 0.15, h * 0.18, 0, 0, Math.PI * 2); g.fillStyle = hub; g.fill();
+  const lip = g.createLinearGradient(0, 0, 0, 14 * s);
+  lip.addColorStop(0, "rgba(0,0,0,0.35)"); lip.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = lip; g.fillRect(0, 0, w, 14 * s);
+  const glare = g.createLinearGradient(0, 0, w * 0.4, h / 2);
+  glare.addColorStop(0, "rgba(255,255,255,0.10)"); glare.addColorStop(1, "rgba(255,255,255,0)");
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(w * 0.55, 0); g.lineTo(w * 0.25, h); g.lineTo(0, h); g.closePath(); g.fillStyle = glare; g.fill();
+}
+
+// ---------------------------------------------------------------------------
+const wakeOn = () => $("wake").getAttribute("aria-pressed") === "true";
+
 function setStatus(text, sub = "") { $("status").textContent = text; $("substatus").textContent = sub; }
 
 function setPlayingUi(on) {
-  $("play").classList.toggle("on", on);
-  // SVG elements have no .hidden property, so toggle the attribute itself.
-  $("icon-play").toggleAttribute("hidden", on);
-  $("icon-stop").toggleAttribute("hidden", !on);
-  $("play").setAttribute("aria-label", on ? "Stop" : "Play");
+  $("play").setAttribute("aria-pressed", String(on));
+  $("playText").textContent = on ? "Listening" : "Listen";
 }
 
 function selectedStream() {
   const q = $("quality").value;
   if (mode === "bg") return { fmt: "pcm16", br: 0, label: "WAV 16" };
-  if (q.startsWith("opus") && opusOK) { const br = +q.split("-")[1]; return { fmt: "opus", br, label: `Opus ${br}` }; }
+  if (q.startsWith("opus") && opusOK) { const br = +q.split("-")[1]; return { fmt: "opus", br, label: `OPUS ${br}` }; }
   if (q === "pcm24") return { fmt: "pcm24", br: 0, label: "PCM 24" };
   return { fmt: "pcm16", br: 0, label: "PCM 16" };
 }
 
 async function requestWakeLock() {
-  if (mode !== "low" || !$("wake").checked || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+  if (mode !== "low" || !wakeOn() || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
   try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
 }
 function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
@@ -487,7 +613,7 @@ async function startPlayback() {
     await player.start();
     if (!wantPlaying) { player.stop(); return; }
     stats.state = "playing";
-    setStatus(T.playing, s.label);
+    setStatus(T.playing);
     requestWakeLock();
     if ("mediaSession" in navigator) {
       try {
@@ -521,7 +647,6 @@ function stopPlayback() {
   stats.state = "idle"; stats.latencyMs = 0;
   setPlayingUi(false);
   setStatus(T.tapToListen);
-  $("meter").style.width = "0%";
 }
 
 function togglePlay(force) {
@@ -564,7 +689,16 @@ function applyMode() {
 $("modeLow").addEventListener("click", () => { mode = "low"; store.set("mode", mode); applyMode(); restartIfPlaying(); });
 $("modeBg").addEventListener("click", () => { mode = "bg"; store.set("mode", mode); applyMode(); releaseWakeLock(); restartIfPlaying(); });
 $("quality").addEventListener("change", () => { store.set("quality", $("quality").value); restartIfPlaying(); });
-$("wake").addEventListener("change", () => { store.set("wake", $("wake").checked ? "1" : "0"); if ($("wake").checked) requestWakeLock(); else releaseWakeLock(); });
+function setWake(on) {
+  $("wake").setAttribute("aria-pressed", String(on));
+  $("wakeText").textContent = on ? "On" : "Off";
+}
+$("wake").addEventListener("click", () => {
+  const on = !wakeOn();
+  setWake(on);
+  store.set("wake", on ? "1" : "0");
+  if (on) requestWakeLock(); else releaseWakeLock();
+});
 $("play").addEventListener("click", () => togglePlay());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wantPlaying) requestWakeLock(); });
 
@@ -572,33 +706,39 @@ async function pollInfo() {
   try {
     const r = await fetch("/info", { cache: "no-store" });
     info = await r.json();
-    const pill = $("conn");
-    pill.className = "pill ok";
-    pill.textContent = info.listeners > 0 ? T.listening(info.listeners) : T.connected;
+    $("conn").className = "conn ok";
+    $("connText").textContent = info.listeners > 0 ? T.listening(info.listeners) : T.connected;
     if (info.auth && !key && $("authBox").hidden) showAuth();
   } catch {
-    $("conn").className = "pill bad";
-    $("conn").textContent = T.offline;
+    $("conn").className = "conn bad";
+    $("connText").textContent = T.offline;
   }
 }
 
-function meterLoop() {
-  if (player && stats.state === "playing") {
-    const db = player.level();
-    stats.levelDb = db;
-    const pct = Number.isFinite(db) ? Math.max(0, Math.min(100, (db + 60) / 60 * 100)) : 0;
-    $("meter").style.width = pct.toFixed(1) + "%";
-    $("sLevel").textContent = Number.isFinite(db) ? `${Math.round(db)} dB` : "–";
-  }
-  $("sLatency").textContent = stats.state !== "playing" ? "–"
-    : mode === "bg" ? "≈1–3 s" : `${stats.latencyMs} ms`;
+function frame(now) {
+  const dt = Math.min(0.2, Math.max(0.001, (now - vu.last) / 1000));
+  vu.last = now;
+
+  const playing = player && stats.state === "playing";
+  const rms = playing ? player.rms() : 0;
+  const db = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+  if (playing) stats.levelDb = db;
+
+  const v = (Number.isFinite(db) ? db : -100) + 18;
+  vu.needle += (vuPosition(v) - vu.needle) * (1 - Math.exp(-dt / 0.065));
+  vu.peak = v > 2 ? 1 : Math.max(0, vu.peak - dt * 2.5);
+  const key2 = Math.round(vu.needle * 2000) + vu.peak;
+  if (key2 !== vu.drawn) { drawVu(); vu.drawn = key2; }
+
+  $("sLevel").textContent = playing && Number.isFinite(db) ? `${Math.round(db)}` : "–";
+  $("sLatency").textContent = stats.state !== "playing" ? "–" : mode === "bg" ? "1–3 s" : `${stats.latencyMs} ms`;
   $("sDrops").textContent = String(stats.underruns + stats.dropped);
-  requestAnimationFrame(meterLoop);
+  requestAnimationFrame(frame);
 }
 
 (async function init() {
   $("quality").value = store.get("quality", "pcm16");
-  $("wake").checked = store.get("wake", "1") === "1";
+  setWake(store.get("wake", "1") === "1");
   setStatus(T.tapToListen);
 
   try {
@@ -610,9 +750,11 @@ function meterLoop() {
   $("qualityNote").textContent = opusOK ? T.opusNote : T.opusUnsupported;
 
   applyMode();
+  if (document.fonts) document.fonts.ready.then(() => { vu.drawn = -1; });
+  window.addEventListener("resize", () => { vu.drawn = -1; });
   await pollInfo();
   setInterval(pollInfo, 3000);
-  requestAnimationFrame(meterLoop);
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
