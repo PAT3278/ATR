@@ -15,6 +15,7 @@ public:
     DisplayWindow();
 
     void setProfile (int profileIndex);
+    void setAutoCode (const juce::String& code);
     void setLive (bool isLive, const juce::String& url, int listeners, bool startFailed);
 
     juce::TextEditor& getPasswordEditor() noexcept { return password; }

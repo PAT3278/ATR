@@ -177,6 +177,7 @@
   <audio id="bg" playsinline preload="none"></audio>
 </main>
 
+<script src="/player-worklet.js"></script>
 <script>
 "use strict";
 
@@ -188,8 +189,9 @@ const I18N = {
     tapToListen: "Tap LISTEN", connecting: "Connecting…", playing: "Playing",
     reconnecting: "Reconnecting…", offline: "Plugin not reachable",
     full: "Too many listeners right now",
-    passwordHint: "This stream is password-protected.",
+    passwordHint: "Scan the QR code on the plugin again, or enter the password shown there.",
     wrongPassword: "Wrong password", needPassword: "Enter the password first",
+    locked: "Too many wrong attempts. Wait a minute and try again.",
     noteLow: "Lowest delay (≈0.1–0.3 s). Keep this page open and the screen on.",
     noteBg: "Keeps playing with the screen locked, using the phone's media player. Adds ≈1–3 s of delay; 16-bit only.",
     opusNote: "PCM is lossless. Opus uses less Wi-Fi — pick it if the sound drops out.",
@@ -201,8 +203,9 @@ const I18N = {
     tapToListen: "タップして再生", connecting: "接続中…", playing: "再生中",
     reconnecting: "再接続中…", offline: "プラグインに接続できません",
     full: "接続数が上限に達しています",
-    passwordHint: "この配信はパスワードで保護されています。",
+    passwordHint: "プラグインのQRコードを読み取り直すか、表示されているパスワードを入力してください。",
     wrongPassword: "パスワードが違います", needPassword: "先にパスワードを入力してください",
+    locked: "間違いが続いたため一時的にロックされました。1分ほど待ってから試してください。",
     noteLow: "遅延が最小（約0.1〜0.3秒）。このページを開いたまま画面をつけておいてください。",
     noteBg: "スマホのメディアプレーヤーで再生するため、画面ロック中も鳴り続けます。遅延は約1〜3秒、16bitのみ。",
     opusNote: "PCMはロスレス。OpusはWi-Fiの帯域を節約します。音が途切れる場合に選んでください。",
@@ -223,10 +226,19 @@ const store = {
 
 // Exposed for automated tests; harmless otherwise.
 const stats = { state: "idle", format: "", packets: 0, frames: 0, underruns: 0, dropped: 0, latencyMs: 0, levelDb: -Infinity, reconnects: 0 };
-window.__pt = { stats, get player() { return player; } };
+const engine = { output: "", decoder: "" };
+window.__pt = { stats, engine, get player() { return player; } };
 
 let info = null;
-let key = (() => { try { return sessionStorage.getItem("pt-key") || ""; } catch { return ""; } })();
+// The access code arrives in the QR code's URL (?k=...); remember it for
+// this tab so reloads keep working.
+let key = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("k");
+  try {
+    if (fromUrl) sessionStorage.setItem("pt-key", fromUrl);
+    return fromUrl || sessionStorage.getItem("pt-key") || "";
+  } catch { return fromUrl || ""; }
+})();
 let mode = store.get("mode", "low");
 let wantPlaying = false;
 let player = null;
@@ -252,10 +264,29 @@ class StreamPlayer {
   async start() {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC({ latencyHint: "interactive" });
-    if (!this.ctx.audioWorklet || !window.AudioWorkletNode) throw new UnsupportedError();
-    await this.ctx.audioWorklet.addModule("/player-worklet.js");
-    this.node = new AudioWorkletNode(this.ctx, "pt-stream", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
-    this.node.port.onmessage = e => this.onWorkletReport(e.data);
+    if (this.ctx.audioWorklet && window.AudioWorkletNode) {
+      // Secure context (HTTPS/localhost): run the engine off the main thread.
+      await this.ctx.audioWorklet.addModule("/player-worklet.js");
+      this.node = new AudioWorkletNode(this.ctx, "pt-stream", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+      this.node.port.onmessage = e => this.onWorkletReport(e.data);
+      this.extraLatency = 0;
+      engine.output = "worklet";
+    } else if (this.ctx.createScriptProcessor) {
+      // Plain-HTTP LAN page (what phones get): browsers withhold AudioWorklet
+      // there, so run the same core in a ScriptProcessor.
+      const size = 2048;
+      this.core = new PtStreamCore(this.ctx.sampleRate);
+      this.node = this.ctx.createScriptProcessor(size, 0, 2);
+      this.node.onaudioprocess = e => {
+        this.core.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));
+        const r = this.core.report();
+        if (r) this.onWorkletReport(r);
+      };
+      this.extraLatency = size / this.ctx.sampleRate;
+      engine.output = "script-processor";
+    } else {
+      throw new UnsupportedError();
+    }
     this.out = this.ctx.createGain();
     this.node.connect(this.out);
     this.out.connect(this.ctx.destination);
@@ -273,6 +304,7 @@ class StreamPlayer {
     const url = `/stream?fmt=${this.fmt}&br=${this.br || 0}&key=${encodeURIComponent(key)}&t=${Date.now()}`;
     const res = await fetch(url, { signal: this.abort.signal, cache: "no-store" });
     if (res.status === 401) throw new AuthError();
+    if (res.status === 429) throw new AuthError("locked");
     if (res.status === 503) throw new FullError();
     if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
     this.pump(res.body.getReader());
@@ -313,6 +345,22 @@ class StreamPlayer {
 
   setupDecoder() {
     if (this.wireFormat !== 2) return;
+
+    if (!("AudioDecoder" in window)) {
+      // No WebCodecs (plain-HTTP page): libopus compiled to WebAssembly.
+      engine.decoder = "wasm";
+      this.wasm = new (globalThis["opus-decoder"].OpusDecoder)({ channels: 2, preSkip: 0 });
+      this.wasmQueue = [];
+      this.wasm.ready.then(() => {
+        if (this.stopped) return;
+        this.wasmReady = true;
+        for (const p of this.wasmQueue) this.decodeWasm(p);
+        this.wasmQueue = null;
+      });
+      return;
+    }
+
+    engine.decoder = "webcodecs";
     this.decoder = new AudioDecoder({
       output: ad => this.onAudioData(ad),
       error: () => { if (!this.stopped) this.onEnd(); },
@@ -320,8 +368,21 @@ class StreamPlayer {
     this.decoder.configure({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 });
   }
 
+  decodeWasm(p) {
+    const out = this.wasm.decodeFrame(p);
+    if (!out.samplesDecoded) return;
+    // The decoder reuses its WebAssembly memory: copy before handing on.
+    const L = out.channelData[0].slice(0, out.samplesDecoded);
+    const R = (out.channelData[1] || out.channelData[0]).slice(0, out.samplesDecoded);
+    this.enqueue(L, R);
+  }
+
   onPacket(p) {
     stats.packets++;
+    if (this.wasm) {
+      if (this.wasmReady) this.decodeWasm(p); else this.wasmQueue.push(p);
+      return;
+    }
     if (this.wireFormat === 2) {
       this.decoder.decode(new EncodedAudioChunk({ type: "key", timestamp: this.ts, data: p }));
       this.ts += 20000;
@@ -382,8 +443,9 @@ class StreamPlayer {
 
   enqueue(L, R) {
     if (this.stopped) return;
-    if (L === R) R = L.slice(); // mono: each side needs its own buffer to transfer
     stats.frames += L.length;
+    if (this.core) { this.core.push(L, R); return; }
+    if (L === R) R = L.slice(); // mono: each side needs its own buffer to transfer
     this.node.port.postMessage({ l: L, r: R }, [L.buffer, R.buffer]);
   }
 
@@ -392,7 +454,7 @@ class StreamPlayer {
     stats.dropped += m.dropped - this.seenDropped;
     this.seenUnderruns = m.underruns;
     this.seenDropped = m.dropped;
-    stats.latencyMs = Math.round((m.fill + (this.ctx.baseLatency || 0) + (this.ctx.outputLatency || 0)) * 1000);
+    stats.latencyMs = Math.round((m.fill + this.extraLatency + (this.ctx.baseLatency || 0) + (this.ctx.outputLatency || 0)) * 1000);
   }
 
   /** Per-side RMS and peak of the most recent ~20 ms of output. */
@@ -415,6 +477,7 @@ class StreamPlayer {
     try { this.abort && this.abort.abort(); } catch {}
     try { this.decoder && this.decoder.state !== "closed" && this.decoder.close(); } catch {}
     try { this.node && this.node.disconnect(); } catch {}
+    try { this.wasm && this.wasm.free(); } catch {}
     try { this.ctx && this.ctx.close(); } catch {}
   }
 }
@@ -424,6 +487,11 @@ class StreamPlayer {
 class ElementPlayer {
   constructor(onEnd) { this.onEnd = onEnd; this.el = $("bg"); }
   async start() {
+    // A wrong/stale code would otherwise just look like a broken stream to
+    // the media element, and it would retry forever.
+    const auth = await fetch(`/auth?key=${encodeURIComponent(key)}`, { cache: "no-store" });
+    if (auth.status === 401) throw new AuthError();
+    if (auth.status === 429) throw new AuthError("locked");
     this.handler = () => { if (!this.stopped) this.onEnd(); };
     this.el.addEventListener("error", this.handler);
     this.el.addEventListener("ended", this.handler);
@@ -523,11 +591,38 @@ function selectedStream() {
   return { fmt: "pcm16", br: 0, label: "PCM 16" };
 }
 
+// Wake Lock needs a secure context; on the plain-HTTP LAN page fall back to
+// playing a tiny muted looping video, which also keeps phones awake (the
+// approach NoSleep.js uses). Inline because iOS won't play video from a
+// server without HTTP Range support.
+const keepAwakeVideo = (() => {
+  const v = document.createElement("video");
+  v.setAttribute("playsinline", ""); v.setAttribute("muted", ""); v.muted = true; v.loop = true;
+  v.setAttribute("aria-hidden", "true");
+  v.style.cssText = "position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.01;pointer-events:none";
+  for (const [type, data] of [["video/mp4", "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"], ["video/webm", "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAOYEU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHYTbuMU6uEElTDZ1OsggEeTbuMU6uEHFO7a1OsggOC7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsirXsYMPQkBNgI1MYXZmNjAuMTYuMTAwV0GNTGF2ZjYwLjE2LjEwMESJiECfQAAAAAAAFlSua8GuAQAAAAAAADjXgQFzxYj62ylwgXA6FpyBACK1nIN1bmSIgQCGhVZfVlA4g4EBI+ODhAX14QDgibCBELqBEJqBAhJUw2f8c3OgY8CAZ8iaRaOHRU5DT0RFUkSHjUxhdmY2MC4xNi4xMDBzc9ZjwItjxYj62ylwgXA6FmfIoUWjh0VOQ09ERVJEh5RMYXZjNjAuMzEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDIuMDAwMDAwMDAwAB9DtnVB3eeBAKOjgQAAgBACAJ0BKhAAEAAARwiFhYiFhIgCAgAMDWAA/v+rUICjlYEAZACxAQABEBAAGAAYWC/0AAgAAKOVgQDIALEBAAEQEAAYABhYL/QACAAAo5WBASwAsQEAARAQABgAGFgv9AAIAACjlYEBkACxAQABEBAAGAAYWC/0AAgAAKOVgQH0ALEBAAEQEAAYABhYL/QACAAAo5WBAlgAsQEAARAQABgAGFgv9AAIAACjlYECvACxAQABEBAUYABhYL/QACAAAKOVgQMgALEBAAEQEAAYABhYL/QACAAAo5WBA4QAsQEAARAQABgAGFgv9AAIAACjlYED6ACxAQABEBAAGAAYWC/0AAgAAKOVgQRMALEBAAEQEAAYABhYL/QACAAAo5WBBLAAsQEAARAQABgAGFgv9AAIAACjlYEFFACxAQABEBAAGAAYWC/0AAgAAKOVgQV4ALEBAAEQEAAYABhYL/QACAAAo5WBBdwAsQEAARAQABgAGFgv9AAIAACjlYEGQACxAQABEBAAGAAYWC/0AAgAAKOVgQakALEBAAEQEAAYABhYL/QACAAAo5WBBwgAsQEAARAQFGAAYWC/0AAgAACjlYEHbACxAQABEBAAGAAYWC/0AAgAABxTu2uRu4+zgQC3iveBAfGCAZ/wgQM="]]) {
+    const src = document.createElement("source");
+    src.type = type;
+    src.src = `data:${type};base64,${data}`;
+    v.appendChild(src);
+  }
+  return v;
+})();
+
 async function requestWakeLock() {
-  if (mode !== "low" || !wakeOn() || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
-  try { wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+  if (mode !== "low" || !wakeOn() || document.visibilityState !== "visible") return;
+  if ("wakeLock" in navigator) {
+    try { wakeLock = await navigator.wakeLock.request("screen"); engine.keepAwake = "wake-lock"; return; } catch {}
+  }
+  if (!keepAwakeVideo.isConnected) document.body.appendChild(keepAwakeVideo);
+  try { await keepAwakeVideo.play(); engine.keepAwake = "video"; } catch {}
 }
-function releaseWakeLock() { try { wakeLock && wakeLock.release(); } catch {} wakeLock = null; }
+function releaseWakeLock() {
+  try { wakeLock && wakeLock.release(); } catch {}
+  wakeLock = null;
+  keepAwakeVideo.pause();
+  engine.keepAwake = "";
+}
 
 async function startPlayback() {
   clearTimeout(reconnectTimer);
@@ -561,7 +656,7 @@ async function startPlayback() {
   } catch (e) {
     try { player.stop(); } catch {}
     player = null;
-    if (e instanceof AuthError) { wantPlaying = false; setPlayingUi(false); stats.state = "auth"; showAuth(T.wrongPassword); setStatus(T.tapToListen); return; }
+    if (e instanceof AuthError) { wantPlaying = false; setPlayingUi(false); stats.state = "auth"; showAuth(e.message === "locked" ? T.locked : T.wrongPassword); setStatus(T.tapToListen); return; }
     if (e instanceof UnsupportedError) { mode = "bg"; store.set("mode", mode); applyMode(); startPlayback(); return; }
     if (e instanceof FullError) { setStatus(T.full); }
     scheduleReconnect();
@@ -611,7 +706,7 @@ $("authForm").addEventListener("submit", async ev => {
       $("authBox").hidden = true;
       $("authError").textContent = "";
     } else {
-      $("authError").textContent = T.wrongPassword;
+      $("authError").textContent = r.status === 429 ? T.locked : T.wrongPassword;
     }
   } catch { $("authError").textContent = T.offline; }
 });
@@ -678,6 +773,16 @@ function frame(now) {
     opusOK = "AudioDecoder" in window && "EncodedAudioChunk" in window &&
       !!(await AudioDecoder.isConfigSupported({ codec: "opus", sampleRate: 48000, numberOfChannels: 2 })).supported;
   } catch { opusOK = false; }
+  if (!opusOK && !("AudioDecoder" in window)) {
+    // No WebCodecs (plain-HTTP page): load the WebAssembly Opus decoder.
+    opusOK = await new Promise(resolve => {
+      const tag = document.createElement("script");
+      tag.src = "/opus-decoder.js";
+      tag.onload = () => resolve(!!globalThis["opus-decoder"] && typeof WebAssembly === "object");
+      tag.onerror = () => resolve(false);
+      document.head.appendChild(tag);
+    });
+  }
   document.querySelectorAll('#quality option[value^="opus"]').forEach(o => { o.disabled = !opusOK; });
   if (!opusOK && $("quality").value.startsWith("opus")) $("quality").value = "pcm16";
   $("qualityNote").textContent = opusOK ? T.opusNote : T.opusUnsupported;

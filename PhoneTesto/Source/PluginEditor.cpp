@@ -57,13 +57,16 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     mixAttachment = std::make_unique<SliderAttachment> (processor.apvts, PhoneTestoAudioProcessor::mixParamId, mixKnob);
     outputAttachment = std::make_unique<SliderAttachment> (processor.apvts, PhoneTestoAudioProcessor::outputParamId, outputKnob);
     mixKnob.setDoubleClickReturnValue (true, 100.0);
-    outputKnob.setDoubleClickReturnValue (true, 70.0);
+    outputKnob.setDoubleClickReturnValue (true, 100.0);
+    mixKnob.setTitle ("Mix");
+    outputKnob.setTitle ("Output");
 
     // MODEL: eight pads acting as one radio group, bound to the device choice
     for (int i = 0; i < (int) modelPads.size(); ++i)
     {
         auto& pad = modelPads[(size_t) i];
         pad.setButtonText (getSpeakerProfiles()[(size_t) i].shortName);
+        pad.setTitle (juce::String ("Model: ") + getSpeakerProfiles()[(size_t) i].name);
         pad.setRadioGroupId (1);
         pad.onClick = [this, i] { modelAttachment->setValueAsCompleteGesture ((float) i); };
         panel.addAndMakeVisible (pad);
@@ -85,6 +88,8 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     onAirButton.onClick = [this] { toggleLive(); };
 
     auto& password = display.getPasswordEditor();
+    password.setTitle ("Live password");
+    display.setAutoCode (processor.getAutoAccessCode());
     password.setText (processor.getLivePassword(), juce::dontSendNotification);
     password.onTextChange = [this] { processor.setLivePassword (display.getPasswordEditor().getText().trim()); };
 
@@ -111,7 +116,8 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     setResizable (true, true);
     setResizeLimits (faceWidth * 7 / 10, faceHeight * 7 / 10, faceWidth * 8 / 5, faceHeight * 8 / 5);
     getConstrainer()->setFixedAspectRatio ((double) faceWidth / (double) faceHeight);
-    setSize (faceWidth, faceHeight);
+    const float scale = juce::jlimit (0.7f, 1.6f, processor.getEditorScale());
+    setSize (juce::roundToInt (faceWidth * scale), juce::roundToInt (faceHeight * scale));
 
     lastTimerSeconds = juce::Time::getMillisecondCounterHiRes() * 0.001;
     startTimerHz (30);
@@ -125,7 +131,9 @@ PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
 
 void PhoneTestoAudioProcessorEditor::resized()
 {
-    panel.setTransform (juce::AffineTransform::scale ((float) getWidth() / (float) faceWidth));
+    const float scale = (float) getWidth() / (float) faceWidth;
+    panel.setTransform (juce::AffineTransform::scale (scale));
+    processor.setEditorScale (scale); // reopen at the same size
 }
 
 //==============================================================================

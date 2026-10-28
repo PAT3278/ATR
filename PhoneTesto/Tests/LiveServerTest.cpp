@@ -387,6 +387,23 @@ int main()
     }
     std::this_thread::sleep_for (std::chrono::milliseconds (300));
 
+    std::printf ("Phone hanging up while the host is idle\n");
+    {
+        Client phone;
+        phone.open (port, "/stream?fmt=pcm16");
+        phone.pump (200);
+        const bool counted = server.getNumListeners() == 1;
+
+        phone.socket->close();
+        const auto t0 = Clock::now();
+        while (server.getNumListeners() > 0 && Clock::now() - t0 < std::chrono::seconds (3))
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds> (Clock::now() - t0).count();
+
+        check (counted && server.getNumListeners() == 0 && ms < 100,
+               "slot freed " + std::to_string (ms) + " ms after the phone hangs up (no audio flowing)");
+    }
+
     std::printf ("Listener cap (%d)\n", LiveMonitorServer::maxListeners);
     {
         TonePusher tone (server, 44100.0);
@@ -415,6 +432,23 @@ int main()
 
     std::printf ("Restart on the same port after stop\n");
     check (server.start (port, 48000.0, 1) && server.getPort() == port, "port is reusable immediately");
+
+    std::printf ("Brute-force lockout\n");
+    {
+        server.setPassword ("right");
+        for (int i = 0; i < LiveMonitorServer::maxFailuresPerWindow; ++i)
+            get (port, "/auth?key=guess" + std::to_string (i), 200);
+
+        check (get (port, "/auth?key=right").status() == 429,
+               "after " + std::to_string (LiveMonitorServer::maxFailuresPerWindow) + " wrong guesses, even the right code is refused (429)");
+        check (get (port, "/stream?fmt=pcm16&key=right").status() == 429, "...for streams too");
+        check (get (port, "/info").status() == 200, "the page itself still loads");
+
+        server.stop();
+        server.start (port, 48000.0, 1);
+        server.setPassword ("right");
+        check (get (port, "/auth?key=right").status() == 204, "lockout cleared when the server restarts");
+    }
     server.stop();
 
     if (failures > 0)

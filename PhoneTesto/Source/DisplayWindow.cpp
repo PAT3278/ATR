@@ -32,11 +32,17 @@ DisplayWindow::DisplayWindow()
     password.setFont (hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
     password.setJustification (juce::Justification::centredLeft);
     password.setIndents (10, 4);
-    password.setTextToShowWhenEmpty ("NONE", hw::colours::textFaint);
+    password.setTextToShowWhenEmpty ("AUTO", hw::colours::textFaint);
     password.setInputRestrictions (32);
     addChildComponent (password);
 
     rebuildCurve();
+}
+
+void DisplayWindow::setAutoCode (const juce::String& code)
+{
+    // With no password typed, phones use this code (it's inside the QR code).
+    password.setTextToShowWhenEmpty (code, hw::colours::textDim);
 }
 
 void DisplayWindow::setProfile (int index)
@@ -174,7 +180,7 @@ void DisplayWindow::paint (juce::Graphics& g)
         for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
         {
             const float y = yForDb (area, db);
-            g.setColour (Colours::white.withAlpha (db == 0.0f ? 0.08f : 0.04f));
+            g.setColour (Colours::white.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.08f : 0.04f));
             g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
             g.setColour (c::textFaint);
             g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
@@ -209,7 +215,7 @@ void DisplayWindow::paint (juce::Graphics& g)
     hw::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft, c::textDim, 12.0f);
     g.setColour (c::text);
     g.setFont (hw::font (hw::Type::condensedBold, 24.0f, 0.02f));
-    g.drawFittedText (url.fromFirstOccurrenceOf ("://", false, false).trimCharactersAtEnd ("/"),
+    g.drawFittedText (url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
                       column.withTrimmedTop (16.0f).withHeight (28.0f).toNearestInt(), Justification::centredLeft, 1, 0.8f);
 
     hw::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },

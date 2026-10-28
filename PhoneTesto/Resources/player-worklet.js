@@ -1,23 +1,29 @@
-// AudioWorklet for the player page's low-latency mode (served by the plugin
-// as /player-worklet.js).
+// Gapless playback engine for the player page's low-latency mode (served by
+// the plugin as /player-worklet.js).
 //
-// The page posts decoded 48 kHz stereo chunks here; this processor plays
-// them from a ring buffer as one continuous stream, resampling to the
-// phone's own output rate with a single stateful interpolator. (Scheduling
-// each chunk as its own AudioBufferSourceNode instead leaves overlaps/gaps
-// of a sample at every join whenever the phone isn't running at 48 kHz --
-// audible clicks.)
+// PtStreamCore plays decoded 48 kHz stereo chunks from a ring buffer as one
+// continuous stream, resampling to the phone's own output rate with a single
+// stateful interpolator. (Scheduling each chunk as its own
+// AudioBufferSourceNode instead leaves overlaps/gaps of a sample at every
+// join whenever the phone isn't running at 48 kHz -- audible clicks.)
 //
 // It also owns the jitter buffer: playback starts once `target` seconds are
 // buffered, an underrun rebuffers with a slightly bigger cushion, and slow
 // clock drift between computer and phone is absorbed by nudging the
 // playback rate by at most +-0.2 % (inaudible) instead of skipping.
+//
+// The same core runs in two hosts:
+//  * an AudioWorklet (below), where the browser allows one -- only in
+//    secure contexts (HTTPS or localhost);
+//  * a ScriptProcessorNode on the page itself otherwise, which is what a
+//    phone opening the plugin's plain-HTTP LAN address gets. The page loads
+//    this file as a normal script for that.
 
 const STREAM_RATE = 48000;
 
-class PtStreamProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
+class PtStreamCore {
+  constructor(outputRate) {
+    this.outputRate = outputRate;
     this.cap = STREAM_RATE * 4;
     this.bufL = new Float32Array(this.cap);
     this.bufR = new Float32Array(this.cap);
@@ -27,13 +33,13 @@ class PtStreamProcessor extends AudioWorkletProcessor {
     this.maxTarget = 0.5 * STREAM_RATE;
     this.target = 0.12 * STREAM_RATE;
     this.playing = false;    // false while (re)buffering
-    this.baseRatio = STREAM_RATE / sampleRate;
+    this.baseRatio = STREAM_RATE / outputRate;
     this.fillAvg = this.target;
     this.stableFrames = 0;
     this.underruns = 0;
     this.dropped = 0;
+    this.rendered = 0;
     this.lastReport = 0;
-    this.port.onmessage = e => this.push(e.data.l, e.data.r);
   }
 
   push(l, r) {
@@ -60,15 +66,15 @@ class PtStreamProcessor extends AudioWorkletProcessor {
     return ((c3 * t + c2) * t + c1) * t + x0;
   }
 
-  process(inputs, outputs) {
-    const L = outputs[0][0], R = outputs[0][1] || outputs[0][0], n = L.length;
+  render(L, R) {
+    const n = L.length;
+    this.rendered += n;
     let fill = this.written - this.readPos;
 
     if (!this.playing) {
       if (fill < this.target) {
         L.fill(0); R.fill(0);
-        this.report(fill);
-        return true;
+        return;
       }
       this.playing = true;
       this.readPos = this.written - this.target;
@@ -96,8 +102,7 @@ class PtStreamProcessor extends AudioWorkletProcessor {
       this.underruns++;
       this.target = Math.min(this.maxTarget, this.target + 0.03 * STREAM_RATE);
       this.stableFrames = 0;
-      this.report(fill);
-      return true;
+      return;
     }
 
     for (let i = 0; i < n; i++) {
@@ -108,21 +113,37 @@ class PtStreamProcessor extends AudioWorkletProcessor {
 
     // Stable for a while: creep back towards the lowest latency.
     this.stableFrames += n;
-    if (this.stableFrames > 15 * sampleRate && this.target > this.minTarget) {
+    if (this.stableFrames > 15 * this.outputRate && this.target > this.minTarget) {
       this.target = Math.max(this.minTarget, this.target - 0.01 * STREAM_RATE);
       this.stableFrames = 0;
     }
-
-    this.report(this.written - this.readPos);
-    return true;
   }
 
-  report(fill) {
-    if (currentFrame - this.lastReport < sampleRate / 8)
-      return;
-    this.lastReport = currentFrame;
-    this.port.postMessage({ fill: fill / STREAM_RATE, underruns: this.underruns, dropped: this.dropped });
+  /** Buffer state, about 8 times a second (null in between). */
+  report() {
+    if (this.rendered - this.lastReport < this.outputRate / 8)
+      return null;
+    this.lastReport = this.rendered;
+    return { fill: (this.written - this.readPos) / STREAM_RATE, underruns: this.underruns, dropped: this.dropped };
   }
 }
 
-registerProcessor("pt-stream", PtStreamProcessor);
+if (typeof AudioWorkletProcessor !== "undefined") {
+  class PtStreamProcessor extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this.core = new PtStreamCore(sampleRate);
+      this.port.onmessage = e => this.core.push(e.data.l, e.data.r);
+    }
+
+    process(inputs, outputs) {
+      const out = outputs[0];
+      this.core.render(out[0], out[1] || out[0]);
+      const r = this.core.report();
+      if (r) this.port.postMessage(r);
+      return true;
+    }
+  }
+
+  registerProcessor("pt-stream", PtStreamProcessor);
+}

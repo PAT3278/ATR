@@ -27,7 +27,31 @@ coloration in real time:
   breakup/compression small drivers exhibit at normal listening levels.
 - **Mono sum** (optional) — many phone speakers are effectively narrow/mono;
   toggle this to sum L/R before the speaker chain.
-- **Mix** and **Output** — blend wet/dry and compensate output level.
+- **Mix** and **Output** — blend wet/dry and trim the output (100 % = unity,
+  the default).
+
+Built for A/B-ing during a mix:
+
+- **Loudness-matched.** Every model is trimmed to the same perceived level
+  as the input (K-weighted, as in loudness meters), so switching models or
+  toggling bypass compares *tone*, not level, and nothing clips at 0 dBFS.
+- **Click-free.** Model changes crossfade between two complete speaker
+  chains; bypass, mono, mix, output and Live are smoothed. All of them can
+  be switched or automated during playback.
+- **Transparent bypass.** BYPASS is the host's bypass too (FL Studio,
+  Ableton, Logic… use it instead of hard-switching the plugin out). It is
+  bit-exact to the input, delayed by the plugin's latency, so there's no
+  timing jump either.
+- **Latency: 4 samples** (from the 2× oversampled saturator), reported to the
+  host for delay compensation.
+- Real-time safe: no allocation or locking on the audio thread; about 1 % of
+  one core.
+
+> **Before exporting your final mix**, bypass PhoneTesto (or remove it) if
+> it's on the master bus — like any monitoring plugin there, Emulate would
+> otherwise be printed into the export. In Live mode the plugin passes audio
+> through unchanged, and it doesn't stream to phones while the DAW renders
+> an export.
 
 This is **not** a calibrated impulse-response model — the filter/drive
 values in `Source/SpeakerProfiles.h` are hand-tuned approximations. If real
@@ -49,8 +73,9 @@ indicators):
 - **MONO**, **BYPASS** and **ON AIR** (Live) buttons; the header shows
   EMULATE or ON AIR with the number of phones listening.
 
-Drag the window's corner to resize; the whole panel scales. Fonts are
-Barlow / Barlow Condensed, embedded in the plugin.
+Drag the window's corner to resize; the whole panel scales, and the size is
+saved with the project. Fonts are Barlow / Barlow Condensed, embedded in the
+plugin.
 
 ## Live Monitor mode
 
@@ -76,15 +101,26 @@ What you get:
     screen on" option. Needs the page open and the screen on.
   - *Screen-off*: hands the stream to the phone's own media player so it
     keeps playing with the screen locked. About 1–3 s behind; 16-bit only.
-- **Optional password** (field in the display, saved with the project).
-  Phones are asked for it before they can listen. Leave it empty for no
-  password.
+- **Access code.** Live is never open to everyone on the network (on shared
+  or office Wi-Fi that would let anyone listen to an unreleased mix). By
+  default a random 8-character code is made each time the plugin loads; it
+  is built into the QR code, so scanning just works, and it's shown in the
+  password field for typing the address by hand. Type your own password
+  there to replace it (saved with the project). After 10 wrong attempts
+  from one address, that address is locked out for a minute.
 - **Listener count** in the plugin, and automatic reconnect on the phone if
   the plugin restarts.
 - While Live is on, the Emulate DSP is skipped (the real phone does the
   speaker colouring itself), so your monitors and the phones hear the same
   clean signal. MODEL, MIX, MONO and BYPASS are dimmed because they don't
   apply.
+- **Works over plain HTTP.** The plugin can't have an HTTPS certificate for
+  a LAN address, and browsers withhold some audio features from plain-HTTP
+  pages. The page detects this and uses fallbacks that work there: a
+  ScriptProcessor instead of an AudioWorklet for low latency, a bundled
+  WebAssembly Opus decoder instead of WebCodecs, and a silent looping video
+  instead of the Wake Lock API to keep the screen on. Nothing is loaded from
+  the internet; everything is served by the plugin.
 
 **Status of testing.** The streaming server is tested with plain socket
 clients that decode every format and check pitch and level, and the player
@@ -122,6 +158,29 @@ Produces (in `build/PhoneTesto_artefacts/Release/`):
 - `Standalone/PhoneTesto` (or `.app` on macOS)
 - `AU/` (macOS only — built automatically when `FORMATS` includes `AU`)
 
+Distribution settings are baked in:
+
+- **Windows**: the MSVC runtime is linked statically, so the plugin runs on
+  machines without the Visual C++ Redistributable.
+- **macOS**: universal binary (Apple Silicon + Intel), macOS 10.13+, and the
+  Local Network usage description that macOS needs before it lets the plugin
+  accept connections from phones.
+
+### Installing the built plugin
+
+The build doesn't copy the plugin into the system plugin folder by default
+(on Windows that folder needs administrator rights, and a failed copy would
+fail the whole build). Copy it yourself:
+
+- **Windows**: `PhoneTesto.vst3` → `C:\Program Files\Common Files\VST3\`
+  (then rescan plugins in FL Studio: Options → Manage plugins → Find
+  plugins).
+- **macOS**: `PhoneTesto.vst3` → `~/Library/Audio/Plug-Ins/VST3/`,
+  `PhoneTesto.component` → `~/Library/Audio/Plug-Ins/Components/`.
+
+Or configure with `-DPHONETESTO_COPY_AFTER_BUILD=ON` to have every build
+install it (on Windows, run VS Code / the terminal as administrator).
+
 ### AAX
 
 AAX requires Avid's proprietary SDK, which cannot be bundled here. If you
@@ -143,23 +202,33 @@ node Tests/browser/player_test.mjs build/PhoneTestoLiveDemo
 xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a display
 ```
 
-- **PhoneTestoDspTest** — white noise and an impulse through every speaker
-  profile (Emulate mode); output must stay finite and at a sane level.
+- **PhoneTestoDspTest** — the processor as a host would drive it, at
+  44.1/48/96 kHz: every model within ±1 dB (K-weighted) of the input on
+  −18 dBFS pink noise and never clipping; no clicks when switching models,
+  bypass, mono, mix or output mid-tone; bypass bit-exact to the delayed
+  input; latency the same before and after prepare; odd and oversized block
+  sizes, silence and decay; CPU use; project save/restore (including the
+  password and a corrupt state blob); and the Live access code (random per
+  load, in the QR URL, required by the server, replaced by a password).
 - **PhoneTestoLiveServerTest** — the streaming server with plain socket
   clients standing in for phones, fed a 440 Hz tone at 44.1 kHz. Decodes
   PCM16, PCM24, Opus and the WAV stream and checks pitch (440 Hz, so the
   48 kHz resampling is right) and level; three formats at once; a host
   sample-rate change mid-stream; the 32-listener cap; passwords (including
-  non-ASCII); abrupt hang-ups (which must not crash the host); and a fast
-  stop() with 32 phones connected. Every decoded format is also checked
-  for clicks (no sample-to-sample jump beyond what a clean sine can make).
+  non-ASCII) and the brute-force lockout; abrupt hang-ups (which must not
+  crash the host, and must free the phone's slot at once even while no
+  audio is flowing); and a fast stop() with 32 phones connected. Every
+  decoded format is also checked for clicks (no sample-to-sample jump
+  beyond what a clean sine can make).
 - **player_test.mjs** — the real player page in Playwright Chromium on a
-  phone-sized screen against `PhoneTestoLiveDemo`'s test tone: presses
-  Play for every quality and checks the decoded level, that the phone's
-  actual output is click-free (taken from the page's own analysers, with
-  the browser running at 44.1 kHz so resampling is exercised), the
-  screen-off mode,
-  the password flow, and auto-reconnect when the plugin goes away and comes
+  phone-sized screen against `PhoneTestoLiveDemo`'s test tone, opened twice:
+  over the LAN address (plain HTTP, as a phone sees it — must pick the
+  ScriptProcessor / WASM Opus / video keep-awake fallbacks) and over
+  localhost (secure — AudioWorklet / WebCodecs / Wake Lock). Presses Play
+  for every quality and checks the decoded level, that the phone's actual
+  output is click-free (with the browser running at 44.1 kHz so resampling
+  is exercised), the screen-off mode, the password flow including the QR
+  code's `?k=` link, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
 - **PhoneTestoEditorSnapshot** — renders the editor (Emulate and Live) to
   PNGs for checking the layout.
@@ -168,13 +237,18 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
   your phone).
 
+The VST3 build also passes Steinberg's VST3 validator (all 47 tests) and
+[pluginval](https://github.com/Tracktion/pluginval) at strictness 10.
+
 ## Project layout
 
 ```
 CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps
 Resources/
   player.html              The phone-side player page (embedded into the plugin)
-  player-worklet.js        Its AudioWorklet: gapless playback, jitter buffer, drift control
+  player-worklet.js        Its playback core (AudioWorklet or ScriptProcessor): gapless
+                           playback, jitter buffer, drift control
+  thirdparty/              opus-decoder (WASM Opus for plain-HTTP pages) + its licence
   fonts/                   Barlow fonts + their licence (OFL.txt)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
@@ -187,7 +261,7 @@ Source/
   LiveStreamEncoder.h/.cpp Per-listener 48 kHz resampling + PCM16/PCM24/Opus packetising
   QrCodeComponent.h/.cpp   Draws the "scan to listen" QR code
 Tests/
-  DspTest.cpp              Emulate-mode DSP sanity test
+  DspTest.cpp              Processor tests: level match, clicks, bypass, latency, state
   LiveServerTest.cpp       Streaming server protocol/audio test
   LiveDemo.cpp             Stand-alone server with a test tone
   EditorSnapshot.cpp       Renders the editor to PNG
@@ -203,15 +277,20 @@ Tests/
 - [Barlow](https://github.com/jpt/barlow) fonts — SIL Open Font License 1.1
   (`Resources/fonts/OFL.txt`); these are included in the repo and embedded in
   the plugin.
+- [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
+  Ethan Halsall — MIT, wrapping libopus (BSD)
+  (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo
+  and served to phones by the plugin.
 
-The code libraries are fetched at configure time rather than vendored.
+JUCE, libopus and the QR library are fetched at configure time rather than
+vendored.
 
 ## Roadmap
 
 - [ ] Real measured impulse responses per device, layered in as an optional
       convolution stage alongside the current EQ/saturation model.
 - [ ] More device profiles (additional Android flagships, tablets, TVs).
-- [ ] A/B bypass shortcut and preset save/recall in the host.
+- [ ] Preset save/recall in the host.
 - [ ] Try Live Monitor on a real iPhone (Safari) and Android (Chrome),
       especially screen-off mode, and adjust for anything iOS-specific.
 - [ ] Streaming over the internet (not just local Wi-Fi), e.g. to send a

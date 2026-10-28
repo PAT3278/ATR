@@ -6,12 +6,16 @@
 //
 //   node Tests/browser/player_test.mjs <path-to-PhoneTestoLiveDemo> [screenshot-dir]
 //
-// Chromium is not iPhone Safari: this proves the page/protocol logic, not
-// iOS-specific audio behaviour.
+// Pages are opened through this machine's LAN address, the way a phone opens
+// them -- a plain-HTTP, insecure context, where browsers withhold
+// AudioWorklet, WebCodecs and Wake Lock -- and also via localhost (secure)
+// for those paths. Chromium is not iPhone Safari: this proves the
+// page/protocol logic, not iOS-specific audio behaviour.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
@@ -51,34 +55,55 @@ async function newPage(browser, locale = "en-US") {
 
 const stats = page => page.evaluate(() => ({ ...window.__pt.stats }));
 
+// The address a phone would use: this machine's non-loopback IPv4.
+const lanAddress = Object.values(os.networkInterfaces()).flat().find(a => a && a.family === "IPv4" && !a.internal)?.address;
+if (!lanAddress) { console.error("no LAN address to test with"); process.exit(2); }
+
 const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
 
 try {
   // ------------------------------------------------------------------------
-  console.log("Low-latency mode, every quality");
-  {
-    const { proc, port } = await startDemo();
-    const { context, page, errors } = await newPage(browser, "ja-JP");
-    await page.goto(`http://127.0.0.1:${port}/`);
+  // A phone opens the plugin's plain-HTTP LAN address, which browsers treat
+  // as an insecure context: no AudioWorklet, WebCodecs or Wake Lock. Test
+  // that first, exactly as phones see it; then localhost (a secure context)
+  // for the AudioWorklet/WebCodecs path.
+  const { proc, port } = await startDemo();
+  const contexts = [
+    { host: lanAddress, label: "phone-like (LAN, insecure)", output: "script-processor", decoder: "wasm", keepAwake: ["video"] },
+    { host: "127.0.0.1", label: "localhost (secure)", output: "worklet", decoder: "webcodecs", keepAwake: ["wake-lock", "video"] }, // headless Chromium denies wake locks -> video fallback
+  ];
+  let page, context, errors;
+
+  for (const c of contexts) {
+    console.log(`Low-latency mode, every quality -- ${c.label}`);
+    ({ context, page, errors } = await newPage(browser, "ja-JP"));
+    await page.goto(`http://${c.host}:${port}/`);
     await page.waitForFunction(() => document.getElementById("conn").classList.contains("ok"));
+    const secure = await page.evaluate(() => isSecureContext);
+    check(secure === (c.host === "127.0.0.1"), `secure context: ${secure}`);
     check(await page.textContent("#status") === "タップして再生", "Japanese UI on a ja-JP phone");
 
     const opusOK = await page.evaluate(() => !document.querySelector('#quality option[value="opus-192"]').disabled);
-    console.log(`  (this browser ${opusOK ? "can" : "cannot"} decode Opus via WebCodecs)`);
+    check(opusOK, "Opus is available");
 
     for (const q of ["pcm16", "pcm24", "opus-192", "opus-96"]) {
-      if (q.startsWith("opus") && !opusOK) { console.log(`  [skip] ${q}: no WebCodecs Opus here`); continue; }
       await page.selectOption("#quality", q);
       await page.click("#play");
       await sleep(3000);
       const s = await stats(page);
+      const eng = await page.evaluate(() => ({ ...window.__pt.engine }));
       if (q === "pcm16") {
         const btn = await page.evaluate(() => [document.getElementById("play").getAttribute("aria-pressed"),
                                               document.getElementById("playText").textContent]);
         check(btn[0] === "true" && btn[1] === "Listening", `LISTEN lamp lit while playing (aria-pressed=${btn[0]}, "${btn[1]}")`);
         const fontsOk = await page.evaluate(() => document.fonts.check('700 20px "Barlow Condensed"'));
         check(fontsOk, "Barlow fonts load from the plugin");
+        check(eng.output === c.output, `playback engine: ${eng.output} (want ${c.output})`);
+        check(c.keepAwake.includes(eng.keepAwake), `keep-screen-on via: ${eng.keepAwake || "nothing"} (want ${c.keepAwake.join(" or ")})`);
       }
+      if (q.startsWith("opus"))
+        check(eng.decoder === c.decoder, `${q}: Opus decoded by ${eng.decoder} (want ${c.decoder})`);
+
       // Clicks: a clean 0.5-amplitude 440 Hz sine never exceeds 0.5 and never
       // moves more than 2*pi*440/rate*0.5 between samples. Chunk joins that
       // overlap or gap show up as spikes far above both.
@@ -101,12 +126,21 @@ try {
 
       check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6,
         `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms, underruns ${s.underruns}, dropped ${s.dropped}`);
-      if (q === "pcm16" && shotDir) await page.screenshot({ path: path.join(shotDir, "player-playing.png"), fullPage: true });
+      if (q === "pcm16" && shotDir && c.output === "script-processor") await page.screenshot({ path: path.join(shotDir, "player-playing.png"), fullPage: true });
       await page.click("#play");
       await sleep(300);
     }
 
     check(errors.length === 0, "no page/console errors while playing" + (errors.length ? ": " + errors.join(" | ") : ""));
+    await context.close();
+  }
+
+  // Reconnect behaviour, on the phone-like page.
+  console.log("Plugin going away and coming back");
+  {
+    ({ context, page, errors } = await newPage(browser));
+    await page.goto(`http://${lanAddress}:${port}/`);
+    await page.waitForFunction(() => document.getElementById("conn").classList.contains("ok"));
 
     // The plugin restarting/closing mid-play: page should notice and keep
     // retrying (connection-refused logs from those retries are expected).
@@ -133,7 +167,7 @@ try {
   {
     const { proc, port } = await startDemo();
     const { context, page, errors } = await newPage(browser);
-    await page.goto(`http://127.0.0.1:${port}/`);
+    await page.goto(`http://${lanAddress}:${port}/`);
     await page.click("#modeBg");
     await page.click("#play");
     await sleep(4000);
@@ -153,7 +187,7 @@ try {
   {
     const { proc, port } = await startDemo(["--password", "1234"]);
     const { context, page, errors } = await newPage(browser);
-    await page.goto(`http://127.0.0.1:${port}/`);
+    await page.goto(`http://${lanAddress}:${port}/`);
     await page.waitForSelector("#authBox:not([hidden])");
     check(true, "password box shown on load");
     if (shotDir) await page.screenshot({ path: path.join(shotDir, "player-password.png"), fullPage: true });
@@ -177,6 +211,20 @@ try {
     const s = await stats(page);
     check(s.state === "playing" && s.levelDb > -12, `plays after unlocking (level ${s.levelDb.toFixed(1)} dBFS)`);
     await page.click("#play");
+
+    // Opening the QR code's URL (code in ?k=) should just play: no prompt.
+    const fresh = await newPage(browser);
+    await fresh.page.goto(`http://${lanAddress}:${port}/?k=1234`);
+    await fresh.page.waitForFunction(() => document.getElementById("conn").classList.contains("ok"));
+    await sleep(300);
+    check(!(await fresh.page.isVisible("#authBox")), "QR URL with ?k= skips the password prompt");
+    await fresh.page.click("#play");
+    await sleep(2500);
+    const viaQr = await stats(fresh.page);
+    check(viaQr.state === "playing" && viaQr.levelDb > -12, `QR URL plays straight away (level ${viaQr.levelDb.toFixed(1)} dBFS)`);
+    await fresh.page.click("#play");
+    await fresh.context.close();
+
     // The browser logs the deliberate wrong-password 401 itself; anything else is a real error.
     const unexpected = errors.filter(e => !/status of 401/.test(e));
     check(unexpected.length === 0, "no unexpected page/console errors" + (unexpected.length ? ": " + unexpected.join(" | ") : ""));

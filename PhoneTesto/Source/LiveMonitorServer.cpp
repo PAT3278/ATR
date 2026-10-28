@@ -106,6 +106,7 @@ namespace
             case 401: return "401 Unauthorized";
             case 404: return "404 Not Found";
             case 405: return "405 Method Not Allowed";
+            case 429: return "429 Too Many Requests";
             case 503: return "503 Service Unavailable";
             default:  return juce::String (code);
         }
@@ -312,6 +313,32 @@ private:
         return true;
     }
 
+    /** A player never sends anything after its request, so the socket
+        turning readable means the phone closed the connection. Checking
+        this notices a hang-up at once, rather than on a later keep-alive
+        (TCP even accepts the first write after a hang-up), so the slot and
+        the plugin's listener count free up straight away. */
+    bool peerHasHungUp()
+    {
+        const int ready = socket->waitUntilReady (true, 0);
+        if (ready == 0)
+            return false;
+        if (ready < 0)
+            return true;
+
+        char scratch[256];
+       #if JUCE_WINDOWS
+        return socket->read (scratch, (int) sizeof (scratch), false) <= 0;
+       #else
+        const int fd = socket->getRawSocketHandle();
+        if (fd < 0)
+            return true;
+
+        const auto got = ::recv (fd, scratch, sizeof (scratch), 0);
+        return got == 0 || (got < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR);
+       #endif
+    }
+
     bool sendResponse (int code, const juce::String& contentType, const void* body, size_t bodySize,
                        bool headOnly = false, const char* cacheControl = "no-store")
     {
@@ -394,6 +421,13 @@ private:
             return;
         }
 
+        if (path == "/opus-decoder.js")
+        {
+            sendResponse (200, "text/javascript; charset=utf-8", BinaryData::opusdecoder_min_js,
+                          (size_t) BinaryData::opusdecoder_min_jsSize, head, "public, max-age=86400");
+            return;
+        }
+
         // The same Barlow fonts the plugin panel uses, for the page.
         struct FontFile { const char* path; const char* data; int size; };
         const FontFile fonts[] = {
@@ -425,21 +459,27 @@ private:
             return;
         }
 
-        const bool authorised = server.checkPassword (request.query["key"]);
-
-        if (path == "/auth")
-        {
-            sendResponse (authorised ? 204 : 401, "text/plain", nullptr, 0);
-            return;
-        }
-
-        if (path != "/stream" && path != "/live.wav")
+        if (path != "/auth" && path != "/stream" && path != "/live.wav")
         {
             sendText (404, "Not found");
             return;
         }
 
-        if (! authorised)
+        const auto auth = server.authorise (request.query["key"], address);
+
+        if (auth == AuthResult::lockedOut)
+        {
+            sendText (429, "Too many wrong attempts; try again in a minute");
+            return;
+        }
+
+        if (path == "/auth")
+        {
+            sendResponse (auth == AuthResult::ok ? 204 : 401, "text/plain", nullptr, 0);
+            return;
+        }
+
+        if (auth != AuthResult::ok)
         {
             sendText (401, "Password required");
             return;
@@ -512,7 +552,7 @@ private:
         auto ensureEncoder = [&]
         {
             const auto rate = server.getInputSampleRate();
-            if (encoder == nullptr || encoder->getInputSampleRate() != rate)
+            if (encoder == nullptr || ! juce::exactlyEqual (encoder->getInputSampleRate(), rate))
                 encoder = std::make_unique<LiveStreamEncoder> (format, rate, bitrate);
             return encoder->isValid();
         };
@@ -564,6 +604,9 @@ private:
 
                 continue;
             }
+
+            if (peerHasHungUp())
+                return;
 
             // The host isn't calling processBlock (transport stopped in some
             // DAWs, offline, etc.): keep the connection alive so the phone
@@ -621,9 +664,9 @@ bool LiveMonitorServer::start (int preferredPort, double newInputSampleRate, int
 
     inputSampleRate = newInputSampleRate > 0.0 ? newInputSampleRate : 48000.0;
 
-    const int attempts = preferredPort == 0 ? 1 : juce::jmax (1, portSearchRange);
+    const int portAttempts = preferredPort == 0 ? 1 : juce::jmax (1, portSearchRange);
 
-    for (int i = 0; i < attempts; ++i)
+    for (int i = 0; i < portAttempts; ++i)
     {
         auto candidate = std::make_unique<juce::StreamingSocket>();
 
@@ -638,6 +681,11 @@ bool LiveMonitorServer::start (int preferredPort, double newInputSampleRate, int
 
     if (listener == nullptr)
         return false;
+
+    {
+        const juce::ScopedLock sl (attemptsLock);
+        attempts.clear();
+    }
 
     running = true;
     startThread();
@@ -731,6 +779,40 @@ bool LiveMonitorServer::hasPassword() const
 {
     const juce::ScopedLock sl (passwordLock);
     return password.isNotEmpty();
+}
+
+LiveMonitorServer::AuthResult LiveMonitorServer::authorise (const juce::String& candidate, const juce::String& clientAddress)
+{
+    const auto now = juce::Time::getMillisecondCounter();
+    const juce::ScopedLock sl (attemptsLock);
+
+    if (attempts.size() > 1000) // bound memory if something sprays many addresses
+        attempts.clear();
+
+    auto& a = attempts[clientAddress];
+
+    if (now < a.lockedUntil)
+        return AuthResult::lockedOut;
+
+    if (checkPassword (candidate))
+    {
+        a.failures = 0;
+        return AuthResult::ok;
+    }
+
+    if (now - a.windowStart > failureWindowMs)
+    {
+        a.windowStart = now;
+        a.failures = 0;
+    }
+
+    if (++a.failures >= maxFailuresPerWindow)
+    {
+        a.failures = 0;
+        a.lockedUntil = now + lockoutMs;
+    }
+
+    return AuthResult::wrong;
 }
 
 bool LiveMonitorServer::checkPassword (const juce::String& candidate) const

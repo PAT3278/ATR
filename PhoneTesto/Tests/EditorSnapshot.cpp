@@ -1,5 +1,5 @@
 // Renders the plugin editor to PNGs -- once in Emulate mode, once with Live
-// Monitor on (QR code, password, listener count) -- while a background
+// Monitor on (QR code with the auto access code, listener count) -- while a background
 // thread feeds the processor a tone so the VU meter is actually moving.
 // Lets the layout be checked without a DAW. Needs a display; on headless
 // Linux run it under xvfb-run.
@@ -73,7 +73,6 @@ int main (int argc, char** argv)
     {
         ok &= snapshot (*editor, dir.getChildFile ("editor-emulate.png"), scale);
 
-        processor.setLivePassword ("1234");
         ok &= processor.startLiveMonitor (0);
 
         juce::Timer::callAfterDelay (400, [&]

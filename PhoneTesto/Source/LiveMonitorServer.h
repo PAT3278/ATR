@@ -3,6 +3,7 @@
 #include <juce_core/juce_core.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <atomic>
+#include <map>
 #include <memory>
 
 namespace phonetesto
@@ -46,10 +47,13 @@ private:
     An embedded HTTP server; the phone needs nothing but a browser:
       GET /           the player page (Resources/player.html)
       GET /player-worklet.js
-                      the page's AudioWorklet (continuous playback + jitter buffer)
-      GET /fonts/*    the Barlow fonts the page shares with the plugin
+                      the page's playback engine (continuous playback + jitter buffer)
+      GET /opus-decoder.js
+                      WebAssembly Opus decoder, for browsers without WebCodecs
+      GET /fonts/<name>.ttf
+                      the Barlow fonts the page shares with the plugin
       GET /info       JSON: stream format + whether a password is required
-      GET /auth?key=  204 if the password is right, 401 if not
+      GET /auth?key=  204 if the password is right, 401 if not, 429 if locked out
       GET /stream?fmt=opus|pcm16|pcm24&br=<kbps>&key=
                       low-latency framed stream for the page's Web Audio player
       GET /live.wav?key=
@@ -82,10 +86,21 @@ public:
     void setInputSampleRate (double newRate) noexcept { if (newRate > 0.0) inputSampleRate.store (newRate); }
     double getInputSampleRate() const noexcept { return inputSampleRate.load(); }
 
-    /** Empty = no password. Takes effect for new requests. */
+    /** Empty = no password. Takes effect for new requests. (The plugin never
+        leaves it empty: with no user password it uses a random access code
+        carried in the QR code.) */
     void setPassword (const juce::String&);
     bool hasPassword() const;
     bool checkPassword (const juce::String& candidate) const;
+
+    /** checkPassword plus brute-force protection: after
+        `maxFailuresPerWindow` wrong guesses from one address within a minute,
+        that address is locked out for `lockoutMs`. */
+    enum class AuthResult { ok, wrong, lockedOut };
+    AuthResult authorise (const juce::String& candidate, const juce::String& clientAddress);
+
+    static constexpr int maxFailuresPerWindow = 10;
+    static constexpr juce::uint32 failureWindowMs = 60000, lockoutMs = 60000;
 
     int getNumListeners() const;
     juce::StringArray getListenerAddresses() const;
@@ -113,6 +128,10 @@ private:
 
     mutable juce::CriticalSection passwordLock;
     juce::String password;
+
+    struct Attempts { int failures = 0; juce::uint32 windowStart = 0, lockedUntil = 0; };
+    juce::CriticalSection attemptsLock;
+    std::map<juce::String, Attempts> attempts;
 
     mutable juce::CriticalSection connectionsLock;
     juce::OwnedArray<Connection> connections;

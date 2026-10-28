@@ -1,9 +1,27 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(PhoneTesto VERSION 0.1.0)
+# --- Distribution settings (must precede project()) ------------------------
+# macOS: one universal binary for Apple Silicon + Intel, loadable on 10.13+.
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
+
+project(PhoneTesto VERSION 0.2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Windows: link the C/C++ runtime statically, so the plugin loads on PCs
+# without the Visual C++ Redistributable installed.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+# Copying the built plugin into the system plugin folder needs admin rights
+# on Windows (C:\Program Files\Common Files\VST3), which would make a normal
+# build fail at the last step -- so it's opt-in there.
+if(WIN32)
+    option(PHONETESTO_COPY_AFTER_BUILD "Copy the built plugins into the system plugin folders" OFF)
+else()
+    option(PHONETESTO_COPY_AFTER_BUILD "Copy the built plugins into the system plugin folders" ON)
+endif()
 
 # --- JUCE ---------------------------------------------------------------
 # Pulled in via FetchContent so the project builds from a clean checkout
@@ -25,6 +43,11 @@ set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
 set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
+if(APPLE)
+    # Opus's x86 SIMD sources don't build in a combined arm64+x86_64 pass;
+    # the generic C code is plenty fast for a handful of streams.
+    set(OPUS_DISABLE_INTRINSICS ON CACHE BOOL "" FORCE)
+endif()
 FetchContent_Declare(
     opus
     GIT_REPOSITORY https://github.com/xiph/opus.git
@@ -44,11 +67,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qrcodegen)
 
-# The phone player page and the Barlow fonts (SIL OFL, see
-# Resources/fonts/OFL.txt) used by both the editor and that page.
+# The phone player page, its playback engine, a WebAssembly Opus decoder for
+# phones whose browser withholds WebCodecs (MIT, see Resources/thirdparty),
+# and the Barlow fonts (SIL OFL, see Resources/fonts/OFL.txt) used by both the
+# editor and that page.
 juce_add_binary_data(PhoneTestoAssets SOURCES
     Resources/player.html
     Resources/player-worklet.js
+    Resources/thirdparty/opus-decoder.min.js
     Resources/fonts/BarlowCondensed-Bold.ttf
     Resources/fonts/BarlowCondensed-SemiBold.ttf
     Resources/fonts/Barlow-Medium.ttf
@@ -82,7 +108,10 @@ juce_add_plugin(PhoneTesto
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
     VST3_CATEGORIES Fx
     AU_MAIN_TYPE kAudioUnitType_Effect
-    COPY_PLUGIN_AFTER_BUILD TRUE
+    COPY_PLUGIN_AFTER_BUILD ${PHONETESTO_COPY_AFTER_BUILD}
+    # macOS asks before an app talks to the local network (Live Monitor);
+    # this is the explanation shown for the standalone app.
+    PLIST_TO_MERGE "<plist><dict><key>NSLocalNetworkUsageDescription</key><string>PhoneTesto streams your mix to phones on your Wi-Fi so you can hear it on their speakers.</string></dict></plist>"
 )
 
 target_sources(PhoneTesto
