@@ -3,16 +3,17 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "HardwareStyle.h"
-#include "VuMeter.h"
+#include "LevelMeter.h"
 #include "DisplayWindow.h"
 
 namespace phonetesto
 {
 
-/** A 1U-style rack unit: VU meter, stepped MODEL selector, MIX/OUTPUT
-    knobs, an amber display (speaker response curve, or the Live QR code),
-    and lamp push buttons. Everything is laid out on a fixed 980x420
-    faceplate that's scaled as a whole when the window is resized. */
+/** Modern flat hardware panel: a large display (speaker response curve, or
+    the Live QR code), a 2x4 grid of MODEL pads, a stereo LED meter, MIX and
+    OUTPUT knobs with live readouts, and LED buttons for MONO, BYPASS and
+    ON AIR. Laid out on a fixed 980x420 panel that's scaled as a whole when
+    the window is resized. */
 class PhoneTestoAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         private juce::Timer
 {
@@ -27,41 +28,40 @@ public:
 
 private:
     /** The scaled child that holds every control; its painting is the
-        editor's paintFaceplate(). */
-    struct Faceplate : public juce::Component
+        editor's paintPanel(). */
+    struct Panel : public juce::Component
     {
         std::function<void (juce::Graphics&)> onPaint;
-        std::function<void (const juce::MouseEvent&)> onMouseDown;
         void paint (juce::Graphics& g) override { if (onPaint) onPaint (g); }
-        void mouseDown (const juce::MouseEvent& e) override { if (onMouseDown) onMouseDown (e); }
     };
 
     void timerCallback() override;
-    void paintFaceplate (juce::Graphics&);
-    void selectModelAt (juce::Point<float>);
+    void paintPanel (juce::Graphics&);
+    void showSelectedModel (int index);
     void toggleLive();
     void updateLiveState();
 
-    juce::Point<float> modelLegendCentre (int index) const;
-    float modelAngle (int index) const;
-
     PhoneTestoAudioProcessor& processor;
     hw::LookAndFeel lookAndFeel;
-    Faceplate faceplate;
+    Panel panel;
 
-    VuMeter vuMeter;
+    LevelMeter meter;
     DisplayWindow display;
-    juce::Slider modelSelector, mixKnob, outputKnob;
-    juce::ToggleButton monoButton, bypassButton, onAirButton;
+    juce::Slider mixKnob, outputKnob;
+    std::array<juce::ToggleButton, 8> modelPads;
+    juce::ToggleButton monoButton { "MONO" }, bypassButton { "BYPASS" }, onAirButton { "ON AIR" };
 
     juce::String liveUrl;
     bool liveStartFailed = false;
+    int shownListeners = -1;
+    bool shownLive = false;
     double lastTimerSeconds = 0.0;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
 
-    std::unique_ptr<SliderAttachment> modelAttachment, mixAttachment, outputAttachment;
+    std::unique_ptr<juce::ParameterAttachment> modelAttachment;
+    std::unique_ptr<SliderAttachment> mixAttachment, outputAttachment;
     std::unique_ptr<ButtonAttachment> monoAttachment, bypassAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessorEditor)

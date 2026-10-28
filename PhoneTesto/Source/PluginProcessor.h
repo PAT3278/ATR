@@ -75,8 +75,9 @@ public:
     void setLivePassword (const juce::String&);
     juce::String getLivePassword() const;
 
-    /** RMS of the most recent output block (loudest channel), for the VU meter. */
-    float getOutputRms() const noexcept { return outputRms.load (std::memory_order_relaxed); }
+    /** Most recent output block's RMS / peak per side (0 = L, 1 = R), for the meter. */
+    float getOutputRms (int side) const noexcept  { return meterRms[side & 1].load (std::memory_order_relaxed); }
+    float getOutputPeak (int side) const noexcept { return meterPeak[side & 1].load (std::memory_order_relaxed); }
 
 private:
     static constexpr const char* livePasswordProperty = "livePassword";
@@ -101,7 +102,7 @@ private:
 
     LiveMonitorServer liveServer;
     std::atomic<bool> liveMonitorActive { false };
-    std::atomic<float> outputRms { 0.0f };
+    std::atomic<float> meterRms[2] { 0.0f, 0.0f }, meterPeak[2] { 0.0f, 0.0f };
 
     juce::AudioBuffer<float> dryBuffer;
     double currentSampleRate = 44100.0;

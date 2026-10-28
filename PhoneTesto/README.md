@@ -36,17 +36,18 @@ level), adding a convolution stage per profile is the natural next step.
 
 ## The panel
 
-The editor is laid out like a rack unit, left to right:
+A modern, flat hardware-style panel (graphite, one orange accent, LED
+indicators):
 
-- **VU meter** — a backlit analogue meter on the output, 0 VU = −18 dBFS
-  RMS, with standard ~300 ms needle ballistics and a PEAK lamp.
-- **MODEL** — an 8-position selector switch. Turn it, or click a printed
-  position to jump straight there.
-- **MIX** / **OUTPUT** knobs — hover or drag to see the value; double-click
-  to reset.
 - **Display** — plots the selected model's frequency response; with Live on
   it shows the QR code, address, password and how many phones are listening.
-- **MONO**, **BYPASS** and **ON AIR** (Live) lamp buttons.
+- **MODEL** — eight pads under the display; the lit one is active.
+- **Meter** — stereo LED meter on the output (−60…0 dBFS) with peak hold and
+  a numeric peak readout per side.
+- **MIX** / **OUTPUT** knobs with their values shown underneath;
+  double-click to reset.
+- **MONO**, **BYPASS** and **ON AIR** (Live) buttons; the header shows
+  EMULATE or ON AIR with the number of phones listening.
 
 Drag the window's corner to resize; the whole panel scales. Fonts are
 Barlow / Barlow Condensed, embedded in the plugin.
@@ -61,7 +62,7 @@ Insert PhoneTesto as the **last plugin on your master bus**, press **ON AIR**
 2. **Scan the QR code** with the phone's camera (or type the URL shown under
    it). The phone must be on the **same Wi-Fi** as the computer.
 3. The player page opens in the phone's browser — no app to install. Tap
-   **LISTEN**. The page has the same look as the plugin, including a VU
+   **LISTEN**. The page has the same look as the plugin, including a level
    meter showing what the phone is receiving.
 
 What you get:
@@ -150,10 +151,14 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   48 kHz resampling is right) and level; three formats at once; a host
   sample-rate change mid-stream; the 32-listener cap; passwords (including
   non-ASCII); abrupt hang-ups (which must not crash the host); and a fast
-  stop() with 32 phones connected.
+  stop() with 32 phones connected. Every decoded format is also checked
+  for clicks (no sample-to-sample jump beyond what a clean sine can make).
 - **player_test.mjs** — the real player page in Playwright Chromium on a
   phone-sized screen against `PhoneTestoLiveDemo`'s test tone: presses
-  Play for every quality and checks the decoded level, the screen-off mode,
+  Play for every quality and checks the decoded level, that the phone's
+  actual output is click-free (taken from the page's own analysers, with
+  the browser running at 44.1 kHz so resampling is exercised), the
+  screen-off mode,
   the password flow, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
 - **PhoneTestoEditorSnapshot** — renders the editor (Emulate and Live) to
@@ -169,13 +174,14 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
 CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps
 Resources/
   player.html              The phone-side player page (embedded into the plugin)
+  player-worklet.js        Its AudioWorklet: gapless playback, jitter buffer, drift control
   fonts/                   Barlow fonts + their licence (OFL.txt)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
   PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
-  HardwareStyle.h/.cpp     Fonts, palette, powder coat, screws, knobs, lamp buttons
-  VuMeter.h/.cpp           Analogue VU meter
-  DisplayWindow.h/.cpp     Amber display: response curve / Live QR, address, password
+  HardwareStyle.h/.cpp     Fonts, palette, flat knobs and LED buttons
+  LevelMeter.h/.cpp        Stereo LED output meter
+  DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
   SpeakerProfiles.h        Per-device filter/drive tables
   LiveMonitorServer.h/.cpp Embedded HTTP server, listener threads, lock-free broadcast ring
   LiveStreamEncoder.h/.cpp Per-listener 48 kHz resampling + PCM16/PCM24/Opus packetising

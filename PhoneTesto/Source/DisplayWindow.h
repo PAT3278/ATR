@@ -6,7 +6,7 @@
 namespace phonetesto
 {
 
-/** The faceplate's amber display window. In Emulate mode it plots the
+/** The panel's main display. In Emulate mode it plots the
     selected speaker profile's frequency response; with Live on it shows the
     QR code, URL, password field and listener count. */
 class DisplayWindow : public juce::Component
@@ -24,7 +24,7 @@ public:
     void resized() override;
 
 private:
-    juce::Rectangle<float> glassArea() const;
+    juce::Rectangle<float> contentArea() const;
     juce::Rectangle<float> plotArea() const;
     void rebuildCurve();
 

@@ -387,7 +387,14 @@ private:
             return;
         }
 
-        // The same Barlow fonts the plugin's faceplate uses, for the page.
+        if (path == "/player-worklet.js")
+        {
+            sendResponse (200, "text/javascript; charset=utf-8", BinaryData::playerworklet_js,
+                          (size_t) BinaryData::playerworklet_jsSize, head);
+            return;
+        }
+
+        // The same Barlow fonts the plugin panel uses, for the page.
         struct FontFile { const char* path; const char* data; int size; };
         const FontFile fonts[] = {
             { "/fonts/BarlowCondensed-Bold.ttf",     BinaryData::BarlowCondensedBold_ttf,     BinaryData::BarlowCondensedBold_ttfSize },

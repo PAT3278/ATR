@@ -224,13 +224,15 @@ std::vector<float> decodeFramed (const std::vector<juce::uint8>& body, int& form
     return left;
 }
 
-/** Pitch by counting rising zero crossings; peak level. Skips the first
-    100 ms (codec/resampler warm-up). */
-void analyse (const std::vector<float>& x, double rate, double& freq, float& peak)
+/** Pitch by counting rising zero crossings; peak level; and the biggest
+    sample-to-sample step, which exposes clicks (a clean 0.5-amplitude
+    440 Hz sine at 48 kHz never moves more than ~0.029 per sample). Skips
+    the first 100 ms (codec/resampler warm-up). */
+void analyse (const std::vector<float>& x, double rate, double& freq, float& peak, float& maxStep)
 {
     const size_t skip = (size_t) (rate * 0.1);
     freq = 0.0;
-    peak = 0.0f;
+    peak = maxStep = 0.0f;
 
     if (x.size() <= skip + 2)
         return;
@@ -241,22 +243,25 @@ void analyse (const std::vector<float>& x, double rate, double& freq, float& pea
         if (x[i - 1] < 0.0f && x[i] >= 0.0f)
             ++crossings;
         peak = std::max (peak, std::abs (x[i]));
+        maxStep = std::max (maxStep, std::abs (x[i] - x[i - 1]));
     }
 
     freq = crossings * rate / (double) (x.size() - skip);
 }
 
-void checkTone (const std::vector<float>& left, const std::string& label, float peakTolerance)
+void checkTone (const std::vector<float>& left, const std::string& label, float peakTolerance, float stepLimit = 0.035f)
 {
     double freq;
-    float peak;
-    analyse (left, 48000.0, freq, peak);
+    float peak, maxStep;
+    analyse (left, 48000.0, freq, peak, maxStep);
 
     char buf[256];
-    std::snprintf (buf, sizeof (buf), "%s: %.2f s of audio, %.1f Hz (want 440), peak %.3f (want 0.5)",
-                   label.c_str(), left.size() / 48000.0, freq, peak);
+    std::snprintf (buf, sizeof (buf), "%s: %.2f s of audio, %.1f Hz (want 440), peak %.3f (want 0.5), biggest step %.4f (clean 0.0288)",
+                   label.c_str(), left.size() / 48000.0, freq, peak, maxStep);
 
-    check (left.size() > 48000 / 2 && std::abs (freq - 440.0) < 4.0 && std::abs (peak - 0.5f) < peakTolerance, buf);
+    check (left.size() > 48000 / 2 && std::abs (freq - 440.0) < 4.0 && std::abs (peak - 0.5f) < peakTolerance
+               && maxStep < stepLimit,
+           buf);
 }
 } // namespace
 
@@ -312,7 +317,7 @@ int main()
 
         auto c = decodeFramed (opus.body(), fmt, rate);
         check (opus.status() == 200 && fmt == 2 && rate == 48000, "opus stream header");
-        checkTone (c, "opus 128 kbps", 0.08f);
+        checkTone (c, "opus 128 kbps", 0.08f, 0.06f);
 
         // Hang up abruptly while audio is still being pushed: if a send on a
         // dead socket raised SIGPIPE this test process would die right here.

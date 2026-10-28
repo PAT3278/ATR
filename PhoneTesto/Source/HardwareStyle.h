@@ -2,26 +2,30 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-/** The rack-hardware look: powder-coated charcoal faceplate, cream
-    silk-screened legends set in Barlow, machined aluminium knobs, a bakelite
-    chicken-head selector, and illuminated push buttons. Shared by the editor
-    and its custom components. */
+/** Modern flat hardware look: a graphite panel, flat controls with hairline
+    borders, LED indicators, one orange accent, and Barlow type. Shared by
+    the editor and its custom components (the phone page mirrors it in
+    Resources/player.html). */
 namespace phonetesto::hw
 {
 
 namespace colours
 {
-    const juce::Colour panelTop    { 0xff36373c };
-    const juce::Colour panelBottom { 0xff26272b };
-    const juce::Colour earTop      { 0xff2e2f33 };
-    const juce::Colour earBottom   { 0xff202124 };
-    const juce::Colour legend      { 0xffebe3ce }; // silk-screen cream
-    const juce::Colour legendDim   { 0xffa39c8a };
-    const juce::Colour amber       { 0xffffb53d }; // display / VU backlight
-    const juce::Colour amberDim    { 0xff6e4c16 };
-    const juce::Colour glass       { 0xff0e0c09 };
-    const juce::Colour lampAmber   { 0xffffa632 };
-    const juce::Colour lampRed     { 0xffff3a2c };
+    const juce::Colour panel      { 0xff1c1d21 };
+    const juce::Colour surface    { 0xff27292f }; // buttons, knob bodies
+    const juce::Colour surfaceHi  { 0xff2f3239 };
+    const juce::Colour border     { 0xff383b43 };
+    const juce::Colour divider    { 0xff2a2c32 };
+    const juce::Colour screen     { 0xff131418 }; // display / meter wells
+    const juce::Colour text       { 0xfff1f0ec };
+    const juce::Colour textDim    { 0xff9497a0 };
+    const juce::Colour textFaint  { 0xff5d6069 };
+    const juce::Colour accent     { 0xffff8a2b };
+    const juce::Colour live       { 0xffff453a };
+    const juce::Colour ledOff     { 0xff45484f };
+    const juce::Colour meterLow   { 0xff35d07f };
+    const juce::Colour meterMid   { 0xffffcc3d };
+    const juce::Colour meterHigh  { 0xffff453a };
 }
 
 enum class Type
@@ -35,28 +39,13 @@ enum class Type
 
 juce::Font font (Type, float height, float kerning = 0.0f);
 
-/** Charcoal powder coat: vertical gradient plus a fine static speckle. */
-void fillPowderCoat (juce::Graphics&, juce::Rectangle<float>, juce::Colour top, juce::Colour bottom);
-
-void drawScrew (juce::Graphics&, juce::Point<float> centre, float radius, float slotAngle);
-
-/** Silk-screened legend: flat ink with a faint shadow so it sits on the
-    texture rather than floating above it. */
-void drawLegend (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Justification,
-                 const juce::Font&, juce::Colour = colours::legend);
-
-/** Printed tick scale around a knob. */
-void drawKnobScale (juce::Graphics&, juce::Point<float> centre, float innerRadius, float outerRadius,
-                    int numTicks, float startAngle, float endAngle,
-                    const juce::String& minLabel, const juce::String& maxLabel);
-
-/** Engraved horizontal rule. */
-void drawRule (juce::Graphics&, float x1, float x2, float y);
+/** Small uppercase section label. */
+void drawLabel (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Justification,
+                juce::Colour = colours::textDim, float height = 13.0f);
 
 // Component properties read by the LookAndFeel.
-constexpr const char* selectorKnobProperty = "hwSelector"; // Slider: draw as a chicken-head selector
-constexpr const char* lampColourProperty   = "hwLamp";     // ToggleButton: lamp colour (ARGB int)
-constexpr const char* lensTextProperty     = "hwLens";     // ToggleButton: text printed on the lens
+constexpr const char* ledColourProperty   = "hwLed";        // ToggleButton: LED colour (ARGB int)
+constexpr const char* solidWhenOnProperty = "hwSolidWhenOn"; // ToggleButton: fill with the LED colour when on
 
 class LookAndFeel : public juce::LookAndFeel_V4
 {
@@ -70,19 +59,13 @@ public:
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font&) override;
 
-    juce::Font getSliderPopupFont (juce::Slider&) override;
-    int getSliderPopupPlacement (juce::Slider&) override;
-    void drawBubble (juce::Graphics&, juce::BubbleComponent&, const juce::Point<float>& tip,
-                     const juce::Rectangle<float>& body) override;
-
     void fillTextEditorBackground (juce::Graphics&, int width, int height, juce::TextEditor&) override;
     void drawTextEditorOutline (juce::Graphics&, int width, int height, juce::TextEditor&) override;
 
-private:
-    void drawAluminiumKnob (juce::Graphics&, juce::Point<float> centre, float radius, float angle);
-    void drawSelectorKnob (juce::Graphics&, juce::Point<float> centre, float radius, float angle);
+    void drawCornerResizer (juce::Graphics&, int w, int h, bool isMouseOver, bool isMouseDragging) override;
 
-    // Keeps the fonts/texture loaded for as long as this LookAndFeel lives,
+private:
+    // Keeps the fonts loaded for as long as this LookAndFeel lives,
     // instead of reloading them on every font() call.
     std::shared_ptr<void> keepResourcesLoaded;
 };

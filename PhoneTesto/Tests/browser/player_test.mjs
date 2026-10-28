@@ -79,8 +79,28 @@ try {
         const fontsOk = await page.evaluate(() => document.fonts.check('700 20px "Barlow Condensed"'));
         check(fontsOk, "Barlow fonts load from the plugin");
       }
+      // Clicks: a clean 0.5-amplitude 440 Hz sine never exceeds 0.5 and never
+      // moves more than 2*pi*440/rate*0.5 between samples. Chunk joins that
+      // overlap or gap show up as spikes far above both.
+      const wave = await page.evaluate(async () => {
+        const p = window.__pt.player, an = p.analysers[0], a = new Float32Array(an.fftSize);
+        let maxAbs = 0, maxJump = 0;
+        for (let k = 0; k < 60; k++) {
+          an.getFloatTimeDomainData(a);
+          for (let i = 1; i < a.length; i++) {
+            maxAbs = Math.max(maxAbs, Math.abs(a[i]));
+            maxJump = Math.max(maxJump, Math.abs(a[i] - a[i - 1]));
+          }
+          await new Promise(r => setTimeout(r, 17));
+        }
+        return { maxAbs, maxJump, rate: p.ctx.sampleRate };
+      });
+      const cleanJump = 2 * Math.PI * 440 / wave.rate * 0.5;
+      check(wave.maxAbs < 0.56 && wave.maxJump < cleanJump * 1.5,
+        `${q}: no clicks at ${wave.rate} Hz (peak ${wave.maxAbs.toFixed(3)}, want ~0.5; biggest step ${wave.maxJump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)})`);
+
       check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6,
-        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s scheduled, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms, underruns ${s.underruns}, dropped ${s.dropped}`);
+        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms, underruns ${s.underruns}, dropped ${s.dropped}`);
       if (q === "pcm16" && shotDir) await page.screenshot({ path: path.join(shotDir, "player-playing.png"), fullPage: true });
       await page.click("#play");
       await sleep(300);

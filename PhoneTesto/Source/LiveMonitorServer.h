@@ -45,6 +45,8 @@ private:
 
     An embedded HTTP server; the phone needs nothing but a browser:
       GET /           the player page (Resources/player.html)
+      GET /player-worklet.js
+                      the page's AudioWorklet (continuous playback + jitter buffer)
       GET /fonts/*    the Barlow fonts the page shares with the plugin
       GET /info       JSON: stream format + whether a password is required
       GET /auth?key=  204 if the password is right, 401 if not

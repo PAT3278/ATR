@@ -48,6 +48,7 @@ FetchContent_MakeAvailable(qrcodegen)
 # Resources/fonts/OFL.txt) used by both the editor and that page.
 juce_add_binary_data(PhoneTestoAssets SOURCES
     Resources/player.html
+    Resources/player-worklet.js
     Resources/fonts/BarlowCondensed-Bold.ttf
     Resources/fonts/BarlowCondensed-SemiBold.ttf
     Resources/fonts/Barlow-Medium.ttf
@@ -89,7 +90,7 @@ target_sources(PhoneTesto
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/HardwareStyle.cpp
-        Source/VuMeter.cpp
+        Source/LevelMeter.cpp
         Source/DisplayWindow.cpp
         Source/LiveMonitorServer.cpp
         Source/LiveStreamEncoder.cpp
