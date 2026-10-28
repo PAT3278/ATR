@@ -273,9 +273,13 @@ class StreamPlayer {
       engine.output = "worklet";
     } else if (this.ctx.createScriptProcessor) {
       // Plain-HTTP LAN page (what phones get): browsers withhold AudioWorklet
-      // there, so run the same core in a ScriptProcessor.
-      const size = 2048;
-      this.core = new PtStreamCore(this.ctx.sampleRate);
+      // there, so run the same core in a ScriptProcessor. Its callbacks run
+      // on the page's main thread, so any stall there longer than about one
+      // buffer (first-run JIT, scrolling, the keep-awake video looping) is
+      // an audible gap: 4096 frames rides out stalls of ~120 ms, where 2048
+      // clicked from 60-90 ms, for ~50 ms more delay.
+      const size = 4096;
+      this.core = new PtStreamCore(this.ctx.sampleRate, size);
       this.node = this.ctx.createScriptProcessor(size, 0, 2);
       this.node.onaudioprocess = e => {
         this.core.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));

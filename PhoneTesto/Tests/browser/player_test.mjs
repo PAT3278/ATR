@@ -124,8 +124,31 @@ try {
       check(wave.maxAbs < 0.56 && wave.maxJump < cleanJump * 1.5,
         `${q}: no clicks at ${wave.rate} Hz (peak ${wave.maxAbs.toFixed(3)}, want ~0.5; biggest step ${wave.maxJump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)})`);
 
-      check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6,
-        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms, underruns ${s.underruns}, dropped ${s.dropped}`);
+      if (q === "pcm16" && c.output === "script-processor") {
+        // Here the engine runs on the page's main thread, so a stall there
+        // (first-run JIT, scrolling, the keep-awake video looping) must not
+        // be heard. A 32768-sample analyser window spans the whole stall.
+        const stall = await page.evaluate(async () => {
+          const p = window.__pt.player, a = p.ctx.createAnalyser();
+          a.fftSize = 32768;
+          p.out.connect(a);
+          await new Promise(r => setTimeout(r, 800));
+          const t = performance.now();
+          while (performance.now() - t < 100) {}
+          await new Promise(r => setTimeout(r, 250));
+          const buf = new Float32Array(a.fftSize);
+          a.getFloatTimeDomainData(buf);
+          p.out.disconnect(a);
+          let maxJump = 0;
+          for (let i = 1; i < buf.length; i++) maxJump = Math.max(maxJump, Math.abs(buf[i] - buf[i - 1]));
+          return maxJump;
+        });
+        check(stall < cleanJump * 1.5,
+          `${q}: a 100 ms stall of the page's main thread isn't heard (biggest step ${stall.toFixed(4)}, clean sine ${cleanJump.toFixed(4)})`);
+      }
+
+      check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6 && s.latencyMs < 300,
+        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms (want < 300), underruns ${s.underruns}, dropped ${s.dropped}`);
       if (q === "pcm16" && shotDir && c.output === "script-processor") await page.screenshot({ path: path.join(shotDir, "player-playing.png"), fullPage: true });
       await page.click("#play");
       await sleep(300);

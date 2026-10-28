@@ -30,6 +30,7 @@ public:
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock; // the double-precision one stays JUCE's default
 
     /** Our BYPASS is a latency-compensated, crossfaded, fully transparent
         bypass, so hosts use it instead of hard-switching the plugin out. */
