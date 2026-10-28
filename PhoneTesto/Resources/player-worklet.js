@@ -33,10 +33,8 @@ class PtStreamCore {
     this.written = 0;        // frames written, monotonic
     this.readPos = 0;        // fractional read position, monotonic
     this.baseRatio = STREAM_RATE / outputRate;
-    const block = blockSize * this.baseRatio;
-    this.minTarget = Math.max(0.08 * STREAM_RATE, block + 0.035 * STREAM_RATE);
-    this.maxTarget = Math.max(0.5 * STREAM_RATE, block + 0.4 * STREAM_RATE);
-    this.target = Math.max(0.12 * STREAM_RATE, block + 0.075 * STREAM_RATE);
+    this.target = 0.12 * STREAM_RATE;
+    this.setBlockSize(blockSize);
     this.playing = false;    // false while (re)buffering
     this.fillAvg = this.target;
     this.stableFrames = 0;
@@ -44,6 +42,13 @@ class PtStreamCore {
     this.dropped = 0;
     this.rendered = 0;
     this.lastReport = 0;
+  }
+
+  setBlockSize(blockSize) {
+    const block = blockSize * this.baseRatio;
+    this.minTarget = Math.max(0.08 * STREAM_RATE, block + 0.035 * STREAM_RATE);
+    this.maxTarget = Math.max(0.5 * STREAM_RATE, block + 0.4 * STREAM_RATE);
+    this.target = Math.max(this.target, block + 0.075 * STREAM_RATE);
   }
 
   push(l, r) {

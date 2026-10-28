@@ -225,8 +225,11 @@ const store = {
 };
 
 // Exposed for automated tests; harmless otherwise.
-const stats = { state: "idle", format: "", packets: 0, frames: 0, underruns: 0, dropped: 0, latencyMs: 0, levelDb: -Infinity, reconnects: 0 };
-const engine = { output: "", decoder: "" };
+const stats = { state: "idle", format: "", packets: 0, frames: 0, underruns: 0, dropped: 0, glitches: 0, latencyMs: 0, levelDb: -Infinity, reconnects: 0 };
+const engine = { output: "", decoder: "", bufferFrames: 0 };
+// ScriptProcessor buffer size; grows (for the rest of the visit) on a phone
+// whose main thread stalls for longer than the buffer covers.
+let scriptProcessorFrames = 4096;
 window.__pt = { stats, engine, get player() { return player; } };
 
 let info = null;
@@ -264,35 +267,24 @@ class StreamPlayer {
   async start() {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC({ latencyHint: "interactive" });
+    this.out = this.ctx.createGain();
     if (this.ctx.audioWorklet && window.AudioWorkletNode) {
       // Secure context (HTTPS/localhost): run the engine off the main thread.
       await this.ctx.audioWorklet.addModule("/player-worklet.js");
       this.node = new AudioWorkletNode(this.ctx, "pt-stream", { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
       this.node.port.onmessage = e => this.onWorkletReport(e.data);
+      this.node.connect(this.out);
       this.extraLatency = 0;
       engine.output = "worklet";
     } else if (this.ctx.createScriptProcessor) {
       // Plain-HTTP LAN page (what phones get): browsers withhold AudioWorklet
-      // there, so run the same core in a ScriptProcessor. Its callbacks run
-      // on the page's main thread, so any stall there longer than about one
-      // buffer (first-run JIT, scrolling, the keep-awake video looping) is
-      // an audible gap: 4096 frames rides out stalls of ~120 ms, where 2048
-      // clicked from 60-90 ms, for ~50 ms more delay.
-      const size = 4096;
-      this.core = new PtStreamCore(this.ctx.sampleRate, size);
-      this.node = this.ctx.createScriptProcessor(size, 0, 2);
-      this.node.onaudioprocess = e => {
-        this.core.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));
-        const r = this.core.report();
-        if (r) this.onWorkletReport(r);
-      };
-      this.extraLatency = size / this.ctx.sampleRate;
+      // there, so run the same core in a ScriptProcessor.
+      this.core = new PtStreamCore(this.ctx.sampleRate, scriptProcessorFrames);
+      this.useScriptProcessor(scriptProcessorFrames);
       engine.output = "script-processor";
     } else {
       throw new UnsupportedError();
     }
-    this.out = this.ctx.createGain();
-    this.node.connect(this.out);
     this.out.connect(this.ctx.destination);
     const split = this.ctx.createChannelSplitter(2);
     this.out.connect(split);
@@ -312,6 +304,41 @@ class StreamPlayer {
     if (res.status === 503) throw new FullError();
     if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
     this.pump(res.body.getReader());
+  }
+
+  /** (Re)creates the ScriptProcessor with `size`-frame buffers. Its callbacks
+      run on the page's main thread, so a stall there longer than the buffer
+      covers (first-run JIT, scrolling, a slow phone) is an audible dropout.
+      4096 frames rides out stalls of ~120 ms; a phone that still drops out
+      gets 8192 (~250 ms) from then on, at ~0.1 s more delay. */
+  useScriptProcessor(size) {
+    if (this.node) { this.node.onaudioprocess = null; this.node.disconnect(); }
+    this.core.setBlockSize(size);
+    this.extraLatency = size / this.ctx.sampleRate;
+    engine.bufferFrames = size;
+
+    // Callbacks normally come one buffer apart. Over ~2 buffers apart, the
+    // output already ran dry: measured, gaps up to 1.9 buffers stay clean
+    // and 2.2 or more always click.
+    const dropoutMs = 2.1 * 1000 * size / this.ctx.sampleRate;
+    const node = this.ctx.createScriptProcessor(size, 0, 2);
+    let last = 0;
+    node.onaudioprocess = e => {
+      const now = performance.now();
+      if (last && now - last > dropoutMs) {
+        stats.glitches++;
+        if (size < 8192) {
+          scriptProcessorFrames = size * 2;
+          setTimeout(() => { if (!this.stopped && this.node === node) this.useScriptProcessor(size * 2); });
+        }
+      }
+      last = now;
+      this.core.render(e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1));
+      const r = this.core.report();
+      if (r) this.onWorkletReport(r);
+    };
+    node.connect(this.out);
+    this.node = node;
   }
 
   async pump(reader) {
@@ -764,7 +791,7 @@ function frame(now) {
 
   $("sLevel").textContent = playing && Number.isFinite(db) ? `${Math.round(db)}` : "–";
   $("sLatency").textContent = stats.state !== "playing" ? "–" : mode === "bg" ? "1–3 s" : `${stats.latencyMs} ms`;
-  $("sDrops").textContent = String(stats.underruns + stats.dropped);
+  $("sDrops").textContent = String(stats.underruns + stats.dropped + stats.glitches);
   requestAnimationFrame(frame);
 }
 

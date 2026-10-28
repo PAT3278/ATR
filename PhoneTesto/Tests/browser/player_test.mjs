@@ -47,6 +47,9 @@ async function newPage(browser, locale = "en-US") {
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale,
   });
   const page = await context.newPage();
+  // PT_CPU_THROTTLE=4 runs the page as if on a CPU 4x slower (a slow phone).
+  const throttle = Number(process.env.PT_CPU_THROTTLE || 1);
+  if (throttle > 1) await (await context.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: throttle });
   const errors = [];
   page.on("pageerror", e => errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
@@ -54,6 +57,44 @@ async function newPage(browser, locale = "en-US") {
 }
 
 const stats = page => page.evaluate(() => ({ ...window.__pt.stats }));
+
+/** Blocks the page's main thread for `ms`, then returns the biggest
+    sample-to-sample step in the output around it (a 32768-sample analyser
+    window spans the whole stall). */
+const stallAndListen = (page, ms) => page.evaluate(async ms => {
+  const p = window.__pt.player, a = p.ctx.createAnalyser();
+  a.fftSize = 32768;
+  p.out.connect(a);
+  await new Promise(r => setTimeout(r, 800));
+  const t = performance.now();
+  while (performance.now() - t < ms) {}
+  await new Promise(r => setTimeout(r, 250));
+  const buf = new Float32Array(a.fftSize);
+  a.getFloatTimeDomainData(buf);
+  p.out.disconnect(a);
+  let maxJump = 0;
+  for (let i = 1; i < buf.length; i++) maxJump = Math.max(maxJump, Math.abs(buf[i] - buf[i - 1]));
+  return maxJump;
+}, ms);
+
+/** Runs `measure` (-> { clean, text }). If it wasn't clean *and* the page
+    itself detected a main-thread dropout meanwhile (its main thread was
+    starved -- on a shared CI runner, the VM briefly losing the CPU), the page
+    has enlarged its buffer, so measure once more and report both. Clicks
+    without a detected dropout are never retried. */
+async function cleanOrAdapted(page, measure) {
+  const before = (await stats(page)).glitches;
+  const first = await measure();
+  const after = (await stats(page)).glitches;
+  if (first.clean || after === before) return { ...first, note: "" };
+
+  const frames = await page.evaluate(() => window.__pt.engine.bufferFrames);
+  await sleep(1500);
+  const second = await measure();
+  const again = (await stats(page)).glitches > after;
+  return { clean: second.clean && !again, text: second.text,
+           note: ` -- first try (${first.text}) had ${after - before} main-thread dropout(s); buffer now ${frames} frames, re-measured${again ? ", dropped out again" : ""}` };
+}
 
 // The address a phone would use: this machine's non-loopback IPv4.
 const lanAddress = Object.values(os.networkInterfaces()).flat().find(a => a && a.family === "IPv4" && !a.internal)?.address;
@@ -107,49 +148,70 @@ try {
       // Clicks: a clean 0.5-amplitude 440 Hz sine never exceeds 0.5 and never
       // moves more than 2*pi*440/rate*0.5 between samples. Chunk joins that
       // overlap or gap show up as spikes far above both.
-      const wave = await page.evaluate(async () => {
-        const p = window.__pt.player, an = p.analysers[0], a = new Float32Array(an.fftSize);
-        let maxAbs = 0, maxJump = 0;
-        for (let k = 0; k < 60; k++) {
-          an.getFloatTimeDomainData(a);
-          for (let i = 1; i < a.length; i++) {
-            maxAbs = Math.max(maxAbs, Math.abs(a[i]));
-            maxJump = Math.max(maxJump, Math.abs(a[i] - a[i - 1]));
+      const rate = await page.evaluate(() => window.__pt.player.ctx.sampleRate);
+      const cleanJump = 2 * Math.PI * 440 / rate * 0.5;
+      const wave = await cleanOrAdapted(page, async () => {
+        const w = await page.evaluate(async () => {
+          const an = window.__pt.player.analysers[0], a = new Float32Array(an.fftSize);
+          let maxAbs = 0, maxJump = 0;
+          for (let k = 0; k < 60; k++) {
+            an.getFloatTimeDomainData(a);
+            for (let i = 1; i < a.length; i++) {
+              maxAbs = Math.max(maxAbs, Math.abs(a[i]));
+              maxJump = Math.max(maxJump, Math.abs(a[i] - a[i - 1]));
+            }
+            await new Promise(r => setTimeout(r, 17));
           }
-          await new Promise(r => setTimeout(r, 17));
-        }
-        return { maxAbs, maxJump, rate: p.ctx.sampleRate };
+          return { maxAbs, maxJump };
+        });
+        return { clean: w.maxAbs < 0.56 && w.maxJump < cleanJump * 1.5,
+                 text: `peak ${w.maxAbs.toFixed(3)}, want ~0.5; biggest step ${w.maxJump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)}` };
       });
-      const cleanJump = 2 * Math.PI * 440 / wave.rate * 0.5;
-      check(wave.maxAbs < 0.56 && wave.maxJump < cleanJump * 1.5,
-        `${q}: no clicks at ${wave.rate} Hz (peak ${wave.maxAbs.toFixed(3)}, want ~0.5; biggest step ${wave.maxJump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)})`);
+      check(wave.clean, `${q}: no clicks at ${rate} Hz (${wave.text})${wave.note}`);
 
       if (q === "pcm16" && c.output === "script-processor") {
         // Here the engine runs on the page's main thread, so a stall there
         // (first-run JIT, scrolling, the keep-awake video looping) must not
-        // be heard. A 32768-sample analyser window spans the whole stall.
-        const stall = await page.evaluate(async () => {
-          const p = window.__pt.player, a = p.ctx.createAnalyser();
-          a.fftSize = 32768;
-          p.out.connect(a);
-          await new Promise(r => setTimeout(r, 800));
-          const t = performance.now();
-          while (performance.now() - t < 100) {}
-          await new Promise(r => setTimeout(r, 250));
-          const buf = new Float32Array(a.fftSize);
-          a.getFloatTimeDomainData(buf);
-          p.out.disconnect(a);
-          let maxJump = 0;
-          for (let i = 1; i < buf.length; i++) maxJump = Math.max(maxJump, Math.abs(buf[i] - buf[i - 1]));
-          return maxJump;
+        // be heard.
+        const stall = await cleanOrAdapted(page, async () => {
+          const jump = await stallAndListen(page, 100);
+          return { clean: jump < cleanJump * 1.5, text: `biggest step ${jump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)}` };
         });
-        check(stall < cleanJump * 1.5,
-          `${q}: a 100 ms stall of the page's main thread isn't heard (biggest step ${stall.toFixed(4)}, clean sine ${cleanJump.toFixed(4)})`);
+        check(stall.clean, `${q}: a 100 ms stall of the page's main thread isn't heard (${stall.text})${stall.note}`);
       }
 
-      check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6 && s.latencyMs < 300,
-        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms (want < 300), underruns ${s.underruns}, dropped ${s.dropped}`);
+      const maxLatency = (await page.evaluate(() => window.__pt.engine.bufferFrames)) > 4096 ? 400 : 300;
+      check(s.state === "playing" && s.frames > 48000 * 2 && s.levelDb > -12 && s.levelDb < -6 && s.latencyMs < maxLatency,
+        `${q}: state=${s.state}, ${(s.frames / 48000).toFixed(1)} s received, level ${s.levelDb.toFixed(1)} dBFS (sine at 0.5 -> -9), latency ${s.latencyMs} ms (want < ${maxLatency}), underruns ${s.underruns}, dropped ${s.dropped}, main-thread dropouts ${s.glitches}`);
       if (q === "pcm16" && shotDir && c.output === "script-processor") await page.screenshot({ path: path.join(shotDir, "player-playing.png"), fullPage: true });
+      await page.click("#play");
+      await sleep(300);
+    }
+
+    if (c.output === "script-processor") {
+      // A phone whose main thread stalls for longer than the buffer covers
+      // must adapt: the page notices the dropout, doubles its buffer, and
+      // plays on cleanly from then on.
+      await page.selectOption("#quality", "pcm16");
+      await page.click("#play");
+      await sleep(2500);
+      const engineState = () => page.evaluate(() => ({ dropouts: window.__pt.stats.glitches, frames: window.__pt.engine.bufferFrames }));
+      const before = await engineState();
+      await page.evaluate(() => { const t = performance.now(); while (performance.now() - t < 300) {} });
+      await sleep(1500);
+      const after = await engineState();
+      if (before.frames === 4096)
+        check(after.dropouts > before.dropouts && after.frames === 8192,
+          `a 300 ms stall is detected as a dropout and the buffer grows (${before.frames} -> ${after.frames} frames, dropouts ${before.dropouts} -> ${after.dropouts})`);
+      else
+        console.log(`  [ -- ] buffer already grew to ${before.frames} frames after an earlier dropout on this machine`);
+
+      const rate = await page.evaluate(() => window.__pt.player.ctx.sampleRate);
+      const cleanJump = 2 * Math.PI * 440 / rate * 0.5;
+      const jump = await stallAndListen(page, 100);
+      const s = await stats(page);
+      check(jump < cleanJump * 1.5 && s.state === "playing" && s.latencyMs < 400,
+        `...then plays on cleanly, riding out a further 100 ms stall (biggest step ${jump.toFixed(4)}, clean sine ${cleanJump.toFixed(4)}; latency ${s.latencyMs} ms, want < 400)`);
       await page.click("#play");
       await sleep(300);
     }
