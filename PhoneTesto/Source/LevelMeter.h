@@ -19,6 +19,8 @@ public:
     static constexpr float floorDb = -60.0f;
 
 private:
+    void paintDigital (juce::Graphics&);
+
     struct Side
     {
         float level = floorDb; // displayed bar, dB

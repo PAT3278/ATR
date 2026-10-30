@@ -424,6 +424,7 @@ void PhoneTestoAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     state.setProperty (livePasswordProperty, getLivePassword(), nullptr);
     state.setProperty (editorScaleProperty, editorScale.load(), nullptr);
+    state.setProperty (editorSkinProperty, editorSkin.load(), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -439,12 +440,15 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     auto tree = juce::ValueTree::fromXml (*xml);
     const auto password = tree.getProperty (livePasswordProperty).toString();
     const auto scale = (float) tree.getProperty (editorScaleProperty, 1.0f);
+    const auto skin = (int) tree.getProperty (editorSkinProperty, editorSkin.load());
     tree.removeProperty (livePasswordProperty, nullptr);
     tree.removeProperty (editorScaleProperty, nullptr);
+    tree.removeProperty (editorSkinProperty, nullptr);
 
     apvts.replaceState (tree);
     setLivePassword (password);
     editorScale = juce::jlimit (0.5f, 2.0f, scale);
+    editorSkin = juce::jlimit (0, 1, skin);
 }
 
 } // namespace phonetesto

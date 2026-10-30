@@ -23,11 +23,13 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void lookAndFeelChanged() override;
 
 private:
     juce::Rectangle<float> contentArea() const;
     juce::Rectangle<float> plotArea() const;
     void rebuildCurve();
+    void paintDigital (juce::Graphics&);
 
     QrCodeComponent qr;
     juce::TextEditor password;
@@ -36,6 +38,7 @@ private:
     bool live = false, failed = false;
     juce::String url;
     int listenerCount = 0;
+    juce::String autoCode;
     juce::Path curve;
 };
 

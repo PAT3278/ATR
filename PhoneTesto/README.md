@@ -77,6 +77,24 @@ Drag the window's corner to resize; the whole panel scales, and the size is
 saved with the project. Fonts are Barlow / Barlow Condensed, embedded in the
 plugin.
 
+### Skins
+
+The **SKIN** button in the header switches between two looks (saved with
+the project):
+
+- **DIGITAL** (default for now, while it's being tried out) — a 2000s
+  games-console interface: deep navy with slowly moving light waves and
+  drifting particles, glass panels with glowing cyan edges, device icons on
+  the MODEL pads, PT Digital type for the logo and numbers.
+- **FLAT** — the modern flat hardware panel described above.
+
+The waves animate at 15 fps and only their band of the window is redrawn
+(everything over it comes from cached images): about 4 ms per frame at
+125 % size in JUCE's software renderer, i.e. ~6 % of one CPU core while
+the window is open — less on Windows and macOS, which draw faster. FLAT
+redraws nothing while idle. `PhoneTestoEditorSnapshot` prints these
+timings.
+
 ## Live Monitor mode
 
 Insert PhoneTesto as the **last plugin on your master bus**, press **ON AIR**
@@ -233,8 +251,10 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   is exercised), the screen-off mode, the password flow including the QR
   code's `?k=` link, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
-- **PhoneTestoEditorSnapshot** — renders the editor (Emulate and Live) to
-  PNGs for checking the layout.
+- **PhoneTestoEditorSnapshot** — renders the editor in both skins (Emulate
+  and Live) to PNGs for checking the layout, checks it reopens at its saved
+  size, and prints what a DIGITAL animation frame costs to draw
+  (`PT_ANIM_FRAMES=45` also saves 3 s of animation frames).
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
@@ -274,11 +294,12 @@ Resources/
   player-worklet.js        Its playback core (AudioWorklet or ScriptProcessor): gapless
                            playback, jitter buffer, drift control
   thirdparty/              opus-decoder (WASM Opus for plain-HTTP pages) + its licence
-  fonts/                   Barlow fonts + their licence (OFL.txt)
+  fonts/                   Barlow and PT Digital fonts + their licences (OFL)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
   PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
-  HardwareStyle.h/.cpp     Fonts, palette, flat knobs and LED buttons
+  HardwareStyle.h/.cpp     Fonts, skins, FLAT palette, flat knobs and LED buttons
+  DigitalStyle.h/.cpp      DIGITAL skin: animated background, glass, glow, device icons
   LevelMeter.h/.cpp        Stereo LED output meter
   DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
   SpeakerProfiles.h        Per-device filter/drive tables
@@ -302,6 +323,10 @@ Tests/
 - [Barlow](https://github.com/jpt/barlow) fonts — SIL Open Font License 1.1
   (`Resources/fonts/OFL.txt`); these are included in the repo and embedded in
   the plugin.
+- PT Digital — SIL Open Font License 1.1 (`Resources/fonts/PTDigital-OFL.txt`).
+  A Modified Version of [Orbitron](https://github.com/theleagueof/orbitron)
+  (static SemiBold/Bold instances cut from its variable font, renamed as its
+  Reserved Font Name requires); embedded in the plugin.
 - [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
   Ethan Halsall — MIT, wrapping libopus (BSD)
   (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo

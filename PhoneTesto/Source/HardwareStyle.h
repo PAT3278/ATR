@@ -2,13 +2,26 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-/** Modern flat hardware look: a graphite panel, flat controls with hairline
-    borders, LED indicators, one orange accent, and Barlow type. Shared by
-    the editor and its custom components (the phone page mirrors it in
-    Resources/player.html). */
+/** The editor's two looks, switchable from its header:
+
+    - FLAT: modern flat hardware -- a graphite panel, flat controls with
+      hairline borders, LED indicators, one orange accent, Barlow type (the
+      phone page mirrors it in Resources/player.html).
+    - DIGITAL: a 2000s games-console interface -- deep navy with slowly
+      moving light waves, glass panels, cyan glow, PT Digital type for the
+      logo and numbers (see DigitalStyle.h).
+
+    Components ask skinOf (*this) which one to draw. */
 namespace phonetesto::hw
 {
 
+enum class Skin
+{
+    flat,
+    digital
+};
+
+/** Flat skin colours. */
 namespace colours
 {
     const juce::Colour panel      { 0xff1c1d21 };
@@ -34,7 +47,9 @@ enum class Type
     condensedSemiBold,
     sansMedium,
     sansSemiBold,
-    sansBold
+    sansBold,
+    digitalSemiBold, // PT Digital (from Orbitron): DIGITAL skin's logo and numbers
+    digitalBold
 };
 
 juce::Font font (Type, float height, float kerning = 0.0f);
@@ -46,11 +61,17 @@ void drawLabel (juce::Graphics&, const juce::String&, juce::Rectangle<float>, ju
 // Component properties read by the LookAndFeel.
 constexpr const char* ledColourProperty   = "hwLed";        // ToggleButton: LED colour (ARGB int)
 constexpr const char* solidWhenOnProperty = "hwSolidWhenOn"; // ToggleButton: fill with the LED colour when on
+constexpr const char* liveProperty        = "hwLive";        // ToggleButton: the ON AIR button
+constexpr const char* iconProperty        = "hwIcon";        // ToggleButton: device icon (speaker profile index)
+constexpr const char* compactProperty     = "hwCompact";     // ToggleButton: small header button, no LED
 
 class LookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     LookAndFeel();
+
+    void setSkin (Skin);
+    Skin getSkin() const noexcept { return skin; }
 
     void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height, float sliderPos,
                            float rotaryStartAngle, float rotaryEndAngle, juce::Slider&) override;
@@ -65,9 +86,14 @@ public:
     void drawCornerResizer (juce::Graphics&, int w, int h, bool isMouseOver, bool isMouseDragging) override;
 
 private:
+    Skin skin = Skin::flat;
+
     // Keeps the fonts loaded for as long as this LookAndFeel lives,
     // instead of reloading them on every font() call.
     std::shared_ptr<void> keepResourcesLoaded;
 };
+
+/** The skin of the LookAndFeel a component is drawn with. */
+Skin skinOf (juce::Component&);
 
 } // namespace phonetesto::hw

@@ -1,5 +1,6 @@
 #include "DisplayWindow.h"
 #include "HardwareStyle.h"
+#include "DigitalStyle.h"
 #include "SpeakerProfiles.h"
 
 #include <juce_dsp/juce_dsp.h>
@@ -42,7 +43,23 @@ DisplayWindow::DisplayWindow()
 void DisplayWindow::setAutoCode (const juce::String& code)
 {
     // With no password typed, phones use this code (it's inside the QR code).
-    password.setTextToShowWhenEmpty (code, hw::colours::textDim);
+    autoCode = code;
+    lookAndFeelChanged();
+}
+
+void DisplayWindow::lookAndFeelChanged()
+{
+    const bool digitalSkin = hw::skinOf (*this) == hw::Skin::digital;
+    const auto text = digitalSkin ? hw::digital::colours::text : hw::colours::text;
+    const auto dim = digitalSkin ? hw::digital::colours::textDim : hw::colours::textDim;
+
+    password.setColour (juce::TextEditor::textColourId, text);
+    password.setFont (digitalSkin ? hw::font (hw::Type::digitalSemiBold, 14.0f, 0.06f)
+                                  : hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
+    password.applyFontToAllText (password.getFont());
+    password.applyColourToAllText (text);
+    password.setTextToShowWhenEmpty (autoCode.isNotEmpty() ? autoCode : juce::String ("AUTO"), dim);
+    repaint();
 }
 
 void DisplayWindow::setProfile (int index)
@@ -141,6 +158,12 @@ void DisplayWindow::paint (juce::Graphics& g)
     using namespace juce;
     namespace c = hw::colours;
 
+    if (hw::skinOf (*this) == hw::Skin::digital)
+    {
+        paintDigital (g);
+        return;
+    }
+
     const auto bounds = getLocalBounds().toFloat();
     g.setColour (c::screen);
     g.fillRoundedRectangle (bounds, 8.0f);
@@ -226,6 +249,105 @@ void DisplayWindow::paint (juce::Graphics& g)
     g.setColour (listenerCount > 0 ? c::accent : c::textFaint);
     g.setFont (hw::font (hw::Type::condensedBold, 32.0f));
     g.drawText (String (listenerCount), listening.translated (0.0f, 14.0f).withHeight (32.0f), Justification::centredLeft, false);
+}
+
+void DisplayWindow::paintDigital (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace d = hw::digital;
+    namespace c = hw::digital::colours;
+
+    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
+    d::drawGlass (g, bounds, 10.0f);
+
+    // a darker screen inside the glass, so the plot reads clearly
+    g.setColour (Colour (0x66020816));
+    g.fillRoundedRectangle (bounds.reduced (5.0f), 7.0f);
+
+    const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
+    const auto small = hw::font (hw::Type::sansSemiBold, 11.0f, 0.06f);
+
+    if (! live)
+    {
+        d::drawLabel (g, "Response", title, Justification::centredLeft);
+
+        const auto& p = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
+        d::drawGlowText (g, String (p.name).toUpperCase(), title, Justification::centredRight,
+                         hw::font (hw::Type::digitalSemiBold, 14.0f, 0.06f), c::text);
+
+        const auto area = plotArea();
+        g.setFont (small);
+
+        for (float hz : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f, 20000.0f })
+        {
+            g.setColour (c::accent.withAlpha (0.05f));
+            g.drawVerticalLine ((int) xForHz (area, hz), area.getY(), area.getBottom());
+        }
+
+        for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
+        {
+            const float x = xForHz (area, hz);
+            g.setColour (c::accent.withAlpha (0.12f));
+            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
+            g.setColour (c::textFaint);
+            g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
+        }
+
+        for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
+        {
+            const float y = yForDb (area, db);
+            g.setColour (c::accent.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.14f : 0.06f));
+            g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
+            g.setColour (c::textFaint);
+            g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
+        }
+
+        Path fill (curve);
+        fill.lineTo (area.getRight(), area.getBottom());
+        fill.lineTo (area.getX(), area.getBottom());
+        fill.closeSubPath();
+        g.setGradientFill (ColourGradient (c::accent.withAlpha (0.28f), 0.0f, area.getY(),
+                                           c::accent.withAlpha (0.0f), 0.0f, area.getBottom(), false));
+        g.fillPath (fill);
+
+        d::strokeGlow (g, curve, c::accent, 2.0f);
+        return;
+    }
+
+    d::drawLabel (g, "Scan to listen", title, Justification::centredLeft, c::accent);
+
+    if (failed)
+    {
+        g.setColour (c::text);
+        g.setFont (hw::font (hw::Type::sansBold, 15.0f, 0.06f));
+        g.drawFittedText ("COULDN'T OPEN A NETWORK PORT.\nANOTHER APP MAY BE USING IT.",
+                          contentArea().toNearestInt(), Justification::centred, 3);
+        return;
+    }
+
+    // halo behind the QR code (the code itself stays black on white so it scans)
+    const auto qrArea = qr.getBounds().toFloat();
+    for (auto [grow, alpha] : { std::pair { 10.0f, 0.06f }, { 5.0f, 0.12f } })
+    {
+        g.setColour (c::accent.withAlpha (alpha));
+        g.fillRoundedRectangle (qrArea.expanded (grow), 6.0f + grow);
+    }
+
+    const auto column = contentArea().withTrimmedLeft ((float) qr.getWidth() + 24.0f);
+
+    d::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft, c::textDim, 11.0f);
+    d::drawGlowText (g, url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
+                     column.withTrimmedTop (16.0f).withHeight (28.0f), Justification::centredLeft,
+                     hw::font (hw::Type::digitalSemiBold, 17.0f, 0.04f), c::text);
+
+    d::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },
+                  Justification::centredLeft, c::textDim, 11.0f);
+
+    const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
+    d::drawLabel (g, "Listening", listening, Justification::centredLeft, c::textDim, 11.0f);
+    d::drawGlowText (g, String (listenerCount), listening.translated (0.0f, 16.0f).withHeight (32.0f), Justification::centredLeft,
+                     hw::font (hw::Type::digitalBold, 26.0f), listenerCount > 0 ? c::accent : c::textDim,
+                     listenerCount > 0 ? 1.0f : 0.0f);
 }
 
 } // namespace phonetesto

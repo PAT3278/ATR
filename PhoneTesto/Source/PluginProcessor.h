@@ -100,6 +100,10 @@ public:
     void setEditorScale (float scale) noexcept { editorScale = scale; }
     float getEditorScale() const noexcept { return editorScale.load(); }
 
+    /** Editor skin (0 = FLAT, 1 = DIGITAL), remembered with the project. */
+    void setEditorSkin (int skin) noexcept { editorSkin = juce::jlimit (0, 1, skin); }
+    int getEditorSkin() const noexcept { return editorSkin.load(); }
+
     /** Most recent output block's RMS / peak per side (0 = L, 1 = R), for the meter. */
     float getOutputRms (int side) const noexcept  { return meterRms[side & 1].load (std::memory_order_relaxed); }
     float getOutputPeak (int side) const noexcept { return meterPeak[side & 1].load (std::memory_order_relaxed); }
@@ -107,6 +111,7 @@ public:
 private:
     static constexpr const char* livePasswordProperty = "livePassword";
     static constexpr const char* editorScaleProperty = "editorScale";
+    static constexpr const char* editorSkinProperty = "editorSkin";
 
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void processSubBlock (juce::AudioBuffer<float>& buffer, int start, int numSamples);
@@ -160,6 +165,7 @@ private:
     juce::String livePassword;
     const juce::String autoAccessCode;
     std::atomic<float> editorScale { 1.0f };
+    std::atomic<int> editorSkin { 1 }; // DIGITAL while it's being tried out
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessor)
 };

@@ -347,11 +347,18 @@ int main()
         setParam (*a, PhoneTestoAudioProcessor::outputParamId, 61.0f);
         setParam (*a, PhoneTestoAudioProcessor::monoParamId, 1.0f);
         a->setLivePassword ("pass word 123");
+        a->setEditorScale (1.25f);
+        a->setEditorSkin (0);
         juce::MemoryBlock state;
         a->getStateInformation (state);
 
         auto b = makeProcessor (48000.0, 512);
+        check (b->getEditorSkin() == 1, "new instances open in the DIGITAL skin");
         b->setStateInformation (state.getData(), (int) state.getSize());
+        check (std::abs (b->getEditorScale() - 1.25f) < 0.001f && b->getEditorSkin() == 0,
+               "editor size and skin restored");
+        check (! b->apvts.copyState().hasProperty ("editorSkin") && ! b->apvts.copyState().hasProperty ("editorScale"),
+               "editor settings aren't left in the parameter tree");
         auto value = [&] (const char* id) { return b->apvts.getParameter (id)->convertFrom0to1 (b->apvts.getParameter (id)->getValue()); };
         check (juce::roundToInt (value (PhoneTestoAudioProcessor::deviceParamId)) == 5
                    && std::abs (value (PhoneTestoAudioProcessor::mixParamId) - 42.0f) < 0.01f

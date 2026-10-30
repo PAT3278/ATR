@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "DigitalStyle.h"
 
 namespace phonetesto
 {
@@ -23,6 +24,11 @@ namespace layout
 
     constexpr float knobStart = juce::MathConstants<float>::pi * 1.25f;
     constexpr float knobEnd = juce::MathConstants<float>::pi * 2.75f;
+
+    constexpr float pillY = 17.0f, pillHeight = 26.0f;
+    constexpr int skinButtonWidth = 118, skinButtonGap = 10;
+
+    constexpr double frameSeconds = 1.0 / 15.0; // DIGITAL background animation: slow waves, so 15 fps is smooth
 } // namespace layout
 
 namespace
@@ -32,15 +38,28 @@ namespace
         return percent <= 0.0 ? juce::String ("-INF dB")
                               : juce::String (juce::Decibels::gainToDecibels (percent / 100.0), 1) + " dB";
     }
+
+    juce::Font pillFont (hw::Skin skin)
+    {
+        return skin == hw::Skin::digital ? hw::font (hw::Type::sansBold, 12.0f, 0.14f)
+                                         : hw::font (hw::Type::condensedBold, 14.0f, 0.12f);
+    }
 } // namespace
 
 //==============================================================================
 PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), processor (p),
+      // read before anything below resizes the window (and so overwrites it)
+      savedScale (juce::jlimit (0.7f, 1.6f, p.getEditorScale()))
 {
     setLookAndFeel (&lookAndFeel);
     addAndMakeVisible (panel);
-    panel.onPaint = [this] (juce::Graphics& g) { paintPanel (g); };
+    panel.onPaint = [this] (juce::Graphics& g) { paintBackground (g); };
+
+    // first child, so it sits behind the controls
+    panel.addAndMakeVisible (overlay);
+    overlay.onPaint = [this] (juce::Graphics& g) { paintOverlay (g); };
+    overlay.setInterceptsMouseClicks (false, false);
 
     panel.addAndMakeVisible (meter);
     panel.addAndMakeVisible (display);
@@ -50,7 +69,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
         knob->setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
         knob->setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
         knob->setRotaryParameters (layout::knobStart, layout::knobEnd, true);
-        knob->onValueChange = [this] { panel.repaint(); };
+        knob->onValueChange = [this] { overlay.repaint(); };
         panel.addAndMakeVisible (*knob);
     }
 
@@ -67,6 +86,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
         auto& pad = modelPads[(size_t) i];
         pad.setButtonText (getSpeakerProfiles()[(size_t) i].shortName);
         pad.setTitle (juce::String ("Model: ") + getSpeakerProfiles()[(size_t) i].name);
+        pad.getProperties().set (hw::iconProperty, i);
         pad.setRadioGroupId (1);
         pad.onClick = [this, i] { modelAttachment->setValueAsCompleteGesture ((float) i); };
         panel.addAndMakeVisible (pad);
@@ -79,6 +99,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
 
     onAirButton.getProperties().set (hw::ledColourProperty, (int) hw::colours::live.getARGB());
     onAirButton.getProperties().set (hw::solidWhenOnProperty, true);
+    onAirButton.getProperties().set (hw::liveProperty, true);
 
     for (auto* b : { &monoButton, &bypassButton, &onAirButton })
         panel.addAndMakeVisible (*b);
@@ -87,12 +108,18 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     bypassAttachment = std::make_unique<ButtonAttachment> (processor.apvts, PhoneTestoAudioProcessor::bypassParamId, bypassButton);
     onAirButton.onClick = [this] { toggleLive(); };
 
+    skinButton.getProperties().set (hw::compactProperty, true);
+    skinButton.setTitle ("Skin");
+    skinButton.onClick = [this] { applySkin (skinButton.getToggleState() ? hw::Skin::digital : hw::Skin::flat); };
+    panel.addAndMakeVisible (skinButton);
+
     auto& password = display.getPasswordEditor();
     password.setTitle ("Live password");
     display.setAutoCode (processor.getAutoAccessCode());
     password.setText (processor.getLivePassword(), juce::dontSendNotification);
     password.onTextChange = [this] { processor.setLivePassword (display.getPasswordEditor().getText().trim()); };
 
+    overlay.setBounds (0, 0, faceWidth, faceHeight);
     display.setBounds (layout::display);
     meter.setBounds (layout::meter);
     mixKnob.setBounds (juce::Rectangle<float> (layout::knobSize, layout::knobSize).withCentre (layout::mixCentre).toNearestInt());
@@ -109,15 +136,20 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
 
     panel.setBounds (0, 0, faceWidth, faceHeight);
 
+    // Everything but the background is drawn from cached images.
+    for (auto* c : panel.getChildren())
+        c->setBufferedToImage (true);
+
     liveUrl = processor.getLiveMonitorUrl();
     onAirButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
+    applySkin (processor.getEditorSkin() == 1 ? hw::Skin::digital : hw::Skin::flat);
     updateLiveState();
 
     setResizable (true, true);
     setResizeLimits (faceWidth * 7 / 10, faceHeight * 7 / 10, faceWidth * 8 / 5, faceHeight * 8 / 5);
     getConstrainer()->setFixedAspectRatio ((double) faceWidth / (double) faceHeight);
-    const float scale = juce::jlimit (0.7f, 1.6f, processor.getEditorScale());
-    setSize (juce::roundToInt (faceWidth * scale), juce::roundToInt (faceHeight * scale));
+    setSize (juce::roundToInt (faceWidth * savedScale), juce::roundToInt (faceHeight * savedScale));
+    sizeRestored = true;
 
     lastTimerSeconds = juce::Time::getMillisecondCounterHiRes() * 0.001;
     startTimerHz (30);
@@ -133,10 +165,29 @@ void PhoneTestoAudioProcessorEditor::resized()
 {
     const float scale = (float) getWidth() / (float) faceWidth;
     panel.setTransform (juce::AffineTransform::scale (scale));
-    processor.setEditorScale (scale); // reopen at the same size
+
+    // Remember the size the user picks, to reopen at it -- but not the sizes
+    // the window passes through while the constructor sets it up.
+    if (sizeRestored)
+        processor.setEditorScale (scale);
 }
 
 //==============================================================================
+void PhoneTestoAudioProcessorEditor::applySkin (hw::Skin newSkin)
+{
+    skin = newSkin;
+    lookAndFeel.setSkin (skin);
+    processor.setEditorSkin (skin == hw::Skin::digital ? 1 : 0);
+
+    skinButton.setToggleState (skin == hw::Skin::digital, juce::dontSendNotification);
+    skinButton.setButtonText (skin == hw::Skin::digital ? "SKIN: DIGITAL" : "SKIN: FLAT");
+
+    sendLookAndFeelChange(); // children pick up the skin's colours and repaint
+    shownListeners = -1;      // re-lay the header
+    updateLiveState();
+    panel.repaint();
+}
+
 void PhoneTestoAudioProcessorEditor::showSelectedModel (int index)
 {
     for (int i = 0; i < (int) modelPads.size(); ++i)
@@ -189,7 +240,11 @@ void PhoneTestoAudioProcessorEditor::updateLiveState()
     {
         shownLive = live;
         shownListeners = listeners;
-        panel.repaint (0, 0, faceWidth, (int) layout::headerHeight);
+
+        const auto pill = statusPillBounds();
+        skinButton.setBounds (juce::roundToInt (pill.getX()) - layout::skinButtonGap - layout::skinButtonWidth,
+                              (int) layout::pillY, layout::skinButtonWidth, (int) layout::pillHeight);
+        overlay.repaint (0, 0, faceWidth, (int) layout::headerHeight + 8);
     }
 
     // With Live on, the real phone does the colouring, so the emulation
@@ -204,7 +259,7 @@ void PhoneTestoAudioProcessorEditor::updateLiveState()
         {
             c->setEnabled (! live);
             c->setAlpha (live ? 0.35f : 1.0f);
-            panel.repaint();
+            overlay.repaint();
         }
     }
 }
@@ -212,20 +267,59 @@ void PhoneTestoAudioProcessorEditor::updateLiveState()
 void PhoneTestoAudioProcessorEditor::timerCallback()
 {
     const double now = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    const auto dt = (float) juce::jlimit (0.001, 0.2, now - lastTimerSeconds);
+    const auto dt = juce::jlimit (0.001, 0.2, now - lastTimerSeconds);
     lastTimerSeconds = now;
 
-    meter.update (processor.getOutputPeak (0), processor.getOutputPeak (1), dt);
+    meter.update (processor.getOutputPeak (0), processor.getOutputPeak (1), (float) dt);
     updateLiveState();
+
+    if (skin == hw::Skin::digital)
+    {
+        animationSeconds += dt;
+        if ((sinceLastFrame += dt) >= layout::frameSeconds)
+        {
+            // only the band where the waves move; the controls over it come from cached images
+            sinceLastFrame = 0.0;
+            const auto top = (int) hw::digital::Background::animatedTop (panel.getLocalBounds().toFloat());
+            panel.repaint (0, top, faceWidth, faceHeight - top);
+        }
+    }
 }
 
 //==============================================================================
-void PhoneTestoAudioProcessorEditor::paintPanel (juce::Graphics& g)
+juce::String PhoneTestoAudioProcessorEditor::statusText() const
+{
+    return shownLive ? "ON AIR  " + juce::String (juce::CharPointer_UTF8 ("\xc2\xb7")) + "  "
+                           + juce::String (juce::jmax (0, shownListeners)) + " LISTENING"
+                     : juce::String ("EMULATE");
+}
+
+juce::Rectangle<float> PhoneTestoAudioProcessorEditor::statusPillBounds() const
+{
+    const float w = juce::GlyphArrangement::getStringWidth (pillFont (skin), statusText()) + 40.0f;
+    return { (float) faceWidth - layout::margin - w, layout::pillY, w, layout::pillHeight };
+}
+
+void PhoneTestoAudioProcessorEditor::paintBackground (juce::Graphics& g)
+{
+    if (skin == hw::Skin::digital)
+        digitalBackground.draw (g, panel.getLocalBounds().toFloat(), animationSeconds);
+    else
+        g.fillAll (hw::colours::panel);
+}
+
+void PhoneTestoAudioProcessorEditor::paintOverlay (juce::Graphics& g)
+{
+    if (skin == hw::Skin::digital)
+        paintDigitalOverlay (g);
+    else
+        paintFlatOverlay (g);
+}
+
+void PhoneTestoAudioProcessorEditor::paintFlatOverlay (juce::Graphics& g)
 {
     using namespace juce;
     namespace c = hw::colours;
-
-    g.fillAll (c::panel);
 
     // header
     const auto logoFont = hw::font (hw::Type::condensedBold, 30.0f, 0.02f);
@@ -247,12 +341,7 @@ void PhoneTestoAudioProcessorEditor::paintPanel (juce::Graphics& g)
     // status pill
     {
         const bool live = shownLive;
-        const String text = live ? "ON AIR  " + String (CharPointer_UTF8 ("\xc2\xb7")) + "  "
-                                       + String (jmax (0, shownListeners)) + " LISTENING"
-                                 : String ("EMULATE");
-        const auto pillFont = hw::font (hw::Type::condensedBold, 14.0f, 0.12f);
-        const float w = GlyphArrangement::getStringWidth (pillFont, text) + 40.0f;
-        const auto pill = Rectangle<float> ((float) faceWidth - layout::margin - w, 17.0f, w, 26.0f);
+        const auto pill = statusPillBounds();
 
         g.setColour (live ? c::live.withAlpha (0.15f) : c::surface);
         g.fillRoundedRectangle (pill, 13.0f);
@@ -261,8 +350,8 @@ void PhoneTestoAudioProcessorEditor::paintPanel (juce::Graphics& g)
         g.setColour (live ? c::live : c::textFaint);
         g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ pill.getX() + 15.0f, pill.getCentreY() }));
         g.setColour (live ? c::text : c::textDim);
-        g.setFont (pillFont);
-        g.drawText (text, pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
+        g.setFont (pillFont (skin));
+        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
     }
 
     g.setColour (c::divider);
@@ -283,6 +372,90 @@ void PhoneTestoAudioProcessorEditor::paintPanel (juce::Graphics& g)
     }
 
     g.setColour (c::textFaint);
+    g.setFont (hw::font (hw::Type::sansMedium, 13.0f));
+    g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
+                      Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
+                      Justification::centredLeft, 2);
+}
+
+void PhoneTestoAudioProcessorEditor::paintDigitalOverlay (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace d = hw::digital;
+    namespace c = hw::digital::colours;
+
+    // header: glowing logo, glass badge, spaced subtitle
+    const auto logoFont = hw::font (hw::Type::digitalBold, 24.0f, 0.06f);
+    const float logoW = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO") + 6.0f;
+    d::drawGlowText (g, "PHONETESTO", { layout::margin, 15.0f, logoW, 30.0f }, Justification::centredLeft, logoFont, c::text);
+
+    const auto badge = Rectangle<float> (layout::margin + logoW + 12.0f, 18.0f, 50.0f, 24.0f);
+    d::drawGlass (g, badge, 12.0f);
+    Path badgeEdge;
+    badgeEdge.addRoundedRectangle (badge.reduced (0.5f), 12.0f);
+    d::strokeGlow (g, badgeEdge, c::accent.withAlpha (0.8f), 1.0f, 0.5f);
+    d::drawGlowText (g, "PT-1", badge, Justification::centred, hw::font (hw::Type::digitalBold, 12.0f, 0.06f), c::accent, 0.6f);
+
+    d::drawLabel (g, "Speaker reference monitor", { badge.getRight() + 14.0f, 18.0f, 280.0f, 24.0f },
+                  Justification::centredLeft, c::textDim, 11.5f);
+
+    // status pill
+    {
+        const bool live = shownLive;
+        const auto pill = statusPillBounds();
+        const float corner = pill.getHeight() * 0.5f;
+
+        d::drawGlass (g, pill, corner);
+        if (live)
+        {
+            g.setColour (c::live.withAlpha (0.22f));
+            g.fillRoundedRectangle (pill, corner);
+            Path edge;
+            edge.addRoundedRectangle (pill.reduced (0.5f), corner);
+            d::strokeGlow (g, edge, c::live.withAlpha (0.85f), 1.0f, 0.6f);
+        }
+
+        const auto dot = Point<float> (pill.getX() + 15.0f, pill.getCentreY());
+        const auto dotColour = live ? c::live : c::accent;
+        g.setColour (dotColour.withAlpha (0.3f));
+        g.fillEllipse (Rectangle<float> (13.0f, 13.0f).withCentre (dot));
+        g.setColour (dotColour);
+        g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre (dot));
+
+        g.setColour (live ? c::text : c::textDim);
+        g.setFont (pillFont (skin));
+        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
+    }
+
+    // header rule: a line of light fading out at both ends
+    {
+        ColourGradient rule (c::accent.withAlpha (0.0f), 0.0f, 0.0f, c::accent.withAlpha (0.0f), (float) faceWidth, 0.0f, false);
+        rule.addColour (0.3, c::accent.withAlpha (0.55f));
+        rule.addColour (0.7, c::accent.withAlpha (0.55f));
+        g.setGradientFill (rule);
+        g.fillRect (0.0f, layout::headerHeight, (float) faceWidth, 1.0f);
+
+        ColourGradient haze (rule);
+        haze.multiplyOpacity (0.12f);
+        g.setGradientFill (haze);
+        g.fillRect (0.0f, layout::headerHeight - 3.0f, (float) faceWidth, 7.0f);
+    }
+
+    // knob labels and readouts
+    for (auto [knob, label, centre] : { std::tuple<Slider*, const char*, Point<float>> { &mixKnob, "Mix", layout::mixCentre },
+                                         { &outputKnob, "Output", layout::outputCentre } })
+    {
+        const float alpha = knob->getAlpha();
+        d::drawLabel (g, label, Rectangle<float> (120.0f, 16.0f).withCentre (centre.translated (0.0f, -64.0f)),
+                      Justification::centred, c::textDim.withAlpha (alpha));
+
+        const auto value = knob == &mixKnob ? String (roundToInt (knob->getValue())) + "%" : outputText (knob->getValue());
+        d::drawGlowText (g, value, Rectangle<float> (140.0f, 24.0f).withCentre (centre.translated (0.0f, 63.0f)),
+                         Justification::centred, hw::font (hw::Type::digitalSemiBold, 16.0f, 0.04f),
+                         c::text.withAlpha (alpha), 0.8f * alpha);
+    }
+
+    g.setColour (c::textFaint.brighter (0.2f));
     g.setFont (hw::font (hw::Type::sansMedium, 13.0f));
     g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
                       Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),

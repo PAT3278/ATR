@@ -1,4 +1,5 @@
 #include "HardwareStyle.h"
+#include "DigitalStyle.h"
 #include "BinaryData.h"
 
 namespace phonetesto::hw
@@ -19,9 +20,11 @@ namespace
             faces[(int) Type::sansMedium]        = load (BinaryData::BarlowMedium_ttf, BinaryData::BarlowMedium_ttfSize);
             faces[(int) Type::sansSemiBold]      = load (BinaryData::BarlowSemiBold_ttf, BinaryData::BarlowSemiBold_ttfSize);
             faces[(int) Type::sansBold]          = load (BinaryData::BarlowBold_ttf, BinaryData::BarlowBold_ttfSize);
+            faces[(int) Type::digitalSemiBold]   = load (BinaryData::PTDigitalSemiBold_ttf, BinaryData::PTDigitalSemiBold_ttfSize);
+            faces[(int) Type::digitalBold]       = load (BinaryData::PTDigitalBold_ttf, BinaryData::PTDigitalBold_ttfSize);
         }
 
-        juce::Typeface::Ptr faces[5];
+        juce::Typeface::Ptr faces[7];
     };
 } // namespace
 
@@ -49,6 +52,25 @@ LookAndFeel::LookAndFeel()
     setColour (juce::CaretComponent::caretColourId, colours::accent);
 }
 
+void LookAndFeel::setSkin (Skin newSkin)
+{
+    skin = newSkin;
+    const auto accent = skin == Skin::digital ? digital::colours::accent : colours::accent;
+    const auto text = skin == Skin::digital ? digital::colours::text : colours::text;
+    setColour (juce::TextEditor::textColourId, text);
+    setColour (juce::TextEditor::highlightColourId, accent.withAlpha (0.35f));
+    setColour (juce::TextEditor::highlightedTextColourId, text);
+    setColour (juce::CaretComponent::caretColourId, accent);
+}
+
+Skin skinOf (juce::Component& c)
+{
+    if (auto* lf = dynamic_cast<LookAndFeel*> (&c.getLookAndFeel()))
+        return lf->getSkin();
+
+    return Skin::flat;
+}
+
 juce::Typeface::Ptr LookAndFeel::getTypefaceForFont (const juce::Font& f)
 {
     if (f.getTypefaceName() == juce::Font::getDefaultSansSerifFontName())
@@ -63,6 +85,13 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, 
     using namespace juce;
 
     const auto bounds = Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+
+    if (skin == Skin::digital)
+    {
+        digital::drawKnob (g, bounds, pos, startAngle, endAngle);
+        return;
+    }
+
     const auto c = bounds.getCentre();
     const float r = jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f - 3.0f;
     const float angle = startAngle + pos * (endAngle - startAngle);
@@ -101,11 +130,31 @@ void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bo
 {
     using namespace juce;
 
+    if (skin == Skin::digital)
+    {
+        digital::drawToggleButton (g, b, highlighted, down);
+        return;
+    }
+
     const bool on = b.getToggleState();
     const bool solid = b.getProperties().getWithDefault (solidWhenOnProperty, false);
+    const bool compact = b.getProperties().getWithDefault (compactProperty, false);
     const auto led = Colour ((uint32) (int) b.getProperties().getWithDefault (ledColourProperty, (int) colours::accent.getARGB()));
     const auto bounds = b.getLocalBounds().toFloat().reduced (1.0f);
-    constexpr float corner = 6.0f;
+    const float corner = compact ? bounds.getHeight() * 0.5f : 6.0f;
+
+    if (compact)
+    {
+        // small header pill: no LED, just a label
+        g.setColour (highlighted ? colours::surfaceHi : colours::surface);
+        g.fillRoundedRectangle (bounds, corner);
+        g.setColour (colours::border);
+        g.drawRoundedRectangle (bounds.reduced (0.5f), corner, 1.0f);
+        g.setColour (colours::textDim);
+        g.setFont (font (Type::condensedBold, 13.0f, 0.12f));
+        g.drawText (b.getButtonText(), bounds, Justification::centred, false);
+        return;
+    }
 
     Colour fill = colours::surface, edge = colours::border, textColour = colours::text.withAlpha (0.78f);
 
@@ -153,19 +202,26 @@ void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bo
 
 void LookAndFeel::fillTextEditorBackground (juce::Graphics& g, int width, int height, juce::TextEditor&)
 {
-    g.setColour (colours::surface);
+    g.setColour (skin == Skin::digital ? juce::Colour (0x88061533) : colours::surface);
     g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, 5.0f);
 }
 
 void LookAndFeel::drawTextEditorOutline (juce::Graphics& g, int width, int height, juce::TextEditor& editor)
 {
-    g.setColour (editor.hasKeyboardFocus (true) ? colours::accent : colours::border);
+    const bool focused = editor.hasKeyboardFocus (true);
+
+    if (skin == Skin::digital)
+        g.setColour (focused ? digital::colours::accent : digital::colours::glassEdge);
+    else
+        g.setColour (focused ? colours::accent : colours::border);
+
     g.drawRoundedRectangle (0.5f, 0.5f, (float) width - 1.0f, (float) height - 1.0f, 5.0f, 1.0f);
 }
 
 void LookAndFeel::drawCornerResizer (juce::Graphics& g, int w, int h, bool isMouseOver, bool isMouseDragging)
 {
-    g.setColour (colours::textFaint.withAlpha (isMouseOver || isMouseDragging ? 1.0f : 0.6f));
+    const auto dots = skin == Skin::digital ? digital::colours::textDim : colours::textFaint;
+    g.setColour (dots.withAlpha (isMouseOver || isMouseDragging ? 1.0f : 0.6f));
 
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j <= i; ++j)
