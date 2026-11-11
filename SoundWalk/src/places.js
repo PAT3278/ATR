@@ -106,8 +106,8 @@
 
       p.grade = {
         top: '#86b4d9', bottom: '#ffe6ad', fog: '#efdcaa', near: 22, far: 120,
-        sun: '#ffd89a', sunInt: 2.9, hemi: 0.8, sunDir: [0.3, 0.55, -0.6],
-        tint: [1.06, 1.0, 0.86], expo: 1.05, sat: 1.08, stars: 0,
+        sun: '#ffd08a', sunInt: 2.5, hemi: 0.62, sunDir: [0.3, 0.42, -0.6],
+        tint: [1.05, 1.0, 0.88], expo: 0.98, sat: 1.0, stars: 0,
       };
       p.map = [{ t: 'rect', x: 0, z: -27, w: 16, h: 66, c: '#4f7a3a' }, { t: 'rect', x: 0, z: -27, w: 7.5, h: 66, c: '#cdbf9f' }];
       p.face = Math.PI;
@@ -206,13 +206,15 @@
         }
       }
       // Embankments, a tunnel mouth on the near side
-      const embM = E.mat('#5f7f45', { flat: true });
+      const embM = E.mat('#56544f', { rough: 0.9 });
       const emb1 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 18), embM);
       emb1.position.set(BX, 1.8, RZ + 26); g.add(emb1);
       const emb2 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 120), embM);
       emb2.position.set(BX, 1.8, RZ - 77); g.add(emb2);
       const hill = new THREE.Mesh(new THREE.BoxGeometry(14, 9, 16), embM);
       hill.position.set(BX, 4.5, RZ + 42); g.add(hill);
+      const hillBand = new THREE.Mesh(new THREE.BoxGeometry(14.12, 0.14, 16.12), new THREE.MeshBasicMaterial({ color: '#ffb060' }));
+      hillBand.position.set(BX, 7.9, RZ + 42); g.add(hillBand);
       const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 4.2), new THREE.MeshBasicMaterial({ color: '#0c0a0e' }));
       mouth.position.set(BX, 5.6, RZ + 33.95); mouth.rotation.y = Math.PI; g.add(mouth);
       p.addBox(BX, RZ + 26, 2.6, 9);
@@ -396,7 +398,7 @@
   PLACES.stereotype = {
     build(p, E) {
       const g = p.group, r = E.rng(53);
-      const floor = E.plane(44, 44, E.mat('#ffffff', { map: E.tex('checker', 11, 11) }));
+      const floor = E.plane(44, 44, E.mat('#8d8d8d', { map: E.tex('checker', 11, 11), rough: 0.6 }));
       floor.position.set(0, 0.03, -10);
       g.add(floor); p.pick(floor);
 
@@ -434,9 +436,9 @@
       p.addBox(0, -29, 20, 0.8);
 
       p.grade = {
-        top: '#b9b9b9', bottom: '#e9e9e9', fog: '#d6d6d6', near: 30, far: 170,
-        sun: '#ffffff', sunInt: 2.3, hemi: 0.7, sunDir: [0.5, 0.6, 0.3],
-        tint: [1, 1, 1], expo: 0.9, sat: 0.42, stars: 0,
+        top: '#7f8288', bottom: '#c9c9c9', fog: '#a9aaae', near: 30, far: 170,
+        sun: '#ffffff', sunInt: 2.2, hemi: 0.55, sunDir: [0.55, 0.45, 0.3],
+        tint: [0.98, 1, 1.02], expo: 0.86, sat: 0.36, stars: 0,
       };
       p.map = [{ t: 'rect', x: 0, z: -10, w: 44, h: 44, c: '#d8d8d8' }];
       p.face = Math.PI;
