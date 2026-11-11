@@ -9,6 +9,10 @@
   if (!window.THREE) { $('#loading').innerHTML = '<span>3Dエンジンを読み込めませんでした。ページを再読み込みしてください。</span>'; return; }
   const SW = window.SW, CFG = SW.CONFIG;
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const IC = {
+    cart: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.5 11h10L20 7H6.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>',
+    play: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8V4z"/></svg>',
+  };
   const TOUCH = matchMedia('(hover: none)').matches;
 
   /* ================= utils ================= */
@@ -96,11 +100,14 @@
   const RT_H = 720;
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: HDR ? THREE.HalfFloatType : THREE.UnsignedByteType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
   const post = new THREE.ShaderMaterial({
-    uniforms: { tD: { value: rt.texture }, res: { value: new THREE.Vector2(1, 1) }, time: { value: 0 }, bloom: { value: 1.15 }, grain: { value: 0.035 }, vig: { value: 0.42 }, thr: { value: HDR ? 0.85 : 0.8 }, tint: { value: new THREE.Vector3(1, 1, 1) }, expo: { value: 1 }, sat: { value: 1 } },
+    uniforms: { tD: { value: rt.texture }, res: { value: new THREE.Vector2(1, 1) }, time: { value: 0 }, bloom: { value: 1.15 }, grain: { value: 0.035 }, vig: { value: 0.42 }, thr: { value: HDR ? 0.85 : 0.8 }, tint: { value: new THREE.Vector3(1, 1, 1) }, expo: { value: 1 }, sat: { value: 1 }, spd: { value: 0 } },
     vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
-    fragmentShader: `uniform sampler2D tD;uniform vec2 res;uniform float time,bloom,grain,vig,expo,thr,sat;uniform vec3 tint;varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tD;uniform vec2 res;uniform float time,bloom,grain,vig,expo,thr,sat,spd;uniform vec3 tint;varying vec2 vUv;
     vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
-    void main(){vec3 c=texture2D(tD,vUv).rgb;vec3 b=vec3(0.);vec2 px=1./res;
+    void main(){vec2 q0=vUv-.5;vec3 c=vec3(0.);float rb=spd*.014*smoothstep(.05,.6,length(q0));
+      for(int i=0;i<6;i++){c+=texture2D(tD,vUv-q0*rb*float(i)).rgb;}c/=6.;
+      float an=atan(q0.y,q0.x);float ln=step(.975,fract(sin(floor(an*46.)*12.9898+floor(time*18.)*7.7)*43758.5453))*smoothstep(.28,.62,length(q0))*spd;c+=ln*.35;
+      vec3 b=vec3(0.);vec2 px=1./res;
       for(int i=0;i<12;i++){float a=float(i)*.5236;vec2 d=vec2(cos(a),sin(a))*px;
         b+=max(texture2D(tD,vUv+d*3.).rgb-thr,0.)*.5+max(texture2D(tD,vUv+d*8.).rgb-thr,0.)*.35+max(texture2D(tD,vUv+d*15.).rgb-thr,0.)*.25;}
       c+=b/12.*bloom;c=aces(c*expo)*tint;
@@ -116,7 +123,7 @@
   function resize() {
     const w = cv.clientWidth || innerWidth, h = cv.clientHeight || innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
     renderer.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
-    camera.aspect = w / h; camera.fov = w / h < 0.8 ? 68 : 55; camera.updateProjectionMatrix();
+    camera.aspect = w / h; baseFov = w / h < 0.8 ? 68 : 55; camera.fov = baseFov; camera.updateProjectionMatrix();
     const ih = Math.min(RT_H, Math.round(h * dpr)), iw = Math.max(1, Math.round((ih * w) / h));
     rt.setSize(iw, ih); post.uniforms.res.value.set(iw, ih);
   }
@@ -356,7 +363,6 @@
     sign.scale.set(3.2, 0.8, 1); sign.position.set(sx, 2.75, sz);
     scene.add(sign);
     p.sign = sign;
-    interact.push({ kind: 'sign', place: p, x: sx, z: sz, r: 2.2, mark: 3.5 });
   });
   function refreshLabels(p) {
     p.label.material.map.dispose();
@@ -412,11 +418,31 @@
     A.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.02; A.add(blob);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 1.3), new THREE.MeshBasicMaterial({ color: lin('#ffb428') }));
+    board.material.userData.lin = true; board.position.y = 0.07; board.visible = false; A.add(board);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.2), new THREE.MeshBasicMaterial({ color: lin('#ffb428'), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    glow.material.userData.lin = true; glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.03, -0.5); glow.visible = false; A.add(glow);
     let phase = 0;
     return {
       G: A,
-      animate(dt, speed, bob) {
-        const k = Math.min(1, speed / 4.4);
+      animate(dt, speed, bob, bst = 0, lean = 0) {
+        const riding = bst > 0.3;
+        board.visible = glow.visible = riding;
+        body.rotation.z = lean;
+        body.rotation.y = riding ? 1.05 : 0;
+        head.rotation.y = riding ? -0.95 : 0;
+        arms.forEach((a, i) => (a.pivot.rotation.z = (i ? 1 : -1) * (riding ? 0.95 : 0.08)));
+        if (riding) {
+          legs[0].pivot.rotation.x = 0.3; legs[1].pivot.rotation.x = -0.3;
+          legs[0].pivot.rotation.z = -0.25; legs[1].pivot.rotation.z = 0.25;
+          legs[0].knee.rotation.x = legs[1].knee.rotation.x = 0.35;
+          arms[0].pivot.rotation.x = arms[1].pivot.rotation.x = 0;
+          body.position.y = 0.06 + Math.sin(performance.now() / 160) * 0.015;
+          glow.material.opacity = 0.2 + bst * 0.3; head.rotation.x = 0;
+          return;
+        }
+        legs[0].pivot.rotation.z = legs[1].pivot.rotation.z = 0;
+        const k = Math.min(1, speed / 5);
         if (speed > 0.05) phase += dt * (4 + speed * 1.6);
         const sw = Math.sin(phase) * 0.6 * k;
         legs[0].pivot.rotation.x = sw; legs[1].pivot.rotation.x = -sw;
@@ -438,7 +464,9 @@
 
   /* ================= state ================= */
   const KEY = 'soundwalk-v1';
-  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0 };
+  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false };
+  let boost = 0, dashOn = false, baseFov = 55, wind = null;
+  function jump() { if (mode === 'walk' && !P.air) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
   let camYaw = Math.PI, camPitch = 0.3, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 6.6;
   function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: P.x, z: P.z, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
@@ -481,7 +509,7 @@
   $('#npMeter').innerHTML = meterHTML(8);
   $('#vVol').innerHTML = meterHTML(10);
   function setMeter(el, v) { const is = el.children, on = Math.round(clamp(v, 0, 1) * is.length); for (let i = 0; i < is.length; i++) is[i].classList.toggle('on', i < on); }
-  function updateFound() { $('#foundCount').textContent = `${places.filter((p) => p.found).length}/${places.length}`; }
+  function updateFound() { $('#discs').innerHTML = places.map((p) => (p.found ? `<i class="on" style="background:${esc(p.color)}"></i>` : '<i></i>')).join(''); }
 
   function region() {
     let best = null, bd = 1e9;
@@ -537,7 +565,8 @@
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
     if (e.code === 'KeyQ') camYaw += 0.2;
     else if (e.code === 'KeyE') camYaw -= 0.2;
-    else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter' || e.code === 'Space')) { e.preventDefault(); pressA(); }
+    else if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
+    else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter')) { e.preventDefault(); if (focus) act(focus); }
     else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); openMap(); }
   });
   addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; const k = KEYMAP[e.code]; if (k) keys.delete(k); });
@@ -586,7 +615,7 @@
   $('#dialog').addEventListener('click', advance);
 
   // Gamepad: left stick moves, right stick turns the view, A interacts, B backs out.
-  let padPrev = [];
+  let padPrev = [], padRun = false;
   function pad() {
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find((g) => g && g.connected) : null;
     if (!gp) return null;
@@ -597,12 +626,14 @@
     if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); }
     if (down(9) && mode === 'walk') openMap();
     padPrev = pressed;
+    padRun = !!(pressed[7] || pressed[5] || pressed[2]);
     camYaw -= dz(gp.axes[2] || 0) * 0.04;
     camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85);
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
-  function pressA() { if (mode === 'dialog') { advance(); return; } if (mode === 'walk' && focus) act(focus); }
+  function pressA() { if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else jump(); } }
+  $('#btnB').addEventListener('pointerdown', (e) => { e.preventDefault(); dashOn = !dashOn; $('#btnB').classList.toggle('on', dashOn); });
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
   function act(ia) {
     auto = null; keys.clear();
@@ -642,16 +673,14 @@
     document.body.classList.add('busy', 'viewing');
     const s = p.song;
     $('#vPlace').textContent = s.place;
-    $('#vPlaceEn').textContent = s.placeEn;
     $('#vTitle').textContent = s.title;
     $('#vMeta').textContent = [(s.artist || CFG.artist) + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
-    $('#vCaption').textContent = s.caption || '';
     const acts = $('#vActions');
     acts.innerHTML = '';
     const canCheckout = !!(CFG.checkoutEndpoint && s.price);
     if (canCheckout) {
       const b = document.createElement('button');
-      b.className = 'btn primary'; b.type = 'button'; b.textContent = `この曲を買う ${yen(s.price)}`;
+      b.className = 'btn primary'; b.type = 'button'; b.innerHTML = `${IC.cart}<span>${yen(s.price)}</span>`;
       b.addEventListener('click', () => checkout(s, b));
       acts.appendChild(b);
     }
@@ -659,10 +688,10 @@
       const a = document.createElement('a');
       a.className = 'btn' + (!canCheckout && l.kind === 'buy' && i === 0 ? ' primary' : '');
       a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
-      a.textContent = `${l.label} ↗`;
+      a.innerHTML = l.kind === 'buy' ? `${IC.cart}<span>BUY ↗</span>` : `${IC.play}<span>LISTEN ↗</span>`; a.title = l.label; a.setAttribute('aria-label', l.label);
       acts.appendChild(a);
     });
-    if (!acts.children.length) { const n = document.createElement('p'); n.className = 'c-note'; n.textContent = '購入ページは準備中です。'; acts.appendChild(n); }
+    if (!acts.children.length) { const n = document.createElement('button'); n.className = 'btn'; n.type = 'button'; n.disabled = true; n.innerHTML = `${IC.cart}<span>SOON</span>`; n.setAttribute('aria-label', '購入ページは準備中'); acts.appendChild(n); }
     const ch = SW.Audio.channels[p.idx];
     $('#vSketch').hidden = !(ch && ch.mode === 'sketch');
     $('#view').hidden = false;
@@ -681,8 +710,8 @@
 
   async function checkout(s, btn) {
     btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = '購入ページを開いています…';
+    const label = btn.innerHTML;
+    btn.textContent = '…';
     try {
       const res = await fetch(CFG.checkoutEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ name: `${s.title} — ${CFG.artist} (Digital)`, price: s.price, quantity: 1 }] }) });
       const data = await res.json();
@@ -696,7 +725,7 @@
     } catch (e) {
       toast('購入ページを開けませんでした。ストアのリンクからお試しください。', 3600);
     } finally {
-      btn.disabled = false; btn.textContent = label;
+      btn.disabled = false; btn.innerHTML = label;
     }
   }
 
@@ -745,19 +774,20 @@
     if (mode !== 'walk') return;
     mode = 'modal'; keys.clear(); document.body.classList.add('busy');
     drawMap();
-    const list = $('#mapList');
-    list.innerHTML = '';
-    places.forEach((p) => {
-      const li = document.createElement('li');
-      const d = Math.round(Math.hypot(P.x - p.vx, P.z - p.vz));
-      li.innerHTML = `<button class="mi" type="button"><span class="dot" style="background:${p.found ? esc(p.color) : '#6b7080'}"></span><span class="nm">${esc(p.song.place)}<small>${p.found ? esc(p.song.title) : '？？？'} · ${d}m</small></span><span class="go">行く →</span></button>`;
-      li.firstChild.addEventListener('click', () => { closeMap(); routeTo(p); });
-      list.appendChild(li);
-    });
     $('#modal').hidden = false;
-    const first = list.querySelector('.mi'); if (first) first.focus({ preventScroll: true });
+    $('#mapClose').focus({ preventScroll: true });
   }
   function closeMap() { if (mode !== 'modal') return; mode = 'walk'; $('#modal').hidden = true; document.body.classList.remove('busy'); cv.focus({ preventScroll: true }); }
+  function warpTo(p) {
+    const f = $('#fade'); f.classList.add('on'); mode = 'fade';
+    setTimeout(() => {
+      const q = p.path[Math.max(0, p.path.length - 9)];
+      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z); P.v = 0; auto = null;
+      P.face = Math.atan2(p.vx - q.x, p.vz - q.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face); camYaw = P.face + Math.PI;
+      regionKey = ''; updateRegion(true); save();
+      f.classList.remove('on'); mode = 'walk';
+    }, 320);
+  }
   $('#mapBtn').addEventListener('click', () => (mode === 'modal' ? closeMap() : openMap()));
   $('#mapClose').addEventListener('click', closeMap);
   mapCv.addEventListener('click', (e) => {
@@ -766,7 +796,9 @@
     let best = null, bd = 14;
     places.forEach((p) => { const d = Math.hypot(p.vx - x, p.vz - z); if (d < bd) { bd = d; best = p; } });
     closeMap();
-    if (best) routeTo(best); else auto = { pts: [{ x, z }], i: 0 };
+    if (best && best.found) warpTo(best);
+    else if (best) routeTo(best);
+    else auto = { pts: [{ x, z }], i: 0 };
   });
   $('#soundBtn').addEventListener('click', () => {
     const m = !SW.Audio.muted;
@@ -793,7 +825,7 @@
       if (!p.found && d < 20 && on) {
         p.found = true; refreshLabels(p); updateFound(); save();
         SW.Audio.chime();
-        banner('NEW PLACE', `${p.song.place} ─ ${p.song.title}`);
+        banner('♪ NEW', p.song.title); lastFocus = undefined;
       }
       if (!on) { p.f = SILENT; return; }
       const ch = A.channels[p.idx];
@@ -812,7 +844,7 @@
       const np = $('#np');
       if (loud && mode === 'walk') {
         np.hidden = false;
-        $('#npTitle').textContent = loud.found ? loud.song.title : '？？？ どこかから音がする';
+        $('#npTitle').textContent = loud.found ? loud.song.title : '？';
         $('#npArrow').style.transform = `rotate(${loud.dir}rad)`;
         $('#npArrow').style.color = loud.color;
         setMeter($('#npMeter'), Math.sqrt(loud.gain));
@@ -827,7 +859,10 @@
     if (mode === 'walk') {
       const iv = inputVec();
       let mx = 0, mz = 0, sp = 0;
-      const top = running ? 7.6 : 4.4;
+      // Hold run (or auto-travel a long way) to hop on the board: speed builds up, turns get wider.
+      const want = running || dashOn || padRun || (auto && auto.pts.length - auto.i > 5);
+      boost += ((want && (iv.m > 0.05 || auto) ? 1 : 0) - boost) * Math.min(1, dt * 2.2);
+      const top = 5 + 12 * boost;
       if (iv.m > 0.05) {
         const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
         mx = fx * iv.f + rx * iv.s; mz = fz * iv.f + rz * iv.s;
@@ -841,16 +876,27 @@
         } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : top; }
       }
       if (sp > 0) {
-        const ox = P.x, oz = P.z, np = { x: P.x + mx * sp * dt, z: P.z + mz * sp * dt };
+        const tr = Math.min(1, dt * (14 - 9.5 * boost));
+        P.hx += (mx - P.hx) * tr; P.hz += (mz - P.hz) * tr;
+        const hl = Math.hypot(P.hx, P.hz) || 1; P.hx /= hl; P.hz /= hl;
+      }
+      P.v += (sp - P.v) * Math.min(1, dt * (auto && sp < top ? 10 : sp > P.v ? 5 : 3));
+      let turn = 0;
+      if (P.v > 0.05) {
+        const ox = P.x, oz = P.z, np = { x: P.x + P.hx * P.v * dt, z: P.z + P.hz * P.v * dt };
         collide(np); P.x = np.x; P.z = np.z;
-        if (auto && Math.hypot(P.x - ox, P.z - oz) < sp * dt * 0.2) {
+        const moved = Math.hypot(P.x - ox, P.z - oz);
+        if (auto && moved < P.v * dt * 0.2) {
           auto.stuck = (auto.stuck || 0) + dt;
           if (auto.stuck > 0.5) { const th = auto.then; auto = null; if (th && Math.hypot(th.x - P.x, th.z - P.z) < th.r + 1) { faceTo(th); act(th); } }
         } else if (auto) auto.stuck = 0;
-        let df = Math.atan2(mx, mz) - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 12);
+        if (moved < P.v * dt * 0.4) P.v *= 0.8;
+        let df = Math.atan2(P.hx, P.hz) - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 12);
+        turn = df;
         updateRegion(true);
       }
-      P.speed += (sp - P.speed) * Math.min(1, dt * 10);
+      P.lean += (clamp(-turn * 4, -0.45, 0.45) * boost - P.lean) * Math.min(1, dt * 6);
+      P.speed = P.v;
       focus = null;
       let best = 1e9;
       const fx = Math.sin(P.face), fz = Math.cos(P.face);
@@ -863,15 +909,16 @@
         if (sc < best) { best = sc; focus = ia; }
       }
     } else {
-      P.speed += (0 - P.speed) * Math.min(1, dt * 10);
+      P.speed += (0 - P.speed) * Math.min(1, dt * 10); P.v = 0; P.lean = 0; boost += (0 - boost) * Math.min(1, dt * 4);
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
     const gh = groundAt(P.x, P.z);
-    P.y += (gh - P.y) * Math.min(1, dt * 14);
+    if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
+    else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
     const vf = viewPlace ? viewPlace.f : null;
-    avatar.animate(dt, P.speed, vf ? vf.pulse : 0);
+    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean);
 
     const show = focus && mode === 'walk';
     marker.visible = !!show;
@@ -883,7 +930,7 @@
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
         const s = fkey.place.song;
-        $('#promptText').innerHTML = fkey.kind === 'view' ? `<b>眺める</b>${esc(s.place)}${fkey.place.found ? '　♪ ' + esc(s.title) : ''}` : `<b>読む</b>道しるべ：${esc(s.place)}`;
+        $('#promptText').textContent = fkey.place.found ? '♪ ' + s.title : '？';
       }
     }
     $('#btnA').classList.toggle('ready', !!fkey);
@@ -923,7 +970,7 @@
       tmpU.set(0, 1, 0).applyAxisAngle(fwd, s.roll || 0);
     } else {
       if (mode === 'title') { camYaw += dt * 0.06; }
-      let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * camDist, cy = ty + Math.sin(camPitch) * camDist, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * camDist;
+      let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * (camDist + boost * 1.8), cy = ty + Math.sin(camPitch) * (camDist + boost * 1.8), cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * (camDist + boost * 1.8);
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
       cx = clamp(cx, -160, 160); cz = clamp(cz, -160, 160); cy = Math.min(40, Math.max(groundAt(cx, cz) + 0.5, cy));
       tmpV.set(cx, cy, cz); tmpL.set(tx, ty - 0.1, tz); tmpU.set(0, 1, 0);
@@ -933,17 +980,84 @@
       const k = ease(camBlend);
       tmpV.lerpVectors(camFrom.pos, tmpV, k); tmpL.lerpVectors(camFrom.look, tmpL, k); tmpU.lerpVectors(camFrom.up, tmpU, k).normalize();
     }
+    const fv = baseFov + (RM ? 0 : boost * 15);
+    if (Math.abs(camera.fov - fv) > 0.05) { camera.fov = fv; camera.updateProjectionMatrix(); }
+    const spd = boost * clamp(P.v / 16, 0, 1);
+    post.uniforms.spd.value = RM ? 0 : spd;
+    if (wind) { const ct = SW.Audio.ctx.currentTime; wind.g.gain.setTargetAtTime(0.12 * spd * spd, ct, 0.1); wind.f.frequency.setTargetAtTime(450 + 900 * spd, ct, 0.1); }
     camera.position.copy(tmpV); camera.up.copy(tmpU); camera.lookAt(tmpL); camLook.copy(tmpL);
     sky.position.copy(camera.position); stars.position.copy(camera.position);
     sun.position.set(P.x + G.sunDir.x * 60, P.y + G.sunDir.y * 60, P.z + G.sunDir.z * 60);
     sun.target.position.set(P.x, P.y, P.z);
   }
 
+  /* ================= minimap & edge markers ================= */
+  const mini = $('#mini'), mc = mini.getContext('2d');
+  function drawMini() {
+    const g = mc, S = mini.width, c = S / 2, Rm = c - 3, k = Rm / 75;
+    const cy = Math.cos(camYaw), sy = Math.sin(camYaw);
+    const tr = (x, z) => { const dx = x - P.x, dz = z - P.z; return [c + (dx * cy - dz * sy) * k, c + (dx * sy + dz * cy) * k]; };
+    g.clearRect(0, 0, S, S);
+    g.save(); g.beginPath(); g.arc(c, c, Rm, 0, 7); g.clip();
+    g.fillStyle = 'rgba(16,26,18,.88)'; g.fillRect(0, 0, S, S);
+    g.strokeStyle = '#b9a47a'; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round';
+    places.forEach((p) => { g.beginPath(); for (let i = 0; i < p.path.length; i += 3) { const [x, y] = tr(p.path[i].x, p.path[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); });
+    const [px, py] = tr(0, 0);
+    g.fillStyle = '#cfc2a4'; g.beginPath(); g.arc(px, py, PLAZA_R * k, 0, 7); g.fill();
+    g.restore();
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '700 9px sans-serif';
+    places.forEach((p) => {
+      let [x, y] = tr(p.vx, p.vz);
+      const dx = x - c, dy = y - c, d = Math.hypot(dx, dy), out = d > Rm - 6;
+      if (out) { x = c + (dx / d) * (Rm - 5); y = c + (dy / d) * (Rm - 5); }
+      g.beginPath(); g.arc(x, y, out ? 4 : 6.5, 0, 7); g.fillStyle = p.found ? p.color : '#9aa0b0'; g.fill();
+      g.lineWidth = 1.5; g.strokeStyle = '#05060a'; g.stroke();
+      if (!out) { g.fillStyle = '#05060a'; g.fillText(p.found ? '♪' : '?', x, y + 0.5); }
+    });
+    g.save(); g.translate(c, c); g.rotate(Math.PI - (P.face - camYaw));
+    g.fillStyle = '#ffb428'; g.beginPath(); g.moveTo(0, -8); g.lineTo(6, 6); g.lineTo(0, 3); g.lineTo(-6, 6); g.closePath(); g.fill();
+    g.lineWidth = 1.5; g.strokeStyle = '#05060a'; g.stroke(); g.restore();
+    g.beginPath(); g.arc(c, c, Rm, 0, 7); g.lineWidth = 2; g.strokeStyle = 'rgba(255,255,255,.4)'; g.stroke();
+  }
+  // Arrows at the screen edge pointing at the nearest places that are off screen (with distance).
+  const v3 = new THREE.Vector3();
+  places.forEach((p) => { const el = document.createElement('div'); el.className = 'edge-i'; el.hidden = true; el.innerHTML = '<i></i><b></b>'; $('#edge').appendChild(el); p.edge = el; });
+  function updateEdge() {
+    const W = innerWidth, H = innerHeight, cand = [];
+    places.forEach((p) => {
+      p.edge.hidden = true;
+      if (mode !== 'walk') return;
+      const d = Math.hypot(P.x - p.vx, P.z - p.vz);
+      if (d < 14) return;
+      v3.set(p.vx, p.vy + 4, p.vz).applyMatrix4(camera.matrixWorldInverse);
+      let x, y;
+      if (v3.z < 0) { v3.applyMatrix4(camera.projectionMatrix); x = v3.x; y = v3.y; if (Math.abs(x) < 0.85 && Math.abs(y) < 0.8) return; }
+      else { x = v3.x || 1; y = -Math.abs(v3.x) * 0.35; }
+      cand.push({ p, d, x, y });
+    });
+    cand.sort((a, b) => a.d - b.d).slice(0, 3).forEach(({ p, d, x, y }) => {
+      const l = Math.hypot(x, y) || 1, ux = x / l, uy = y / l;
+      const sc = Math.min((W / 2 - 34) / Math.abs(ux || 1e-6), (H / 2 - 78) / Math.abs(uy || 1e-6));
+      const el = p.edge;
+      el.hidden = false;
+      el.style.transform = `translate(${W / 2 + ux * sc}px,${H / 2 - uy * sc}px)`;
+      el.style.color = p.found ? p.color : '#eef0f5';
+      el.firstChild.style.transform = `rotate(${Math.atan2(ux, uy)}rad)`;
+      el.lastChild.textContent = Math.round(d) + 'm';
+    });
+  }
+  let hintT = 0, hintOut = false;
+  stickEl.addEventListener('pointerdown', () => stickEl.classList.add('used'));
+
   /* ================= start ================= */
   function start() {
     if (mode !== 'title') return;
     SW.Audio.init();
     SW.Audio.resume();
+    { const ctx = SW.Audio.ctx, n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      n.buffer = SW.Kit.noiseBuf; n.loop = true; f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 0.6; g.gain.value = 0;
+      n.connect(f).connect(g).connect(SW.Audio.master); n.start(); wind = { g, f }; }
+    document.body.classList.remove('pre');
     $('#title').classList.add('out');
     setTimeout(() => ($('#title').hidden = true), 650);
     snapCam(); camBlendDur = 1.4;
@@ -971,6 +1085,9 @@
     post.uniforms.time.value = t;
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+    if (mode === 'walk') drawMini();
+    updateEdge();
+    if (!hintOut && mode === 'walk' && P.speed > 1 && (hintT += dt) > 3) { hintOut = true; $('#hint').classList.add('out'); }
     requestAnimationFrame(loop);
   }
   const fontsReady = document.fonts && document.fonts.ready ? Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2500))]) : Promise.resolve();
