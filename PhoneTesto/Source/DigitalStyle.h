@@ -2,7 +2,7 @@
 
 #include "HardwareStyle.h"
 
-/** The DIGITAL skin: a 2000s games-console interface. Deep navy behind
+/** The DIGITAL skin: a 2000s games-console interface, kept refined. Deep navy behind
     slowly moving light waves and drifting particles; controls are glass
     panels with glowing cyan edges; PT Digital (from Orbitron) for the logo
     and numbers, Barlow for labels. Static parts are cached by the editor,
@@ -12,18 +12,18 @@ namespace phonetesto::hw::digital
 
 namespace colours
 {
-    const juce::Colour bgTop      { 0xff0d2249 };
-    const juce::Colour bgMid      { 0xff07142e };
-    const juce::Colour bgBottom   { 0xff02060f };
-    const juce::Colour glassEdge  { 0x66a9d6ff };
-    const juce::Colour text       { 0xffeef6ff };
-    const juce::Colour textDim    { 0xff9db8de };
-    const juce::Colour textFaint  { 0xff5b7ba7 };
-    const juce::Colour accent     { 0xff4cc9ff };
-    const juce::Colour live       { 0xffff3d6e };
-    const juce::Colour meterLow   { 0xff35c4ff };
-    const juce::Colour meterMid   { 0xffc8ecff };
-    const juce::Colour meterHigh  { 0xffff3d6e };
+    const juce::Colour bgTop      { 0xff0b1a33 };
+    const juce::Colour bgMid      { 0xff060e1f };
+    const juce::Colour bgBottom   { 0xff020409 };
+    const juce::Colour glassEdge  { 0x4498bce6 };
+    const juce::Colour text       { 0xfff3f6fa };
+    const juce::Colour textDim    { 0xff95a7c0 };
+    const juce::Colour textFaint  { 0xff56677f };
+    const juce::Colour accent     { 0xff8fd0f0 };
+    const juce::Colour live       { 0xffff5f7e };
+    const juce::Colour meterLow   { 0xff8fd0f0 };
+    const juce::Colour meterMid   { 0xffe8f1f8 };
+    const juce::Colour meterHigh  { 0xffff5f7e };
 }
 
 /** Navy gradient, light waves and particles; `seconds` animates them. Only

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#07142e">
+<meta name="theme-color" content="#060e1f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PhoneTesto Live</title>
@@ -116,30 +116,30 @@
      audio is played by this page's main thread), glass cards, cyan glow,
      PT Digital for the logo and numbers. */
   html[data-skin="digital"] {
-    --panel: #07142e;
-    --surface: rgba(90, 143, 230, 0.12);
+    --panel: #060e1f;
+    --surface: rgba(111, 143, 191, 0.08);
     --surface-hi: rgba(90, 143, 230, 0.2);
-    --border: rgba(169, 214, 255, 0.3);
-    --divider: rgba(76, 201, 255, 0.28);
+    --border: rgba(152, 188, 230, 0.24);
+    --divider: rgba(143, 208, 240, 0.28);
     --screen: rgba(2, 8, 22, 0.55);
-    --text: #eef6ff;
-    --text-dim: #9db8de;
-    --text-faint: #5b7ba7;
-    --accent: 76, 201, 255;
-    --live: 255, 61, 110;
-    --led-off: #2a4466;
+    --text: #f3f6fa;
+    --text-dim: #95a7c0;
+    --text-faint: #56677f;
+    --accent: 143, 208, 240;
+    --live: 255, 95, 126;
+    --led-off: #2a3a52;
     --cond: "Barlow", -apple-system, "Segoe UI", sans-serif;
     --digital: "PT Digital", "Barlow", sans-serif;
-    --glass: linear-gradient(rgba(90, 143, 230, 0.16), rgba(22, 51, 112, 0.24));
-    --glow: 0 0 14px rgba(76, 201, 255, 0.45);
-    --text-glow: 0 0 8px rgba(76, 201, 255, 0.7);
+    --glass: linear-gradient(rgba(111, 143, 191, 0.10), rgba(15, 35, 70, 0.22));
+    --glow: 0 0 10px rgba(143, 208, 240, 0.22);
+    --text-glow: 0 0 6px rgba(143, 208, 240, 0.35);
   }
   html[data-skin="digital"], html[data-skin="digital"] body {
-    background-color: #02060f;
+    background-color: #020409;
     background-image:
-      radial-gradient(ellipse 90% 40% at 20% 0%, rgba(63, 141, 255, 0.28), transparent 70%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='%234cc9ff' stroke-opacity='.18' stroke-width='6'/%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='white' stroke-opacity='.45' stroke-width='1'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='%238f86ff' stroke-opacity='.16' stroke-width='6'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='white' stroke-opacity='.3' stroke-width='1'/%3E%3C/svg%3E"),
-      linear-gradient(#0d2249, #07142e 50%, #02060f);
+      radial-gradient(ellipse 90% 40% at 20% 0%, rgba(93, 134, 192, 0.18), transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='%238fd0f0' stroke-opacity='.1' stroke-width='6'/%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='white' stroke-opacity='.32' stroke-width='1'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='%23aebfd8' stroke-opacity='.08' stroke-width='6'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='white' stroke-opacity='.3' stroke-width='1'/%3E%3C/svg%3E"),
+      linear-gradient(#0b1a33, #060e1f 50%, #020409);
     background-repeat: no-repeat;
     background-size: 100% 100%, 100% 220px, 100% 100%;
     background-position: 0 0, 0 58%, 0 0;
@@ -154,18 +154,18 @@
   html[data-skin="digital"] .well { border-radius: 14px; }
   html[data-skin="digital"] .btn { border-radius: 12px; color: var(--text-dim); font-size: 15px; letter-spacing: 0.12em; }
   html[data-skin="digital"] .btn[aria-pressed="true"] {
-    background-image: linear-gradient(rgba(76, 201, 255, 0.32), rgba(76, 201, 255, 0.16));
-    border-color: rgba(76, 201, 255, 0.95); color: var(--text); text-shadow: var(--text-glow);
+    background-image: linear-gradient(rgba(143, 208, 240, 0.32), rgba(143, 208, 240, 0.16));
+    border-color: rgba(143, 208, 240, 0.95); color: var(--text); text-shadow: var(--text-glow);
     box-shadow: var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
-  html[data-skin="digital"] .btn.solid[aria-pressed="true"] { background-color: rgba(76, 201, 255, 0.22); }
+  html[data-skin="digital"] .btn.solid[aria-pressed="true"] { background-color: rgba(143, 208, 240, 0.22); }
   html[data-skin="digital"] #play { border-radius: 36px; font-size: 21px; }
   html[data-skin="digital"] header { flex-wrap: wrap; row-gap: 10px; }
   html[data-skin="digital"] .logo { font: 700 21px/1 var(--digital); letter-spacing: 0.05em; text-shadow: var(--text-glow); white-space: nowrap; }
   html[data-skin="digital"] .conn .label { white-space: nowrap; }
   html[data-skin="digital"] .badge {
     font: 700 11px/1 var(--digital); white-space: nowrap; color: rgb(var(--accent)); background: var(--glass);
-    border: 1px solid rgba(76, 201, 255, 0.8); border-radius: 99px; padding: 5px 9px; box-shadow: var(--glow);
+    border: 1px solid rgba(143, 208, 240, 0.8); border-radius: 99px; padding: 5px 9px; box-shadow: var(--glow);
   }
   html[data-skin="digital"] .label { font: 700 12px var(--cond); letter-spacing: 0.16em; }
   html[data-skin="digital"] .readouts .label { font-size: 10px; }
@@ -173,12 +173,12 @@
   html[data-skin="digital"] .readouts b { font: 600 15px var(--digital); margin-top: 3px; }
   html[data-skin="digital"] .field { font: 600 16px var(--digital); }
   html[data-skin="digital"] select.field {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%234cc9ff'/></svg>"), var(--glass);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%238fd0f0'/></svg>"), var(--glass);
     background-repeat: no-repeat, no-repeat; background-position: right 14px center, 0 0; background-size: auto, 100% 100%;
   }
   html[data-skin="digital"] .field option { background: #0b1d3f; }
   html[data-skin="digital"] .divider {
-    background: linear-gradient(90deg, transparent, rgba(76, 201, 255, 0.6) 30%, rgba(76, 201, 255, 0.6) 70%, transparent);
+    background: linear-gradient(90deg, transparent, rgba(143, 208, 240, 0.6) 30%, rgba(143, 208, 240, 0.6) 70%, transparent);
   }
 </style>
 </head>
@@ -633,7 +633,7 @@ function drawMeter() {
   const xFor = db => left + (Math.min(0, Math.max(FLOOR, db)) - FLOOR) / -FLOOR * (right - left);
   const digital = document.documentElement.dataset.skin === "digital";
   const palette = digital
-    ? { high: [255, 61, 110], mid: [200, 236, 255], low: [53, 196, 255], unlit: 0.06, dim: "#9db8de", text: "#eef6ff", faint: "#5b7ba7" }
+    ? { high: [255, 95, 126], mid: [232, 241, 248], low: [143, 208, 240], unlit: 0.06, dim: "#95a7c0", text: "#f3f6fa", faint: "#56677f" }
     : { high: [255, 69, 58], mid: [255, 204, 61], low: [53, 208, 127], unlit: 0.09, dim: "#9497a0", text: "#f1f0ec", faint: "#5d6069" };
   const zone = db => db >= -1 ? palette.high : db >= -9 ? palette.mid : palette.low;
   const seg = 3 * s, pitch = 4 * s;
@@ -848,7 +848,7 @@ function applySkin(skin) {
   if (skin !== "digital" && skin !== "flat") return;
   if (document.documentElement.dataset.skin === skin) return;
   document.documentElement.dataset.skin = skin;
-  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#07142e" : "#1c1d21";
+  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#060e1f" : "#1c1d21";
   meter.dirty = true;
   drawMeter();
 }

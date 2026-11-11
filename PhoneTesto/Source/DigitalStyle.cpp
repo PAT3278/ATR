@@ -31,10 +31,10 @@ namespace
     };
 
     constexpr Wave ribbons[] = {
-        { 0.62f, 34.0f,  900.0f,  0.55f, 14.0f, 380.0f, -0.85f, 46.0f, 0.14f, 0xff4cc9ff,  260.0f },
-        { 0.68f, 26.0f,  700.0f, -0.45f, 18.0f, 520.0f,  0.70f, 30.0f, 0.11f, 0xffd8f1ff, -330.0f },
-        { 0.72f, 40.0f, 1200.0f,  0.35f, 10.0f, 300.0f,  1.00f, 64.0f, 0.08f, 0xff8f86ff,  200.0f },
-        { 0.57f, 20.0f,  600.0f,  0.65f,  8.0f, 260.0f, -1.20f, 18.0f, 0.10f, 0xff4cc9ff, -420.0f },
+        { 0.62f, 34.0f,  900.0f,  0.55f, 14.0f, 380.0f, -0.85f, 46.0f, 0.10f, 0xffd6e6f5,  260.0f },
+        { 0.68f, 26.0f,  700.0f, -0.45f, 18.0f, 520.0f,  0.70f, 30.0f, 0.08f, 0xffffffff, -330.0f },
+        { 0.72f, 40.0f, 1200.0f,  0.35f, 10.0f, 300.0f,  1.00f, 64.0f, 0.06f, 0xffaebfd8,  200.0f },
+        { 0.57f, 20.0f,  600.0f,  0.65f,  8.0f, 260.0f, -1.20f, 18.0f, 0.07f, 0xffd6e6f5, -420.0f },
     };
 
     float waveY (const Wave& w, float x, float height, double t, float offset)
@@ -76,7 +76,7 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
         // soft backlight from the upper left
         const auto glowCentre = Point<float> (area.getWidth() * 0.2f, area.getHeight() * 0.08f);
         const float glowRadius = area.getWidth() * 0.6f;
-        bg.setGradientFill (ColourGradient (Colour (0x403f8dff), glowCentre, Colour (0x003f8dff),
+        bg.setGradientFill (ColourGradient (Colour (0x2c5d86c0), glowCentre, Colour (0x005d86c0),
                                             glowCentre.translated (glowRadius, 0.0f), true));
         bg.fillRect (Rectangle<float> (glowRadius * 2.0f, glowRadius * 2.0f).withCentre (glowCentre).getIntersection (area));
     }
@@ -113,9 +113,9 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
                                            tint.withAlpha (0.0f), 0.0f, yc + reach + wave.thickness, false));
         g.fillPath (ribbon);
 
-        g.setColour (tint.withAlpha (wave.alpha * 0.9f));
-        g.strokePath (top, roundStroke (5.0f));
-        g.setColour (Colours::white.withAlpha (jmin (1.0f, wave.alpha * 3.0f)));
+        g.setColour (tint.withAlpha (wave.alpha * 0.6f));
+        g.strokePath (top, roundStroke (3.0f));
+        g.setColour (Colours::white.withAlpha (jmin (1.0f, wave.alpha * 3.4f)));
         g.strokePath (top, roundStroke (1.0f));
 
         // a pulse of light running along the crest, wrapping round
@@ -132,16 +132,16 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
             pulse.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset));
 
         const float tailX = r.getX() + head + tailDir * 170.0f, headX = r.getX() + head;
-        g.setGradientFill (ColourGradient (tint.withAlpha (0.0f), tailX, 0.0f, tint.withAlpha (0.35f), headX, 0.0f, false));
-        g.strokePath (pulse, roundStroke (9.0f));
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.0f), tailX, 0.0f, Colours::white.withAlpha (0.95f), headX, 0.0f, false));
-        g.strokePath (pulse, roundStroke (2.0f));
+        g.setGradientFill (ColourGradient (tint.withAlpha (0.0f), tailX, 0.0f, tint.withAlpha (0.16f), headX, 0.0f, false));
+        g.strokePath (pulse, roundStroke (6.0f));
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.0f), tailX, 0.0f, Colours::white.withAlpha (0.85f), headX, 0.0f, false));
+        g.strokePath (pulse, roundStroke (1.4f));
     }
 
     // particles rising through the band, fading out towards its top
     const float bandTop = animatedTop (r) + 8.0f, band = r.getBottom() - bandTop;
 
-    for (int i = 0; i < 40; ++i)
+    for (int i = 0; i < 18; ++i)
     {
         const float sp = hash01 (i * 3 + 3);
         float y = std::fmod (hash01 (i * 3 + 2) * band - (float) t * (14.0f + sp * 34.0f), band);
@@ -151,19 +151,19 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
                                      bandTop + y);
         const float fade = jmin (1.0f, y / 40.0f);
         const float twinkle = 0.5f + 0.5f * std::sin ((float) t * (2.5f + 4.0f * sp) + (float) i * 1.3f);
-        const float size = 1.0f + 1.8f * hash01 (i * 7 + 5);
+        const float size = 0.9f + 1.1f * hash01 (i * 7 + 5);
 
-        g.setColour ((i % 3 == 0 ? Colour (0xff8f86ff) : colours::accent).withAlpha (0.16f * twinkle * fade));
+        g.setColour (colours::accent.withAlpha (0.07f * twinkle * fade));
         g.fillEllipse (Rectangle<float> (size * 5.0f, size * 5.0f).withCentre (c));
-        g.setColour (Colours::white.withAlpha ((0.35f + 0.6f * twinkle) * fade));
+        g.setColour (Colours::white.withAlpha ((0.25f + 0.5f * twinkle) * fade));
         g.fillEllipse (Rectangle<float> (size, size).withCentre (c));
     }
 }
 
 void drawGlass (Graphics& g, Rectangle<float> r, float corner, float lift)
 {
-    g.setGradientFill (ColourGradient (Colour (0xff5a8fe6).withAlpha (jmin (1.0f, 0.15f * lift)), 0.0f, r.getY(),
-                                       Colour (0xff163370).withAlpha (jmin (1.0f, 0.24f * lift)), 0.0f, r.getBottom(), false));
+    g.setGradientFill (ColourGradient (Colour (0xff6f8fbf).withAlpha (jmin (1.0f, 0.10f * lift)), 0.0f, r.getY(),
+                                       Colour (0xff0f2346).withAlpha (jmin (1.0f, 0.22f * lift)), 0.0f, r.getBottom(), false));
     g.fillRoundedRectangle (r, corner);
 
     // gloss over the upper part
@@ -180,14 +180,14 @@ void drawGlass (Graphics& g, Rectangle<float> r, float corner, float lift)
     }
 
     // hairline edge, brightest along the top
-    g.setGradientFill (ColourGradient (Colour (0xffc4e6ff).withAlpha (jmin (1.0f, 0.55f * lift)), 0.0f, r.getY(),
+    g.setGradientFill (ColourGradient (Colour (0xffdbe8f5).withAlpha (jmin (1.0f, 0.38f * lift)), 0.0f, r.getY(),
                                        colours::glassEdge.withAlpha (jmin (1.0f, 0.2f * lift)), 0.0f, r.getBottom(), false));
     g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
 }
 
 void strokeGlow (Graphics& g, const Path& p, Colour c, float width, float glow)
 {
-    for (auto [extra, alpha] : { std::pair { 12.0f, 0.05f }, { 7.0f, 0.10f }, { 3.5f, 0.22f } })
+    for (auto [extra, alpha] : { std::pair { 10.0f, 0.025f }, { 6.0f, 0.05f }, { 3.0f, 0.12f } })
     {
         g.setColour (c.withMultipliedAlpha (alpha * glow));
         g.strokePath (p, roundStroke (width + extra * glow));
@@ -207,9 +207,9 @@ void drawGlowText (Graphics& g, const String& text, Rectangle<float> area, Justi
     if (glow > 0.0f)
     {
         // white text gets the cyan halo; coloured text glows in its own colour
-        g.setColour ((c.getSaturation() < 0.2f ? colours::accent : c).withAlpha (0.09f * glow));
+        g.setColour ((c.getSaturation() < 0.2f ? colours::accent : c).withAlpha (0.045f * glow));
 
-        for (float radius : { 2.6f, 1.3f })
+        for (float radius : { 2.0f, 1.0f })
             for (int k = 0; k < 8; ++k)
             {
                 const float a = MathConstants<float>::twoPi * (float) k / 8.0f;
@@ -319,8 +319,8 @@ void drawKnob (Graphics& g, Rectangle<float> bounds, float pos, float startAngle
     const auto body = Rectangle<float> (bodyR * 2.0f, bodyR * 2.0f).withCentre (c);
     g.setColour (Colours::black.withAlpha (0.45f));
     g.fillEllipse (body.translated (0.0f, 3.0f).expanded (1.0f));
-    g.setGradientFill (ColourGradient (Colour (0xff2c5899), c.x - bodyR * 0.35f, c.y - bodyR * 0.45f,
-                                       Colour (0xff071430), c.x + bodyR * 0.6f, c.y + bodyR, true));
+    g.setGradientFill (ColourGradient (Colour (0xff27426b), c.x - bodyR * 0.35f, c.y - bodyR * 0.45f,
+                                       Colour (0xff050c1a), c.x + bodyR * 0.6f, c.y + bodyR, true));
     g.fillEllipse (body);
 
     const auto gloss = body.reduced (bodyR * 0.2f, 0.0f).withHeight (bodyR * 0.8f).translated (0.0f, bodyR * 0.06f);
