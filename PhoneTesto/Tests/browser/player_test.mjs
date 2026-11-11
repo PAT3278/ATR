@@ -137,8 +137,13 @@ try {
         const btn = await page.evaluate(() => [document.getElementById("play").getAttribute("aria-pressed"),
                                               document.getElementById("playText").textContent]);
         check(btn[0] === "true" && btn[1] === "Listening", `LISTEN lamp lit while playing (aria-pressed=${btn[0]}, "${btn[1]}")`);
-        const fontsOk = await page.evaluate(() => document.fonts.check('700 20px "Barlow Condensed"'));
-        check(fontsOk, "Barlow fonts load from the plugin");
+        const fonts = await page.evaluate(async () => {
+          await document.fonts.ready;
+          return { skin: document.documentElement.dataset.skin,
+                   digital: document.fonts.check('700 20px "PT Digital"'), barlow: document.fonts.check('700 12px "Barlow"') };
+        });
+        check(fonts.skin === "digital" && fonts.digital && fonts.barlow,
+              `DIGITAL look with the plugin's fonts (skin=${fonts.skin}, PT Digital ${fonts.digital}, Barlow ${fonts.barlow})`);
         check(eng.output === c.output, `playback engine: ${eng.output} (want ${c.output})`);
         check(c.keepAwake.includes(eng.keepAwake), `keep-screen-on via: ${eng.keepAwake || "nothing"} (want ${c.keepAwake.join(" or ")})`);
       }
@@ -313,6 +318,24 @@ try {
     // The browser logs the deliberate wrong-password 401 itself; anything else is a real error.
     const unexpected = errors.filter(e => !/status of 401/.test(e));
     check(unexpected.length === 0, "no unexpected page/console errors" + (unexpected.length ? ": " + unexpected.join(" | ") : ""));
+    await context.close();
+    proc.kill("SIGTERM");
+  }
+
+  // The page follows the plugin's skin, reported in /info.
+  console.log("Page follows the plugin's skin");
+  for (const skin of ["digital", "flat"]) {
+    const { proc, port } = await startDemo(["--skin", skin]);
+    ({ context, page, errors } = await newPage(browser, "ja-JP"));
+    await page.goto(`http://${lanAddress}:${port}/`);
+    await page.waitForFunction(() => document.getElementById("conn").classList.contains("ok"));
+    const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
+                                               bg: getComputedStyle(document.body).backgroundColor,
+                                               theme: document.querySelector('meta[name="theme-color"]').content }));
+    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#07142e" : "#1c1d21"),
+          `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
+    check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));
     await context.close();
     proc.kill("SIGTERM");
   }

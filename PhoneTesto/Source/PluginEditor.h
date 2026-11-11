@@ -73,7 +73,7 @@ private:
     int shownListeners = -1;
     bool shownLive = false;
     double lastTimerSeconds = 0.0;
-    double animationSeconds = 0.0, sinceLastFrame = 0.0;
+    double animationStart = 0.0, animationSeconds = 0.0;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;

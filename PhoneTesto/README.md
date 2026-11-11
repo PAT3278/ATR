@@ -83,17 +83,22 @@ The **SKIN** button in the header switches between two looks (saved with
 the project):
 
 - **DIGITAL** (default for now, while it's being tried out) — a 2000s
-  games-console interface: deep navy with slowly moving light waves and
-  drifting particles, glass panels with glowing cyan edges, device icons on
-  the MODEL pads, PT Digital type for the logo and numbers.
+  games-console interface: deep navy with light waves sweeping across
+  (each with a pulse of light running along its crest) and rising
+  particles, glass panels with glowing cyan edges, device icons on the
+  MODEL pads, PT Digital type for the logo and numbers.
 - **FLAT** — the modern flat hardware panel described above.
 
-The waves animate at 15 fps and only their band of the window is redrawn
-(everything over it comes from cached images): about 4 ms per frame at
-125 % size in JUCE's software renderer, i.e. ~6 % of one CPU core while
-the window is open — less on Windows and macOS, which draw faster. FLAT
-redraws nothing while idle. `PhoneTestoEditorSnapshot` prints these
-timings.
+The phone page follows the plugin's skin (in a simpler form: the same
+colours, glass and type, over a still background).
+
+The DIGITAL animation runs at 30 fps, timed by the clock (so its speed
+doesn't depend on how often the host redraws), and only the band the waves
+move in is redrawn — everything over it comes from cached images. That's
+about 3.3 ms per frame at 125 % size in JUCE's software renderer, ~10 % of
+one CPU core while the window is open; the GPU-drawn editor on Windows and
+macOS should be lighter, but that hasn't been measured yet. FLAT redraws
+nothing while idle. `PhoneTestoEditorSnapshot` prints these timings.
 
 ## Live Monitor mode
 
@@ -254,7 +259,8 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
 - **PhoneTestoEditorSnapshot** — renders the editor in both skins (Emulate
   and Live) to PNGs for checking the layout, checks it reopens at its saved
   size, and prints what a DIGITAL animation frame costs to draw
-  (`PT_ANIM_FRAMES=45` also saves 3 s of animation frames).
+  (`PT_ANIM_FRAMES=60` also saves animation frames, with their real times
+  in `anim-times.txt`).
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on

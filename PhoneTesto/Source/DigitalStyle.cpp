@@ -17,7 +17,8 @@ namespace
         return (float) (x & 0xffffffu) / (float) 0xffffffu;
     }
 
-    /** One light ribbon: two summed sines, drifting at their own speeds. */
+    /** One light ribbon: two summed sines, drifting at their own speeds,
+        with a pulse of light running along its crest. */
     struct Wave
     {
         float centre;               // fraction of the height
@@ -25,13 +26,15 @@ namespace
         float amp2, len2, speed2;
         float thickness;            // px
         float alpha;
+        uint32 tint;                // edge glow / pulse colour
+        float pulseSpeed;           // px/s (negative: right to left)
     };
 
     constexpr Wave ribbons[] = {
-        { 0.62f, 34.0f,  900.0f,  0.12f, 14.0f, 380.0f, -0.21f, 46.0f, 0.10f },
-        { 0.68f, 26.0f,  700.0f, -0.09f, 18.0f, 520.0f,  0.17f, 30.0f, 0.08f },
-        { 0.72f, 40.0f, 1200.0f,  0.07f, 10.0f, 300.0f,  0.25f, 64.0f, 0.06f },
-        { 0.57f, 20.0f,  600.0f,  0.15f,  8.0f, 260.0f, -0.30f, 18.0f, 0.07f },
+        { 0.62f, 34.0f,  900.0f,  0.55f, 14.0f, 380.0f, -0.85f, 46.0f, 0.14f, 0xff4cc9ff,  260.0f },
+        { 0.68f, 26.0f,  700.0f, -0.45f, 18.0f, 520.0f,  0.70f, 30.0f, 0.11f, 0xffd8f1ff, -330.0f },
+        { 0.72f, 40.0f, 1200.0f,  0.35f, 10.0f, 300.0f,  1.00f, 64.0f, 0.08f, 0xff8f86ff,  200.0f },
+        { 0.57f, 20.0f,  600.0f,  0.65f,  8.0f, 260.0f, -1.20f, 18.0f, 0.10f, 0xff4cc9ff, -420.0f },
     };
 
     float waveY (const Wave& w, float x, float height, double t, float offset)
@@ -99,40 +102,60 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
         ribbon = top;
         for (float x = std::ceil (width / step) * step; x >= 0.0f; x -= step)
         {
-            const float thick = wave.thickness * (0.55f + 0.45f * std::sin (x / 210.0f + (float) (t * 0.11) + (float) i * 2.1f));
+            const float thick = wave.thickness * (0.55f + 0.45f * std::sin (x / 210.0f + (float) (t * 0.5) + (float) i * 2.1f));
             ribbon.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset + 0.35f) + thick);
         }
         ribbon.closeSubPath();
 
+        const auto tint = Colour (wave.tint);
         const float yc = r.getY() + wave.centre * height, reach = wave.amp1 + wave.amp2;
         g.setGradientFill (ColourGradient (Colours::white.withAlpha (wave.alpha), 0.0f, yc - reach,
-                                           Colour (0x0060b0ff), 0.0f, yc + reach + wave.thickness, false));
+                                           tint.withAlpha (0.0f), 0.0f, yc + reach + wave.thickness, false));
         g.fillPath (ribbon);
 
-        g.setColour (Colours::white.withAlpha (wave.alpha * 0.45f));
-        g.strokePath (top, roundStroke (4.0f));
-        g.setColour (Colours::white.withAlpha (jmin (1.0f, wave.alpha * 2.4f)));
+        g.setColour (tint.withAlpha (wave.alpha * 0.9f));
+        g.strokePath (top, roundStroke (5.0f));
+        g.setColour (Colours::white.withAlpha (jmin (1.0f, wave.alpha * 3.0f)));
         g.strokePath (top, roundStroke (1.0f));
+
+        // a pulse of light running along the crest, wrapping round
+        const float span = width + 400.0f;
+        float head = std::fmod ((float) t * wave.pulseSpeed + hash01 ((int) i + 40) * span, span);
+        if (head < 0.0f) head += span;
+        head -= 200.0f;
+        const float tailDir = wave.pulseSpeed > 0.0f ? -1.0f : 1.0f;
+        const float x0 = jmin (head, head + tailDir * 170.0f), x1 = jmax (head, head + tailDir * 170.0f);
+
+        Path pulse;
+        pulse.startNewSubPath (r.getX() + x0, r.getY() + waveY (wave, x0, height, t, offset));
+        for (float x = x0 + 6.0f; x <= x1; x += 6.0f)
+            pulse.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset));
+
+        const float tailX = r.getX() + head + tailDir * 170.0f, headX = r.getX() + head;
+        g.setGradientFill (ColourGradient (tint.withAlpha (0.0f), tailX, 0.0f, tint.withAlpha (0.35f), headX, 0.0f, false));
+        g.strokePath (pulse, roundStroke (9.0f));
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.0f), tailX, 0.0f, Colours::white.withAlpha (0.95f), headX, 0.0f, false));
+        g.strokePath (pulse, roundStroke (2.0f));
     }
 
-    // particles drifting up through the band, fading out towards its top
+    // particles rising through the band, fading out towards its top
     const float bandTop = animatedTop (r) + 8.0f, band = r.getBottom() - bandTop;
 
-    for (int i = 0; i < 28; ++i)
+    for (int i = 0; i < 40; ++i)
     {
         const float sp = hash01 (i * 3 + 3);
-        float y = std::fmod (hash01 (i * 3 + 2) * band - (float) t * (4.0f + sp * 10.0f), band);
+        float y = std::fmod (hash01 (i * 3 + 2) * band - (float) t * (14.0f + sp * 34.0f), band);
         if (y < 0.0f) y += band;
 
-        const auto c = Point<float> (r.getX() + hash01 (i * 3 + 1) * width + 6.0f * std::sin ((float) t * 0.3f + (float) i),
+        const auto c = Point<float> (r.getX() + hash01 (i * 3 + 1) * width + 10.0f * std::sin ((float) t * 0.9f + (float) i),
                                      bandTop + y);
         const float fade = jmin (1.0f, y / 40.0f);
-        const float twinkle = 0.5f + 0.5f * std::sin ((float) t * (0.6f + sp) + (float) i * 1.3f);
-        const float size = 1.0f + 1.6f * hash01 (i * 7 + 5);
+        const float twinkle = 0.5f + 0.5f * std::sin ((float) t * (2.5f + 4.0f * sp) + (float) i * 1.3f);
+        const float size = 1.0f + 1.8f * hash01 (i * 7 + 5);
 
-        g.setColour (colours::accent.withAlpha (0.10f * twinkle * fade));
+        g.setColour ((i % 3 == 0 ? Colour (0xff8f86ff) : colours::accent).withAlpha (0.16f * twinkle * fade));
         g.fillEllipse (Rectangle<float> (size * 5.0f, size * 5.0f).withCentre (c));
-        g.setColour (Colours::white.withAlpha ((0.25f + 0.45f * twinkle) * fade));
+        g.setColour (Colours::white.withAlpha ((0.35f + 0.6f * twinkle) * fade));
         g.fillEllipse (Rectangle<float> (size, size).withCentre (c));
     }
 }

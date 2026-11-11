@@ -140,8 +140,8 @@ public:
                     const float top = phonetesto::hw::digital::Background::animatedTop (panelBounds) * savedScale;
                     const auto band = juce::Rectangle<int> (0, (int) top, editor->getWidth(), editor->getHeight() - (int) top);
                     const auto bandMs = timeMs ([&] { juce::Graphics g (frame); g.reduceClipRegion (band); editor->paintEntireComponent (g, true); });
-                    std::printf ("%s: animation frame (wave band) %.2f ms -> %.1f%% of one core at 15 fps\n",
-                                 name.toRawUTF8(), bandMs, bandMs * 15.0 / 10.0);
+                    std::printf ("%s: animation frame (wave band) %.2f ms -> %.1f%% of one core at 30 fps\n",
+                                 name.toRawUTF8(), bandMs, bandMs * 30.0 / 10.0);
                 }
 
                 if (std::getenv ("PT_PROFILE_CHILDREN") != nullptr)
@@ -186,7 +186,7 @@ public:
                 }
             }
 
-            // PT_ANIM_FRAMES=n: also save n frames of the DIGITAL animation, 1/15 s apart
+            // PT_ANIM_FRAMES=n: also save n frames of the DIGITAL animation
             if (skin == 1)
                 if (const int frames = juce::String (std::getenv ("PT_ANIM_FRAMES")).getIntValue(); frames > 0)
                 {
@@ -198,16 +198,20 @@ public:
         });
     }
 
+    /** Saves frames as fast as it can, with each one's real time in
+        anim-times.txt (so a preview can play them back at true speed). */
     void captureFrames (int index, int total, std::function<void()> then)
     {
         if (index >= total)
         {
+            dir.getChildFile ("anim-times.txt").replaceWithText (frameTimes.joinIntoString ("\n"));
             then();
             return;
         }
 
+        frameTimes.add (juce::String (juce::Time::getMillisecondCounterHiRes(), 1));
         allOk &= snapshot (*editor, dir.getChildFile ("anim-" + juce::String (index).paddedLeft ('0', 3) + ".png"), 1.0f);
-        juce::Timer::callAfterDelay (1000 / 15, [this, index, total, then] { captureFrames (index + 1, total, then); });
+        juce::Timer::callAfterDelay (1000 / 30, [this, index, total, then] { captureFrames (index + 1, total, then); });
     }
 
     void goLive (int skin)
@@ -246,6 +250,7 @@ private:
     juce::File dir;
     float scale = 1.5f;
     bool allOk = true;
+    juce::StringArray frameTimes;
     std::unique_ptr<phonetesto::PhoneTestoAudioProcessor> processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor;
     std::atomic<bool> feeding { true };

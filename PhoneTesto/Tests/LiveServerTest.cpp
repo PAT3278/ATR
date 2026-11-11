@@ -286,6 +286,18 @@ int main()
                    && info.bodyText().find ("\"sampleRate\":48000") != std::string::npos,
                "GET /info reports 48 kHz, no password: " + info.bodyText());
 
+        // the phone page follows the plugin's skin
+        const bool digitalByDefault = info.bodyText().find ("\"skin\":\"digital\"") != std::string::npos;
+        server.setDigitalSkin (false);
+        const bool flatAfter = get (port, "/info").bodyText().find ("\"skin\":\"flat\"") != std::string::npos;
+        server.setDigitalSkin (true);
+        check (digitalByDefault && flatAfter, "/info reports the plugin's skin (digital by default, flat after switching)");
+
+        bool fontsOk = true;
+        for (auto* font : { "/fonts/PTDigital-Bold.ttf", "/fonts/PTDigital-SemiBold.ttf", "/fonts/Barlow-Bold.ttf" })
+            fontsOk &= get (port, font).status() == 200;
+        check (fontsOk, "serves the DIGITAL skin's fonts");
+
         check (get (port, "/nope").status() == 404, "unknown path -> 404");
         check (get (port, "/auth").status() == 204, "/auth with no password set -> 204");
     }

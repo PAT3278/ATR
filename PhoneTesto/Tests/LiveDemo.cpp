@@ -2,7 +2,7 @@
 // DAW, so the phone player page can be tried (or tested in a browser)
 // without a plugin host:
 //
-//   PhoneTestoLiveDemo [--port N] [--password P] [--rate HZ] [--seconds S]
+//   PhoneTestoLiveDemo [--port N] [--password P] [--rate HZ] [--seconds S] [--skin digital|flat]
 //
 // Prints "READY port=<n>" once listening. Runs until --seconds elapse or
 // stdin closes.
@@ -20,7 +20,7 @@ int main (int argc, char** argv)
     int port = 51813;
     double rate = 44100.0;
     double seconds = 0.0;
-    juce::String password;
+    juce::String password, skin ("digital");
 
     for (int i = 1; i + 1 < argc; i += 2)
     {
@@ -29,10 +29,12 @@ int main (int argc, char** argv)
         else if (flag == "--password") password = value;
         else if (flag == "--rate")     rate = value.getDoubleValue();
         else if (flag == "--seconds")  seconds = value.getDoubleValue();
+        else if (flag == "--skin")     skin = value;
     }
 
     phonetesto::LiveMonitorServer server;
     server.setPassword (password);
+    server.setDigitalSkin (skin != "flat");
 
     if (! server.start (port, rate))
     {

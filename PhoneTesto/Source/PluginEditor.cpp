@@ -28,7 +28,6 @@ namespace layout
     constexpr float pillY = 17.0f, pillHeight = 26.0f;
     constexpr int skinButtonWidth = 118, skinButtonGap = 10;
 
-    constexpr double frameSeconds = 1.0 / 15.0; // DIGITAL background animation: slow waves, so 15 fps is smooth
 } // namespace layout
 
 namespace
@@ -151,8 +150,8 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     setSize (juce::roundToInt (faceWidth * savedScale), juce::roundToInt (faceHeight * savedScale));
     sizeRestored = true;
 
-    lastTimerSeconds = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    startTimerHz (30);
+    lastTimerSeconds = animationStart = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    startTimerHz (30); // meter, Live state, and the DIGITAL animation's frame rate
 }
 
 PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
@@ -275,14 +274,13 @@ void PhoneTestoAudioProcessorEditor::timerCallback()
 
     if (skin == hw::Skin::digital)
     {
-        animationSeconds += dt;
-        if ((sinceLastFrame += dt) >= layout::frameSeconds)
-        {
-            // only the band where the waves move; the controls over it come from cached images
-            sinceLastFrame = 0.0;
-            const auto top = (int) hw::digital::Background::animatedTop (panel.getLocalBounds().toFloat());
-            panel.repaint (0, top, faceWidth, faceHeight - top);
-        }
+        // Straight from the clock, so the motion keeps its speed however
+        // often the host lets this timer run.
+        animationSeconds = now - animationStart;
+
+        // only the band where the waves move; the controls over it come from cached images
+        const auto top = (int) hw::digital::Background::animatedTop (panel.getLocalBounds().toFloat());
+        panel.repaint (0, top, faceWidth, faceHeight - top);
     }
 }
 

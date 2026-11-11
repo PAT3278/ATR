@@ -428,13 +428,16 @@ private:
             return;
         }
 
-        // The same Barlow fonts the plugin panel uses, for the page.
+        // The same fonts the plugin panel uses, for the page.
         struct FontFile { const char* path; const char* data; int size; };
         const FontFile fonts[] = {
             { "/fonts/BarlowCondensed-Bold.ttf",     BinaryData::BarlowCondensedBold_ttf,     BinaryData::BarlowCondensedBold_ttfSize },
             { "/fonts/BarlowCondensed-SemiBold.ttf", BinaryData::BarlowCondensedSemiBold_ttf, BinaryData::BarlowCondensedSemiBold_ttfSize },
             { "/fonts/Barlow-Medium.ttf",            BinaryData::BarlowMedium_ttf,            BinaryData::BarlowMedium_ttfSize },
             { "/fonts/Barlow-SemiBold.ttf",          BinaryData::BarlowSemiBold_ttf,          BinaryData::BarlowSemiBold_ttfSize },
+            { "/fonts/Barlow-Bold.ttf",              BinaryData::BarlowBold_ttf,              BinaryData::BarlowBold_ttfSize },
+            { "/fonts/PTDigital-SemiBold.ttf",       BinaryData::PTDigitalSemiBold_ttf,       BinaryData::PTDigitalSemiBold_ttfSize },
+            { "/fonts/PTDigital-Bold.ttf",           BinaryData::PTDigitalBold_ttf,           BinaryData::PTDigitalBold_ttfSize },
         };
 
         for (auto& f : fonts)
@@ -454,7 +457,8 @@ private:
                  << ",\"channels\":" << LiveStreamEncoder::numChannels
                  << ",\"auth\":" << (server.hasPassword() ? "true" : "false")
                  << ",\"listeners\":" << server.numStreaming.load()
-                 << ",\"maxListeners\":" << maxListeners << "}";
+                 << ",\"maxListeners\":" << maxListeners
+                 << ",\"skin\":\"" << (server.digitalSkin.load() ? "digital" : "flat") << "\"}";
             sendResponse (200, "application/json", json.toRawUTF8(), json.getNumBytesAsUTF8(), head);
             return;
         }

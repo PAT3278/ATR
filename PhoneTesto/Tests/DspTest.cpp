@@ -401,6 +401,28 @@ int main()
             return juce::String (head + 9, 3).getIntValue();
         };
 
+        auto infoBody = [&]
+        {
+            juce::StreamingSocket sock;
+            if (! sock.connect ("127.0.0.1", a->getLiveMonitorPort(), 2000))
+                return juce::String();
+            const juce::String req ("GET /info HTTP/1.1\r\nHost: x\r\n\r\n");
+            sock.write (req.toRawUTF8(), (int) req.getNumBytesAsUTF8());
+            juce::MemoryOutputStream got;
+            char buf[512];
+            while (sock.waitUntilReady (true, 1000) == 1)
+            {
+                const int r = sock.read (buf, (int) sizeof (buf), false);
+                if (r <= 0) break;
+                got.write (buf, (size_t) r);
+            }
+            return got.toString();
+        };
+        a->setEditorSkin (0);
+        const bool flat = infoBody().contains ("\"skin\":\"flat\"");
+        a->setEditorSkin (1);
+        check (flat && infoBody().contains ("\"skin\":\"digital\""), "the phone page is told the plugin's skin");
+
         check (status ("/stream?fmt=pcm16") == 401, "stream without the code is refused, even with no password set");
         check (status ("/auth?key=" + code) == 204, "the code from the QR URL is accepted");
 

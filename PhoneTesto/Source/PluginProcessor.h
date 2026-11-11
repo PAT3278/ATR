@@ -100,8 +100,13 @@ public:
     void setEditorScale (float scale) noexcept { editorScale = scale; }
     float getEditorScale() const noexcept { return editorScale.load(); }
 
-    /** Editor skin (0 = FLAT, 1 = DIGITAL), remembered with the project. */
-    void setEditorSkin (int skin) noexcept { editorSkin = juce::jlimit (0, 1, skin); }
+    /** Editor skin (0 = FLAT, 1 = DIGITAL), remembered with the project. The
+        Live phone page follows it. */
+    void setEditorSkin (int skin) noexcept
+    {
+        editorSkin = juce::jlimit (0, 1, skin);
+        liveServer.setDigitalSkin (editorSkin.load() == 1);
+    }
     int getEditorSkin() const noexcept { return editorSkin.load(); }
 
     /** Most recent output block's RMS / peak per side (0 = L, 1 = R), for the meter. */

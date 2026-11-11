@@ -448,7 +448,7 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     apvts.replaceState (tree);
     setLivePassword (password);
     editorScale = juce::jlimit (0.5f, 2.0f, scale);
-    editorSkin = juce::jlimit (0, 1, skin);
+    setEditorSkin (skin);
 }
 
 } // namespace phonetesto

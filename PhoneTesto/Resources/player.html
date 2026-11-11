@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin="digital">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1c1d21">
+<meta name="theme-color" content="#07142e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PhoneTesto Live</title>
@@ -12,8 +12,12 @@
   @font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(/fonts/BarlowCondensed-SemiBold.ttf) format("truetype"); }
   @font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url(/fonts/Barlow-Medium.ttf) format("truetype"); }
   @font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url(/fonts/Barlow-SemiBold.ttf) format("truetype"); }
+  @font-face { font-family: "Barlow"; font-weight: 700; font-display: swap; src: url(/fonts/Barlow-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "PT Digital"; font-weight: 600; font-display: swap; src: url(/fonts/PTDigital-SemiBold.ttf) format("truetype"); }
+  @font-face { font-family: "PT Digital"; font-weight: 700; font-display: swap; src: url(/fonts/PTDigital-Bold.ttf) format("truetype"); }
 
-  /* Same palette as the plugin panel (Source/HardwareStyle.h). */
+  /* FLAT skin: same palette as the plugin panel (Source/HardwareStyle.h).
+     The DIGITAL skin's overrides are at the end. */
   :root {
     --panel: #1c1d21;
     --surface: #27292f;
@@ -106,6 +110,76 @@
   .auth-row { display: grid; grid-template-columns: 1fr 120px; gap: 10px; }
   .error { color: rgb(var(--live)); font: 600 13px var(--sans); min-height: 1.2em; }
   [hidden] { display: none !important; }
+
+  /* DIGITAL skin, matching the plugin's (Source/DigitalStyle.h), kept
+     simple: a still background (no animation -- on a plain-HTTP page the
+     audio is played by this page's main thread), glass cards, cyan glow,
+     PT Digital for the logo and numbers. */
+  html[data-skin="digital"] {
+    --panel: #07142e;
+    --surface: rgba(90, 143, 230, 0.12);
+    --surface-hi: rgba(90, 143, 230, 0.2);
+    --border: rgba(169, 214, 255, 0.3);
+    --divider: rgba(76, 201, 255, 0.28);
+    --screen: rgba(2, 8, 22, 0.55);
+    --text: #eef6ff;
+    --text-dim: #9db8de;
+    --text-faint: #5b7ba7;
+    --accent: 76, 201, 255;
+    --live: 255, 61, 110;
+    --led-off: #2a4466;
+    --cond: "Barlow", -apple-system, "Segoe UI", sans-serif;
+    --digital: "PT Digital", "Barlow", sans-serif;
+    --glass: linear-gradient(rgba(90, 143, 230, 0.16), rgba(22, 51, 112, 0.24));
+    --glow: 0 0 14px rgba(76, 201, 255, 0.45);
+    --text-glow: 0 0 8px rgba(76, 201, 255, 0.7);
+  }
+  html[data-skin="digital"], html[data-skin="digital"] body {
+    background-color: #02060f;
+    background-image:
+      radial-gradient(ellipse 90% 40% at 20% 0%, rgba(63, 141, 255, 0.28), transparent 70%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='%234cc9ff' stroke-opacity='.18' stroke-width='6'/%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='white' stroke-opacity='.45' stroke-width='1'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='%238f86ff' stroke-opacity='.16' stroke-width='6'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='white' stroke-opacity='.3' stroke-width='1'/%3E%3C/svg%3E"),
+      linear-gradient(#0d2249, #07142e 50%, #02060f);
+    background-repeat: no-repeat;
+    background-size: 100% 100%, 100% 220px, 100% 100%;
+    background-position: 0 0, 0 58%, 0 0;
+  }
+  html[data-skin="digital"] .well,
+  html[data-skin="digital"] .btn,
+  html[data-skin="digital"] .field,
+  html[data-skin="digital"] .conn {
+    background-color: transparent; background-image: var(--glass);
+    border-color: var(--border); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  html[data-skin="digital"] .well { border-radius: 14px; }
+  html[data-skin="digital"] .btn { border-radius: 12px; color: var(--text-dim); font-size: 15px; letter-spacing: 0.12em; }
+  html[data-skin="digital"] .btn[aria-pressed="true"] {
+    background-image: linear-gradient(rgba(76, 201, 255, 0.32), rgba(76, 201, 255, 0.16));
+    border-color: rgba(76, 201, 255, 0.95); color: var(--text); text-shadow: var(--text-glow);
+    box-shadow: var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  html[data-skin="digital"] .btn.solid[aria-pressed="true"] { background-color: rgba(76, 201, 255, 0.22); }
+  html[data-skin="digital"] #play { border-radius: 36px; font-size: 21px; }
+  html[data-skin="digital"] header { flex-wrap: wrap; row-gap: 10px; }
+  html[data-skin="digital"] .logo { font: 700 21px/1 var(--digital); letter-spacing: 0.05em; text-shadow: var(--text-glow); white-space: nowrap; }
+  html[data-skin="digital"] .conn .label { white-space: nowrap; }
+  html[data-skin="digital"] .badge {
+    font: 700 11px/1 var(--digital); white-space: nowrap; color: rgb(var(--accent)); background: var(--glass);
+    border: 1px solid rgba(76, 201, 255, 0.8); border-radius: 99px; padding: 5px 9px; box-shadow: var(--glow);
+  }
+  html[data-skin="digital"] .label { font: 700 12px var(--cond); letter-spacing: 0.16em; }
+  html[data-skin="digital"] .readouts .label { font-size: 10px; }
+  html[data-skin="digital"] #status { font: 600 17px var(--digital); text-shadow: var(--text-glow); }
+  html[data-skin="digital"] .readouts b { font: 600 15px var(--digital); margin-top: 3px; }
+  html[data-skin="digital"] .field { font: 600 16px var(--digital); }
+  html[data-skin="digital"] select.field {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%234cc9ff'/></svg>"), var(--glass);
+    background-repeat: no-repeat, no-repeat; background-position: right 14px center, 0 0; background-size: auto, 100% 100%;
+  }
+  html[data-skin="digital"] .field option { background: #0b1d3f; }
+  html[data-skin="digital"] .divider {
+    background: linear-gradient(90deg, transparent, rgba(76, 201, 255, 0.6) 30%, rgba(76, 201, 255, 0.6) 70%, transparent);
+  }
 </style>
 </head>
 <body>
@@ -557,7 +631,11 @@ function drawMeter() {
 
   const left = 18 * s, right = w - 46 * s, rowH = 18 * s, rows = [6 * s, 32 * s];
   const xFor = db => left + (Math.min(0, Math.max(FLOOR, db)) - FLOOR) / -FLOOR * (right - left);
-  const zone = db => db >= -1 ? [255, 69, 58] : db >= -9 ? [255, 204, 61] : [53, 208, 127];
+  const digital = document.documentElement.dataset.skin === "digital";
+  const palette = digital
+    ? { high: [255, 61, 110], mid: [200, 236, 255], low: [53, 196, 255], unlit: 0.06, dim: "#9db8de", text: "#eef6ff", faint: "#5b7ba7" }
+    : { high: [255, 69, 58], mid: [255, 204, 61], low: [53, 208, 127], unlit: 0.09, dim: "#9497a0", text: "#f1f0ec", faint: "#5d6069" };
+  const zone = db => db >= -1 ? palette.high : db >= -9 ? palette.mid : palette.low;
   const seg = 3 * s, pitch = 4 * s;
 
   g.font = `700 ${12 * s}px "Barlow Condensed", sans-serif`;
@@ -565,13 +643,13 @@ function drawMeter() {
 
   meter.sides.forEach((sd, i) => {
     const y = rows[i];
-    g.fillStyle = "#9497a0"; g.textAlign = "left";
+    g.fillStyle = palette.dim; g.textAlign = "left";
     g.fillText(i ? "R" : "L", 0, y + rowH / 2);
 
     for (let x = left; x + seg <= right + 0.5; x += pitch) {
       const db = FLOOR + (x + seg / 2 - left) / (right - left) * -FLOOR;
       const [r, gg, b] = zone(db);
-      g.fillStyle = db <= sd.level ? `rgb(${r},${gg},${b})` : `rgba(${r},${gg},${b},0.09)`;
+      g.fillStyle = db <= sd.level ? `rgb(${r},${gg},${b})` : `rgba(${r},${gg},${b},${palette.unlit})`;
       g.fillRect(x, y, seg, rowH);
     }
     if (sd.hold > FLOOR + 0.5) {
@@ -581,13 +659,13 @@ function drawMeter() {
     }
 
     g.textAlign = "right";
-    g.fillStyle = sd.hold >= -1 ? "rgb(255,69,58)" : "#f1f0ec";
+    g.fillStyle = sd.hold >= -1 ? `rgb(${palette.high})` : palette.text;
     g.font = `700 ${14 * s}px "Barlow Condensed", sans-serif`;
     g.fillText(sd.hold <= FLOOR + 0.5 ? "–" : sd.hold.toFixed(1), w, y + rowH / 2);
     g.font = `700 ${12 * s}px "Barlow Condensed", sans-serif`;
   });
 
-  g.fillStyle = "#5d6069"; g.textAlign = "center";
+  g.fillStyle = palette.faint; g.textAlign = "center";
   g.font = `600 ${11 * s}px "Barlow Condensed", sans-serif`;
   for (const db of [-60, -48, -36, -24, -12, -6, 0]) g.fillText(String(db), xFor(db), h - 8 * s);
 }
@@ -765,10 +843,21 @@ $("wake").addEventListener("click", () => {
 $("play").addEventListener("click", () => togglePlay());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wantPlaying) requestWakeLock(); });
 
+// The page follows the plugin's skin (DIGITAL until /info says otherwise).
+function applySkin(skin) {
+  if (skin !== "digital" && skin !== "flat") return;
+  if (document.documentElement.dataset.skin === skin) return;
+  document.documentElement.dataset.skin = skin;
+  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#07142e" : "#1c1d21";
+  meter.dirty = true;
+  drawMeter();
+}
+
 async function pollInfo() {
   try {
     const r = await fetch("/info", { cache: "no-store" });
     info = await r.json();
+    applySkin(info.skin);
     $("conn").className = "conn ok";
     $("connText").textContent = info.listeners > 0 ? T.listening(info.listeners) : T.connected;
     if (info.auth && !key && $("authBox").hidden) showAuth();
