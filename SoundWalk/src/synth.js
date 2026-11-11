@@ -444,6 +444,48 @@
     },
   };
 
+  /* SHOT — fast night drive: 172 BPM breakbeat, rolling reese bass, stabs. */
+  SKETCHES.shot = {
+    bpm: 172, swing: 0, bars: 4,
+    setup(ctx, out) { return baseSetup(ctx, out, this.bpm, { fb: 0.3, fcut: 3500, wet: 0.4 }); },
+    step(ctx, st, t, s, bar, sd) {
+      const K = Kit, b = st.bus;
+      const roots = [38, 38, 41, 36];
+      const root = roots[bar];
+      if (s === 0 || s === 10 || (bar % 2 === 1 && s === 7)) K.kick(ctx, b, t, { vol: 0.8, f0: 170, f1: 50, decay: 0.22 });
+      if (s === 4 || s === 12) K.snare(ctx, b, t, { vol: 0.36, decay: 0.14, tone: 230 });
+      if (s === 15 || (s === 9 && bar % 2 === 0)) K.snare(ctx, b, t, { vol: 0.1, decay: 0.06, tone: 0 });
+      if (s % 2 === 0) K.hat(ctx, b, t, { vol: 0.06, decay: 0.025 });
+      else K.hat(ctx, b, t, { vol: 0.025, decay: 0.015, freq: 9000 });
+      if (s === 0 || s === 6 || s === 10) K.voice(ctx, b, t, SW.mtof(root - 12), sd * (s === 0 ? 5 : 3), { type: 'sawtooth', vol: 0.16, a: 0.003, d: 0.3, s: 0.6, r: 0.06, cutoff: 420, fenv: 2.2, fdec: 0.2, detune: [-14, 14], drive: true });
+      if (s === 2 || s === 11) {
+        for (const iv of [0, 3, 7, 10]) { const g = K.voice(ctx, b, t, SW.mtof(root + 24 + iv), sd * 0.8, { type: 'square', vol: 0.018, a: 0.002, d: 0.1, s: 0.2, r: 0.06, cutoff: 3000 }); g.connect(st.send); }
+      }
+      if (bar === 3 && s === 8) K.riser(ctx, b, t, sd * 8, { vol: 0.08 });
+    },
+  };
+
+  /* OHH — wide, sunlit house: 124 BPM, open chords, plucked arp, bright hats. */
+  SKETCHES.ohh = {
+    bpm: 124, swing: 0.06, bars: 4,
+    setup(ctx, out) { return baseSetup(ctx, out, this.bpm, { fb: 0.42, fcut: 4200, wet: 0.55 }); },
+    step(ctx, st, t, s, bar, sd) {
+      const K = Kit, b = st.bus;
+      const chords = [[62, 66, 69, 73, 76], [59, 62, 66, 69, 73], [55, 59, 62, 66, 71], [57, 61, 64, 69, 73]];
+      const roots = [38, 35, 43, 45];
+      const ch = chords[bar];
+      if (s % 4 === 0) K.kick(ctx, b, t, { vol: 0.75, f0: 140, f1: 48, decay: 0.3 });
+      if (s === 4 || s === 12) K.clap(ctx, b, t, { vol: 0.22 });
+      if (s % 4 === 2) K.hat(ctx, b, t, { vol: 0.09, decay: 0.12 });
+      if (s % 2 === 1) K.hat(ctx, b, t, { vol: 0.03, decay: 0.02 });
+      if (s % 4 === 2 || s === 15) K.voice(ctx, b, t, SW.mtof(roots[bar]), sd * 1.5, { type: 'triangle', vol: 0.3, a: 0.004, d: 0.2, s: 0.5, r: 0.06, cutoff: 700 });
+      if (s === 0 || s === 7 || s === 10) ch.forEach((n) => K.voice(ctx, b, t, SW.mtof(n), sd * (s === 0 ? 6 : 2.5), { type: 'sawtooth', vol: 0.022, a: 0.01, d: 0.6, s: 0.5, r: 0.4, cutoff: 2600, fenv: 1.5, fdec: 0.3, detune: [-9, 9] }));
+      const seq = [0, 2, 4, 1, 3, 4, 2, 1];
+      const g = K.voice(ctx, b, t, SW.mtof(ch[seq[s % 8]] + 12), sd * 0.9, { type: 'triangle', vol: 0.03, a: 0.002, d: 0.15, s: 0, r: 0.15, cutoff: 5000 });
+      g.connect(st.send);
+    },
+  };
+
   /* Fallback for songs whose sketch name is unknown: a gentle pulse in A minor. */
   SKETCHES.default = {
     bpm: 100, swing: 0.1, bars: 4,

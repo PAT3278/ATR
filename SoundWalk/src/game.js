@@ -152,7 +152,7 @@
   const circles = [], boxes = [];
   const interact = [];
 
-  const ground = plane(260, 260, mat('#ffffff', { map: tex('grass', 70, 70) }));
+  const ground = plane(400, 400, mat('#ffffff', { map: tex('grass', 110, 110) }));
   ground.userData.ground = true;
   scene.add(ground); pick.push(ground);
 
@@ -299,8 +299,8 @@
       }
       return true;
     };
-    for (let i = 0; i < 1400 && spots.length < 330; i++) { const x = (r() - 0.5) * 184, z = (r() - 0.5) * 184; if (ok(x, z)) spots.push([x, z, 0.8 + r() * 0.7]); }
-    for (let i = 0; i < 160; i++) { const t = (i / 160) * 4, sd = Math.floor(t), f = (t % 1) * 200 - 100; const x = sd === 0 ? f : sd === 1 ? 97 : sd === 2 ? -f : -97, z = sd === 0 ? -97 : sd === 1 ? f : sd === 2 ? 97 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
+    for (let i = 0; i < 4000 && spots.length < 720; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z)) spots.push([x, z, 0.8 + r() * 0.7]); }
+    for (let i = 0; i < 240; i++) { const t = (i / 240) * 4, sd = Math.floor(t), f = (t % 1) * 304 - 152; const x = sd === 0 ? f : sd === 1 ? 152 : sd === 2 ? -f : -152, z = sd === 0 ? -152 : sd === 1 ? f : sd === 2 ? 152 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
     const n = spots.length;
     const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.32, 2.6, 6).translate(0, 1.3, 0), mat('#5b4331'), n);
     const tops = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), n * 2);
@@ -447,7 +447,7 @@
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (!s) return;
       places.forEach((p) => { p.found = (s.found || []).includes(p.song.id); });
-      if (Number.isFinite(s.x) && Number.isFinite(s.z) && Math.abs(s.x) < 88 && Math.abs(s.z) < 88) { P.x = s.x; P.z = s.z; }
+      if (Number.isFinite(s.x) && Number.isFinite(s.z) && Math.abs(s.x) < 143 && Math.abs(s.z) < 143) { P.x = s.x; P.z = s.z; }
       if (Number.isFinite(s.yaw)) camYaw = s.yaw;
     } catch (e) { /* ignore */ }
   }
@@ -455,7 +455,7 @@
   /* ================= collisions ================= */
   const PR = 0.35;
   function collide(p) {
-    p.x = clamp(p.x, -90, 90); p.z = clamp(p.z, -90, 90);
+    p.x = clamp(p.x, -145, 145); p.z = clamp(p.z, -145, 145);
     for (const c of circles) {
       const dx = p.x - c.x, dz = p.z - c.z, rr = c.r + PR;
       if (Math.abs(dx) > rr || Math.abs(dz) > rr) continue;
@@ -644,7 +644,7 @@
     $('#vPlace').textContent = s.place;
     $('#vPlaceEn').textContent = s.placeEn;
     $('#vTitle').textContent = s.title;
-    $('#vMeta').textContent = [CFG.artist + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
+    $('#vMeta').textContent = [(s.artist || CFG.artist) + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
     $('#vCaption').textContent = s.caption || '';
     const acts = $('#vActions');
     acts.innerHTML = '';
@@ -662,6 +662,7 @@
       a.textContent = `${l.label} ↗`;
       acts.appendChild(a);
     });
+    if (!acts.children.length) { const n = document.createElement('p'); n.className = 'c-note'; n.textContent = '購入ページは準備中です。'; acts.appendChild(n); }
     const ch = SW.Audio.channels[p.idx];
     $('#vSketch').hidden = !(ch && ch.mode === 'sketch');
     $('#view').hidden = false;
@@ -701,8 +702,8 @@
 
   /* ================= map ================= */
   const mapCv = $('#mapCanvas'), mg = mapCv.getContext('2d');
-  const MAP_S = mapCv.width / 190;
-  const toMap = (x, z) => [(x + 95) * MAP_S, (z + 95) * MAP_S];
+  const MAP_S = mapCv.width / 300;
+  const toMap = (x, z) => [(x + 150) * MAP_S, (z + 150) * MAP_S];
   function drawMap() {
     const g = mg, W = mapCv.width;
     g.fillStyle = '#1d2b1c'; g.fillRect(0, 0, W, W);
@@ -761,7 +762,7 @@
   $('#mapClose').addEventListener('click', closeMap);
   mapCv.addEventListener('click', (e) => {
     const r = mapCv.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * mapCv.width / MAP_S - 95, z = ((e.clientY - r.top) / r.height) * mapCv.height / MAP_S - 95;
+    const x = ((e.clientX - r.left) / r.width) * mapCv.width / MAP_S - 150, z = ((e.clientY - r.top) / r.height) * mapCv.height / MAP_S - 150;
     let best = null, bd = 14;
     places.forEach((p) => { const d = Math.hypot(p.vx - x, p.vz - z); if (d < bd) { bd = d; best = p; } });
     closeMap();
@@ -904,11 +905,12 @@
       const f = p.f || SILENT;
       if (v > 0.001 || viewPlace === p) p.update(t, dt, f, v, viewPlace === p);
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
-      const hide = viewPlace === p || d < 7;
+      p.group.visible = !viewPlace || viewPlace === p || camBlend < 1;
+      const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
       p.beam.visible = !hide;
       p.beam.material.opacity = (p.found ? 0.07 : 0.12) + f.pulse * 0.16;
       p.ringM.material.opacity = viewPlace === p ? 0 : 0.35 + f.pulse * 0.5 + Math.sin(t * 3) * 0.1;
-      p.label.visible = !hide && d < 110;
+      p.label.visible = !hide && d < 160;
     });
 
     // Camera
@@ -923,7 +925,7 @@
       if (mode === 'title') { camYaw += dt * 0.06; }
       let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * camDist, cy = ty + Math.sin(camPitch) * camDist, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * camDist;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
-      cx = clamp(cx, -110, 110); cz = clamp(cz, -110, 110); cy = Math.min(40, Math.max(groundAt(cx, cz) + 0.5, cy));
+      cx = clamp(cx, -160, 160); cz = clamp(cz, -160, 160); cy = Math.min(40, Math.max(groundAt(cx, cz) + 0.5, cy));
       tmpV.set(cx, cy, cz); tmpL.set(tx, ty - 0.1, tz); tmpU.set(0, 1, 0);
     }
     if (camBlend < 1) {
@@ -982,5 +984,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { P, places, get mode() { return mode; }, enterView, exitView, routeTo, start };
+  window.__soundwalk = { P, places, collide, get mode() { return mode; }, enterView, exitView, routeTo, start };
 })();

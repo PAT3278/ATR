@@ -149,7 +149,7 @@
       const g = p.group, r = E.rng(23);
       const RZ = -14, RW = 12;
 
-      const water = new THREE.Mesh(new THREE.PlaneGeometry(120, RW, 1, 1), new THREE.ShaderMaterial({
+      const water = new THREE.Mesh(new THREE.PlaneGeometry(100, RW, 1, 1), new THREE.ShaderMaterial({
         uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ff9a5c') }, b: { value: new THREE.Color('#2d2456') } },
         vertexShader: 'varying vec2 vUv;varying vec3 vW;void main(){vUv=uv;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
         fragmentShader: 'uniform float t,level;uniform vec3 a,b;varying vec2 vUv;varying vec3 vW;' +
@@ -162,11 +162,11 @@
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.05, RZ);
       g.add(water);
-      p.addBox(0, RZ, 60, RW / 2 + 0.2);
+      p.addBox(0, RZ, 50, RW / 2 + 0.2);
 
       const sandM = E.mat('#cdb683', { map: E.tex('sand', 30, 1) });
       for (const z of [RZ + RW / 2 + 0.8, RZ - RW / 2 - 0.8]) {
-        const s = E.plane(120, 1.8, sandM);
+        const s = E.plane(100, 1.8, sandM);
         s.position.set(0, 0.04, z);
         g.add(s);
       }
@@ -176,8 +176,8 @@
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), ps = new THREE.Vector3(), eu = new THREE.Euler();
       for (let i = 0; i < reedN; i++) {
         const near = i % 2 === 0;
-        const x = (r() - 0.5) * 120;
-        if (near && Math.abs(x) < 6) continue;
+        let x = (r() - 0.5) * 96;
+        if (near && Math.abs(x) < 6) x += Math.sign(x || 1) * 8;
         ps.set(x, 0, near ? RZ + RW / 2 + 0.6 + r() * 1.6 : RZ - RW / 2 - 0.6 - r() * 2);
         eu.set((r() - 0.5) * 0.3, 0, (r() - 0.5) * 0.3); q.setFromEuler(eu);
         const h = 0.6 + r() * 0.8; sc.set(1, h, 1);
@@ -261,11 +261,11 @@
         sun: '#ff9a5a', sunInt: 2.2, hemi: 0.55, sunDir: [0.1, 0.12, -1],
         tint: [1.1, 0.95, 0.88], expo: 1.0, sat: 1.1, stars: 0.1,
       };
-      p.map = [{ t: 'rect', x: 0, z: RZ, w: 120, h: RW, c: '#3f6f9e' }, { t: 'rect', x: BX, z: RZ - 40, w: 4, h: 150, c: '#56604a' }];
+      p.map = [{ t: 'rect', x: 0, z: RZ, w: 100, h: RW, c: '#3f6f9e' }, { t: 'rect', x: BX, z: RZ - 40, w: 4, h: 150, c: '#56604a' }];
       p.face = Math.PI;
       p.pathEnd = 4;
       p.clearR = 9;
-      p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 62) || (Math.abs(lx - BX) < 9 && lz > -150 && lz < 54) || Math.hypot(lx, lz) < 8;
+      p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 9 && lz > -150 && lz < 54) || Math.hypot(lx, lz) < 8;
 
       let trainT = 6;
       p.update = (t, dt, f, v) => {
