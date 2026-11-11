@@ -429,7 +429,7 @@
         const riding = bst > 0.3;
         board.visible = glow.visible = riding;
         body.rotation.z = lean;
-        body.rotation.y = riding ? 1.05 : 0;
+        body.rotation.y = riding ? 1.05 : 0; if (riding) { body.rotation.x = 0; hips.rotation.y = 0; }
         head.rotation.y = riding ? -0.95 : 0;
         arms.forEach((a, i) => (a.pivot.rotation.z = (i ? 1 : -1) * (riding ? 0.95 : 0.08)));
         if (riding) {
@@ -442,14 +442,16 @@
           return;
         }
         legs[0].pivot.rotation.z = legs[1].pivot.rotation.z = 0;
-        const k = Math.min(1, speed / 5);
-        if (speed > 0.05) phase += dt * (4 + speed * 1.6);
-        const sw = Math.sin(phase) * 0.6 * k;
+        const k = Math.min(1, speed / 7.5), run = Math.max(0, Math.min(1, (speed - 2.5) / 4));
+        if (speed > 0.05) phase += dt * (4.5 + speed * 1.25);
+        const sw = Math.sin(phase) * (0.6 + 0.45 * run) * Math.min(1, speed / 2.5);
         legs[0].pivot.rotation.x = sw; legs[1].pivot.rotation.x = -sw;
-        legs[0].knee.rotation.x = Math.max(0, -Math.sin(phase)) * 0.7 * k; legs[1].knee.rotation.x = Math.max(0, Math.sin(phase)) * 0.7 * k;
-        arms[0].pivot.rotation.x = -sw * 0.75; arms[1].pivot.rotation.x = sw * 0.75;
-        arms.forEach((a) => (a.elbow.rotation.x = -0.15 - 0.25 * k));
-        body.position.y = Math.abs(Math.sin(phase)) * 0.035 * k;
+        const kn = (0.7 + 0.9 * run) * Math.min(1, speed / 2.5);
+        legs[0].knee.rotation.x = Math.max(0, -Math.sin(phase - 0.6)) * kn + 0.15 * run; legs[1].knee.rotation.x = Math.max(0, Math.sin(phase - 0.6)) * kn + 0.15 * run;
+        arms[0].pivot.rotation.x = -sw * (0.75 + 0.35 * run); arms[1].pivot.rotation.x = sw * (0.75 + 0.35 * run);
+        arms.forEach((a) => (a.elbow.rotation.x = -0.15 - 0.25 * k - 1.25 * run));
+        body.rotation.x = 0.2 * run; hips.rotation.y = Math.sin(phase) * 0.14 * run;
+        body.position.y = Math.abs(Math.sin(phase)) * (0.035 + 0.075 * run) * k;
         if (k < 0.05) { phase = 0; body.position.y = Math.sin(performance.now() / 700) * 0.006 + bob * 0.03; head.rotation.x = -bob * 0.12; }
         else head.rotation.x = 0;
       },
@@ -862,7 +864,7 @@
       // Hold run (or auto-travel a long way) to hop on the board: speed builds up, turns get wider.
       const want = running || dashOn || padRun || (auto && auto.pts.length - auto.i > 5);
       boost += ((want && (iv.m > 0.05 || auto) ? 1 : 0) - boost) * Math.min(1, dt * 2.2);
-      const top = 5 + 12 * boost;
+      const top = 7.5 + 9.5 * boost;
       if (iv.m > 0.05) {
         const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
         mx = fx * iv.f + rx * iv.s; mz = fz * iv.f + rz * iv.s;
@@ -880,7 +882,7 @@
         P.hx += (mx - P.hx) * tr; P.hz += (mz - P.hz) * tr;
         const hl = Math.hypot(P.hx, P.hz) || 1; P.hx /= hl; P.hz /= hl;
       }
-      P.v += (sp - P.v) * Math.min(1, dt * (auto && sp < top ? 10 : sp > P.v ? 5 : 3));
+      P.v += (sp - P.v) * Math.min(1, dt * (auto && sp < top ? 10 : sp > P.v ? 8 : 4));
       let turn = 0;
       if (P.v > 0.05) {
         const ox = P.x, oz = P.z, np = { x: P.x + P.hx * P.v * dt, z: P.z + P.hz * P.v * dt };
@@ -980,7 +982,7 @@
       const k = ease(camBlend);
       tmpV.lerpVectors(camFrom.pos, tmpV, k); tmpL.lerpVectors(camFrom.look, tmpL, k); tmpU.lerpVectors(camFrom.up, tmpU, k).normalize();
     }
-    const fv = baseFov + (RM ? 0 : boost * 15);
+    const fv = baseFov + (RM ? 0 : boost * 15 + clamp(P.v / 7.5, 0, 1) * (1 - boost) * 4);
     if (Math.abs(camera.fov - fv) > 0.05) { camera.fov = fv; camera.updateProjectionMatrix(); }
     const spd = boost * clamp(P.v / 16, 0, 1);
     post.uniforms.spd.value = RM ? 0 : spd;
