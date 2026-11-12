@@ -179,9 +179,9 @@ void drawGlass (Graphics& g, Rectangle<float> r, float corner, float lift)
         g.fillRect (gloss);
     }
 
-    // hairline edge, brightest along the top
-    g.setGradientFill (ColourGradient (Colour (0xffdbe8f5).withAlpha (jmin (1.0f, 0.38f * lift)), 0.0f, r.getY(),
-                                       colours::glassEdge.withAlpha (jmin (1.0f, 0.2f * lift)), 0.0f, r.getBottom(), false));
+    // just a whisper of an edge along the top, fading out down the sides
+    g.setGradientFill (ColourGradient (Colour (0xffdbe8f5).withAlpha (jmin (1.0f, 0.16f * lift)), 0.0f, r.getY(),
+                                       colours::glassEdge.withAlpha (0.0f), 0.0f, r.getY() + jmin (r.getHeight(), 60.0f), false));
     g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
 }
 
@@ -327,8 +327,6 @@ void drawKnob (Graphics& g, Rectangle<float> bounds, float pos, float startAngle
     g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.26f), 0.0f, gloss.getY(),
                                        Colours::white.withAlpha (0.0f), 0.0f, gloss.getBottom(), false));
     g.fillEllipse (gloss);
-    g.setColour (colours::glassEdge);
-    g.drawEllipse (body.reduced (0.5f), 1.0f);
 
     // glowing indicator dot
     const auto dot = c.getPointOnCircumference (bodyR * 0.68f, angle);
@@ -340,62 +338,116 @@ void drawKnob (Graphics& g, Rectangle<float> bounds, float pos, float startAngle
     g.fillEllipse (Rectangle<float> (2.8f, 2.8f).withCentre (dot));
 }
 
+namespace
+{
+    /** A small on/off switch: a capsule track with a sliding knob. */
+    void drawSwitch (Graphics& g, Rectangle<float> track, bool on, Colour lit)
+    {
+        const float radius = track.getHeight() * 0.5f;
+        g.setColour (on ? lit.withAlpha (0.9f) : Colours::white.withAlpha (0.13f));
+        g.fillRoundedRectangle (track, radius);
+
+        const auto knob = Rectangle<float> (track.getHeight() - 4.0f, track.getHeight() - 4.0f)
+                              .withCentre ({ on ? track.getRight() - radius : track.getX() + radius, track.getCentreY() });
+        g.setColour (Colours::black.withAlpha (0.25f));
+        g.fillEllipse (knob.translated (0.0f, 1.0f));
+        g.setColour (on ? Colours::white : Colour (0xffb9c6d6));
+        g.fillEllipse (knob);
+    }
+
+    /** "On air": a dot with radiating arcs either side; `pulse` (0..1) brightens the arcs. */
+    void drawBroadcastIcon (Graphics& g, Point<float> c, float size, Colour colour, float pulse)
+    {
+        g.setColour (colour);
+        g.fillEllipse (Rectangle<float> (size * 0.22f, size * 0.22f).withCentre (c));
+
+        for (int ring = 1; ring <= 2; ++ring)
+        {
+            const float radius = size * (0.2f + 0.16f * (float) ring);
+            const float alpha = jlimit (0.15f, 1.0f, 0.5f + 0.5f * pulse - 0.25f * (float) (ring - 1));
+
+            for (float side : { -1.0f, 1.0f })
+            {
+                const float mid = side * MathConstants<float>::halfPi;
+                Path arc;
+                arc.addCentredArc (c.x, c.y, radius, radius, 0.0f, mid - 0.6f, mid + 0.6f, true);
+                g.setColour (colour.withAlpha (alpha));
+                g.strokePath (arc, roundStroke (jmax (1.2f, size * 0.07f)));
+            }
+        }
+    }
+} // namespace
+
 void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down)
 {
     const bool on = b.getToggleState();
     const auto& props = b.getProperties();
     const bool live = props.getWithDefault (liveProperty, false);
     const bool compact = props.getWithDefault (compactProperty, false);
+    const bool isSwitch = props.getWithDefault (switchProperty, false);
     const int icon = props.getWithDefault (iconProperty, -1);
 
     const auto glow = live ? colours::live : colours::accent;
     const auto r = b.getLocalBounds().toFloat().reduced (compact ? 1.0f : 3.0f); // room for the glow
-    const float corner = (compact || live) ? r.getHeight() * 0.5f : 7.0f;
+    const float corner = r.getHeight() * 0.5f;                                    // capsules throughout
 
-    drawGlass (g, r, corner, highlighted ? 1.6f : 1.0f);
+    Path shape;
+    shape.addRoundedRectangle (r, corner);
 
-    if (on)
+    // No outline: the body is a soft wash of light, a little brighter under the mouse.
+    const float hover = highlighted ? 1.0f : 0.0f;
+    g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.075f + 0.045f * hover), 0.0f, r.getY(),
+                                       Colours::white.withAlpha (0.03f + 0.03f * hover), 0.0f, r.getBottom(), false));
+    g.fillPath (shape);
+
+    // Selected things light up from within (switches show it on their switch).
+    const bool lit = on && ! isSwitch && ! compact;
+    if (lit)
     {
-        g.setColour (glow.withAlpha (live ? 0.55f : 0.20f));
-        g.fillRoundedRectangle (r, corner);
-        Path edge;
-        edge.addRoundedRectangle (r.reduced (0.5f), corner);
-        strokeGlow (g, edge, glow.withAlpha (0.9f), 1.0f, 0.6f);
+        g.setColour (glow.withAlpha (0.10f));
+        g.fillRoundedRectangle (r.expanded (2.5f), corner + 2.5f);
+        g.setGradientFill (ColourGradient (glow.withAlpha (live ? 0.8f : 0.46f), 0.0f, r.getY(),
+                                           glow.withAlpha (live ? 0.55f : 0.24f), 0.0f, r.getBottom(), false));
+        g.fillPath (shape);
+
+        Graphics::ScopedSaveState state (g);
+        g.reduceClipRegion (shape);
+        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.16f), 0.0f, r.getY(),
+                                           Colours::white.withAlpha (0.0f), 0.0f, r.getCentreY(), false));
+        g.fillRect (r.withHeight (r.getHeight() * 0.5f));
     }
 
     if (down)
     {
         g.setColour (Colours::black.withAlpha (0.18f));
-        g.fillRoundedRectangle (r, corner);
+        g.fillPath (shape);
     }
 
-    auto textArea = r.reduced (10.0f, 0.0f);
+    auto textArea = r.reduced (12.0f, 0.0f);
     auto just = Justification::centred;
+    const bool bright = lit || (isSwitch && on);
 
     if (icon >= 0)
     {
-        const auto iconBox = r.withWidth (r.getHeight()).reduced (r.getHeight() * 0.17f).translated (3.0f, 0.0f);
-        drawDeviceIcon (g, icon, iconBox, on ? colours::text : colours::textDim);
-        textArea = r.withLeft (iconBox.getRight() + 3.0f).withTrimmedRight (6.0f);
+        const auto iconBox = r.withWidth (r.getHeight()).reduced (r.getHeight() * 0.17f).translated (6.0f, 0.0f);
+        drawDeviceIcon (g, icon, iconBox, bright ? colours::text : colours::textDim);
+        textArea = r.withLeft (iconBox.getRight() + 3.0f).withTrimmedRight (10.0f);
         just = Justification::centredLeft;
     }
-    else if (! compact)
+    else if (isSwitch)
     {
-        // status ring, lit when on
-        const auto centre = Point<float> (r.getX() + 17.0f, r.getCentreY());
-        if (on)
-        {
-            g.setColour (Colours::white.withAlpha (0.3f));
-            g.fillEllipse (Rectangle<float> (13.0f, 13.0f).withCentre (centre));
-            g.setColour (Colours::white);
-            g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre (centre));
-        }
-        else
-        {
-            g.setColour (colours::textFaint);
-            g.drawEllipse (Rectangle<float> (7.0f, 7.0f).withCentre (centre), 1.3f);
-        }
-        textArea = r.withTrimmedLeft (28.0f).withTrimmedRight (12.0f);
+        const auto track = Rectangle<float> (30.0f, 16.0f).withCentre ({ r.getRight() - 14.0f - 15.0f, r.getCentreY() });
+        drawSwitch (g, track, on, glow);
+        textArea = r.withTrimmedLeft (18.0f).withRight (track.getX() - 6.0f);
+        just = Justification::centredLeft;
+    }
+    else if (live)
+    {
+        // breathes while on air (the editor repaints this button for it)
+        const float pulse = on ? 0.5f + 0.5f * std::sin ((float) Time::getMillisecondCounter() * 0.001f * MathConstants<float>::twoPi * 0.7f)
+                               : 0.0f;
+        drawBroadcastIcon (g, { r.getX() + r.getHeight() * 0.72f, r.getCentreY() }, r.getHeight() * 0.62f,
+                           on ? colours::text : colours::textDim, pulse);
     }
 
     const float height = compact ? 11.5f : (icon >= 0 ? 12.5f : jmin (14.0f, r.getHeight() * 0.40f));
@@ -406,12 +458,12 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
     const float fits = jmin (1.0f, textArea.getWidth() / jmax (1.0f, GlyphArrangement::getStringWidth (f, text)));
     const auto fitted = f.withHorizontalScale (jmax (0.8f, fits));
 
-    if (on && ! compact)
-        drawGlowText (g, text, textArea, just, fitted, colours::text, 0.8f);
+    if (lit)
+        drawGlowText (g, text, textArea, just, fitted, colours::text, 0.6f);
     else
     {
         g.setFont (fitted);
-        g.setColour (on ? colours::text : colours::textDim);
+        g.setColour (bright ? colours::text : colours::textDim);
         g.drawText (text, textArea, just, false);
     }
 }

@@ -202,7 +202,14 @@ void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bo
 
 void LookAndFeel::fillTextEditorBackground (juce::Graphics& g, int width, int height, juce::TextEditor&)
 {
-    g.setColour (skin == Skin::digital ? juce::Colour (0x88061533) : colours::surface);
+    if (skin == Skin::digital)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.07f));
+        g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, (float) height * 0.5f);
+        return;
+    }
+
+    g.setColour (colours::surface);
     g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, 5.0f);
 }
 
@@ -211,10 +218,17 @@ void LookAndFeel::drawTextEditorOutline (juce::Graphics& g, int width, int heigh
     const bool focused = editor.hasKeyboardFocus (true);
 
     if (skin == Skin::digital)
-        g.setColour (focused ? digital::colours::accent : digital::colours::glassEdge);
-    else
-        g.setColour (focused ? colours::accent : colours::border);
+    {
+        // no outline; a soft ring only while typing
+        if (focused)
+        {
+            g.setColour (digital::colours::accent.withAlpha (0.55f));
+            g.drawRoundedRectangle (0.5f, 0.5f, (float) width - 1.0f, (float) height - 1.0f, (float) height * 0.5f, 1.0f);
+        }
+        return;
+    }
 
+    g.setColour (focused ? colours::accent : colours::border);
     g.drawRoundedRectangle (0.5f, 0.5f, (float) width - 1.0f, (float) height - 1.0f, 5.0f, 1.0f);
 }
 

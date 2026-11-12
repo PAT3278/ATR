@@ -142,30 +142,62 @@
       linear-gradient(#0b1a33, #060e1f 50%, #020409);
     background-repeat: no-repeat;
     background-size: 100% 100%, 100% 220px, 100% 100%;
-    background-position: 0 0, 0 58%, 0 0;
+    background-position: 0 0, 0 96%, 0 0;
   }
+  /* No outlines anywhere: soft washes of light, rounded shapes, and selected
+     things lighting up from within. */
   html[data-skin="digital"] .well,
   html[data-skin="digital"] .btn,
   html[data-skin="digital"] .field,
   html[data-skin="digital"] .conn {
     background-color: transparent; background-image: var(--glass);
-    border-color: var(--border); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    border-color: transparent; box-shadow: none;
   }
-  html[data-skin="digital"] .well { border-radius: 14px; }
-  html[data-skin="digital"] .btn { border-radius: 12px; color: var(--text-dim); font-size: 15px; letter-spacing: 0.12em; }
-  html[data-skin="digital"] .btn[aria-pressed="true"] {
-    background-image: linear-gradient(rgba(143, 208, 240, 0.32), rgba(143, 208, 240, 0.16));
-    border-color: rgba(143, 208, 240, 0.95); color: var(--text); text-shadow: var(--text-glow);
-    box-shadow: var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  html[data-skin="digital"] .well { border-radius: 20px; }
+  html[data-skin="digital"] .btn,
+  html[data-skin="digital"] .field { border-radius: 999px; }
+  html[data-skin="digital"] .btn { color: var(--text-dim); font-size: 15px; letter-spacing: 0.12em; }
+  html[data-skin="digital"] .btn[aria-pressed]::before { display: none; }
+  html[data-skin="digital"] .btn[aria-pressed="true"],
+  html[data-skin="digital"] .btn.solid[aria-pressed="true"] {
+    background-color: transparent; background-image: linear-gradient(rgba(143, 208, 240, 0.46), rgba(143, 208, 240, 0.24));
+    border-color: transparent; color: var(--text); text-shadow: var(--text-glow);
+    box-shadow: 0 0 0 3px rgba(143, 208, 240, 0.08), 0 0 16px rgba(143, 208, 240, 0.2);
   }
-  html[data-skin="digital"] .btn.solid[aria-pressed="true"] { background-color: rgba(143, 208, 240, 0.22); }
-  html[data-skin="digital"] #play { border-radius: 36px; font-size: 21px; }
+  html[data-skin="digital"] .field:focus { border-color: transparent; box-shadow: 0 0 0 2px rgba(143, 208, 240, 0.45); }
+
+  /* LISTEN shows what a tap will do: play, or stop while listening. */
+  html[data-skin="digital"] #play { font-size: 20px; gap: 14px; }
+  html[data-skin="digital"] #play::before {
+    display: block; content: ""; position: static; flex: none; margin: 0; width: 14px; height: 16px;
+    border-radius: 0; box-shadow: none; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+  html[data-skin="digital"] #play[aria-pressed="true"]::before { width: 13px; height: 13px; clip-path: none; border-radius: 3px; background: currentColor; }
+
+  /* MODE: one segmented control -- pick a side. */
+  html[data-skin="digital"] .pair { background: rgba(255, 255, 255, 0.05); border-radius: 999px; padding: 4px; gap: 4px; }
+  html[data-skin="digital"] .pair .btn { min-height: 40px; }
+  html[data-skin="digital"] .pair .btn:not([aria-pressed="true"]) { background-image: none; }
+
+  /* KEEP SCREEN ON: a real on/off switch. */
+  html[data-skin="digital"] #wake {
+    width: 54px; min-height: 30px; height: 30px; padding: 0; flex: none;
+    background-image: none; background-color: rgba(255, 255, 255, 0.13); box-shadow: none;
+  }
+  html[data-skin="digital"] #wake[aria-pressed="true"] { background-image: none; background-color: rgba(143, 208, 240, 0.9); box-shadow: none; }
+  html[data-skin="digital"] #wakeText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  html[data-skin="digital"] #wake::before {
+    display: block; content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; margin: 0;
+    border-radius: 50%; background: #b9c6d6; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    transition: transform 0.18s ease, background-color 0.18s ease;
+  }
+  html[data-skin="digital"] #wake[aria-pressed="true"]::before { transform: translateX(24px); background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
   html[data-skin="digital"] header { flex-wrap: wrap; row-gap: 10px; }
   html[data-skin="digital"] .logo { font: 700 21px/1 var(--digital); letter-spacing: 0.05em; text-shadow: var(--text-glow); white-space: nowrap; }
   html[data-skin="digital"] .conn .label { white-space: nowrap; }
   html[data-skin="digital"] .badge {
-    font: 700 11px/1 var(--digital); white-space: nowrap; color: rgb(var(--accent)); background: var(--glass);
-    border: 1px solid rgba(143, 208, 240, 0.8); border-radius: 99px; padding: 5px 9px; box-shadow: var(--glow);
+    font: 700 11px/1 var(--digital); white-space: nowrap; color: rgb(var(--accent)); background: rgba(143, 208, 240, 0.14);
+    border: 0; border-radius: 99px; padding: 6px 10px;
   }
   html[data-skin="digital"] .label { font: 700 12px var(--cond); letter-spacing: 0.16em; }
   html[data-skin="digital"] .readouts .label { font-size: 10px; }

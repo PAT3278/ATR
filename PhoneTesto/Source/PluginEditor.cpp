@@ -100,6 +100,9 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     onAirButton.getProperties().set (hw::solidWhenOnProperty, true);
     onAirButton.getProperties().set (hw::liveProperty, true);
 
+    monoButton.getProperties().set (hw::switchProperty, true);
+    bypassButton.getProperties().set (hw::switchProperty, true);
+
     for (auto* b : { &monoButton, &bypassButton, &onAirButton })
         panel.addAndMakeVisible (*b);
 
@@ -281,6 +284,9 @@ void PhoneTestoAudioProcessorEditor::timerCallback()
         // only the band where the waves move; the controls over it come from cached images
         const auto top = (int) hw::digital::Background::animatedTop (panel.getLocalBounds().toFloat());
         panel.repaint (0, top, faceWidth, faceHeight - top);
+
+        if (onAirButton.getToggleState())
+            onAirButton.repaint(); // its broadcast icon breathes while on air
     }
 }
 
@@ -388,10 +394,8 @@ void PhoneTestoAudioProcessorEditor::paintDigitalOverlay (juce::Graphics& g)
     d::drawGlowText (g, "PHONETESTO", { layout::margin, 15.0f, logoW, 30.0f }, Justification::centredLeft, logoFont, c::text);
 
     const auto badge = Rectangle<float> (layout::margin + logoW + 12.0f, 18.0f, 50.0f, 24.0f);
-    d::drawGlass (g, badge, 12.0f);
-    Path badgeEdge;
-    badgeEdge.addRoundedRectangle (badge.reduced (0.5f), 12.0f);
-    d::strokeGlow (g, badgeEdge, c::accent.withAlpha (0.8f), 1.0f, 0.5f);
+    g.setColour (c::accent.withAlpha (0.14f));
+    g.fillRoundedRectangle (badge, 12.0f);
     d::drawGlowText (g, "PT-1", badge, Justification::centred, hw::font (hw::Type::digitalBold, 12.0f, 0.06f), c::accent, 0.6f);
 
     d::drawLabel (g, "Speaker reference monitor", { badge.getRight() + 14.0f, 18.0f, 280.0f, 24.0f },
@@ -403,15 +407,14 @@ void PhoneTestoAudioProcessorEditor::paintDigitalOverlay (juce::Graphics& g)
         const auto pill = statusPillBounds();
         const float corner = pill.getHeight() * 0.5f;
 
-        d::drawGlass (g, pill, corner);
+        // no outline: a soft capsule, glowing red while on air
         if (live)
         {
-            g.setColour (c::live.withAlpha (0.22f));
-            g.fillRoundedRectangle (pill, corner);
-            Path edge;
-            edge.addRoundedRectangle (pill.reduced (0.5f), corner);
-            d::strokeGlow (g, edge, c::live.withAlpha (0.85f), 1.0f, 0.6f);
+            g.setColour (c::live.withAlpha (0.12f));
+            g.fillRoundedRectangle (pill.expanded (2.5f), corner + 2.5f);
         }
+        g.setColour (live ? c::live.withAlpha (0.32f) : Colours::white.withAlpha (0.07f));
+        g.fillRoundedRectangle (pill, corner);
 
         const auto dot = Point<float> (pill.getX() + 15.0f, pill.getCentreY());
         const auto dotColour = live ? c::live : c::accent;

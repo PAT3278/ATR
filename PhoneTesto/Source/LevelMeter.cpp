@@ -108,9 +108,9 @@ void LevelMeter::paintDigital (juce::Graphics& g)
     namespace c = hw::digital::colours;
 
     const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    d::drawGlass (g, bounds, 10.0f);
+    d::drawGlass (g, bounds, 16.0f);
     g.setColour (Colour (0x66020816));
-    g.fillRoundedRectangle (bounds.reduced (5.0f), 7.0f);
+    g.fillRoundedRectangle (bounds.reduced (5.0f), 12.0f);
 
     const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
     auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };

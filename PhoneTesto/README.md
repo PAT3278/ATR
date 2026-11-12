@@ -85,8 +85,11 @@ the project):
 - **DIGITAL** (default for now, while it's being tried out) — a 2000s
   games-console interface: deep navy with light waves sweeping across
   (each with a pulse of light running along its crest) and rising
-  particles, glass panels with glowing cyan edges, device icons on the
-  MODEL pads, PT Digital type for the logo and numbers.
+  particles, soft glass panels, PT Digital type for the logo and numbers.
+  Controls have no outlines: buttons are soft capsules that light up from
+  inside when on, MONO and BYPASS are sliding switches, ON AIR shows a
+  broadcast icon that pulses while live, and the MODEL pads show device
+  icons.
 - **FLAT** — the modern flat hardware panel described above.
 
 The phone page follows the plugin's skin (in a simpler form: the same

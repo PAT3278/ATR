@@ -64,6 +64,7 @@ constexpr const char* solidWhenOnProperty = "hwSolidWhenOn"; // ToggleButton: fi
 constexpr const char* liveProperty        = "hwLive";        // ToggleButton: the ON AIR button
 constexpr const char* iconProperty        = "hwIcon";        // ToggleButton: device icon (speaker profile index)
 constexpr const char* compactProperty     = "hwCompact";     // ToggleButton: small header button, no LED
+constexpr const char* switchProperty      = "hwSwitch";      // ToggleButton: on/off setting, drawn with a switch (DIGITAL)
 
 class LookAndFeel : public juce::LookAndFeel_V4
 {
