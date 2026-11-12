@@ -95,6 +95,7 @@
       const el = this.el;
       const sync = () => {
         if (isFinite(el.duration) && el.duration > 0) el.currentTime = (this.ctx.currentTime - this.engine.epoch) % el.duration;
+        this.synced = true;   // from here on the element's own time is the song position
       };
       if (el.readyState >= 1) sync();
       else el.addEventListener('loadedmetadata', sync, { once: true });

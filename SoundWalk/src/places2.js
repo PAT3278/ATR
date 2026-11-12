@@ -177,7 +177,12 @@
       };
 
       // Uptown brownstones along the approach: stoops with iron rails, and two performers on the steps.
-      const perf = []; let stoopUp = 0;
+      const perf = []; let stoopUp = 0, songT = 0, camLead = -1;
+      // Who has the verse, by position in the track (seconds), from songs.js. Times below are in the same clock.
+      const PARTS = p.song.parts || [{ at: 0, who: 'stvn' }], LEN = p.song.length || 125.2;
+      const whoAt = (T) => { let w = PARTS[0].who; for (const s of PARTS) if (T >= s.at) w = s.who; return w; };
+      const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
+      const CUTAWAYS = [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]]; // short cuts to the firefight; none while they are on the move
       {
         const cr = E.rng(212), X = 6.6;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
@@ -227,7 +232,7 @@
           if (i === 1 || i === 2) {
             const m = fig(i === 1 ? '#b3161d' : '#d8d2c0', i === 1 ? '#111111' : '#2a4a8a');
             const w = new THREE.Group(); w.add(m.f); g.add(w);
-            perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1 });
+            perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1, name: i === 1 ? 'stvn' : 'vas', off: i === 1 ? 0 : 9.4, amp: 0.3, up: 0 });   // red jacket = stvn, white jacket = vas
           }
         }
         const walk = E.plane(4, 26, E.mat('#77736c', { map: E.tex('paving', 2, 13), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 26.3); g.add(walk); p.pick(walk);
@@ -283,37 +288,49 @@
           if (T.beam) { T.beam.rotation.z = Math.sin(t * 0.25 + T.seed) * 0.35; T.beam.material.opacity = 0.05 + f.mid * 0.1; }
         });
         towerM.emissiveIntensity = 0.4 + f.level * 0.6;
-        // The two performers loop through: on the stoop -> up the steps and in through the door ->
-        // leaning out of the first-floor window -> back down. 64 s per loop, matching the view's cuts.
+        // The two performers follow the song (p.songT, the track's playback position): whoever has the verse leads,
+        // the other backs them up. First half on the stoop, then up the steps and in through the door to perform
+        // from the first-floor windows for the second half, and back down for the loop.
+        // p.songT is the playing track's position. Before the track starts (further away, or still loading) use the clock it will be
+        // synced to, so nothing jumps when the audio comes in.
+        { const A = SW.Audio; songT = p.songT != null ? p.songT : A && A.ctx ? (((A.ctx.currentTime - A.epoch) % LEN) + LEN) % LEN : t % LEN; }
+        const leadName = whoAt(songT);
         let upMax = 0;
         perf.forEach((m, i) => {
-          const tc = (((t - i * 1.3) % 64) + 64) % 64, e = 0.35 + f.level * 1.4, b = Math.abs(Math.sin(t * 3.6 + m.s));
+          const tc = (((songT - m.off) % LEN) + LEN) % LEN, lead = m.name === leadName, b = Math.abs(Math.sin(t * 3.6 + m.s));   // each has their own clock, offset so they only move while the other has the verse
+          m.amp += ((lead ? 1 : 0.3) - m.amp) * Math.min(1, dt * 3);                    // hand the lead over smoothly at a verse change
+          const e = (0.35 + f.level * 1.4) * m.amp;
           const sx = m.X - 1.46, doorX = m.X + 0.6, lerp = (a, c, k) => a + (c - a) * k;
           const stairY = (x) => 0.225 * (Math.max(0, Math.min(7, Math.floor((x - (m.X - 3.085)) / 0.36))) + 1);
           let x = sx, y = 0.225 * 5, z = m.dz + m.zo, yaw = -Math.PI / 2 + m.yaw, lean = 0, door = 0, up = 0, vis = true, act = true;
-          if (tc >= 24 && tc < 27) { const k = (tc - 24) / 3; x = lerp(sx, doorX, k); y = stairY(x); z = m.dz + m.zo * (1 - Math.min(1, k * 2)); yaw = Math.PI / 2; door = sstep(0, 0.3, k); act = false; vis = x < m.X + 0.25; }
-          else if (tc >= 27 && tc < 29) { vis = false; door = 1 - sstep(27, 27.8, tc); }
-          else if (tc >= 29 && tc < 56) { up = sstep(29.2, 30.4, tc) * (1 - sstep(54.6, 55.8, tc)); x = m.X + 0.56 + (1 - up) * 0.3; y = 4.52; z = m.z0; yaw = -Math.PI / 2 + m.yaw * 0.5; lean = 0.44 * up; vis = up > 0.03; }
-          else if (tc >= 56 && tc < 58) { vis = false; door = sstep(57.2, 58, tc); }
-          else if (tc >= 58 && tc < 61) { const k = (tc - 58) / 3; x = lerp(doorX, sx, k); y = stairY(x); z = m.dz + m.zo * Math.max(0, k * 2 - 1); door = 1 - sstep(0.6, 0.95, k); act = false; vis = x < m.X + 0.25; }
-          upMax = Math.max(upMax, up);
+          if (tc >= GO_IN && tc < GO_IN + 3) { const k = (tc - GO_IN) / 3; x = lerp(sx, doorX, k); y = stairY(x); z = m.dz + m.zo * (1 - Math.min(1, k * 2)); yaw = Math.PI / 2; door = sstep(0, 0.3, k); act = false; vis = x < m.X + 0.25; }
+          else if (tc >= GO_IN + 3 && tc < GO_IN + 5) { vis = false; door = 1 - sstep(GO_IN + 3, GO_IN + 3.8, tc); }
+          else if (tc >= GO_IN + 5 && tc < COME_OUT - 2) { up = sstep(GO_IN + 5.2, GO_IN + 6.2, tc) * (1 - sstep(COME_OUT - 3.3, COME_OUT - 2.2, tc)); x = m.X + 0.56 + (1 - up) * 0.3; y = 4.52; z = m.z0; yaw = -Math.PI / 2 + m.yaw * 0.5; lean = 0.44 * up; vis = up > 0.03; }
+          else if (tc >= COME_OUT - 2 && tc < COME_OUT) { vis = false; door = sstep(COME_OUT - 0.8, COME_OUT, tc); }
+          else if (tc >= COME_OUT && tc < COME_OUT + 3) { const k = (tc - COME_OUT) / 3; x = lerp(doorX, sx, k); y = stairY(x); z = m.dz + m.zo * Math.max(0, k * 2 - 1); door = 1 - sstep(0.6, 0.95, k); act = false; vis = x < m.X + 0.25; }
+          upMax = Math.max(upMax, up); m.up = up;
           m.w.visible = vis;
-          m.w.position.set(x, y + (act ? b * 0.05 * e + f.pulse * 0.06 : Math.abs(Math.sin(t * 9)) * 0.04), z);
+          m.w.position.set(x, y + (act ? b * 0.05 * e + f.pulse * 0.06 * m.amp : Math.abs(Math.sin(t * 9)) * 0.04), z);
           m.w.rotation.y = yaw; m.f.rotation.x = lean;
           m.hinge.rotation.y = 1.35 * door;   // swings inward, into the dark hallway, so it never crosses the performer
           const so = Math.max(up, 0); m.sash.scale.y = 1 - 0.6 * so; m.sash.position.y = 6.3 + 1.7 * 0.3 * so;
-          m.torso.rotation.z = act ? Math.sin(t * 1.8 + m.s) * 0.1 * e : 0; m.head.rotation.x = act ? -f.pulse * 0.25 : 0;
+          m.torso.rotation.z = act ? Math.sin(t * 1.8 + m.s) * 0.1 * e : 0; m.head.rotation.x = act ? -f.pulse * 0.25 * m.amp : 0;
           if (act) {
-            m.arms[1].rotation.x = -1.9 + Math.sin(t * 2.2 + m.s) * 0.12; m.arms[1].rotation.z = -0.35;                         // mic hand up
-            m.arms[0].rotation.x = -0.9 - Math.sin(t * 3.6 + m.s) * 0.6 * e; m.arms[0].rotation.z = (i ? 1 : -1) * 0.2 - 0.3; // free hand gesturing
+            const a = m.amp, k = (a - 0.3) / 0.7;                                                                                  // 1 = leading, 0 = backing
+            m.arms[1].rotation.x = lerp(-0.95, -1.9, k) + Math.sin(t * 2.2 + m.s) * 0.12; m.arms[1].rotation.z = -0.35;           // mic at the mouth when leading, at the chest when not
+            m.arms[0].rotation.x = lerp(-0.25, -0.9, k) - Math.sin(t * 3.6 + m.s) * 0.6 * e; m.arms[0].rotation.z = (i ? 1 : -1) * 0.2 - 0.3; // free hand: big gestures when leading
           } else { const sw = Math.sin(t * 9) * 0.5; m.arms[0].rotation.set(sw, 0, 0); m.arms[1].rotation.set(-sw, 0, 0); }       // walking
         });
-        stoopUp = upMax;
+        { const li = perf.findIndex((m) => m.name === leadName), lm = perf[li < 0 ? 0 : li];   // the camera follows whoever has the verse: up to their window, and across to their side
+          stoopUp += (lm.up - stoopUp) * Math.min(1, dt * 2.5);
+          camLead += ((li === 1 ? 1 : -1) - camLead) * Math.min(1, dt * 1.5); }
       };
       p.shot = (t, f) => {
-        if (Math.floor(t / 16) % 2 === 1) {   // the stoop performance; pulls back and tilts up when they are at the windows
-          const narrow = innerWidth / innerHeight < 0.8, who = Math.floor(t / 32) % 2, u = RM ? (stoopUp > 0.5 ? 1 : 0) : stoopUp;   // a portrait screen frames one performer per cut
-          const zs = narrow ? (who ? 27.55 : 21.85) : 24.7, zw = narrow ? (who ? 29.4 : 23.2) : 26.3, zc = zs + (zw - zs) * u, a = Math.sin(t * 0.25) * (narrow ? 0.5 : 1.8);
+        if (!CUTAWAYS.some(([a, c]) => songT >= a && songT < c)) {   // the performance; pulls back and tilts up when they are at the windows. Short cutaways go to the firefight.
+          const narrow = innerWidth / innerHeight < 0.8, who = perf.findIndex((m) => m.name === whoAt(songT)) === 1 ? 1 : 0, u = RM ? (stoopUp > 0.5 ? 1 : 0) : stoopUp;
+          // a portrait screen frames whoever has the verse; a wide one keeps both in frame and leans towards the lead
+          const asp = innerWidth / innerHeight, ln = camLead * (asp < 1.3 ? 0.8 : 0.8 * Math.max(0, Math.min(1, (asp - 1.5) / 0.28)));   // lean only as far as both still fit
+          const zs = narrow ? (who ? 27.55 : 21.85) : 24.7 + ln, zw = narrow ? (who ? 29.4 : 23.2) : 26.3 + ln, zc = zs + (zw - zs) * u, a = Math.sin(t * 0.25) * (narrow ? 0.5 : 1.2);
           return { pos: [0.6 - 4.6 * u, 1.15 + 0.25 * u, zc + a * (1 - 0.6 * u)], look: [6.6, 2.5 + 3.5 * u, zc + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 };
         }
         const k = RM ? 0 : f.pulse * 0.05;

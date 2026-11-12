@@ -1216,6 +1216,7 @@
       const side = d > 0.01 ? (dx * rx + dz * rz) / d : 0;
       ch.setTargets(p.gain, viewing ? 0 : clamp(side * 0.85 * (1 - pp * pp), -0.85, 0.85), cut);
       p.f = ch.analyse(dt, t);
+      p.songT = ch.mode === 'media' && ch.el && ch.playing && ch.synced && isFinite(ch.el.currentTime) ? ch.el.currentTime : null;   // where the real track is, for scenery that follows the song
       p.dir = Math.atan2((dx * rx + dz * rz), (dx * fx + dz * fz));
       if (p.gain > 0.012 && (!loud || p.gain > loud.gain)) loud = p;
     });

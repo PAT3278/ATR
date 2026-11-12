@@ -128,6 +128,9 @@ SW.SONGS = [
     scene: 'field',
     sketch: 'flip',
     src: 'audio/field.mp3',
+    // Who has the verse, by time in the track (seconds). The two figures on the brownstone stoops follow this.
+    length: 125.2,
+    parts: [{ at: 0, who: 'stvn' }, { at: 40, who: 'vas' }, { at: 67, who: 'stvn' }, { at: 95, who: 'vas' }],
     color: '#ff4a3a',
     price: 250,
     links: [],
