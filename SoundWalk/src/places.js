@@ -206,7 +206,7 @@
         }
       }
       // Embankments, a tunnel mouth on the near side
-      const embM = E.mat('#56544f', { rough: 0.9 });
+      const embM = E.mat('#a4a8ab', { rough: 0.8 });
       const emb1 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 18), embM);
       emb1.position.set(BX, 1.8, RZ + 26); g.add(emb1);
       const emb2 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 120), embM);
@@ -346,7 +346,7 @@
       g.add(city);
 
       // Billboard at the end of the street
-      const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#ff3fb0', glow: '#ff3fb0', font: '700 150px "Saira Condensed", sans-serif' });
+      const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#ff3fb0', glow: '#ff3fb0', font: '700 150px "Hind", sans-serif' });
       const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map: bbTex, transparent: true }));
       bb.position.set(1, 20, -27);
       g.add(bb);

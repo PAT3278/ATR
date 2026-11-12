@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#05060a">
+<meta name="theme-color" content="#0b4a8c">
 <title>SOUND WALK</title>
 <meta name="description" content="歩いて、近づいて、聴いて、買う。曲ごとの景色がある3Dマップ。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Saira+Condensed:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="pre">
@@ -17,7 +17,7 @@
 
   <div id="hud">
     <div class="hud-l">
-      <div class="loc"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg><span id="locName"></span></div>
+      <span id="locName" hidden></span>
       <div id="discs" aria-label="見つけた曲"></div>
       <div id="np" hidden>
         <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11"/></svg>
@@ -46,7 +46,7 @@
   <div id="view" hidden>
     <button id="backBtn" class="ibtn back" type="button" aria-label="もどる"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg><kbd>Esc</kbd></button>
     <article class="card">
-      <p class="c-place"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg><span id="vPlace"></span></p>
+      <span id="vPlace" hidden></span>
       <h2 id="vTitle"></h2>
       <p class="c-meta" id="vMeta"></p>
       <div class="c-vol"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11"/></svg><span id="vVol" class="meter big"></span></div>

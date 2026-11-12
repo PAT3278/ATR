@@ -299,7 +299,7 @@
         lp.position.set(x, H, ZC);
         g.add(tm.add(lp)); lampGroup.push(lp);
       }
-      const signTex = E.textTex('SHOT  →  EXIT\n出口  1km', { w: 512, h: 256, color: '#ffffff', font: '700 72px "Saira Condensed","Noto Sans JP",sans-serif', font2: '700 56px "Noto Sans JP",sans-serif' });
+      const signTex = E.textTex('SHOT  →  EXIT\n出口  1km', { w: 512, h: 256, color: '#ffffff', font: '700 72px "Hind","Noto Sans JP",sans-serif', font2: '700 56px "Noto Sans JP",sans-serif' });
       for (const x of [-30, 30]) {
         const gt = new THREE.Group();
         for (const z of [-WD / 2, WD / 2]) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7, 0.4), poleM); c.position.set(0, 3.5, z); gt.add(c); }
