@@ -55,7 +55,7 @@
     g.putImageData(img, 0, 0);
   }
   const rgb = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-  const TEXSIZE = { grass: 512, path: 256, slate: 256 };
+  const TEXSIZE = { grass: 512, path: 256, slate: 512 };
   const TEXDRAW = {
     grass(g, S, r) {
       paintGround(g, S, ['#353f27', '#56603a', '#857a4f', '#57483a'].map(rgb), { dry: [0.5, 0.72], dirt: [0.6, 0.72] });
@@ -65,17 +65,45 @@
       for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S, q = 1.5 + r() * 3.5; g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 1.5, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${120 + r() * 40},${116 + r() * 36},${104 + r() * 30})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
     },
     paving(g, S, r) { g.fillStyle = '#cfc2a4'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { g.fillStyle = `rgba(${150 + r() * 40},${135 + r() * 35},${110 + r() * 30},.35)`; g.fillRect(x * w + 2, y * w + 2, w - 4, w - 4); } g.fillStyle = D(0.25); for (let k = 0; k <= n; k++) { g.fillRect(k * w - 1, 0, 2, S); g.fillRect(0, k * w - 1, S, 2); } speckle(g, S, S, r, 1200, 0.06); },
-    slate(g, S, r) { // pale rectangular pavers in running bond, worn and slightly uneven
-      g.fillStyle = '#4a4841'; g.fillRect(0, 0, S, S);
-      const cols = 4, rows = 8, bw = S / cols, bh = S / rows, j = 1.6;
+    slate(g, S, r) { // pale rectangular pavers in running bond: old, cracked, chipped and stained
+      g.fillStyle = '#34322c'; g.fillRect(0, 0, S, S);
+      const cols = 4, rows = 8, bw = S / cols, bh = S / rows;
+      const bricks = [];
       for (let y = 0; y < rows; y++) for (let x = -1; x < cols; x++) {
-        const ox = x * bw + (y % 2 ? bw / 2 : 0), v = 168 + r() * 44, w = r() * 8;
-        const gr = g.createLinearGradient(ox, y * bh, ox + bw, y * bh + bh);
-        gr.addColorStop(0, `rgb(${v + 8},${v + 7},${v + 2 - w})`); gr.addColorStop(1, `rgb(${v - 10},${v - 11},${v - 16 - w})`);
-        for (const dx of [0, S]) { g.fillStyle = gr; g.save(); g.translate(dx, 0); g.fillRect(ox + j, y * bh + j, bw - j * 2, bh - j * 2); g.restore(); }
+        const ox = x * bw + (y % 2 ? bw / 2 : 0), oy = y * bh;
+        const k = r(), v = k < 0.12 ? 96 + r() * 30 : k < 0.3 ? 132 + r() * 26 : 160 + r() * 48;   // a few dark, replaced or soaked bricks
+        const warm = k > 0.85 ? 16 : r() * 8, j = 1.5 + r() * 2.2, sink = r() < 0.1;
+        for (const dx of [0, S]) {
+          g.save(); g.translate(dx + ox, oy);
+          const gr = g.createLinearGradient(0, 0, bw, bh);
+          gr.addColorStop(0, `rgb(${v + 10 + warm},${v + 8},${v + 2 - warm})`); gr.addColorStop(1, `rgb(${v - 14 + warm},${v - 16},${v - 22 - warm})`);
+          g.fillStyle = gr;
+          // uneven outline: each corner pulled in a little, some corners broken off
+          const c = [0, 1, 2, 3].map(() => (r() < 0.22 ? 5 + r() * 12 : r() * 2.5));
+          g.beginPath(); g.moveTo(j + c[0], j); g.lineTo(bw - j - c[1], j); g.lineTo(bw - j, j + c[1]); g.lineTo(bw - j, bh - j - c[2]); g.lineTo(bw - j - c[2], bh - j); g.lineTo(j + c[3], bh - j); g.lineTo(j, bh - j - c[3]); g.lineTo(j, j + c[0]); g.closePath(); g.fill();
+          if (sink) { g.fillStyle = 'rgba(0,0,0,.28)'; g.fill(); }
+          // worn, darker edges
+          g.strokeStyle = 'rgba(40,36,30,.35)'; g.lineWidth = 3; g.stroke();
+          g.restore();
+        }
+        bricks.push([ox, oy]);
       }
+      // cracks: jagged lines across one or two bricks, some splitting a brick in half
+      const crack = (x, y, a, len, w) => { g.beginPath(); g.moveTo(x, y); for (let d = 0; d < len; d += 5 + r() * 6) { a += (r() - 0.5) * 0.9; x += Math.cos(a) * 7; y += Math.sin(a) * 7; g.lineTo(x, y); if (r() < 0.12) crack(x, y, a + (r() < 0.5 ? 0.9 : -0.9), len * 0.3, w * 0.6); } g.strokeStyle = 'rgba(22,20,17,.85)'; g.lineWidth = w; g.stroke(); g.strokeStyle = 'rgba(235,230,215,.18)'; g.lineWidth = 0.7; g.stroke(); };
+      for (let i = 0; i < 26; i++) { const x = S * (0.08 + r() * 0.84), y = S * (0.08 + r() * 0.84); crack(x, y, r() * 6.28, 30 + r() * 80, 0.8 + r() * 1.4); }
+      // pitting and small chips
+      for (let i = 0; i < 420; i++) { g.fillStyle = `rgba(30,27,22,${0.25 + r() * 0.4})`; g.beginPath(); g.ellipse(r() * S, r() * S, 0.6 + r() * 2.2, 0.5 + r() * 1.6, r() * 3, 0, 7); g.fill(); }
+      // grime, damp stains, moss creeping out of the joints
       const img = g.getImageData(0, 0, S, S), d = img.data;
-      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const k = 0.74 + 0.4 * fbm(x / S, y / S, 4, 21) + 0.16 * (fbm(x / S, y / S, 40, 5, 2) - 0.5), i = (y * S + x) * 4; d[i] *= k; d[i + 1] *= k; d[i + 2] *= k * 0.98; }
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const u = x / S, v = y / S, i = (y * S + x) * 4;
+        const stain = fbm(u, v, 3, 21), fine = fbm(u, v, 40, 5, 2), moss = fbm(u, v, 6, 77);
+        let k = 0.55 + 0.62 * stain + 0.2 * (fine - 0.5);
+        k *= 1 - 0.45 * sst(0.6, 0.75, fbm(u, v, 5, 140));           // dark damp patches
+        d[i] *= k; d[i + 1] *= k; d[i + 2] *= k * 0.97;
+        const lum = d[i + 1], m = sst(0.56, 0.7, moss) * (lum < 90 ? 0.75 : 0.22);   // moss favours joints and dark bricks
+        d[i] += (58 - d[i]) * m; d[i + 1] += (74 - d[i + 1]) * m; d[i + 2] += (40 - d[i + 2]) * m;
+      }
       g.putImageData(img, 0, 0);
     },
     sand(g, S, r) { g.fillStyle = '#d6c08c'; g.fillRect(0, 0, S, S); speckle(g, S, S, r, 3000, 0.08); },
@@ -357,7 +385,7 @@
   const PLAZA_R = 11;
   {
     const pl = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 56), mat('#b4b1a8', { map: tex('slate', 9, 9), rough: 0.9 }, true));
-    pl.material.bumpMap = pl.material.map; pl.material.bumpScale = 0.03;
+    pl.material.bumpMap = pl.material.map; pl.material.bumpScale = 0.05;
     pl.rotation.x = -Math.PI / 2; pl.position.y = 0.03; pl.receiveShadow = true;
     scene.add(pl); pick.push(pl); pl.userData.ground = true;
     const rim = new THREE.Mesh(new THREE.RingGeometry(PLAZA_R, PLAZA_R + 0.6, 56), whiteM);
@@ -513,14 +541,6 @@
     scene.add(label);
     p.label = label;
 
-    // Signpost on the plaza pointing down this place's path
-    const len = Math.hypot(p.x, p.z), ux = p.x / len, uz = p.z / len, sx = ux * 8.4 - uz * 2.2, sz = uz * 8.4 + ux * 2.2;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.2, 6), mat('#3d3024'));
-    post.position.set(sx, 1.1, sz); post.castShadow = true;
-    const board = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.45, 0.06), mat('#' + new THREE.Color(p.color).lerp(new THREE.Color('#3a342c'), 0.5).getHexString(), { rough: 0.9 }));
-    board.position.set(sx + ux * 0.5, 1.85, sz + uz * 0.5); board.rotation.y = Math.atan2(uz, -ux) + Math.PI;
-    scene.add(post, board);
-    circles.push({ x: sx, z: sz, r: 0.25 });
   });
   function refreshLabels() { /* no floating words in the world: places are told apart by colour and shape */ }
 
@@ -836,7 +856,7 @@
       const ia = h.object.userData.ia;
       if (ia) {
         if (Math.hypot(ia.x - P.x, ia.z - P.z) < ia.r) { faceTo(ia); act(ia); return; }
-        routeTo(ia.place, ia);
+        if (ia.place) routeTo(ia.place, ia); else auto = { pts: [{ x: ia.sx, z: ia.sz }], i: 0, then: ia };
         return;
       }
       if (h.object.userData.ground) { auto = { pts: [{ x: h.point.x, z: h.point.z }], i: 0 }; return; }
@@ -876,6 +896,7 @@
   function act(ia) {
     auto = null; keys.clear();
     if (ia.kind === 'view') { enterView(ia.place); return; }
+    if (ia.kind === 'board') { openMap(); return; }
     if (ia.kind === 'sign') {
       const p = ia.place, s = p.song;
       say([`この道の先：${s.place}（${s.placeEn}）`, p.found ? `♪ ${s.title} が流れている場所。近づくほど音が大きくなる。` : 'どんな曲が流れているかは、行ってみないとわからない。']);
@@ -971,7 +992,7 @@
   const mapCv = $('#mapCanvas'), mg = mapCv.getContext('2d');
   const MAP_S = mapCv.width / 300;
   const toMap = (x, z) => [(x + 150) * MAP_S, (z + 150) * MAP_S];
-  function drawMap() {
+  function drawMap(at) {
     const g = mg, W = mapCv.width;
     g.fillStyle = '#141412'; g.fillRect(0, 0, W, W);
     g.lineCap = 'round';
@@ -998,8 +1019,8 @@
       g.font = '700 18px sans-serif'; g.textBaseline = 'middle'; g.fillStyle = '#141412';
       g.fillText(p.found ? '♪' : '?', x, y + 1);
     });
-    const [px, py] = toMap(P.x, P.z);
-    g.save(); g.translate(px, py); g.rotate(-P.face + Math.PI);
+    const [px, py] = toMap((at || P).x, (at || P).z);
+    g.save(); g.translate(px, py); g.rotate(at ? 0 : -P.face + Math.PI); if (at) g.scale(1.6, 1.6);
     g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill();
     g.restore();
   }
@@ -1023,6 +1044,28 @@
   }
   $('#mapBtn').addEventListener('click', () => (mode === 'modal' ? closeMap() : openMap()));
   $('#mapClose').addEventListener('click', closeMap);
+  const guide = (() => {
+    const bx = -4.6, bz = -3.4, rot = Math.atan2(4.6, -4.1), g = new THREE.Group();
+    const wood = mat('#3d3024', { rough: 0.9 }), woodD = mat('#2c221a', { rough: 0.9 });
+    const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 512;
+    const tex2 = new THREE.CanvasTexture(cv2); tex2.encoding = THREE.sRGBEncoding; tex2.anisotropy = 4;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 2.3), new THREE.MeshBasicMaterial({ map: tex2 }));
+    face.material.userData.lin = true; face.material.color.setScalar(0.8); face.position.set(0, 2.05, 0.07);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 0.1), woodD); back.position.y = 2.05;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.12, 0.7), wood); roof.position.y = 3.5; 
+    const roof2 = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.12, 0.45), wood); roof2.position.set(0, 3.42, 0.42); roof2.rotation.x = 0.5;
+    g.add(face, back, roof, roof2);
+    for (const sx of [-1.4, 1.4]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.5, 0.16), wood); p.position.set(sx, 1.75, 0); g.add(p); }
+    g.traverse((m) => { if (m.isMesh && m !== face) m.castShadow = true; });
+    g.position.set(bx, 0, bz); g.rotation.y = rot;
+    scene.add(g);
+    const c = Math.cos(rot), s = Math.sin(rot);
+    boxes.push({ x: bx, z: bz, hx: 1.5, hz: 0.25, c, s });
+    const ia = { kind: 'board', x: bx, z: bz, r: 3, mark: 4.1, sx: bx + s * 1.6, sz: bz + c * 1.6 };
+    interact.push(ia);
+    back.userData.ia = face.userData.ia = ia; pick.push(back, face);
+    return { refresh() { drawMap({ x: bx + s * 1.2, z: bz + c * 1.2 }); cv2.getContext('2d').drawImage(mapCv, 0, 0, 512, 512); tex2.needsUpdate = true; } };
+  })();
   mapCv.addEventListener('click', (e) => {
     const r = mapCv.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * mapCv.width / MAP_S - 150, z = ((e.clientY - r.top) / r.height) * mapCv.height / MAP_S - 150;
@@ -1058,7 +1101,7 @@
       if (!p.found && d < 20 && on) {
         p.found = true; refreshLabels(p); updateFound(); save();
         SW.Audio.chime();
-        banner('♪ NEW', p.song.title); lastFocus = undefined;
+        banner('♪ NEW', p.song.title); lastFocus = undefined; guide.refresh();
       }
       if (!on) { p.f = SILENT; return; }
       const ch = A.channels[p.idx];
@@ -1162,8 +1205,7 @@
       $('#prompt').hidden = !fkey;
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
-        const s = fkey.place.song;
-        $('#promptText').textContent = fkey.place.found ? '♪ ' + s.title : '？';
+        $('#promptText').textContent = fkey.kind === 'board' ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
     $('#btnA').classList.toggle('ready', !!fkey);
@@ -1335,6 +1377,7 @@
     
     mode = 'title';
     $('#title').hidden = false;
+    guide.refresh();
     $('#loading').classList.add('out');
     requestAnimationFrame(loop);
     $('#startBtn').focus({ preventScroll: true });
