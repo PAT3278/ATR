@@ -206,7 +206,7 @@
         }
       }
       // Embankments, a tunnel mouth on the near side
-      const embM = E.mat('#a4a8ab', { rough: 0.8 });
+      const embM = E.mat('#56544f', { rough: 0.9 });
       const emb1 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 18), embM);
       emb1.position.set(BX, 1.8, RZ + 26); g.add(emb1);
       const emb2 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 120), embM);
