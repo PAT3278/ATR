@@ -543,23 +543,42 @@
       g.traverse((m) => { if (m.isMesh) m.castShadow = true; });
       return (t, bst, speed) => { hubs.forEach((hb) => (hb.rotation.x = t * speed * 4)); };
     }));
-    // Floating deck, ridden sideways.
-    mk('side', 0.14, (g) => {
-      const shell = gloss('#f1f5f8', { rough: 0.15, env: 1 });
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.05, 1.1), shell); deck.position.y = 0.1; deck.castShadow = true;
-      for (const z of [-0.55, 0.55]) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18), shell); cap.position.set(0, 0.1, z); cap.castShadow = true; g.add(cap); }
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.056, 1.25), led()); strip.position.y = 0.1;
-      const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.2), additive('#4fd0ff', 0.35)); glow.rotation.x = -Math.PI / 2; glow.position.set(0, 0.03, -0.4);
-      g.add(deck, strip, glow);
-      return (t, bst) => { glow.material.opacity = 0.2 + bst * 0.3; g.position.y = Math.sin(t * 6) * 0.015; };
-    });
-    // Hover disc.
-    mk('front', 0.22, (g) => {
-      const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.36, 0.09, 28), gloss('#e9f4fb', { rough: 0.12, metal: 0.3, env: 1.1 })); dish.position.y = 0.13; dish.castShadow = true;
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.025, 8, 12), led('#9cf06a')); rim.rotation.x = Math.PI / 2; rim.position.y = 0.175;
-      const glow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), additive('#9cf06a', 0.3)); glow.rotation.x = -Math.PI / 2; glow.position.y = -0.02;
-      g.add(dish, rim, glow);
-      return (t, bst) => { rim.rotation.z = t * 3; glow.material.opacity = 0.15 + bst * 0.3; g.position.y = 0.05 + Math.sin(t * 5) * 0.02; };
+    // Hover boards, ridden sideways: wheel-less decks floating a hand above the ground.
+    const blobM = () => { const m = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }); m.userData.lin = true; return m; };
+    const deckShape = (g, m, w, len, y, th) => {
+      const mid = new THREE.Mesh(new THREE.BoxGeometry(w, th, len - w), m); mid.position.y = y; mid.castShadow = true; g.add(mid);
+      for (const sd of [-1, 1]) { const cap = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, th, 20), m); cap.position.set(0, y, sd * (len - w) / 2); cap.castShadow = true; g.add(cap); }
+    };
+    // Retro deck: bright shell, striped grip, two lifter pads underneath.
+    [['#e0457b', '#35b8a8', '#f2d24a'], ['#3f8fd8', '#f2f2ee', '#e0457b'], ['#e8762c', '#2a2a2e', '#f2f2ee']].forEach(([body, s1, s2]) => mk('side', 0.335, (g) => {
+      const Y = 0.3;
+      deckShape(g, gloss(body, { rough: 0.3, env: 0.5 }), 0.3, 1.12, Y, 0.045);
+      deckShape(g, mat(s1, { rough: 0.8 }), 0.22, 0.98, Y + 0.024, 0.008);
+      for (const z of [-0.2, 0, 0.2]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.01, 0.035), mat(s2, { rough: 0.8 })); st.position.set(0, Y + 0.026, z); g.add(st); }
+      for (const z of [-0.3, 0.3]) {
+        const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.1, 0.05, 18), rubber); pad.position.set(0, Y - 0.045, z);
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.052, 14), chrome); ring.position.copy(pad.position); ring.position.y -= 0.004;
+        g.add(pad, ring);
+      }
+      const sh = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), blobM()); sh.rotation.x = -Math.PI / 2; sh.scale.set(0.5, 1.25, 1); sh.position.y = 0.025; g.add(sh);
+      return (t) => { const b = Math.sin(t * 4) * 0.02; g.position.y = b; sh.position.y = 0.025 - b; g.rotation.z = Math.sin(t * 2.3) * 0.03; };
+    }));
+    // Engine board: black oval deck on four round hover engines with a faint blue wash on the ground.
+    mk('side', 0.375, (g) => {
+      const Y = 0.34, black = gloss('#1b1c20', { rough: 0.25, metal: 0.4, env: 0.7 });
+      const deck = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.035, 32), black); deck.scale.set(0.21, 1, 0.62); deck.position.y = Y; deck.castShadow = true;
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.8), mat('#2a2b30', { rough: 0.5, metal: 0.5 })); chassis.position.y = Y - 0.045;
+      g.add(deck, chassis);
+      const rings = [];
+      for (const x of [-0.13, 0.13]) for (const z of [-0.3, 0.3]) {
+        const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.075, 18), black); eng.position.set(x, Y - 0.105, z); eng.castShadow = true;
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.01, 16), led('#3d8bff')); ring.position.set(x, Y - 0.146, z);
+        g.add(eng, ring); rings.push(ring);
+      }
+      const wash = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), additive('#2f7bff', 0.18)); wash.rotation.x = -Math.PI / 2; wash.scale.set(0.6, 1.3, 1); wash.position.y = 0.03;
+      const sh = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), blobM()); sh.rotation.x = -Math.PI / 2; sh.scale.set(0.55, 1.3, 1); sh.position.y = 0.025;
+      g.add(sh, wash);
+      return (t, bst) => { const b = Math.sin(t * 5) * 0.015; g.position.y = b; sh.position.y = 0.025 - b; wash.position.y = 0.03 - b; wash.material.opacity = 0.1 + bst * 0.12 + Math.sin(t * 20) * 0.02; };
     });
     let cur = null, last = null, forced = null;
     let phase = 0;
@@ -572,16 +591,16 @@
         if (!riding && cur) { cur.g.visible = false; cur = null; }
         const side = riding && cur.pose === 'side';
         body.rotation.z = lean;
-        body.rotation.y = side ? 1.05 : 0; if (riding) { body.rotation.x = side ? 0 : 0.1; hips.rotation.y = 0; }
-        head.rotation.y = side ? -0.95 : 0;
+        body.rotation.y = side ? 1.4 : 0; if (riding) { body.rotation.x = side ? 0 : 0.1; hips.rotation.y = 0; }
+        head.rotation.y = side ? -1.2 : 0;
         arms.forEach((a, i) => (a.pivot.rotation.z = (i ? 1 : -1) * (side ? 0.95 : riding ? 0.3 : 0.08)));
         if (riding) {
           const tt = performance.now() / 1000;
           cur.upd(tt, bst, speed);
           if (side) {
-            legs[0].pivot.rotation.x = 0.3; legs[1].pivot.rotation.x = -0.3;
-            legs[0].pivot.rotation.z = -0.25; legs[1].pivot.rotation.z = 0.25;
-            legs[0].knee.rotation.x = legs[1].knee.rotation.x = 0.35;
+            legs[0].pivot.rotation.x = legs[1].pivot.rotation.x = -0.1;
+            legs[0].pivot.rotation.z = -0.3; legs[1].pivot.rotation.z = 0.3;
+            legs[0].knee.rotation.x = legs[1].knee.rotation.x = 0.2;
           } else {
             legs[0].pivot.rotation.x = legs[1].pivot.rotation.x = -0.14;
             legs[0].pivot.rotation.z = -0.11; legs[1].pivot.rotation.z = 0.11;
