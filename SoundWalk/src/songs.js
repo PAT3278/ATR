@@ -20,6 +20,8 @@ SW.CONFIG = {
   // When this page is served from the NS HACK site, point it at that site's endpoint:
   //   checkoutEndpoint: '/api/stripe/checkout'
   // The endpoint receives { items: [{ name, price, quantity }] } and should answer { url } (or { sessionId }).
+  // Next show, shown in the live house beside the riverside (TAMA EXPRESSION). Edit here when it changes.
+  live: { date: '12.26', place: 'TOKYO' },
   checkoutEndpoint: null,
   stripePublishableKey: null, // only needed if the endpoint answers { sessionId } instead of { url }
 };

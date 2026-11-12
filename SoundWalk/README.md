@@ -84,6 +84,14 @@ Vercel / GitHub Pages などにそのまま置けます。three.js r128 は cdnj
 - **ストアリンク（いまの設定）**: 各曲の `links` に `kind: 'buy'` のURLを入れるとメインボタンになります。KEYAKI / TAMA EXPRESSION / FLIP DA HOODS は LinkCore、STEREOTYPE / NO JOBB は購入先が見つからなかったので SoundCloud の視聴リンクにしています。
 - **直接販売（Stripe Checkout）**: `SW.CONFIG.checkoutEndpoint` にエンドポイントを設定し、各曲の `price`（円）を入れると「この曲を買う ¥250」ボタンが出ます。エンドポイントは `{ items: [{ name, price, quantity }] }` を受け取り、`{ url }`（Checkout の URL）を返してください。`{ sessionId }` を返す場合は `stripePublishableKey` も設定します。NS HACK サイトの `/api/stripe/checkout` にそのまま渡せる形式です（同じドメインで配信する場合）。
 
+## 広場と世界のしかけ
+
+- **案内板**: 広場の井戸の横。エリア全体の地図（文字なし）で、調べると全体地図が開きます。
+- **踏み跡の道**: 草がすり減って土が見えた跡が、広場から各場所まで続いています。
+- **ライブハウス**: TAMA EXPRESSION の隣、線路の下の黒い建物。入口は開いていて、中にステージ・照明・観客がいます。ステージ前で調べると次のライブ情報が出ます。日付と場所は `src/songs.js` の `SW.CONFIG.live` で変更します（今は `12.26 / TOKYO`）。
+- **ブラウンストーン**: FIELD の手前に、NYアップタウン風の階段付きの家並み。階段の上で2人がマイクを持ってパフォーマンスしていて、FIELD を「眺める」と16秒ごとにビル内の銃撃戦とこの階段の場面が切り替わります。
+- **水上ホバー**: 川や海の上に入ると、自動で水上用の乗り物に乗り換えます（陸に上がると降ります）。
+
 ## 今後の予定（未実装）
 
 - **Drum Fish Pond**: 池でドラムの音素材（スネア、808 など）を釣れる場所。一度に一匹ずつ、一つの音が釣れる。

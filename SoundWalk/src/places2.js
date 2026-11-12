@@ -175,7 +175,53 @@
         }
       };
 
-      p.map = [{ t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
+      // Uptown brownstones along the approach: stoops with iron rails, and two performers on the steps.
+      const perf = [];
+      {
+        const cr = E.rng(212), X = 6.6;
+        const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
+        const bx = (w, h, d, x, y, z, m, shadow = true) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = shadow; o.receiveShadow = true; g.add(o); return o; };
+        const fig = (jacket, cap) => {
+          const f = new THREE.Group(), skin = E.mat('#8a5a3c'), jm = E.mat(jacket, { rough: 0.8 }), pm = E.mat('#1d1f26');
+          for (const sx of [-0.1, 0.1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.9, 8), pm); l.position.set(sx, 0.45, 0); f.add(l); }
+          const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.62, 10), jm); torso.position.y = 1.2; torso.scale.z = 0.7; f.add(torso);
+          const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 10), skin); head.position.y = 1.68; f.add(head);
+          const hat = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 8, 0, 6.3, 0, 1.6), E.mat(cap)); hat.position.y = 1.7; f.add(hat);
+          const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.27, 1.45, 0); const a = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.56, 8), jm); a.position.y = -0.28; piv.add(a); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), skin); hd.position.y = -0.6; piv.add(hd); f.add(piv); return piv; });
+          const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.2, 8), ironM); mic.position.y = -0.68; arms[1].add(mic);
+          f.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+          return { f, arms, torso, head };
+        };
+        for (let i = 0; i < 4; i++) {
+          const z0 = 17 + i * 6.2, H = 10.4 + (i % 2) * 0.9, wall = E.mat(['#6a4636', '#7d4034', '#5c4136', '#86563f'][i]), dz = z0 - 1.6;
+          bx(8, H, 6.1, X + 4, H / 2, z0, wall);
+          bx(0.7, 0.5, 6.3, X - 0.15, H - 0.1, z0, trimM); bx(0.3, 0.25, 6.2, X - 0.05, H - 0.75, z0, trimM, false);        // cornice
+          bx(0.3, 0.18, 6.2, X - 0.05, 4.75, z0, trimM, false);                                                             // string course
+          const win = (y, z, h = 1.7) => { bx(0.06, h, 0.95, X - 0.03, y, z, cr() < 0.45 ? winLit : winDark, false); bx(0.16, 0.2, 1.2, X - 0.06, y + h / 2 + 0.14, z, trimM, false); bx(0.2, 0.1, 1.15, X - 0.08, y - h / 2 - 0.05, z, trimM, false); };
+          win(3.25, z0 + 0.35, 1.9); win(3.25, z0 + 2.0, 1.9); win(0.95, z0 + 1.2, 0.9);
+          for (const y of [6.3, 8.6]) for (const z of [-1.85, 0, 1.85]) win(y, z0 + z);
+          bx(0.08, 2.4, 1.15, X - 0.04, 3.0, dz, doorM, false); bx(0.3, 0.3, 1.6, X - 0.1, 4.35, dz, trimM, false);        // door and hood
+          bx(0.1, 0.22, 0.14, X - 0.08, 3.4, dz + 0.85, winLit, false);                                                     // door lamp
+          for (let k = 0; k < 8; k++) bx(0.37, 0.225 * (k + 1), 1.75, X - 2.9 + k * 0.36, 0.1125 * (k + 1), dz, stepM);    // stoop
+          for (const sd of [-1, 1]) {
+            const rz = dz + sd * 0.95, rail = bx(3.45, 0.05, 0.05, X - 1.5, 1.85, rz, ironM, false); rail.rotation.z = 0.556;
+            for (let k = 0; k < 7; k++) bx(0.03, 0.9, 0.03, X - 2.9 + k * 0.46, 0.5 + k * 0.288, rz, ironM, false);
+            bx(0.12, 1.15, 0.12, X - 3.1, 0.58, rz, ironM, false);
+          }
+          for (let k = 0; k < 9; k++) bx(0.03, 0.8, 0.03, X - 3.1, 0.4, z0 + 0.1 + k * 0.34, ironM, false);                 // area railing
+          bx(0.04, 0.04, 3.0, X - 3.1, 0.8, z0 + 1.5, ironM, false);
+          p.addBox(X + 4, z0, 4.05, 3.1); p.addBox(X - 1.5, dz, 1.6, 1.0); p.addBox(X - 3.1, z0 + 1.5, 0.15, 1.55);
+          if (i === 1 || i === 2) {
+            const m = fig(i === 1 ? '#b3161d' : '#d8d2c0', i === 1 ? '#111111' : '#2a4a8a');
+            m.f.position.set(X - 2.9 + 4 * 0.36, 0.225 * 5, dz + (i === 1 ? 0.25 : -0.25)); m.f.rotation.y = -Math.PI / 2 + (i === 1 ? 0.3 : -0.3); g.add(m.f);
+            perf.push({ ...m, y: 0.225 * 5, s: i * 2.1 });
+          }
+        }
+        const walk = E.plane(4, 26, E.mat('#77736c', { map: E.tex('paving', 2, 13), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 26.3); g.add(walk); p.pick(walk);
+        const box2 = bx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
+        box2.rotation.y = 0.3;
+      }
+      p.map = [{ t: 'rect', x: 10.6, z: 26.3, w: 8, h: 25, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
         top: '#05070f', bottom: '#1a2234', fog: '#0f141e', near: 24, far: 190,
         sun: '#9fb4ff', sunInt: 0.3, hemi: 0.28, sunDir: [0.2, 0.8, -0.4],
@@ -184,7 +230,7 @@
       p.face = Math.PI;
       p.pathEnd = 11;
       p.clearR = 26;
-      p.blocks = (lx, lz) => (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => (lx > -1 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
         // Shots on the kick, a burst on hard hits; a slow trickle so it never goes fully quiet.
@@ -223,8 +269,16 @@
           if (T.beam) { T.beam.rotation.z = Math.sin(t * 0.25 + T.seed) * 0.35; T.beam.material.opacity = 0.05 + f.mid * 0.1; }
         });
         towerM.emissiveIntensity = 0.4 + f.level * 0.6;
+        perf.forEach((m, i) => {
+          const e = 0.35 + f.level * 1.4, b = Math.abs(Math.sin(t * 3.6 + m.s));
+          m.f.position.y = m.y + b * 0.05 * e + f.pulse * 0.06;
+          m.torso.rotation.z = Math.sin(t * 1.8 + m.s) * 0.1 * e; m.head.rotation.x = -f.pulse * 0.25;
+          m.arms[1].rotation.x = -1.9 + Math.sin(t * 2.2 + m.s) * 0.12; m.arms[1].rotation.z = -0.35;                         // mic hand up
+          m.arms[0].rotation.x = -0.9 - Math.sin(t * 3.6 + m.s) * 0.6 * e; m.arms[0].rotation.z = (i ? 1 : -1) * 0.2 - 0.3; // free hand gesturing
+        });
       };
       p.shot = (t, f) => {
+        if (Math.floor(t / 16) % 2 === 1) { const a = Math.sin(t * 0.25) * 1.8; return { pos: [0.6, 1.15, 24.7 + a], look: [6.6, 2.5, 24.7 + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 }; } // the stoop performance
         const k = RM ? 0 : f.pulse * 0.05;
         const x = Math.sin(t * 0.13) * 7;
         return { pos: [x + (Math.random() - 0.5) * k, 1.15 + (Math.random() - 0.5) * k, 3], look: [x * 0.4, 1.5, -24], roll: Math.sin(t * 0.2) * 0.02 };
@@ -430,15 +484,15 @@
           'col+=a*smoothstep(.6,1.,w)*(.15+path*(1.4+level*2.));col=mix(col,a*.9,pow(y,8.)*.6);gl_FragColor=vec4(pow(col,vec3(2.2)),1.);}',
       }));
       sea.rotation.x = -Math.PI / 2; sea.position.set(0, 0.07, -230);
-      g.add(sea);
-      p.addBox(0, -230, 350, 190);
+      g.add(sea); p.pick(sea);
+      p.water(0, -230, 350, 190);
       const beach = E.plane(260, 8, E.mat('#e2cf9e', { map: E.tex('sand', 60, 2) }));
       beach.position.set(0, 0.06, -37); g.add(beach);
       // Sea stacks and the far mountains
       for (let i = 0; i < 9; i++) {
         const s = 4 + r() * 9;
         const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockD);
-        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); m.scale.y = 1.6 + r(); m.castShadow = true; g.add(m);
+        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); m.scale.y = 1.6 + r(); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
       }
       const mtnM = E.mat('#6f86a6', { flat: true });
       for (let i = 0; i < 9; i++) {

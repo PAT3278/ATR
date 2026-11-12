@@ -161,8 +161,8 @@
       }));
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.05, RZ);
-      g.add(water);
-      p.addBox(0, RZ, 50, RW / 2 + 0.2);
+      g.add(water); p.pick(water);
+      p.water(0, RZ, 50, RW / 2);
 
       const sandM = E.mat('#cdb683', { map: E.tex('sand', 30, 1) });
       for (const z of [RZ + RW / 2 + 0.8, RZ - RW / 2 - 0.8]) {
@@ -211,14 +211,56 @@
       emb1.position.set(BX, 1.8, RZ + 26); g.add(emb1);
       const emb2 = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, 120), embM);
       emb2.position.set(BX, 1.8, RZ - 77); g.add(emb2);
-      const hill = new THREE.Mesh(new THREE.BoxGeometry(14, 9, 16), embM);
-      hill.position.set(BX, 4.5, RZ + 42); g.add(hill);
+      // Live house under the tracks: the train runs through the upper floor, the ground floor is an open venue.
+      const CZ = RZ + 42, V = new THREE.Group(); V.position.set(BX, 0, CZ); g.add(V);
+      const wallM = E.mat('#1b1a1c', { rough: 0.9 }), stageM = E.mat('#141316', { rough: 0.7 }), gearM = E.mat('#0f0f11', { rough: 0.6, metal: 0.3 });
+      const vbox = (w, h, d, x, y, z, m = wallM) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; V.add(o); return o; };
+      const vglow = (hex, o) => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+      vbox(0.4, 9, 16, -6.8, 4.5, 0); vbox(14, 9, 0.4, 0, 4.5, -7.8); vbox(14, 9, 0.4, 0, 4.5, 7.8);          // back and side walls
+      vbox(0.4, 5.4, 16, 6.8, 6.3, 0); vbox(0.4, 3.6, 4.5, 6.8, 1.8, -5.75); vbox(0.4, 3.6, 4.5, 6.8, 1.8, 5.75); // front, with a 7 m opening
+      vbox(14, 0.3, 16, 0, 3.45, 0); vbox(14, 0.3, 16, 0, 8.85, 0);                                              // ceiling under the tracks, roof
+      const vfloor = E.plane(13.2, 15.2, E.mat('#2b2622', { rough: 0.65 })); vfloor.position.y = 0.05; V.add(vfloor); p.pick(vfloor);
+      vbox(3.2, 0.7, 12, -4.9, 0.35, 0, stageM);                                                                  // stage
+      for (const z of [-5.1, 5.1]) { vbox(0.95, 1.1, 0.95, -3.95, 1.25, z, gearM); vbox(0.85, 0.9, 0.85, -3.95, 2.25, z, gearM); } // PA stacks
+      for (const z of [-2.2, 2.2]) vbox(0.45, 0.75, 0.9, -5.9, 1.08, z, gearM);                                   // amps
+      { const kick = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.4, 16), gearM); kick.rotation.z = Math.PI / 2; kick.position.set(-5.5, 1.04, 0); V.add(kick);
+        for (const [x, y, z, r] of [[-5.4, 1.45, -0.45, 0.2], [-5.4, 1.45, 0.45, 0.2], [-5.75, 1.2, 0.85, 0.26]]) { const tm = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.2, 12), gearM); tm.position.set(x, y, z); V.add(tm); }
+        for (const z of [-0.95, 1.2]) { const cy = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.015, 14), E.mat('#8a7440', { metal: 0.8, rough: 0.35 })); cy.position.set(-5.5, 1.75, z); V.add(cy); }
+        const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.5, 6), gearM); mic.position.set(-3.7, 1.45, 0); V.add(mic); }
+      vbox(0.12, 0.12, 12.4, -3.6, 3.18, 0, gearM);                                                               // lighting truss
+      const live = SW.CONFIG.live || { date: '', place: '' };
+      const poster = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 2.5), new THREE.MeshBasicMaterial({ map: E.textTex(`NEXT LIVE\n${live.date}  ${live.place}`, { w: 1024, h: 344, color: '#d8d2c0', color2: '#e0262d', font: '400 92px "Special Elite","Courier New",monospace', font2: '400 118px "Special Elite","Courier New",monospace' }), transparent: true }));
+      poster.position.set(-6.55, 2.05, 0); poster.rotation.y = Math.PI / 2; V.add(poster);
+      const beams = [], cols = ['#ff2a6a', '#2ad4ff', '#ffb02a', '#b36bff', '#2ad4ff', '#ff2a6a'];
+      cols.forEach((hex, i) => {
+        const z = -5 + i * 2, can = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.26, 10), gearM); can.position.set(-3.6, 3.0, z); V.add(can);
+        const m = vglow(hex, 0.16), beam = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.3, 14, 1, true), m); beam.position.set(-4.2, 1.85, z); beam.rotation.z = 0.25; V.add(beam);
+        beams.push({ m, beam, s: i * 1.3 });
+      });
+      const sl1 = new THREE.PointLight('#ff2a6a', 1.4, 15, 1.6); sl1.position.set(-3.6, 2.7, -3); V.add(sl1);
+      const sl2 = new THREE.PointLight('#2ad4ff', 1.4, 15, 1.6); sl2.position.set(-3.6, 2.7, 3); V.add(sl2);
+      // a few people waiting for the show
+      const crowd = [], bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.25, 8).translate(0, 0.62, 0), headG = new THREE.SphereGeometry(0.17, 10, 8).translate(0, 1.45, 0), crowdM = E.mat('#141315', { rough: 0.9 }), cr = E.rng(909);
+      for (let i = 0; i < 13; i++) { const f = new THREE.Group(); f.add(new THREE.Mesh(bodyG, crowdM), new THREE.Mesh(headG, crowdM)); const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2; if (Math.abs(z) < 1.4 && x < 0.6) { continue; } f.position.set(x, 0.05, z); f.scale.setScalar(0.92 + cr() * 0.18); V.add(f); crowd.push({ f, s: cr() * 6 }); p.addCircle(BX + x, CZ + z, 0.3); }
+      // open entrance: lit frame, marquee, light spilling onto the ground outside
+      const neon = new THREE.MeshBasicMaterial({ color: '#ff3a44' });
+      for (const [w, h, d, y, z] of [[0.08, 0.08, 7.2, 3.58, 0], [0.08, 3.55, 0.08, 1.8, -3.55], [0.08, 3.55, 0.08, 1.8, 3.55]]) { const n = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), neon); n.position.set(7.04, y, z); V.add(n); }
+      const marquee = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.3), new THREE.MeshBasicMaterial({ map: E.textTex(`LIVE  ${live.date}  ${live.place}`, { w: 1024, h: 208, color: '#f2e9d2', bg: '#16090a', font: '400 78px "Special Elite","Courier New",monospace' }) }));
+      marquee.position.set(7.03, 4.55, 0); marquee.rotation.y = Math.PI / 2; V.add(marquee);
+      const spill = new THREE.Mesh(new THREE.PlaneGeometry(9, 8), vglow('#ff6a5a', 0.1)); spill.rotation.x = -Math.PI / 2; spill.position.set(10.5, 0.06, 0); V.add(spill);
+      p.addBox(BX - 6.8, CZ, 0.35, 8); p.addBox(BX, CZ - 7.8, 7, 0.35); p.addBox(BX, CZ + 7.8, 7, 0.35);
+      p.addBox(BX + 6.8, CZ - 5.75, 0.35, 2.25); p.addBox(BX + 6.8, CZ + 5.75, 0.35, 2.25); p.addBox(BX - 4.9, CZ, 1.7, 6.1);
+      p.info(BX - 2.3, CZ, 2.6, 2.5, [`NEXT LIVE\n${live.date}  ${live.place}`]);
+      const venueUpd = (t, f) => {
+        beams.forEach((b) => { b.m.opacity = 0.08 + f.pulse * 0.22 + 0.05 * Math.sin(t * 2 + b.s); b.beam.rotation.x = Math.sin(t * 0.8 + b.s) * 0.25; });
+        sl1.intensity = 0.9 + f.pulse * 2.2; sl2.intensity = 0.9 + f.high * 3;
+        crowd.forEach((c) => { c.f.position.y = 0.05 + Math.abs(Math.sin(t * 3.2 + c.s)) * 0.05 * (0.4 + f.level * 2) + f.pulse * 0.05; });
+      };
       const hillBand = new THREE.Mesh(new THREE.BoxGeometry(14.12, 0.14, 16.12), new THREE.MeshBasicMaterial({ color: '#ffb060' }));
       hillBand.position.set(BX, 7.9, RZ + 42); g.add(hillBand);
       const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 4.2), new THREE.MeshBasicMaterial({ color: '#0c0a0e' }));
       mouth.position.set(BX, 5.6, RZ + 33.95); mouth.rotation.y = Math.PI; g.add(mouth);
       p.addBox(BX, RZ + 26, 2.6, 9);
-      p.addBox(BX, RZ + 42, 7, 8);
 
       // Train
       const train = new THREE.Group();
@@ -271,6 +313,7 @@
 
       let trainT = 6;
       p.update = (t, dt, f, v) => {
+        venueUpd(t, f);
         water.material.uniforms.t.value = t;
         water.material.uniforms.level.value += (f.level - water.material.uniforms.level.value) * Math.min(1, dt * 8);
         const sS = 1 + f.bass * 0.07;
