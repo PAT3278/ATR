@@ -585,14 +585,19 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
 
     if (on)
     {
-        g.setColour (lit.withAlpha (0.18f));
-        g.fillRoundedRectangle (r.expanded (3.0f), corner + 3.0f);
+        // a faint glow around a lit key, not a ring
+        for (auto [grow, alpha] : { std::pair { 6.0f, 0.04f }, { 3.0f, 0.06f } })
+        {
+            g.setColour (lit.withAlpha (alpha));
+            g.fillRoundedRectangle (r.expanded (grow), corner + grow);
+        }
     }
 
-    // shadow and the key's side
-    g.setColour (Colours::black.withAlpha (pressed ? 0.25f : 0.35f));
+    // shadow and the key's side: translucent, so the edge reads as depth
+    // rather than a border
+    g.setColour (Colours::black.withAlpha (pressed ? 0.10f : 0.14f));
     g.fillRoundedRectangle (r.translated (0.0f, 2.0f), corner);
-    g.setColour (on ? lit.darker (0.9f) : Colour (0xff6e6253));
+    g.setColour (on ? lit.darker (0.6f).withAlpha (0.45f) : Colour (0xff3a2a22).withAlpha (0.28f));
     g.fillRoundedRectangle (r.withTrimmedTop (travel), corner);
 
     auto cap = r.withTrimmedBottom (travel);

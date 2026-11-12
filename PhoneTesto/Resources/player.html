@@ -133,7 +133,7 @@
     --mono: "PhoneTesto Mono", ui-monospace, monospace;
     --cream-top: #ece2d2;
     --cream-bottom: #c9bca8;
-    --key-side: #6e6253;
+    --key-side: rgba(58, 42, 34, 0.28);
     --ink: #3a2a22;
   }
   html[data-skin="digital"] { background: #050d10; }
@@ -182,18 +182,18 @@
   html[data-skin="digital"] .btn {
     border: 0; border-radius: 11px; color: var(--ink); font-size: 16px; letter-spacing: 0.1em;
     background: linear-gradient(var(--cream-top), var(--cream-bottom));
-    box-shadow: 0 3px 0 var(--key-side), 0 6px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 3px 0 var(--key-side), 0 6px 12px rgba(0, 0, 0, 0.14);
     transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
   html[data-skin="digital"] .btn[aria-pressed]::before {
     left: 50%; top: 7px; width: 22px; height: 3px; margin: 0 0 0 -11px; border-radius: 2px;
     background: var(--led-off); box-shadow: none;
   }
-  html[data-skin="digital"] .btn:active { transform: translateY(1.5px); box-shadow: 0 1.5px 0 var(--key-side), 0 4px 8px rgba(0, 0, 0, 0.3); filter: none; }
+  html[data-skin="digital"] .btn:active { transform: translateY(1.5px); box-shadow: 0 1.5px 0 var(--key-side), 0 4px 8px rgba(0, 0, 0, 0.12); filter: none; }
   html[data-skin="digital"] .btn[aria-pressed="true"],
   html[data-skin="digital"] .btn.solid[aria-pressed="true"] {
     color: #2a120a; background: linear-gradient(#ffb373, #f08046); transform: translateY(2px);
-    box-shadow: 0 1px 0 #7a3d1e, 0 0 0 3px rgba(var(--accent), 0.16), 0 0 20px rgba(var(--accent), 0.4);
+    box-shadow: 0 1px 0 rgba(122, 61, 30, 0.4), 0 0 18px rgba(var(--accent), 0.3);
   }
   html[data-skin="digital"] .btn[aria-pressed="true"]::before { background: #fff6e8; box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.6); }
   html[data-skin="digital"] .field:focus { box-shadow: 0 0 0 2px rgba(var(--accent), 0.6); }
