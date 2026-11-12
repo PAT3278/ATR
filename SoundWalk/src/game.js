@@ -580,6 +580,19 @@
       g.add(sh, wash);
       return (t, bst) => { const b = Math.sin(t * 5) * 0.015; g.position.y = b; sh.position.y = 0.025 - b; wash.position.y = 0.03 - b; wash.material.opacity = 0.1 + bst * 0.12 + Math.sin(t * 20) * 0.02; };
     });
+    // Kinto-un: a golden cloud you stand on, with a tail of puffs streaming behind.
+    mk('front', 0.5, (g) => {
+      const cm = mat('#f1c544', { rough: 1, emissive: '#7a5a10', emissiveIntensity: 0.5 }, true), puffs = [], tail = [];
+      [[0, 0.3, 0, 0.3], [0.26, 0.27, 0.05, 0.24], [-0.26, 0.27, 0.03, 0.24], [0.1, 0.26, 0.24, 0.22], [-0.12, 0.26, 0.22, 0.22], [0.14, 0.27, -0.2, 0.23], [-0.14, 0.27, -0.22, 0.23], [0.4, 0.24, -0.08, 0.16], [-0.4, 0.24, -0.1, 0.16]].forEach(([x, y, z, r]) => {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), cm); m.position.set(x, y, z); m.scale.y = 0.72; m.castShadow = true; g.add(m); puffs.push({ m, y, s: x * 7 + z * 5 });
+      });
+      [[-0.45, 0.2], [-0.72, 0.15], [-0.95, 0.11], [-1.14, 0.07]].forEach(([z, r]) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), cm); m.position.set(0, 0.26, z); m.castShadow = true; g.add(m); tail.push(m); });
+      return (t, bst, speed) => {
+        g.position.y = Math.sin(t * 3) * 0.03;
+        puffs.forEach((p) => (p.m.position.y = p.y + Math.sin(t * 4 + p.s) * 0.015));
+        tail.forEach((m, i) => { m.position.x = Math.sin(t * 6 - i * 0.9) * 0.05 * (i + 1); m.position.y = 0.26 + Math.sin(t * 5 - i) * 0.03; m.visible = speed > 2; });
+      };
+    });
     let cur = null, last = null, forced = null;
     let phase = 0;
     return {
