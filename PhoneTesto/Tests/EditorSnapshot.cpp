@@ -1,8 +1,8 @@
-// Renders the plugin editor to PNGs -- in each skin (FLAT, DIGITAL), once
+// Renders the plugin editor to PNGs -- in each skin (FLAT, SUNSET), once
 // in Emulate mode and once with Live Monitor on (QR code with the auto
 // access code, listener count) -- while a background thread feeds the
 // processor a tone so the meter is actually moving. Also prints how long a
-// DIGITAL animation frame takes to draw. Lets the layout be checked without
+// SUNSET animation frame takes to draw. Lets the layout be checked without
 // a DAW. Needs a display; on headless Linux run it under xvfb-run. Exits
 // non-zero unless every image was written.
 //
@@ -126,7 +126,7 @@ public:
             allOk &= snapshot (*editor, dir.getChildFile ("editor-" + name + "-emulate.png"), scale);
 
             // what a frame costs to draw: the whole editor (controls come
-            // from cached images), and for DIGITAL its animated background alone
+            // from cached images), and for SUNSET its animated background alone
             {
                 juce::Image frame (juce::Image::RGB, editor->getWidth(), editor->getHeight(), false);
                 const auto ms = timeMs ([&] { juce::Graphics g (frame); editor->paintEntireComponent (g, true); });
@@ -186,7 +186,7 @@ public:
                 }
             }
 
-            // PT_ANIM_FRAMES=n: also save n frames of the DIGITAL animation
+            // PT_ANIM_FRAMES=n: also save n frames of the SUNSET animation
             if (skin == 1)
                 if (const int frames = juce::String (std::getenv ("PT_ANIM_FRAMES")).getIntValue(); frames > 0)
                 {

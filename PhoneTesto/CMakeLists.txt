@@ -87,8 +87,8 @@ juce_add_binary_data(PhoneTestoAssets SOURCES
     Resources/fonts/Barlow-Medium.ttf
     Resources/fonts/Barlow-SemiBold.ttf
     Resources/fonts/Barlow-Bold.ttf
-    Resources/fonts/PTDigital-SemiBold.ttf
-    Resources/fonts/PTDigital-Bold.ttf
+    Resources/fonts/PhoneTestoMono-Regular.ttf
+    Resources/fonts/PhoneTestoMono-Medium.ttf
 )
 
 # --- AAX ------------------------------------------------------------------

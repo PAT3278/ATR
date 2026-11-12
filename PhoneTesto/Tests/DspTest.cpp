@@ -353,7 +353,7 @@ int main()
         a->getStateInformation (state);
 
         auto b = makeProcessor (48000.0, 512);
-        check (b->getEditorSkin() == 1, "new instances open in the DIGITAL skin");
+        check (b->getEditorSkin() == 1, "new instances open in the SUNSET skin");
         b->setStateInformation (state.getData(), (int) state.getSize());
         check (std::abs (b->getEditorScale() - 1.25f) < 0.001f && b->getEditorSkin() == 0,
                "editor size and skin restored");

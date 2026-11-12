@@ -20,8 +20,8 @@ namespace
             faces[(int) Type::sansMedium]        = load (BinaryData::BarlowMedium_ttf, BinaryData::BarlowMedium_ttfSize);
             faces[(int) Type::sansSemiBold]      = load (BinaryData::BarlowSemiBold_ttf, BinaryData::BarlowSemiBold_ttfSize);
             faces[(int) Type::sansBold]          = load (BinaryData::BarlowBold_ttf, BinaryData::BarlowBold_ttfSize);
-            faces[(int) Type::digitalSemiBold]   = load (BinaryData::PTDigitalSemiBold_ttf, BinaryData::PTDigitalSemiBold_ttfSize);
-            faces[(int) Type::digitalBold]       = load (BinaryData::PTDigitalBold_ttf, BinaryData::PTDigitalBold_ttfSize);
+            faces[(int) Type::monoRegular]       = load (BinaryData::PhoneTestoMonoRegular_ttf, BinaryData::PhoneTestoMonoRegular_ttfSize);
+            faces[(int) Type::monoMedium]        = load (BinaryData::PhoneTestoMonoMedium_ttf, BinaryData::PhoneTestoMonoMedium_ttfSize);
         }
 
         juce::Typeface::Ptr faces[7];
@@ -204,7 +204,7 @@ void LookAndFeel::fillTextEditorBackground (juce::Graphics& g, int width, int he
 {
     if (skin == Skin::digital)
     {
-        g.setColour (juce::Colours::white.withAlpha (0.07f));
+        g.setColour (juce::Colours::black.withAlpha (0.3f));
         g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, (float) height * 0.5f);
         return;
     }

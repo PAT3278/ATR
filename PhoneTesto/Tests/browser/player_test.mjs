@@ -140,10 +140,10 @@ try {
         const fonts = await page.evaluate(async () => {
           await document.fonts.ready;
           return { skin: document.documentElement.dataset.skin,
-                   digital: document.fonts.check('700 20px "PT Digital"'), barlow: document.fonts.check('700 12px "Barlow"') };
+                   digital: document.fonts.check('500 20px "PhoneTesto Mono"'), barlow: document.fonts.check('700 12px "Barlow Condensed"') };
         });
         check(fonts.skin === "digital" && fonts.digital && fonts.barlow,
-              `DIGITAL look with the plugin's fonts (skin=${fonts.skin}, PT Digital ${fonts.digital}, Barlow ${fonts.barlow})`);
+              `SUNSET look with the plugin's fonts (skin=${fonts.skin}, PhoneTesto Mono ${fonts.digital}, Barlow Condensed ${fonts.barlow})`);
         check(eng.output === c.output, `playback engine: ${eng.output} (want ${c.output})`);
         check(c.keepAwake.includes(eng.keepAwake), `keep-screen-on via: ${eng.keepAwake || "nothing"} (want ${c.keepAwake.join(" or ")})`);
       }
@@ -332,7 +332,7 @@ try {
     const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
                                                bg: getComputedStyle(document.body).backgroundColor,
                                                theme: document.querySelector('meta[name="theme-color"]').content }));
-    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#060e1f" : "#1c1d21"),
+    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#2e2440" : "#1c1d21"),
           `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
     check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));

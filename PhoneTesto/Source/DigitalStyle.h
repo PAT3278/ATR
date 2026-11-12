@@ -2,47 +2,46 @@
 
 #include "HardwareStyle.h"
 
-/** The DIGITAL skin: a 2000s games-console interface, kept refined. Deep navy behind
-    slowly moving light waves and drifting particles; controls are glass
-    panels with glowing cyan edges; PT Digital (from Orbitron) for the logo
-    and numbers, Barlow for labels. Static parts are cached by the editor,
-    so only the background is redrawn while it animates. */
+/** The SUNSET skin (Skin::digital in code): a warm, analog look. A grainy
+    dusk sky over a teal sea whose sun reflection shimmers; smoky
+    translucent panels with no outlines; cream tape-deck keys that light up
+    orange when chosen; cream knobs with a coral pointer; Barlow Condensed
+    for labels and PhoneTesto Mono (DM Mono) for numbers. Static parts are cached by the
+    editor, so only the sea is redrawn while it animates. */
 namespace phonetesto::hw::digital
 {
 
 namespace colours
 {
-    const juce::Colour bgTop      { 0xff0b1a33 };
-    const juce::Colour bgMid      { 0xff060e1f };
-    const juce::Colour bgBottom   { 0xff020409 };
-    const juce::Colour glassEdge  { 0x4498bce6 };
-    const juce::Colour text       { 0xfff3f6fa };
-    const juce::Colour textDim    { 0xff95a7c0 };
-    const juce::Colour textFaint  { 0xff56677f };
-    const juce::Colour accent     { 0xff8fd0f0 };
-    const juce::Colour live       { 0xffff5f7e };
-    const juce::Colour meterLow   { 0xff8fd0f0 };
-    const juce::Colour meterMid   { 0xffe8f1f8 };
-    const juce::Colour meterHigh  { 0xffff5f7e };
+    const juce::Colour text       { 0xfff7ecdd };
+    const juce::Colour textDim    { 0xffc4b2a6 };
+    const juce::Colour textFaint  { 0xff8c7a78 };
+    const juce::Colour accent     { 0xffff9a4d }; // the sun
+    const juce::Colour live       { 0xffff5e62 }; // coral
+    const juce::Colour teal       { 0xff5cc8c4 }; // the sea
+    const juce::Colour cream      { 0xffe4d8c5 }; // keys and knobs
+    const juce::Colour ink        { 0xff3a2a22 }; // text on cream
+    const juce::Colour meterLow   { 0xff5cc8c4 };
+    const juce::Colour meterMid   { 0xffffb347 };
+    const juce::Colour meterHigh  { 0xffff5e62 };
 }
 
-/** Navy gradient, light waves and particles; `seconds` animates them. Only
-    the band below animatedTop() ever changes, so that's all that needs
-    redrawing per frame. */
+/** Dusk sky, sea and film grain; `seconds` animates the sun's reflection
+    on the water. Only the band below animatedTop() ever changes, so that's
+    all that needs redrawing per frame. */
 class Background
 {
 public:
     void draw (juce::Graphics&, juce::Rectangle<float>, double seconds);
 
     static float animatedTop (juce::Rectangle<float> area) { return area.getY() + area.getHeight() * 0.43f; }
+    static float horizon (juce::Rectangle<float> area)     { return area.getY() + area.getHeight() * 0.56f; }
 
 private:
-    juce::Image base;               // gradient + backlight, at the screen's pixel size
-    juce::Path edges[4], shapes[4]; // reused each frame
+    juce::Image base; // sky, sea, grain and vignette, at the screen's pixel size
 };
 
-/** A glass panel: translucent blue fill, top gloss and a glowing hairline
-    edge. `lift` > 1 brightens it (hover). */
+/** A smoky translucent panel, no outline. `lift` > 1 brightens it (hover). */
 void drawGlass (juce::Graphics&, juce::Rectangle<float>, float corner, float lift = 1.0f);
 
 /** Strokes a path with a soft glow around it. */
@@ -52,7 +51,7 @@ void strokeGlow (juce::Graphics&, const juce::Path&, juce::Colour, float width, 
 void drawGlowText (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Justification,
                    const juce::Font&, juce::Colour, float glow = 1.0f);
 
-/** Small, widely spaced uppercase label. */
+/** Small, spaced uppercase label. */
 void drawLabel (juce::Graphics&, const juce::String&, juce::Rectangle<float>, juce::Justification,
                 juce::Colour = colours::textDim, float height = 12.0f);
 

@@ -54,7 +54,7 @@ void DisplayWindow::lookAndFeelChanged()
     const auto dim = digitalSkin ? hw::digital::colours::textDim : hw::colours::textDim;
 
     password.setColour (juce::TextEditor::textColourId, text);
-    password.setFont (digitalSkin ? hw::font (hw::Type::digitalSemiBold, 14.0f, 0.06f)
+    password.setFont (digitalSkin ? hw::font (hw::Type::monoRegular, 15.0f)
                                   : hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
     password.applyFontToAllText (password.getFont());
     password.applyColourToAllText (text);
@@ -260,34 +260,40 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
     const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
     d::drawGlass (g, bounds, 16.0f);
 
-    // a darker screen inside the glass, so the plot reads clearly
-    g.setColour (Colour (0x66020816));
-    g.fillRoundedRectangle (bounds.reduced (5.0f), 12.0f);
+    // a dark, warm screen set into the panel, like a tape deck's window
+    {
+        const auto screen = bounds.reduced (5.0f);
+        g.setGradientFill (ColourGradient (Colour (0xe0140c12), 0.0f, screen.getY(), Colour (0xe00d080c), 0.0f, screen.getBottom(), false));
+        g.fillRoundedRectangle (screen, 12.0f);
+        g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.35f), 0.0f, screen.getY(), Colours::black.withAlpha (0.0f), 0.0f, screen.getY() + 8.0f, false));
+        g.fillRoundedRectangle (screen.withHeight (12.0f), 12.0f);
+    }
 
     const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
-    const auto small = hw::font (hw::Type::sansSemiBold, 11.0f, 0.06f);
+    const auto small = hw::font (hw::Type::monoRegular, 10.0f);
 
     if (! live)
     {
         d::drawLabel (g, "Response", title, Justification::centredLeft);
 
         const auto& p = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
-        d::drawGlowText (g, String (p.name).toUpperCase(), title, Justification::centredRight,
-                         hw::font (hw::Type::digitalSemiBold, 14.0f, 0.06f), c::text);
+        g.setColour (c::text);
+        g.setFont (hw::font (hw::Type::condensedBold, 16.0f, 0.10f));
+        g.drawText (String (p.name).toUpperCase(), title, Justification::centredRight, false);
 
         const auto area = plotArea();
         g.setFont (small);
 
         for (float hz : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f, 20000.0f })
         {
-            g.setColour (c::accent.withAlpha (0.05f));
+            g.setColour (c::cream.withAlpha (0.04f));
             g.drawVerticalLine ((int) xForHz (area, hz), area.getY(), area.getBottom());
         }
 
         for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
         {
             const float x = xForHz (area, hz);
-            g.setColour (c::accent.withAlpha (0.12f));
+            g.setColour (c::cream.withAlpha (0.08f));
             g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
             g.setColour (c::textFaint);
             g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
@@ -296,7 +302,7 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
         for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
         {
             const float y = yForDb (area, db);
-            g.setColour (c::accent.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.14f : 0.06f));
+            g.setColour (c::cream.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.12f : 0.05f));
             g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
             g.setColour (c::textFaint);
             g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
@@ -306,11 +312,11 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
         fill.lineTo (area.getRight(), area.getBottom());
         fill.lineTo (area.getX(), area.getBottom());
         fill.closeSubPath();
-        g.setGradientFill (ColourGradient (c::accent.withAlpha (0.28f), 0.0f, area.getY(),
+        g.setGradientFill (ColourGradient (c::accent.withAlpha (0.32f), 0.0f, area.getY(),
                                            c::accent.withAlpha (0.0f), 0.0f, area.getBottom(), false));
         g.fillPath (fill);
 
-        d::strokeGlow (g, curve, c::accent, 2.0f);
+        d::strokeGlow (g, curve, Colour (0xffffc48a), 2.0f);
         return;
     }
 
@@ -327,9 +333,9 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
 
     // halo behind the QR code (the code itself stays black on white so it scans)
     const auto qrArea = qr.getBounds().toFloat();
-    for (auto [grow, alpha] : { std::pair { 10.0f, 0.06f }, { 5.0f, 0.12f } })
+    for (auto [grow, alpha] : { std::pair { 10.0f, 0.05f }, { 5.0f, 0.10f } })
     {
-        g.setColour (c::accent.withAlpha (alpha));
+        g.setColour (c::cream.withAlpha (alpha));
         g.fillRoundedRectangle (qrArea.expanded (grow), 6.0f + grow);
     }
 
@@ -338,7 +344,7 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
     d::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft, c::textDim, 11.0f);
     d::drawGlowText (g, url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
                      column.withTrimmedTop (16.0f).withHeight (28.0f), Justification::centredLeft,
-                     hw::font (hw::Type::digitalSemiBold, 17.0f, 0.04f), c::text);
+                     hw::font (hw::Type::monoMedium, 17.0f), c::text, 0.0f);
 
     d::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },
                   Justification::centredLeft, c::textDim, 11.0f);
@@ -346,7 +352,7 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
     const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
     d::drawLabel (g, "Listening", listening, Justification::centredLeft, c::textDim, 11.0f);
     d::drawGlowText (g, String (listenerCount), listening.translated (0.0f, 16.0f).withHeight (32.0f), Justification::centredLeft,
-                     hw::font (hw::Type::digitalBold, 26.0f), listenerCount > 0 ? c::accent : c::textDim,
+                     hw::font (hw::Type::monoMedium, 26.0f), listenerCount > 0 ? c::accent : c::textDim,
                      listenerCount > 0 ? 1.0f : 0.0f);
 }
 

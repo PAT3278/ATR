@@ -7,7 +7,7 @@ using namespace juce;
 
 namespace
 {
-    /** Repeatable 0..1 noise, so particles keep their places between frames. */
+    /** Repeatable 0..1 noise, so the sea's glints keep their places between frames. */
     float hash01 (int n)
     {
         auto x = (uint32) n * 2654435761u;
@@ -17,177 +17,191 @@ namespace
         return (float) (x & 0xffffffu) / (float) 0xffffffu;
     }
 
-    /** One light ribbon: two summed sines, drifting at their own speeds,
-        with a pulse of light running along its crest. */
-    struct Wave
-    {
-        float centre;               // fraction of the height
-        float amp1, len1, speed1;   // px, px, rad/s
-        float amp2, len2, speed2;
-        float thickness;            // px
-        float alpha;
-        uint32 tint;                // edge glow / pulse colour
-        float pulseSpeed;           // px/s (negative: right to left)
-    };
-
-    constexpr Wave ribbons[] = {
-        { 0.62f, 34.0f,  900.0f,  0.55f, 14.0f, 380.0f, -0.85f, 46.0f, 0.10f, 0xffd6e6f5,  260.0f },
-        { 0.68f, 26.0f,  700.0f, -0.45f, 18.0f, 520.0f,  0.70f, 30.0f, 0.08f, 0xffffffff, -330.0f },
-        { 0.72f, 40.0f, 1200.0f,  0.35f, 10.0f, 300.0f,  1.00f, 64.0f, 0.06f, 0xffaebfd8,  200.0f },
-        { 0.57f, 20.0f,  600.0f,  0.65f,  8.0f, 260.0f, -1.20f, 18.0f, 0.07f, 0xffd6e6f5, -420.0f },
-    };
-
-    float waveY (const Wave& w, float x, float height, double t, float offset)
-    {
-        constexpr float twoPi = MathConstants<float>::twoPi;
-        return w.centre * height
-             + w.amp1 * std::sin (twoPi * x / w.len1 + (float) (t * w.speed1) + offset)
-             + w.amp2 * std::sin (twoPi * x / w.len2 + (float) (t * w.speed2) + offset * 1.7f);
-    }
-
     PathStrokeType roundStroke (float width)
     {
         return PathStrokeType (width, PathStrokeType::curved, PathStrokeType::rounded);
+    }
+
+    constexpr float sunX = 0.7f; // fraction of the width
+
+    /** Sky, sun, clouds and sea, with no animation. */
+    void paintScenery (Graphics& g, Rectangle<float> area)
+    {
+        const float horizon = Background::horizon (area);
+
+        // dusk sky: plum overhead, warming to gold at the horizon
+        ColourGradient sky (Colour (0xff2e2440), 0.0f, area.getY(), Colour (0xffffc983), 0.0f, horizon, false);
+        sky.addColour (0.30, Colour (0xff5e3a62));
+        sky.addColour (0.58, Colour (0xffa9507a));
+        sky.addColour (0.80, Colour (0xffe57b5c));
+        g.setGradientFill (sky);
+        g.fillRect (area.withBottom (horizon));
+
+        // the sun, just set: a wide warm glow on the horizon
+        const auto sun = Point<float> (area.getX() + area.getWidth() * sunX, horizon);
+        for (auto [rx, ry, alpha] : { std::tuple { 0.55f, 0.32f, 0.35f }, { 0.22f, 0.12f, 0.45f }, { 0.08f, 0.04f, 0.6f } })
+        {
+            const float w = area.getWidth() * rx, h = area.getHeight() * ry;
+            Graphics::ScopedSaveState state (g);
+            g.addTransform (AffineTransform::scale (1.0f, h / w, sun.x, sun.y));
+            g.setGradientFill (ColourGradient (Colour (0xffffd9a0).withAlpha (alpha), sun, Colour (0x00ffb070), sun.translated (w, 0.0f), true));
+            g.fillEllipse (Rectangle<float> (w * 2.0f, w * 2.0f).withCentre (sun));
+        }
+
+        // long soft clouds, lit warmer the lower they hang
+        for (int i = 0; i < 9; ++i)
+        {
+            const float y = area.getY() + area.getHeight() * (0.08f + 0.40f * hash01 (i + 11));
+            const float w = area.getWidth() * (0.18f + 0.30f * hash01 (i + 21));
+            const float x = area.getX() + area.getWidth() * (hash01 (i + 31) * 1.1f - 0.05f);
+            const float h = 5.0f + 9.0f * hash01 (i + 41);
+            const float warm = jlimit (0.0f, 1.0f, (y - area.getY()) / (horizon - area.getY()));
+            const auto colour = Colour (0xff3b2a4c).interpolatedWith (Colour (0xffffb27a), 0.25f + 0.6f * warm);
+            const auto centre = Point<float> (x, y);
+
+            // an ellipse with a radial falloff, squashed flat: no hard edges
+            Graphics::ScopedSaveState state (g);
+            g.addTransform (AffineTransform::scale (1.0f, h / w, centre.x, centre.y));
+            ColourGradient puff (colour.withAlpha (0.30f + 0.15f * warm), centre, colour.withAlpha (0.0f), centre.translated (w * 0.5f, 0.0f), true);
+            puff.addColour (0.5, colour.withAlpha (0.16f + 0.1f * warm));
+            g.setGradientFill (puff);
+            g.fillEllipse (Rectangle<float> (w, w).withCentre (centre));
+        }
+
+        // sea: teal, darkening towards the viewer
+        ColourGradient sea (Colour (0xff3a5566), 0.0f, horizon, Colour (0xff050d10), 0.0f, area.getBottom(), false);
+        sea.addColour (0.18, Colour (0xff1d4452));
+        sea.addColour (0.55, Colour (0xff0c2630));
+        g.setGradientFill (sea);
+        g.fillRect (area.withTop (horizon));
+
+        // the horizon itself: a fine line of light
+        ColourGradient line (Colour (0x00ffd9a0), area.getX(), 0.0f, Colour (0x00ffd9a0), area.getRight(), 0.0f, false);
+        line.addColour (sunX, Colour (0xffffe2b0).withAlpha (0.7f));
+        g.setGradientFill (line);
+        g.fillRect (area.getX(), horizon - 0.5f, area.getWidth(), 1.0f);
+
+        // the sky's glow, mirrored softly in the water
+        ColourGradient mirror (Colour (0xffff9a6a).withAlpha (0.22f), sun, Colour (0x00ff9a6a), sun.translated (area.getWidth() * 0.3f, 0.0f), true);
+        Graphics::ScopedSaveState state (g);
+        g.reduceClipRegion (area.withTop (horizon).toNearestInt());
+        g.addTransform (AffineTransform::scale (1.0f, 0.5f, sun.x, sun.y));
+        g.setGradientFill (mirror);
+        g.fillRect (area.withTop (horizon).withHeight (area.getHeight()));
+    }
+
+    /** Film grain and a vignette, straight onto the cached pixels. */
+    void addGrainAndVignette (Image& image)
+    {
+        Image::BitmapData px (image, Image::BitmapData::readWrite);
+        const float cx = (float) px.width * 0.5f, cy = (float) px.height * 0.45f;
+        const float maxD = std::sqrt (cx * cx + cy * cy);
+        Random random (1979);
+
+        for (int y = 0; y < px.height; ++y)
+            for (int x = 0; x < px.width; ++x)
+            {
+                const auto c = px.getPixelColour (x, y);
+                const float dx = ((float) x - cx) / maxD, dy = ((float) y - cy) / maxD;
+                const float vignette = 1.0f - 0.55f * jlimit (0.0f, 1.0f, (dx * dx + dy * dy - 0.12f) * 1.6f);
+                const float grain = (random.nextFloat() + random.nextFloat() - 1.0f) * 0.09f; // soft, triangular
+
+                auto channel = [&] (uint8 v)
+                {
+                    const float f = (float) v / 255.0f * vignette + grain * (0.35f + 0.65f * (float) v / 255.0f);
+                    return (uint8) jlimit (0, 255, roundToInt (f * 255.0f));
+                };
+                px.setPixelColour (x, y, Colour (channel (c.getRed()), channel (c.getGreen()), channel (c.getBlue())));
+            }
     }
 } // namespace
 
 //==============================================================================
 void Background::draw (Graphics& g, Rectangle<float> r, double t)
 {
-    // The gradient and backlight never change: render them once, at the
-    // screen's real pixel size, so each frame they're a plain copy (an image
-    // drawn at any other scale would be resampled every frame, which costs
-    // more than drawing it).
+    // The scenery never changes: render it once, at the screen's real pixel
+    // size, so each frame it's a plain copy (an image drawn at any other
+    // scale would be resampled every frame, which costs more than drawing it).
     const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
     const int pw = roundToInt (r.getWidth() * scale), ph = roundToInt (r.getHeight() * scale);
 
     if (base.getWidth() != pw || base.getHeight() != ph)
     {
         base = Image (Image::RGB, jmax (1, pw), jmax (1, ph), false);
-        Graphics bg (base);
-        bg.addTransform (AffineTransform::scale (scale));
-        const auto area = Rectangle<float> (r.getWidth(), r.getHeight());
-
-        ColourGradient fill (colours::bgTop, 0.0f, 0.0f, colours::bgBottom, 0.0f, area.getBottom(), false);
-        fill.addColour (0.5, colours::bgMid);
-        bg.setGradientFill (fill);
-        bg.fillRect (area);
-
-        // soft backlight from the upper left
-        const auto glowCentre = Point<float> (area.getWidth() * 0.2f, area.getHeight() * 0.08f);
-        const float glowRadius = area.getWidth() * 0.6f;
-        bg.setGradientFill (ColourGradient (Colour (0x2c5d86c0), glowCentre, Colour (0x005d86c0),
-                                            glowCentre.translated (glowRadius, 0.0f), true));
-        bg.fillRect (Rectangle<float> (glowRadius * 2.0f, glowRadius * 2.0f).withCentre (glowCentre).getIntersection (area));
+        {
+            Graphics bg (base);
+            bg.addTransform (AffineTransform::scale (scale));
+            paintScenery (bg, { r.getWidth(), r.getHeight() });
+        }
+        addGrainAndVignette (base);
     }
 
     g.drawImageTransformed (base, AffineTransform::scale (1.0f / scale).translated (r.getX(), r.getY()));
 
-    constexpr float step = 12.0f;
-    const float width = r.getWidth(), height = r.getHeight();
+    const float width = r.getWidth();
+    const float horizonY = horizon (r), depth = r.getBottom() - horizonY;
+    const float centreX = r.getX() + width * sunX;
 
-    for (size_t i = 0; i < std::size (ribbons); ++i)
+    // slow swells rolling towards the viewer: faint lines, spreading apart
+    // as they come closer
+    for (int k = 0; k < 7; ++k)
     {
-        const auto& wave = ribbons[i];
-        const float offset = (float) i * 1.3f;
-        auto& top = edges[i];
-        auto& ribbon = shapes[i];
-        top.clear();
-        ribbon.clear();
+        const float p = (float) std::fmod (t * 0.035 + (double) k / 7.0, 1.0);
+        const float y = horizonY + p * p * depth;
+        const float alpha = 0.10f * std::sin (p * MathConstants<float>::pi);
 
-        top.startNewSubPath (r.getX(), r.getY() + waveY (wave, 0.0f, height, t, offset));
-        for (float x = step; x <= width + step; x += step)
-            top.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset));
+        Path swell;
+        swell.startNewSubPath (r.getX(), y);
+        for (float x = 0.0f; x <= width + 40.0f; x += 40.0f)
+            swell.lineTo (r.getX() + x, y + (1.0f + 4.0f * p) * std::sin (x / 90.0f + (float) k * 1.7f + (float) t * 0.4f));
 
-        ribbon = top;
-        for (float x = std::ceil (width / step) * step; x >= 0.0f; x -= step)
-        {
-            const float thick = wave.thickness * (0.55f + 0.45f * std::sin (x / 210.0f + (float) (t * 0.5) + (float) i * 2.1f));
-            ribbon.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset + 0.35f) + thick);
-        }
-        ribbon.closeSubPath();
-
-        const auto tint = Colour (wave.tint);
-        const float yc = r.getY() + wave.centre * height, reach = wave.amp1 + wave.amp2;
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (wave.alpha), 0.0f, yc - reach,
-                                           tint.withAlpha (0.0f), 0.0f, yc + reach + wave.thickness, false));
-        g.fillPath (ribbon);
-
-        g.setColour (tint.withAlpha (wave.alpha * 0.6f));
-        g.strokePath (top, roundStroke (3.0f));
-        g.setColour (Colours::white.withAlpha (jmin (1.0f, wave.alpha * 3.4f)));
-        g.strokePath (top, roundStroke (1.0f));
-
-        // a pulse of light running along the crest, wrapping round
-        const float span = width + 400.0f;
-        float head = std::fmod ((float) t * wave.pulseSpeed + hash01 ((int) i + 40) * span, span);
-        if (head < 0.0f) head += span;
-        head -= 200.0f;
-        const float tailDir = wave.pulseSpeed > 0.0f ? -1.0f : 1.0f;
-        const float x0 = jmin (head, head + tailDir * 170.0f), x1 = jmax (head, head + tailDir * 170.0f);
-
-        Path pulse;
-        pulse.startNewSubPath (r.getX() + x0, r.getY() + waveY (wave, x0, height, t, offset));
-        for (float x = x0 + 6.0f; x <= x1; x += 6.0f)
-            pulse.lineTo (r.getX() + x, r.getY() + waveY (wave, x, height, t, offset));
-
-        const float tailX = r.getX() + head + tailDir * 170.0f, headX = r.getX() + head;
-        g.setGradientFill (ColourGradient (tint.withAlpha (0.0f), tailX, 0.0f, tint.withAlpha (0.16f), headX, 0.0f, false));
-        g.strokePath (pulse, roundStroke (6.0f));
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.0f), tailX, 0.0f, Colours::white.withAlpha (0.85f), headX, 0.0f, false));
-        g.strokePath (pulse, roundStroke (1.4f));
+        g.setColour (Colour (0xffbfe8e6).withAlpha (alpha));
+        g.strokePath (swell, roundStroke (0.6f + 1.4f * p));
     }
 
-    // particles rising through the band, fading out towards its top
-    const float bandTop = animatedTop (r) + 8.0f, band = r.getBottom() - bandTop;
-
-    for (int i = 0; i < 18; ++i)
+    // the sun's reflection: glints scattered in a widening column below it,
+    // drifting and twinkling
+    for (int i = 0; i < 110; ++i)
     {
-        const float sp = hash01 (i * 3 + 3);
-        float y = std::fmod (hash01 (i * 3 + 2) * band - (float) t * (14.0f + sp * 34.0f), band);
-        if (y < 0.0f) y += band;
+        const float d = std::pow (hash01 (i * 5 + 1), 1.5f);                 // 0 at the horizon, 1 at the bottom
+        const float spread = 20.0f + d * width * 0.32f;
+        const float across = hash01 (i * 5 + 2) * 2.0f - 1.0f;
+        const float sway = std::sin ((float) t * (0.25f + 0.3f * hash01 (i * 5 + 3)) + (float) i) * (3.0f + 14.0f * d);
+        const float x = centreX + across * spread + sway;
+        const float y = horizonY + 2.0f + d * (depth - 4.0f);
 
-        const auto c = Point<float> (r.getX() + hash01 (i * 3 + 1) * width + 10.0f * std::sin ((float) t * 0.9f + (float) i),
-                                     bandTop + y);
-        const float fade = jmin (1.0f, y / 40.0f);
-        const float twinkle = 0.5f + 0.5f * std::sin ((float) t * (2.5f + 4.0f * sp) + (float) i * 1.3f);
-        const float size = 0.9f + 1.1f * hash01 (i * 7 + 5);
+        const float twinkle = 0.5f + 0.5f * std::sin ((float) t * (1.2f + 2.6f * hash01 (i * 5 + 4)) + (float) i * 2.3f);
+        const float alpha = (0.12f + 0.7f * twinkle * twinkle) * (1.0f - 0.55f * d) * (1.0f - 0.7f * std::abs (across));
+        const float length = (6.0f + 34.0f * hash01 (i * 5 + 5)) * (0.5f + 1.5f * d);
+        const float thick = 0.8f + 1.8f * d;
 
-        g.setColour (colours::accent.withAlpha (0.07f * twinkle * fade));
-        g.fillEllipse (Rectangle<float> (size * 5.0f, size * 5.0f).withCentre (c));
-        g.setColour (Colours::white.withAlpha ((0.25f + 0.5f * twinkle) * fade));
-        g.fillEllipse (Rectangle<float> (size, size).withCentre (c));
+        const auto colour = Colour (0xffffd59a).interpolatedWith (Colour (0xffff7f86), jmin (1.0f, d * 1.3f));
+        g.setColour (colour.withAlpha (jmin (1.0f, alpha)));
+        g.fillRoundedRectangle (Rectangle<float> (length, thick).withCentre ({ x, y }), thick * 0.5f);
     }
 }
 
 void drawGlass (Graphics& g, Rectangle<float> r, float corner, float lift)
 {
-    g.setGradientFill (ColourGradient (Colour (0xff6f8fbf).withAlpha (jmin (1.0f, 0.10f * lift)), 0.0f, r.getY(),
-                                       Colour (0xff0f2346).withAlpha (jmin (1.0f, 0.22f * lift)), 0.0f, r.getBottom(), false));
+    // smoky, warm, translucent: the scenery shows through, tinted
+    g.setGradientFill (ColourGradient (Colour (0xff22161f).withAlpha (jmin (1.0f, 0.50f + 0.04f * (lift - 1.0f))), 0.0f, r.getY(),
+                                       Colour (0xff120b12).withAlpha (jmin (1.0f, 0.64f)), 0.0f, r.getBottom(), false));
     g.fillRoundedRectangle (r, corner);
 
-    // gloss over the upper part
-    {
-        Graphics::ScopedSaveState state (g);
-        Path shape;
-        shape.addRoundedRectangle (r, corner);
-        g.reduceClipRegion (shape);
-
-        const auto gloss = r.withHeight (jmin (r.getHeight() * 0.5f, 56.0f));
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (jmin (1.0f, 0.09f * lift)), 0.0f, gloss.getY(),
-                                           Colours::white.withAlpha (0.0f), 0.0f, gloss.getBottom(), false));
-        g.fillRect (gloss);
-    }
-
-    // just a whisper of an edge along the top, fading out down the sides
-    g.setGradientFill (ColourGradient (Colour (0xffdbe8f5).withAlpha (jmin (1.0f, 0.16f * lift)), 0.0f, r.getY(),
-                                       colours::glassEdge.withAlpha (0.0f), 0.0f, r.getY() + jmin (r.getHeight(), 60.0f), false));
-    g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
+    // a soft sheen along the top, no edge
+    Graphics::ScopedSaveState state (g);
+    Path shape;
+    shape.addRoundedRectangle (r, corner);
+    g.reduceClipRegion (shape);
+    const auto sheen = r.withHeight (jmin (r.getHeight() * 0.4f, 36.0f));
+    g.setGradientFill (ColourGradient (Colour (0xffffe6cc).withAlpha (jmin (1.0f, 0.07f * lift)), 0.0f, sheen.getY(),
+                                       Colour (0x00ffe6cc), 0.0f, sheen.getBottom(), false));
+    g.fillRect (sheen);
 }
 
 void strokeGlow (Graphics& g, const Path& p, Colour c, float width, float glow)
 {
-    for (auto [extra, alpha] : { std::pair { 10.0f, 0.025f }, { 6.0f, 0.05f }, { 3.0f, 0.12f } })
+    for (auto [extra, alpha] : { std::pair { 9.0f, 0.03f }, { 5.0f, 0.06f }, { 2.5f, 0.14f } })
     {
         g.setColour (c.withMultipliedAlpha (alpha * glow));
         g.strokePath (p, roundStroke (width + extra * glow));
@@ -195,8 +209,6 @@ void strokeGlow (Graphics& g, const Path& p, Colour c, float width, float glow)
 
     g.setColour (c);
     g.strokePath (p, roundStroke (width));
-    g.setColour (Colours::white.withAlpha (0.5f * c.getFloatAlpha()));
-    g.strokePath (p, roundStroke (jmax (0.6f, width * 0.35f)));
 }
 
 void drawGlowText (Graphics& g, const String& text, Rectangle<float> area, Justification just,
@@ -206,15 +218,13 @@ void drawGlowText (Graphics& g, const String& text, Rectangle<float> area, Justi
 
     if (glow > 0.0f)
     {
-        // white text gets the cyan halo; coloured text glows in its own colour
-        g.setColour ((c.getSaturation() < 0.2f ? colours::accent : c).withAlpha (0.045f * glow));
+        g.setColour ((c.getSaturation() < 0.2f ? colours::accent : c).withAlpha (0.04f * glow));
 
-        for (float radius : { 2.0f, 1.0f })
-            for (int k = 0; k < 8; ++k)
-            {
-                const float a = MathConstants<float>::twoPi * (float) k / 8.0f;
-                g.drawText (text, area.translated (radius * std::cos (a), radius * std::sin (a)), just, false);
-            }
+        for (int k = 0; k < 8; ++k)
+        {
+            const float a = MathConstants<float>::twoPi * (float) k / 8.0f;
+            g.drawText (text, area.translated (1.5f * std::cos (a), 1.5f * std::sin (a)), just, false);
+        }
     }
 
     g.setColour (c);
@@ -223,7 +233,7 @@ void drawGlowText (Graphics& g, const String& text, Rectangle<float> area, Justi
 
 void drawLabel (Graphics& g, const String& text, Rectangle<float> area, Justification just, Colour colour, float height)
 {
-    g.setFont (font (Type::sansBold, height, 0.16f));
+    g.setFont (font (Type::condensedBold, height + 1.0f, 0.16f));
     g.setColour (colour);
     g.drawText (text.toUpperCase(), area, just, false);
 }
@@ -304,54 +314,56 @@ void drawKnob (Graphics& g, Rectangle<float> bounds, float pos, float startAngle
 
     Path track;
     track.addCentredArc (c.x, c.y, ringR, ringR, 0.0f, startAngle, endAngle, true);
-    g.setColour (colours::accent.withAlpha (0.13f));
+    g.setColour (colours::cream.withAlpha (0.14f));
     g.strokePath (track, roundStroke (3.0f));
 
     if (pos > 0.001f)
     {
         Path value;
         value.addCentredArc (c.x, c.y, ringR, ringR, 0.0f, startAngle, angle, true);
-        strokeGlow (g, value, colours::accent, 2.6f);
+        strokeGlow (g, value, colours::accent, 3.0f, 0.7f);
     }
 
-    // glossy orb
+    // a cream cap on a dark skirt, like a tape deck's
     const float bodyR = ringR - 9.0f;
     const auto body = Rectangle<float> (bodyR * 2.0f, bodyR * 2.0f).withCentre (c);
-    g.setColour (Colours::black.withAlpha (0.45f));
-    g.fillEllipse (body.translated (0.0f, 3.0f).expanded (1.0f));
-    g.setGradientFill (ColourGradient (Colour (0xff27426b), c.x - bodyR * 0.35f, c.y - bodyR * 0.45f,
-                                       Colour (0xff050c1a), c.x + bodyR * 0.6f, c.y + bodyR, true));
+    g.setColour (Colours::black.withAlpha (0.4f));
+    g.fillEllipse (body.translated (0.0f, 4.0f).expanded (2.0f));
+    g.setColour (Colour (0xff4a3e36));
     g.fillEllipse (body);
 
-    const auto gloss = body.reduced (bodyR * 0.2f, 0.0f).withHeight (bodyR * 0.8f).translated (0.0f, bodyR * 0.06f);
-    g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.26f), 0.0f, gloss.getY(),
-                                       Colours::white.withAlpha (0.0f), 0.0f, gloss.getBottom(), false));
-    g.fillEllipse (gloss);
+    const auto cap = body.reduced (bodyR * 0.08f).translated (0.0f, -bodyR * 0.04f);
+    g.setGradientFill (ColourGradient (Colour (0xfffbf3e6), c.x - bodyR * 0.35f, c.y - bodyR * 0.5f,
+                                       Colour (0xffb3a48e), c.x + bodyR * 0.55f, c.y + bodyR * 0.9f, true));
+    g.fillEllipse (cap);
 
-    // glowing indicator dot
-    const auto dot = c.getPointOnCircumference (bodyR * 0.68f, angle);
-    g.setColour (colours::accent.withAlpha (0.25f));
-    g.fillEllipse (Rectangle<float> (13.0f, 13.0f).withCentre (dot));
-    g.setColour (colours::accent);
-    g.fillEllipse (Rectangle<float> (6.5f, 6.5f).withCentre (dot));
-    g.setColour (Colours::white);
-    g.fillEllipse (Rectangle<float> (2.8f, 2.8f).withCentre (dot));
+    // the flat top, a touch lighter, so the cap reads as chamfered
+    const auto top = cap.reduced (bodyR * 0.16f);
+    g.setGradientFill (ColourGradient (Colour (0xfff6ecdd), 0.0f, top.getY(), Colour (0xffd5c7b1), 0.0f, top.getBottom(), false));
+    g.fillEllipse (top);
+
+    // coral pointer
+    Path pointer;
+    pointer.startNewSubPath (c.getPointOnCircumference (bodyR * 0.30f, angle));
+    pointer.lineTo (c.getPointOnCircumference (bodyR * 0.78f, angle));
+    g.setColour (colours::live);
+    g.strokePath (pointer, roundStroke (3.2f));
 }
 
 namespace
 {
-    /** A small on/off switch: a capsule track with a sliding knob. */
-    void drawSwitch (Graphics& g, Rectangle<float> track, bool on, Colour lit)
+    /** A small on/off switch: a dark track with a sliding cream knob, orange when on. */
+    void drawSwitch (Graphics& g, Rectangle<float> track, bool on)
     {
         const float radius = track.getHeight() * 0.5f;
-        g.setColour (on ? lit.withAlpha (0.9f) : Colours::white.withAlpha (0.13f));
+        g.setColour (on ? colours::accent : Colours::black.withAlpha (0.35f));
         g.fillRoundedRectangle (track, radius);
 
         const auto knob = Rectangle<float> (track.getHeight() - 4.0f, track.getHeight() - 4.0f)
                               .withCentre ({ on ? track.getRight() - radius : track.getX() + radius, track.getCentreY() });
         g.setColour (Colours::black.withAlpha (0.25f));
         g.fillEllipse (knob.translated (0.0f, 1.0f));
-        g.setColour (on ? Colours::white : Colour (0xffb9c6d6));
+        g.setColour (on ? Colour (0xfffff6ea) : colours::cream.withMultipliedBrightness (0.85f));
         g.fillEllipse (knob);
     }
 
@@ -386,59 +398,87 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
     const bool compact = props.getWithDefault (compactProperty, false);
     const bool isSwitch = props.getWithDefault (switchProperty, false);
     const int icon = props.getWithDefault (iconProperty, -1);
+    const auto text = b.getButtonText();
 
-    const auto glow = live ? colours::live : colours::accent;
-    const auto r = b.getLocalBounds().toFloat().reduced (compact ? 1.0f : 3.0f); // room for the glow
-    const float corner = r.getHeight() * 0.5f;                                    // capsules throughout
-
-    Path shape;
-    shape.addRoundedRectangle (r, corner);
-
-    // No outline: the body is a soft wash of light, a little brighter under the mouse.
-    const float hover = highlighted ? 1.0f : 0.0f;
-    g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.075f + 0.045f * hover), 0.0f, r.getY(),
-                                       Colours::white.withAlpha (0.03f + 0.03f * hover), 0.0f, r.getBottom(), false));
-    g.fillPath (shape);
-
-    // Selected things light up from within (switches show it on their switch).
-    const bool lit = on && ! isSwitch && ! compact;
-    if (lit)
+    // header pills: smoky capsules
+    if (compact)
     {
-        g.setColour (glow.withAlpha (0.10f));
-        g.fillRoundedRectangle (r.expanded (2.5f), corner + 2.5f);
-        g.setGradientFill (ColourGradient (glow.withAlpha (live ? 0.8f : 0.46f), 0.0f, r.getY(),
-                                           glow.withAlpha (live ? 0.55f : 0.24f), 0.0f, r.getBottom(), false));
-        g.fillPath (shape);
-
-        Graphics::ScopedSaveState state (g);
-        g.reduceClipRegion (shape);
-        g.setGradientFill (ColourGradient (Colours::white.withAlpha (0.16f), 0.0f, r.getY(),
-                                           Colours::white.withAlpha (0.0f), 0.0f, r.getCentreY(), false));
-        g.fillRect (r.withHeight (r.getHeight() * 0.5f));
+        const auto r = b.getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (Colour (0xff140a12).withAlpha (highlighted ? 0.5f : 0.36f));
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setFont (font (Type::condensedBold, 13.0f, 0.14f));
+        g.setColour (highlighted ? colours::text : colours::textDim);
+        g.drawText (text, r, Justification::centred, false);
+        return;
     }
 
-    if (down)
+    // MONO / BYPASS: a label beside a sliding switch, on a faint plate
+    if (isSwitch)
     {
-        g.setColour (Colours::black.withAlpha (0.18f));
-        g.fillPath (shape);
+        const auto r = b.getLocalBounds().toFloat().reduced (3.0f);
+        g.setColour (Colours::white.withAlpha (highlighted ? 0.09f : 0.06f));
+        g.fillRoundedRectangle (r, 10.0f);
+
+        const auto track = Rectangle<float> (32.0f, 18.0f).withCentre ({ r.getRight() - 14.0f - 16.0f, r.getCentreY() });
+        drawSwitch (g, track, on);
+
+        g.setFont (font (Type::condensedBold, 14.0f, 0.14f));
+        g.setColour (on ? colours::text : colours::textDim);
+        g.drawText (text, r.withTrimmedLeft (16.0f).withRight (track.getX() - 6.0f), Justification::centredLeft, false);
+        return;
     }
 
-    auto textArea = r.reduced (12.0f, 0.0f);
+    // Everything else is a tape-deck key: a cream cap on a darker base, no
+    // outline. Chosen keys sit pressed in and light up from within.
+    const auto r = b.getLocalBounds().toFloat().reduced (3.0f, 2.0f);
+    const float corner = 9.0f, travel = 3.0f;
+    const bool pressed = on || down;
+    const auto lit = live ? colours::live : colours::accent;
+
+    if (on)
+    {
+        g.setColour (lit.withAlpha (0.18f));
+        g.fillRoundedRectangle (r.expanded (3.0f), corner + 3.0f);
+    }
+
+    // shadow and the key's side
+    g.setColour (Colours::black.withAlpha (pressed ? 0.25f : 0.35f));
+    g.fillRoundedRectangle (r.translated (0.0f, 2.0f), corner);
+    g.setColour (on ? lit.darker (0.9f) : Colour (0xff6e6253));
+    g.fillRoundedRectangle (r.withTrimmedTop (travel), corner);
+
+    auto cap = r.withTrimmedBottom (travel);
+    if (on)        cap = cap.translated (0.0f, 2.0f);
+    else if (down) cap = cap.translated (0.0f, 1.5f);
+
+    const auto capTop = on ? lit.brighter (0.25f) : colours::cream.brighter (highlighted ? 0.12f : 0.05f);
+    const auto capBottom = on ? lit : colours::cream.darker (0.18f);
+    g.setGradientFill (ColourGradient (capTop, 0.0f, cap.getY(), capBottom, 0.0f, cap.getBottom(), false));
+    g.fillRoundedRectangle (cap, corner);
+
+    // a little lamp slot along the top edge
+    const auto slot = Rectangle<float> (20.0f, 3.0f).withCentre ({ cap.getCentreX(), cap.getY() + 6.0f });
+    if (on)
+    {
+        g.setColour (Colours::white.withAlpha (0.35f));
+        g.fillRoundedRectangle (slot.expanded (3.0f, 2.0f), 3.0f);
+        g.setColour (Colour (0xfffff6e8));
+    }
+    else
+    {
+        g.setColour (colours::ink.withAlpha (0.22f));
+    }
+    g.fillRoundedRectangle (slot, 1.5f);
+
+    const auto ink = on ? Colour (0xff2a120a) : colours::ink;
+    auto textArea = cap.withTrimmedTop (4.0f).reduced (12.0f, 0.0f);
     auto just = Justification::centred;
-    const bool bright = lit || (isSwitch && on);
 
     if (icon >= 0)
     {
-        const auto iconBox = r.withWidth (r.getHeight()).reduced (r.getHeight() * 0.17f).translated (6.0f, 0.0f);
-        drawDeviceIcon (g, icon, iconBox, bright ? colours::text : colours::textDim);
-        textArea = r.withLeft (iconBox.getRight() + 3.0f).withTrimmedRight (10.0f);
-        just = Justification::centredLeft;
-    }
-    else if (isSwitch)
-    {
-        const auto track = Rectangle<float> (30.0f, 16.0f).withCentre ({ r.getRight() - 14.0f - 15.0f, r.getCentreY() });
-        drawSwitch (g, track, on, glow);
-        textArea = r.withTrimmedLeft (18.0f).withRight (track.getX() - 6.0f);
+        const auto iconBox = cap.withTrimmedTop (4.0f).withWidth (cap.getHeight()).reduced (cap.getHeight() * 0.2f).translated (6.0f, 0.0f);
+        drawDeviceIcon (g, icon, iconBox, ink.withAlpha (0.85f));
+        textArea = cap.withTrimmedTop (4.0f).withLeft (iconBox.getRight() + 3.0f).withTrimmedRight (10.0f);
         just = Justification::centredLeft;
     }
     else if (live)
@@ -446,26 +486,16 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
         // breathes while on air (the editor repaints this button for it)
         const float pulse = on ? 0.5f + 0.5f * std::sin ((float) Time::getMillisecondCounter() * 0.001f * MathConstants<float>::twoPi * 0.7f)
                                : 0.0f;
-        drawBroadcastIcon (g, { r.getX() + r.getHeight() * 0.72f, r.getCentreY() }, r.getHeight() * 0.62f,
-                           on ? colours::text : colours::textDim, pulse);
+        drawBroadcastIcon (g, { cap.getX() + cap.getHeight() * 0.8f, cap.getCentreY() + 2.0f }, cap.getHeight() * 0.6f, ink, pulse);
     }
 
-    const float height = compact ? 11.5f : (icon >= 0 ? 12.5f : jmin (14.0f, r.getHeight() * 0.40f));
-    const auto f = font (Type::sansBold, height, 0.10f);
-    const auto text = b.getButtonText();
+    const auto f = font (Type::condensedBold, icon >= 0 ? 14.5f : jmin (17.0f, cap.getHeight() * 0.42f), 0.08f);
 
     // squeeze long names rather than cut them
     const float fits = jmin (1.0f, textArea.getWidth() / jmax (1.0f, GlyphArrangement::getStringWidth (f, text)));
-    const auto fitted = f.withHorizontalScale (jmax (0.8f, fits));
-
-    if (lit)
-        drawGlowText (g, text, textArea, just, fitted, colours::text, 0.6f);
-    else
-    {
-        g.setFont (fitted);
-        g.setColour (bright ? colours::text : colours::textDim);
-        g.drawText (text, textArea, just, false);
-    }
+    g.setFont (f.withHorizontalScale (jmax (0.8f, fits)));
+    g.setColour (ink);
+    g.drawText (text, textArea, just, false);
 }
 
 } // namespace phonetesto::hw::digital

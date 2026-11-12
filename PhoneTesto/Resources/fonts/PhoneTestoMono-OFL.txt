@@ -1,9 +1,9 @@
-PT Digital (PTDigital-SemiBold.ttf, PTDigital-Bold.ttf) is a Modified Version of
-Orbitron (https://github.com/theleagueof/orbitron), instanced from its variable
-font at weights 600 and 700 and renamed, as the Reserved Font Name below
-requires. It is distributed under the same licence:
+PhoneTesto Mono (PhoneTestoMono-Regular.ttf, PhoneTestoMono-Medium.ttf) is a
+Modified Version of DM Mono (https://github.com/googlefonts/dm-mono): the
+zero is drawn without its slash, and the font is renamed. It is distributed
+under the same licence as DM Mono, reproduced below.
 
-Copyright 2018 The Orbitron Project Authors (https://github.com/theleagueof/orbitron), with Reserved Font Name: "Orbitron"
+Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

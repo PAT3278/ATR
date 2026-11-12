@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#060e1f">
+<meta name="theme-color" content="#2e2440">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>PhoneTesto Live</title>
@@ -13,11 +13,11 @@
   @font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url(/fonts/Barlow-Medium.ttf) format("truetype"); }
   @font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url(/fonts/Barlow-SemiBold.ttf) format("truetype"); }
   @font-face { font-family: "Barlow"; font-weight: 700; font-display: swap; src: url(/fonts/Barlow-Bold.ttf) format("truetype"); }
-  @font-face { font-family: "PT Digital"; font-weight: 600; font-display: swap; src: url(/fonts/PTDigital-SemiBold.ttf) format("truetype"); }
-  @font-face { font-family: "PT Digital"; font-weight: 700; font-display: swap; src: url(/fonts/PTDigital-Bold.ttf) format("truetype"); }
+  @font-face { font-family: "PhoneTesto Mono"; font-weight: 400; font-display: swap; src: url(/fonts/PhoneTestoMono-Regular.ttf) format("truetype"); }
+  @font-face { font-family: "PhoneTesto Mono"; font-weight: 500; font-display: swap; src: url(/fonts/PhoneTestoMono-Medium.ttf) format("truetype"); }
 
   /* FLAT skin: same palette as the plugin panel (Source/HardwareStyle.h).
-     The DIGITAL skin's overrides are at the end. */
+     The SUNSET skin's overrides (data-skin="digital") are at the end. */
   :root {
     --panel: #1c1d21;
     --surface: #27292f;
@@ -111,107 +111,117 @@
   .error { color: rgb(var(--live)); font: 600 13px var(--sans); min-height: 1.2em; }
   [hidden] { display: none !important; }
 
-  /* DIGITAL skin, matching the plugin's (Source/DigitalStyle.h), kept
-     simple: a still background (no animation -- on a plain-HTTP page the
-     audio is played by this page's main thread), glass cards, cyan glow,
-     PT Digital for the logo and numbers. */
+  /* SUNSET skin (data-skin="digital"), matching the plugin's
+     (Source/DigitalStyle.h), kept simple and still -- on a plain-HTTP page
+     the audio is played by this page's main thread: a grainy dusk sky over
+     a teal sea, smoky panels, cream tape-deck keys that light up orange,
+     Barlow Condensed labels and PhoneTesto Mono numbers. */
   html[data-skin="digital"] {
-    --panel: #060e1f;
-    --surface: rgba(111, 143, 191, 0.08);
-    --surface-hi: rgba(90, 143, 230, 0.2);
-    --border: rgba(152, 188, 230, 0.24);
-    --divider: rgba(143, 208, 240, 0.28);
-    --screen: rgba(2, 8, 22, 0.55);
-    --text: #f3f6fa;
-    --text-dim: #95a7c0;
-    --text-faint: #56677f;
-    --accent: 143, 208, 240;
-    --live: 255, 95, 126;
-    --led-off: #2a3a52;
-    --cond: "Barlow", -apple-system, "Segoe UI", sans-serif;
-    --digital: "PT Digital", "Barlow", sans-serif;
-    --glass: linear-gradient(rgba(111, 143, 191, 0.10), rgba(15, 35, 70, 0.22));
-    --glow: 0 0 10px rgba(143, 208, 240, 0.22);
-    --text-glow: 0 0 6px rgba(143, 208, 240, 0.35);
+    --panel: #2e2440;
+    --surface: rgba(20, 10, 18, 0.36);
+    --surface-hi: rgba(20, 10, 18, 0.5);
+    --border: transparent;
+    --divider: rgba(247, 236, 221, 0.14);
+    --screen: rgba(24, 14, 22, 0.62);
+    --text: #f7ecdd;
+    --text-dim: rgba(247, 236, 221, 0.68);
+    --text-faint: rgba(247, 236, 221, 0.4);
+    --accent: 255, 154, 77;
+    --live: 255, 94, 98;
+    --teal: 92, 200, 196;
+    --led-off: rgba(58, 42, 34, 0.25);
+    --mono: "PhoneTesto Mono", ui-monospace, monospace;
+    --cream-top: #ece2d2;
+    --cream-bottom: #c9bca8;
+    --key-side: #6e6253;
+    --ink: #3a2a22;
   }
   html[data-skin="digital"], html[data-skin="digital"] body {
-    background-color: #020409;
+    background-color: #050d10;
     background-image:
-      radial-gradient(ellipse 90% 40% at 20% 0%, rgba(93, 134, 192, 0.18), transparent 70%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 120' preserveAspectRatio='none'%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='%238fd0f0' stroke-opacity='.1' stroke-width='6'/%3E%3Cpath d='M0 62C70 30 140 96 220 58S350 40 400 64' fill='none' stroke='white' stroke-opacity='.32' stroke-width='1'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='%23aebfd8' stroke-opacity='.08' stroke-width='6'/%3E%3Cpath d='M0 78C90 104 170 44 260 80S360 96 400 74' fill='none' stroke='white' stroke-opacity='.3' stroke-width='1'/%3E%3C/svg%3E"),
-      linear-gradient(#0b1a33, #060e1f 50%, #020409);
-    background-repeat: no-repeat;
-    background-size: 100% 100%, 100% 220px, 100% 100%;
-    background-position: 0 0, 0 96%, 0 0;
+      url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27220%27 height=%27220%27%3E%3Cfilter id=%27n%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%27.9%27 numOctaves=%272%27 stitchTiles=%27stitch%27/%3E%3CfeColorMatrix values=%270 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .4 0%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url%28%23n%29%27/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 400 300%27 preserveAspectRatio=%27none%27%3E%3Cpath d=%27M0 30 Q100 27 200 30 T400 30%27 stroke=%27%23bfe8e6%27 stroke-opacity=%270.07%27 stroke-width=%270.7%27 fill=%27none%27/%3E%3Cpath d=%27M0 80 Q100 77 200 80 T400 80%27 stroke=%27%23bfe8e6%27 stroke-opacity=%270.06%27 stroke-width=%271%27 fill=%27none%27/%3E%3Cpath d=%27M0 150 Q100 147 200 150 T400 150%27 stroke=%27%23bfe8e6%27 stroke-opacity=%270.06%27 stroke-width=%271.4%27 fill=%27none%27/%3E%3Cpath d=%27M0 240 Q100 237 200 240 T400 240%27 stroke=%27%23bfe8e6%27 stroke-opacity=%270.05%27 stroke-width=%271.8%27 fill=%27none%27/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 400 300%27 preserveAspectRatio=%27none%27%3E%3Crect x=%27248.7%27 y=%2756.2%27 width=%2712.9%27 height=%270.32%27 fill=%27%23ffd59a%27 fill-opacity=%270.13%27/%3E%3Crect x=%27259.3%27 y=%27117.3%27 width=%275.4%27 height=%270.41%27 fill=%27%23ffb08a%27 fill-opacity=%270.24%27/%3E%3Crect x=%27277.4%27 y=%274.1%27 width=%272.8%27 height=%270.25%27 fill=%27%23ffd59a%27 fill-opacity=%270.15%27/%3E%3Crect x=%27309.5%27 y=%2783.3%27 width=%275.7%27 height=%270.36%27 fill=%27%23ffd59a%27 fill-opacity=%270.17%27/%3E%3Crect x=%27344.6%27 y=%27148.1%27 width=%2718.6%27 height=%270.45%27 fill=%27%23ffb08a%27 fill-opacity=%270.19%27/%3E%3Crect x=%27121.9%27 y=%27285.6%27 width=%2739.2%27 height=%270.64%27 fill=%27%23ff8a90%27 fill-opacity=%270.11%27/%3E%3Crect x=%27264.7%27 y=%2718.1%27 width=%275.9%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.39%27/%3E%3Crect x=%27278.1%27 y=%2724.6%27 width=%2710.2%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.24%27/%3E%3Crect x=%27217.1%27 y=%27121.2%27 width=%275.5%27 height=%270.41%27 fill=%27%23ffb08a%27 fill-opacity=%270.15%27/%3E%3Crect x=%27260.0%27 y=%27167.0%27 width=%2713.2%27 height=%270.47%27 fill=%27%23ffb08a%27 fill-opacity=%270.23%27/%3E%3Crect x=%27249.3%27 y=%2791.7%27 width=%2718.4%27 height=%270.37%27 fill=%27%23ffd59a%27 fill-opacity=%270.31%27/%3E%3Crect x=%27279.0%27 y=%2737.5%27 width=%279.7%27 height=%270.30%27 fill=%27%23ffd59a%27 fill-opacity=%270.40%27/%3E%3Crect x=%27220.8%27 y=%27185.2%27 width=%2732.4%27 height=%270.50%27 fill=%27%23ffb08a%27 fill-opacity=%270.11%27/%3E%3Crect x=%27301.9%27 y=%2781.5%27 width=%276.2%27 height=%270.36%27 fill=%27%23ffd59a%27 fill-opacity=%270.25%27/%3E%3Crect x=%27278.2%27 y=%274.3%27 width=%279.9%27 height=%270.25%27 fill=%27%23ffd59a%27 fill-opacity=%270.32%27/%3E%3Crect x=%27216.5%27 y=%27242.8%27 width=%2729.5%27 height=%270.58%27 fill=%27%23ff8a90%27 fill-opacity=%270.19%27/%3E%3Crect x=%27261.9%27 y=%27131.8%27 width=%2723.3%27 height=%270.43%27 fill=%27%23ffb08a%27 fill-opacity=%270.35%27/%3E%3Crect x=%27296.2%27 y=%2798.0%27 width=%275.0%27 height=%270.38%27 fill=%27%23ffd59a%27 fill-opacity=%270.31%27/%3E%3Crect x=%27352.3%27 y=%27155.1%27 width=%2725.1%27 height=%270.46%27 fill=%27%23ffb08a%27 fill-opacity=%270.16%27/%3E%3Crect x=%27293.0%27 y=%2772.4%27 width=%273.7%27 height=%270.35%27 fill=%27%23ffd59a%27 fill-opacity=%270.25%27/%3E%3Crect x=%27264.4%27 y=%2722.3%27 width=%273.1%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.38%27/%3E%3Crect x=%27269.1%27 y=%2715.7%27 width=%276.7%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27274.9%27 y=%278.7%27 width=%278.0%27 height=%270.26%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27359.4%27 y=%27220.0%27 width=%2714.7%27 height=%270.55%27 fill=%27%23ff8a90%27 fill-opacity=%270.17%27/%3E%3Crect x=%27301.6%27 y=%2765.2%27 width=%2718.5%27 height=%270.34%27 fill=%27%23ffd59a%27 fill-opacity=%270.15%27/%3E%3Crect x=%27267.1%27 y=%2723.7%27 width=%275.2%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.28%27/%3E%3Crect x=%27241.7%27 y=%27134.9%27 width=%274.6%27 height=%270.43%27 fill=%27%23ffb08a%27 fill-opacity=%270.21%27/%3E%3Crect x=%27276.1%27 y=%2768.0%27 width=%2718.8%27 height=%270.34%27 fill=%27%23ffd59a%27 fill-opacity=%270.32%27/%3E%3Crect x=%27286.0%27 y=%27110.8%27 width=%2717.8%27 height=%270.40%27 fill=%27%23ffb08a%27 fill-opacity=%270.11%27/%3E%3Crect x=%27337.9%27 y=%27252.8%27 width=%2736.4%27 height=%270.59%27 fill=%27%23ff8a90%27 fill-opacity=%270.23%27/%3E%3Crect x=%27268.4%27 y=%2774.3%27 width=%275.1%27 height=%270.35%27 fill=%27%23ffd59a%27 fill-opacity=%270.30%27/%3E%3Crect x=%27268.9%27 y=%276.6%27 width=%274.3%27 height=%270.26%27 fill=%27%23ffd59a%27 fill-opacity=%270.18%27/%3E%3Crect x=%27244.7%27 y=%2760.3%27 width=%273.1%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.16%27/%3E%3Crect x=%27275.3%27 y=%2711.5%27 width=%272.5%27 height=%270.26%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27218.3%27 y=%27143.5%27 width=%2710.6%27 height=%270.44%27 fill=%27%23ffb08a%27 fill-opacity=%270.18%27/%3E%3Crect x=%27240.6%27 y=%2766.6%27 width=%2716.9%27 height=%270.34%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27275.5%27 y=%2795.5%27 width=%275.4%27 height=%270.38%27 fill=%27%23ffd59a%27 fill-opacity=%270.13%27/%3E%3Crect x=%27254.0%27 y=%2761.0%27 width=%2716.1%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.16%27/%3E%3Crect x=%27284.0%27 y=%273.0%27 width=%277.4%27 height=%270.25%27 fill=%27%23ffd59a%27 fill-opacity=%270.17%27/%3E%3Crect x=%27207.9%27 y=%27119.7%27 width=%2715.4%27 height=%270.41%27 fill=%27%23ffb08a%27 fill-opacity=%270.37%27/%3E%3Crect x=%27322.9%27 y=%27237.8%27 width=%2715.0%27 height=%270.57%27 fill=%27%23ff8a90%27 fill-opacity=%270.15%27/%3E%3Crect x=%27285.6%27 y=%2722.1%27 width=%278.7%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.38%27/%3E%3Crect x=%27252.1%27 y=%2757.6%27 width=%2715.5%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27340.9%27 y=%27233.5%27 width=%2732.6%27 height=%270.56%27 fill=%27%23ff8a90%27 fill-opacity=%270.23%27/%3E%3Crect x=%27277.2%27 y=%2733.7%27 width=%277.2%27 height=%270.29%27 fill=%27%23ffd59a%27 fill-opacity=%270.12%27/%3E%3Crect x=%27273.8%27 y=%273.4%27 width=%274.7%27 height=%270.25%27 fill=%27%23ffd59a%27 fill-opacity=%270.36%27/%3E%3Crect x=%27243.8%27 y=%27277.0%27 width=%2741.2%27 height=%270.62%27 fill=%27%23ff8a90%27 fill-opacity=%270.25%27/%3E%3Crect x=%27232.3%27 y=%27276.4%27 width=%2715.2%27 height=%270.62%27 fill=%27%23ff8a90%27 fill-opacity=%270.11%27/%3E%3Crect x=%27262.4%27 y=%2727.6%27 width=%2710.3%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.42%27/%3E%3Crect x=%27261.5%27 y=%27228.5%27 width=%2726.9%27 height=%270.56%27 fill=%27%23ff8a90%27 fill-opacity=%270.25%27/%3E%3Crect x=%27277.8%27 y=%279.3%27 width=%2711.9%27 height=%270.26%27 fill=%27%23ffd59a%27 fill-opacity=%270.39%27/%3E%3Crect x=%27270.0%27 y=%27193.0%27 width=%2710.7%27 height=%270.51%27 fill=%27%23ffb08a%27 fill-opacity=%270.27%27/%3E%3Crect x=%27293.1%27 y=%2758.4%27 width=%2718.0%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.23%27/%3E%3Crect x=%27313.3%27 y=%2776.8%27 width=%2715.8%27 height=%270.35%27 fill=%27%23ffd59a%27 fill-opacity=%270.16%27/%3E%3Crect x=%27263.5%27 y=%2715.3%27 width=%2712.4%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.39%27/%3E%3Crect x=%27283.9%27 y=%2718.4%27 width=%2713.7%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.34%27/%3E%3Crect x=%27281.2%27 y=%2763.0%27 width=%275.2%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.11%27/%3E%3Crect x=%27312.0%27 y=%27283.3%27 width=%2726.7%27 height=%270.63%27 fill=%27%23ff8a90%27 fill-opacity=%270.23%27/%3E%3Crect x=%27308.6%27 y=%2786.0%27 width=%2718.5%27 height=%270.36%27 fill=%27%23ffd59a%27 fill-opacity=%270.17%27/%3E%3Crect x=%27265.9%27 y=%2739.2%27 width=%276.0%27 height=%270.30%27 fill=%27%23ffd59a%27 fill-opacity=%270.30%27/%3E%3Crect x=%27273.2%27 y=%2740.8%27 width=%274.5%27 height=%270.30%27 fill=%27%23ffd59a%27 fill-opacity=%270.41%27/%3E%3Crect x=%27270.5%27 y=%2763.9%27 width=%2712.4%27 height=%270.33%27 fill=%27%23ffd59a%27 fill-opacity=%270.39%27/%3E%3Crect x=%27314.7%27 y=%2782.2%27 width=%2712.4%27 height=%270.36%27 fill=%27%23ffd59a%27 fill-opacity=%270.26%27/%3E%3Crect x=%27211.0%27 y=%27113.4%27 width=%2713.2%27 height=%270.40%27 fill=%27%23ffb08a%27 fill-opacity=%270.15%27/%3E%3Crect x=%27282.9%27 y=%272.1%27 width=%273.7%27 height=%270.25%27 fill=%27%23ffd59a%27 fill-opacity=%270.29%27/%3E%3Crect x=%27284.2%27 y=%27183.6%27 width=%2714.4%27 height=%270.50%27 fill=%27%23ffb08a%27 fill-opacity=%270.21%27/%3E%3Crect x=%27316.5%27 y=%27123.7%27 width=%276.6%27 height=%270.42%27 fill=%27%23ffb08a%27 fill-opacity=%270.25%27/%3E%3Crect x=%27261.6%27 y=%2738.4%27 width=%2713.1%27 height=%270.30%27 fill=%27%23ffd59a%27 fill-opacity=%270.28%27/%3E%3Crect x=%27304.9%27 y=%27125.8%27 width=%2724.2%27 height=%270.42%27 fill=%27%23ffb08a%27 fill-opacity=%270.22%27/%3E%3Crect x=%27272.5%27 y=%27142.9%27 width=%2716.7%27 height=%270.44%27 fill=%27%23ffb08a%27 fill-opacity=%270.28%27/%3E%3Crect x=%27277.3%27 y=%2791.4%27 width=%2712.6%27 height=%270.37%27 fill=%27%23ffd59a%27 fill-opacity=%270.38%27/%3E%3Crect x=%27337.0%27 y=%27173.9%27 width=%2730.1%27 height=%270.48%27 fill=%27%23ffb08a%27 fill-opacity=%270.15%27/%3E%3Crect x=%27331.5%27 y=%27125.0%27 width=%2722.6%27 height=%270.42%27 fill=%27%23ffb08a%27 fill-opacity=%270.13%27/%3E%3Crect x=%27276.8%27 y=%2714.5%27 width=%273.0%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.20%27/%3E%3Crect x=%27278.5%27 y=%277.8%27 width=%2710.4%27 height=%270.26%27 fill=%27%23ffd59a%27 fill-opacity=%270.43%27/%3E%3Crect x=%27282.4%27 y=%2719.8%27 width=%2710.1%27 height=%270.27%27 fill=%27%23ffd59a%27 fill-opacity=%270.16%27/%3E%3Crect x=%27396.9%27 y=%27245.9%27 width=%2713.9%27 height=%270.58%27 fill=%27%23ff8a90%27 fill-opacity=%270.27%27/%3E%3Crect x=%27268.7%27 y=%2775.9%27 width=%2720.3%27 height=%270.35%27 fill=%27%23ffd59a%27 fill-opacity=%270.36%27/%3E%3Crect x=%27273.3%27 y=%2721.1%27 width=%278.5%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.23%27/%3E%3Crect x=%27266.7%27 y=%2727.5%27 width=%2711.5%27 height=%270.28%27 fill=%27%23ffd59a%27 fill-opacity=%270.12%27/%3E%3C/svg%3E"),
+      radial-gradient(ellipse 70% 16% at 70% 44%, rgba(255, 217, 160, 0.5), transparent 70%),
+      linear-gradient(180deg, #2e2440 0%, #5e3a62 13%, #a9507a 25%, #e57b5c 35%, #ffc983 43.6%,
+                      #ffe2b0 44%, #3a5566 44.2%, #1d4452 52%, #0c2630 70%, #050d10 100%);
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-size: 220px 220px, 100% 56%, 100% 56%, 100% 100%, 100% 100%;
+    background-position: 0 0, 0 100%, 0 100%, 0 0, 0 0;
   }
-  /* No outlines anywhere: soft washes of light, rounded shapes, and selected
-     things lighting up from within. */
-  html[data-skin="digital"] .well,
-  html[data-skin="digital"] .btn,
-  html[data-skin="digital"] .field,
-  html[data-skin="digital"] .conn {
-    background-color: transparent; background-image: var(--glass);
-    border-color: transparent; box-shadow: none;
+  html[data-skin="digital"] .label { font: 700 13px var(--cond); letter-spacing: 0.16em; color: var(--text-dim); }
+  html[data-skin="digital"] .sub { color: var(--text); opacity: 0.75; }
+  html[data-skin="digital"] .divider { background: linear-gradient(90deg, transparent, rgba(247, 236, 221, 0.3) 25%, rgba(247, 236, 221, 0.3) 75%, transparent); }
+  html[data-skin="digital"] header { flex-wrap: wrap; row-gap: 10px; }
+  html[data-skin="digital"] .logo { text-shadow: 0 1.5px 0 rgba(0, 0, 0, 0.2); white-space: nowrap; }
+  html[data-skin="digital"] .badge { color: #2a1810; border-radius: 6px; }
+  html[data-skin="digital"] .conn { border: 0; background: var(--surface); }
+  html[data-skin="digital"] .conn .label { white-space: nowrap; color: var(--text); }
+  html[data-skin="digital"] .conn.ok .led { background: rgb(var(--teal)); box-shadow: 0 0 8px rgba(var(--teal), 0.7); }
+
+  /* smoky panels, no outlines */
+  html[data-skin="digital"] .well {
+    border: 0; border-radius: 16px; background: linear-gradient(rgba(34, 22, 31, 0.5), rgba(18, 11, 18, 0.64));
+    box-shadow: inset 0 1px 0 rgba(255, 230, 204, 0.07);
   }
-  html[data-skin="digital"] .well { border-radius: 20px; }
-  html[data-skin="digital"] .btn,
-  html[data-skin="digital"] .field { border-radius: 999px; }
-  html[data-skin="digital"] .btn { color: var(--text-dim); font-size: 15px; letter-spacing: 0.12em; }
-  html[data-skin="digital"] .btn[aria-pressed]::before { display: none; }
+  html[data-skin="digital"] #status { font: 500 19px var(--mono); }
+  html[data-skin="digital"] .readouts { border-top-color: var(--divider); }
+  html[data-skin="digital"] .readouts .label { font-size: 11px; }
+  html[data-skin="digital"] .readouts b { font: 500 17px var(--mono); margin-top: 3px; }
+  html[data-skin="digital"] .note { color: var(--text-dim); }
+
+  /* tape-deck keys: a cream cap on a darker base; chosen keys sit pressed
+     in and light up orange, with a lamp slot along the top */
+  html[data-skin="digital"] .btn {
+    border: 0; border-radius: 11px; color: var(--ink); font-size: 16px; letter-spacing: 0.1em;
+    background: linear-gradient(var(--cream-top), var(--cream-bottom));
+    box-shadow: 0 3px 0 var(--key-side), 0 6px 12px rgba(0, 0, 0, 0.3);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  html[data-skin="digital"] .btn[aria-pressed]::before {
+    left: 50%; top: 7px; width: 22px; height: 3px; margin: 0 0 0 -11px; border-radius: 2px;
+    background: var(--led-off); box-shadow: none;
+  }
+  html[data-skin="digital"] .btn:active { transform: translateY(1.5px); box-shadow: 0 1.5px 0 var(--key-side), 0 4px 8px rgba(0, 0, 0, 0.3); filter: none; }
   html[data-skin="digital"] .btn[aria-pressed="true"],
   html[data-skin="digital"] .btn.solid[aria-pressed="true"] {
-    background-color: transparent; background-image: linear-gradient(rgba(143, 208, 240, 0.46), rgba(143, 208, 240, 0.24));
-    border-color: transparent; color: var(--text); text-shadow: var(--text-glow);
-    box-shadow: 0 0 0 3px rgba(143, 208, 240, 0.08), 0 0 16px rgba(143, 208, 240, 0.2);
+    color: #2a120a; background: linear-gradient(#ffb373, #f08046); transform: translateY(2px);
+    box-shadow: 0 1px 0 #7a3d1e, 0 0 0 3px rgba(var(--accent), 0.16), 0 0 20px rgba(var(--accent), 0.4);
   }
-  html[data-skin="digital"] .field:focus { border-color: transparent; box-shadow: 0 0 0 2px rgba(143, 208, 240, 0.45); }
+  html[data-skin="digital"] .btn[aria-pressed="true"]::before { background: #fff6e8; box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.6); }
+  html[data-skin="digital"] .field:focus { box-shadow: 0 0 0 2px rgba(var(--accent), 0.6); }
 
-  /* LISTEN shows what a tap will do: play, or stop while listening. */
-  html[data-skin="digital"] #play { font-size: 20px; gap: 14px; }
+  /* LISTEN shows what a tap will do: play, or stop while listening */
+  html[data-skin="digital"] #play { font-size: 20px; letter-spacing: 0.16em; gap: 14px; }
   html[data-skin="digital"] #play::before {
     display: block; content: ""; position: static; flex: none; margin: 0; width: 14px; height: 16px;
     border-radius: 0; box-shadow: none; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%);
   }
-  html[data-skin="digital"] #play[aria-pressed="true"]::before { width: 13px; height: 13px; clip-path: none; border-radius: 3px; background: currentColor; }
+  html[data-skin="digital"] #play[aria-pressed="true"]::before { width: 13px; height: 13px; clip-path: none; border-radius: 3px; background: currentColor; box-shadow: none; }
 
-  /* MODE: one segmented control -- pick a side. */
-  html[data-skin="digital"] .pair { background: rgba(255, 255, 255, 0.05); border-radius: 999px; padding: 4px; gap: 4px; }
-  html[data-skin="digital"] .pair .btn { min-height: 40px; }
-  html[data-skin="digital"] .pair .btn:not([aria-pressed="true"]) { background-image: none; }
-
-  /* KEEP SCREEN ON: a real on/off switch. */
+  /* KEEP SCREEN ON: an on/off switch */
   html[data-skin="digital"] #wake {
-    width: 54px; min-height: 30px; height: 30px; padding: 0; flex: none;
-    background-image: none; background-color: rgba(255, 255, 255, 0.13); box-shadow: none;
+    width: 56px; min-height: 32px; height: 32px; padding: 0; flex: none; border-radius: 99px; transform: none;
+    background: rgba(0, 0, 0, 0.35); box-shadow: none;
   }
-  html[data-skin="digital"] #wake[aria-pressed="true"] { background-image: none; background-color: rgba(143, 208, 240, 0.9); box-shadow: none; }
+  html[data-skin="digital"] #wake[aria-pressed="true"] { background: rgb(var(--accent)); box-shadow: 0 0 14px rgba(var(--accent), 0.35); transform: none; }
   html[data-skin="digital"] #wakeText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   html[data-skin="digital"] #wake::before {
-    display: block; content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; margin: 0;
-    border-radius: 50%; background: #b9c6d6; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    display: block; content: ""; position: absolute; left: 3px; top: 3px; width: 26px; height: 26px; margin: 0;
+    border-radius: 50%; background: #d8ccb9; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     transition: transform 0.18s ease, background-color 0.18s ease;
   }
-  html[data-skin="digital"] #wake[aria-pressed="true"]::before { transform: translateX(24px); background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
-  html[data-skin="digital"] header { flex-wrap: wrap; row-gap: 10px; }
-  html[data-skin="digital"] .logo { font: 700 21px/1 var(--digital); letter-spacing: 0.05em; text-shadow: var(--text-glow); white-space: nowrap; }
-  html[data-skin="digital"] .conn .label { white-space: nowrap; }
-  html[data-skin="digital"] .badge {
-    font: 700 11px/1 var(--digital); white-space: nowrap; color: rgb(var(--accent)); background: rgba(143, 208, 240, 0.14);
-    border: 0; border-radius: 99px; padding: 6px 10px;
+  html[data-skin="digital"] #wake[aria-pressed="true"]::before { transform: translateX(24px); background: #fff6ea; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+
+  /* quality picker and password: dark insets */
+  html[data-skin="digital"] .field {
+    border: 0; border-radius: 12px; font: 500 16px var(--mono); letter-spacing: 0; color: var(--text);
+    background-color: rgba(0, 0, 0, 0.32); box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
   }
-  html[data-skin="digital"] .label { font: 700 12px var(--cond); letter-spacing: 0.16em; }
-  html[data-skin="digital"] .readouts .label { font-size: 10px; }
-  html[data-skin="digital"] #status { font: 600 17px var(--digital); text-shadow: var(--text-glow); }
-  html[data-skin="digital"] .readouts b { font: 600 15px var(--digital); margin-top: 3px; }
-  html[data-skin="digital"] .field { font: 600 16px var(--digital); }
   html[data-skin="digital"] select.field {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%238fd0f0'/></svg>"), var(--glass);
-    background-repeat: no-repeat, no-repeat; background-position: right 14px center, 0 0; background-size: auto, 100% 100%;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%23ff9a4d'/></svg>");
   }
-  html[data-skin="digital"] .field option { background: #0b1d3f; }
-  html[data-skin="digital"] .divider {
-    background: linear-gradient(90deg, transparent, rgba(143, 208, 240, 0.6) 30%, rgba(143, 208, 240, 0.6) 70%, transparent);
-  }
+  html[data-skin="digital"] .field option { background: #2a1f2c; }
 </style>
 </head>
 <body>
@@ -665,7 +675,7 @@ function drawMeter() {
   const xFor = db => left + (Math.min(0, Math.max(FLOOR, db)) - FLOOR) / -FLOOR * (right - left);
   const digital = document.documentElement.dataset.skin === "digital";
   const palette = digital
-    ? { high: [255, 95, 126], mid: [232, 241, 248], low: [143, 208, 240], unlit: 0.06, dim: "#95a7c0", text: "#f3f6fa", faint: "#56677f" }
+    ? { high: [255, 94, 98], mid: [255, 179, 71], low: [92, 200, 196], unlit: 0.07, dim: "rgba(247,236,221,0.68)", text: "#f7ecdd", faint: "rgba(247,236,221,0.4)" }
     : { high: [255, 69, 58], mid: [255, 204, 61], low: [53, 208, 127], unlit: 0.09, dim: "#9497a0", text: "#f1f0ec", faint: "#5d6069" };
   const zone = db => db >= -1 ? palette.high : db >= -9 ? palette.mid : palette.low;
   const seg = 3 * s, pitch = 4 * s;
@@ -880,7 +890,7 @@ function applySkin(skin) {
   if (skin !== "digital" && skin !== "flat") return;
   if (document.documentElement.dataset.skin === skin) return;
   document.documentElement.dataset.skin = skin;
-  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#060e1f" : "#1c1d21";
+  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#2e2440" : "#1c1d21";
   meter.dirty = true;
   drawMeter();
 }

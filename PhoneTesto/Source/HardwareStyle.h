@@ -7,9 +7,9 @@
     - FLAT: modern flat hardware -- a graphite panel, flat controls with
       hairline borders, LED indicators, one orange accent, Barlow type (the
       phone page mirrors it in Resources/player.html).
-    - DIGITAL: a 2000s games-console interface -- deep navy with slowly
-      moving light waves, glass panels, cyan glow, PT Digital type for the
-      logo and numbers (see DigitalStyle.h).
+    - SUNSET (Skin::digital in code, "digital" in saved state): a warm,
+      analog look -- a grainy dusk sky over a shimmering sea, smoky panels,
+      cream tape-deck keys and knobs, DM Mono numbers (see DigitalStyle.h).
 
     Components ask skinOf (*this) which one to draw. */
 namespace phonetesto::hw
@@ -48,8 +48,8 @@ enum class Type
     sansMedium,
     sansSemiBold,
     sansBold,
-    digitalSemiBold, // PT Digital (from Orbitron): DIGITAL skin's logo and numbers
-    digitalBold
+    monoRegular,     // PhoneTesto Mono (DM Mono, plain zero): the SUNSET skin's numbers
+    monoMedium
 };
 
 juce::Font font (Type, float height, float kerning = 0.0f);
@@ -64,7 +64,7 @@ constexpr const char* solidWhenOnProperty = "hwSolidWhenOn"; // ToggleButton: fi
 constexpr const char* liveProperty        = "hwLive";        // ToggleButton: the ON AIR button
 constexpr const char* iconProperty        = "hwIcon";        // ToggleButton: device icon (speaker profile index)
 constexpr const char* compactProperty     = "hwCompact";     // ToggleButton: small header button, no LED
-constexpr const char* switchProperty      = "hwSwitch";      // ToggleButton: on/off setting, drawn with a switch (DIGITAL)
+constexpr const char* switchProperty      = "hwSwitch";      // ToggleButton: on/off setting, drawn with a switch (SUNSET)
 
 class LookAndFeel : public juce::LookAndFeel_V4
 {

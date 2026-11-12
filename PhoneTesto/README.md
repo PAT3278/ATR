@@ -82,24 +82,24 @@ plugin.
 The **SKIN** button in the header switches between two looks (saved with
 the project):
 
-- **DIGITAL** (default for now, while it's being tried out) — a 2000s
-  games-console interface: deep navy with light waves sweeping across
-  (each with a pulse of light running along its crest) and rising
-  particles, soft glass panels, PT Digital type for the logo and numbers.
-  Controls have no outlines: buttons are soft capsules that light up from
-  inside when on, MONO and BYPASS are sliding switches, ON AIR shows a
-  broadcast icon that pulses while live, and the MODEL pads show device
-  icons.
+- **SUNSET** (the default) — a warm, analog look: a grainy dusk sky over a
+  teal sea, where the sun's reflection glints and drifts and slow swells
+  roll in; smoky translucent panels with no outlines; cream tape-deck keys
+  that sit pressed in and light up orange when chosen (coral for ON AIR,
+  whose broadcast icon pulses while live); cream knobs with a coral
+  pointer; MONO and BYPASS as sliding switches; Barlow Condensed labels
+  and PhoneTesto Mono numbers. (Saved projects and the code call it
+  `digital`, its earlier name.)
 - **FLAT** — the modern flat hardware panel described above.
 
 The phone page follows the plugin's skin (in a simpler form: the same
-colours, glass and type, over a still background).
+colours, keys and type, over a still background).
 
-The DIGITAL animation runs at 30 fps, timed by the clock (so its speed
-doesn't depend on how often the host redraws), and only the band the waves
-move in is redrawn — everything over it comes from cached images. That's
-about 3.3 ms per frame at 125 % size in JUCE's software renderer, ~10 % of
-one CPU core while the window is open; the GPU-drawn editor on Windows and
+The SUNSET animation runs at 30 fps, timed by the clock (so its speed
+doesn't depend on how often the host redraws), and only the sea is
+redrawn — the sky, grain and everything over the sea come from cached
+images. That's about 2.6 ms per frame at 150 % size in JUCE's software
+renderer, ~8 % of one CPU core while the window is open; the GPU-drawn editor on Windows and
 macOS should be lighter, but that hasn't been measured yet. FLAT redraws
 nothing while idle. `PhoneTestoEditorSnapshot` prints these timings.
 
@@ -261,7 +261,7 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
 - **PhoneTestoEditorSnapshot** — renders the editor in both skins (Emulate
   and Live) to PNGs for checking the layout, checks it reopens at its saved
-  size, and prints what a DIGITAL animation frame costs to draw
+  size, and prints what a SUNSET animation frame costs to draw
   (`PT_ANIM_FRAMES=60` also saves animation frames, with their real times
   in `anim-times.txt`).
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
@@ -303,12 +303,12 @@ Resources/
   player-worklet.js        Its playback core (AudioWorklet or ScriptProcessor): gapless
                            playback, jitter buffer, drift control
   thirdparty/              opus-decoder (WASM Opus for plain-HTTP pages) + its licence
-  fonts/                   Barlow and PT Digital fonts + their licences (OFL)
+  fonts/                   Barlow and PhoneTesto Mono fonts + their licences (OFL)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
   PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
   HardwareStyle.h/.cpp     Fonts, skins, FLAT palette, flat knobs and LED buttons
-  DigitalStyle.h/.cpp      DIGITAL skin: animated background, glass, glow, device icons
+  DigitalStyle.h/.cpp      SUNSET skin: animated sea, panels, keys, knobs, device icons
   LevelMeter.h/.cpp        Stereo LED output meter
   DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
   SpeakerProfiles.h        Per-device filter/drive tables
@@ -332,10 +332,11 @@ Tests/
 - [Barlow](https://github.com/jpt/barlow) fonts — SIL Open Font License 1.1
   (`Resources/fonts/OFL.txt`); these are included in the repo and embedded in
   the plugin.
-- PT Digital — SIL Open Font License 1.1 (`Resources/fonts/PTDigital-OFL.txt`).
-  A Modified Version of [Orbitron](https://github.com/theleagueof/orbitron)
-  (static SemiBold/Bold instances cut from its variable font, renamed as its
-  Reserved Font Name requires); embedded in the plugin.
+- PhoneTesto Mono — SIL Open Font License 1.1
+  (`Resources/fonts/PhoneTestoMono-OFL.txt`). A Modified Version of
+  [DM Mono](https://github.com/googlefonts/dm-mono) (its zero redrawn
+  without the slash, renamed so it isn't mistaken for the original);
+  embedded in the plugin.
 - [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
   Ethan Halsall — MIT, wrapping libopus (BSD)
   (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo

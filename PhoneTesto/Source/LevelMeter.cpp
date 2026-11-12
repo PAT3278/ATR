@@ -109,14 +109,14 @@ void LevelMeter::paintDigital (juce::Graphics& g)
 
     const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
     d::drawGlass (g, bounds, 16.0f);
-    g.setColour (Colour (0x66020816));
+    g.setColour (Colour (0xd0120b10));
     g.fillRoundedRectangle (bounds.reduced (5.0f), 12.0f);
 
     const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
     auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };
     auto zoneColour = [] (float db) { return db >= -1.0f ? c::meterHigh : db >= -9.0f ? c::meterMid : c::meterLow; };
 
-    g.setFont (hw::font (hw::Type::sansSemiBold, 10.0f, 0.04f));
+    g.setFont (hw::font (hw::Type::monoRegular, 9.0f));
     for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f })
     {
         g.setColour (c::textFaint);
@@ -146,7 +146,7 @@ void LevelMeter::paintDigital (juce::Graphics& g)
         for (float y = bottom - segment; y >= top - 0.5f; y -= pitch)
         {
             const float segDb = jmap (y + segment * 0.5f, bottom, top, floorDb, 0.0f);
-            g.setColour (segDb <= s.level ? zoneColour (segDb) : Colours::white.withAlpha (0.05f));
+            g.setColour (segDb <= s.level ? zoneColour (segDb) : c::cream.withAlpha (0.05f));
             g.fillRect (x, y, barW, segment);
         }
 
@@ -155,14 +155,14 @@ void LevelMeter::paintDigital (juce::Graphics& g)
             const auto colour = zoneColour (s.hold);
             g.setColour (colour.withAlpha (0.3f));
             g.fillRect (x - 2.0f, yFor (s.hold) - 3.0f, barW + 4.0f, 6.0f);
-            g.setColour (Colours::white);
+            g.setColour (Colour (0xfffff3e4));
             g.fillRect (x, yFor (s.hold) - 1.0f, barW, 2.0f);
         }
 
         const auto readout = Rectangle<float> (x - 8.0f, bounds.getY() + 10.0f, barW + 16.0f, 16.0f);
         d::drawGlowText (g, s.hold <= floorDb + 0.5f ? String (CharPointer_UTF8 ("\xe2\x80\x93")) : String (s.hold, 1),
                          readout, Justification::centred, hw::font (hw::Type::condensedBold, 13.0f),
-                         s.hold >= -1.0f ? c::meterHigh : c::text, 0.5f);
+                         s.hold >= -1.0f ? c::meterHigh : c::text, 0.0f);
 
         d::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 11.0f);
     }

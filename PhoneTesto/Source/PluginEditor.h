@@ -58,7 +58,7 @@ private:
     // `panel` holds every control and paints the background; `overlay` sits
     // behind the controls and paints the static text (header, labels,
     // readouts). The overlay and controls are cached as images, so the
-    // DIGITAL skin's moving background is the only thing redrawn per frame.
+    // SUNSET skin's moving background is the only thing redrawn per frame.
     Painted panel, overlay;
 
     LevelMeter meter;

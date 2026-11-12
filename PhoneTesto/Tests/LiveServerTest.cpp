@@ -294,9 +294,9 @@ int main()
         check (digitalByDefault && flatAfter, "/info reports the plugin's skin (digital by default, flat after switching)");
 
         bool fontsOk = true;
-        for (auto* font : { "/fonts/PTDigital-Bold.ttf", "/fonts/PTDigital-SemiBold.ttf", "/fonts/Barlow-Bold.ttf" })
+        for (auto* font : { "/fonts/PhoneTestoMono-Regular.ttf", "/fonts/PhoneTestoMono-Medium.ttf", "/fonts/Barlow-Bold.ttf" })
             fontsOk &= get (port, font).status() == 200;
-        check (fontsOk, "serves the DIGITAL skin's fonts");
+        check (fontsOk, "serves the SUNSET skin's fonts");
 
         check (get (port, "/nope").status() == 404, "unknown path -> 404");
         check (get (port, "/auth").status() == 204, "/auth with no password set -> 204");

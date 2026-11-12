@@ -436,8 +436,8 @@ private:
             { "/fonts/Barlow-Medium.ttf",            BinaryData::BarlowMedium_ttf,            BinaryData::BarlowMedium_ttfSize },
             { "/fonts/Barlow-SemiBold.ttf",          BinaryData::BarlowSemiBold_ttf,          BinaryData::BarlowSemiBold_ttfSize },
             { "/fonts/Barlow-Bold.ttf",              BinaryData::BarlowBold_ttf,              BinaryData::BarlowBold_ttfSize },
-            { "/fonts/PTDigital-SemiBold.ttf",       BinaryData::PTDigitalSemiBold_ttf,       BinaryData::PTDigitalSemiBold_ttfSize },
-            { "/fonts/PTDigital-Bold.ttf",           BinaryData::PTDigitalBold_ttf,           BinaryData::PTDigitalBold_ttfSize },
+            { "/fonts/PhoneTestoMono-Regular.ttf",   BinaryData::PhoneTestoMonoRegular_ttf,   BinaryData::PhoneTestoMonoRegular_ttfSize },
+            { "/fonts/PhoneTestoMono-Medium.ttf",    BinaryData::PhoneTestoMonoMedium_ttf,    BinaryData::PhoneTestoMonoMedium_ttfSize },
         };
 
         for (auto& f : fonts)

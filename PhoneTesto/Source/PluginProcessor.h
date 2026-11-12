@@ -100,7 +100,7 @@ public:
     void setEditorScale (float scale) noexcept { editorScale = scale; }
     float getEditorScale() const noexcept { return editorScale.load(); }
 
-    /** Editor skin (0 = FLAT, 1 = DIGITAL), remembered with the project. The
+    /** Editor skin (0 = FLAT, 1 = SUNSET, "digital" in code), remembered with the project. The
         Live phone page follows it. */
     void setEditorSkin (int skin) noexcept
     {
@@ -170,7 +170,7 @@ private:
     juce::String livePassword;
     const juce::String autoAccessCode;
     std::atomic<float> editorScale { 1.0f };
-    std::atomic<int> editorSkin { 1 }; // DIGITAL while it's being tried out
+    std::atomic<int> editorSkin { 1 }; // SUNSET
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessor)
 };
