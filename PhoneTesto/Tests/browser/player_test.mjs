@@ -332,7 +332,7 @@ try {
     const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
                                                bg: getComputedStyle(document.body).backgroundColor,
                                                theme: document.querySelector('meta[name="theme-color"]').content }));
-    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#2e2440" : "#1c1d21"),
+    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#141226" : "#1c1d21"),
           `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
     check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));

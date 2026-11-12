@@ -82,9 +82,12 @@ plugin.
 The **SKIN** button in the header switches between two looks (saved with
 the project):
 
-- **SUNSET** (the default) — a warm, analog look: a grainy dusk sky over a
-  teal sea, where the sun's reflection glints and drifts and slow swells
-  roll in; smoky translucent panels with no outlines; cream tape-deck keys
+- **SUNSET** (the default) — a warm, analog look: a grainy dusk sky,
+  shading smoothly from night through plum and rose to gold, over a teal
+  sea, where the sun's reflection glints and drifts and slow swells roll
+  in; on the far shore a city's neon (mint, white, red) smears sideways as
+  in a long-exposure photo, shimmers on the water, and now and then a light
+  trail slides along the coast; smoky translucent panels with no outlines; cream tape-deck keys
   that sit pressed in and light up orange when chosen (coral for ON AIR,
   whose broadcast icon pulses while live); cream knobs with a coral
   pointer; MONO and BYPASS as sliding switches; Barlow Condensed labels

@@ -24,29 +24,138 @@ namespace
 
     constexpr float sunX = 0.7f; // fraction of the width
 
-    /** Sky, sun, clouds and sea, with no animation. */
+    //==========================================================================
+    // Smooth gradations: JUCE blends gradient stops in a straight line in
+    // sRGB, which shows "corners" at each stop and muddy midpoints. These
+    // build gradients from many stops along a Catmull-Rom curve through the
+    // key colours, blended in linear light.
+    float toLinear (float v)   { return std::pow (v, 2.2f); }
+    float fromLinear (float v) { return std::pow (jlimit (0.0f, 1.0f, v), 1.0f / 2.2f); }
+
+    Colour smoothColourAt (const std::vector<Colour>& keys, float position)
+    {
+        const int n = (int) keys.size();
+        const float x = jlimit (0.0f, 1.0f, position) * (float) (n - 1);
+        const int i = jmin (n - 2, (int) x);
+        const float t = x - (float) i;
+        const auto& p0 = keys[(size_t) jmax (0, i - 1)];
+        const auto& p1 = keys[(size_t) i];
+        const auto& p2 = keys[(size_t) (i + 1)];
+        const auto& p3 = keys[(size_t) jmin (n - 1, i + 2)];
+
+        auto channel = [t] (float a, float b, float c, float d)
+        {
+            a = toLinear (a); b = toLinear (b); c = toLinear (c); d = toLinear (d);
+            const float t2 = t * t, t3 = t2 * t;
+            return fromLinear (0.5f * ((2.0f * b) + (-a + c) * t + (2.0f * a - 5.0f * b + 4.0f * c - d) * t2
+                                       + (-a + 3.0f * b - 3.0f * c + d) * t3));
+        };
+
+        return Colour::fromFloatRGBA (channel (p0.getFloatRed(),   p1.getFloatRed(),   p2.getFloatRed(),   p3.getFloatRed()),
+                                      channel (p0.getFloatGreen(), p1.getFloatGreen(), p2.getFloatGreen(), p3.getFloatGreen()),
+                                      channel (p0.getFloatBlue(),  p1.getFloatBlue(),  p2.getFloatBlue(),  p3.getFloatBlue()),
+                                      1.0f);
+    }
+
+    ColourGradient smoothGradient (const std::vector<Colour>& keys, Point<float> from, Point<float> to)
+    {
+        ColourGradient gradient (keys.front(), from, keys.back(), to, false);
+        constexpr int steps = 48;
+        for (int k = 1; k < steps; ++k)
+            gradient.addColour ((double) k / steps, smoothColourAt (keys, (float) k / steps));
+        return gradient;
+    }
+
+    /** A soft radial glow, falling off smoothly (no visible rim), squashed
+        vertically by `squash`. */
+    void fillGlow (Graphics& g, Point<float> centre, float radius, float squash, Colour colour)
+    {
+        Graphics::ScopedSaveState state (g);
+        g.addTransform (AffineTransform::scale (1.0f, squash, centre.x, centre.y));
+        ColourGradient glow (colour, centre, colour.withAlpha (0.0f), centre.translated (radius, 0.0f), true);
+        for (int k = 1; k < 16; ++k)
+        {
+            const float t = (float) k / 16.0f;
+            const float falloff = std::pow (1.0f - t, 2.2f); // eases out to nothing
+            glow.addColour (t, colour.withMultipliedAlpha (falloff));
+        }
+        g.setGradientFill (glow);
+        g.fillEllipse (Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (centre));
+    }
+
+    //==========================================================================
+    // A city on the far shore at night, seen like a long exposure: lights
+    // smeared sideways into soft streaks of neon -- mint, white, red, a
+    // little yellow -- away from the sun.
+    constexpr uint32 neonColours[] = { 0xff8ff5cf, 0xff8ff5cf, 0xffe9fff6, 0xffff4d5e, 0xffffd877, 0xff6fd8ff };
+
+    struct CityLight { float x, lift, length, height, alpha; Colour colour; };
+
+    CityLight cityLight (int i, Rectangle<float> area)
+    {
+        // two clusters: behind the display on the left, and on the right
+        // between the knobs' readouts and the switches
+        const bool right = hash01 (i * 7 + 1) > 0.55f;
+        const float x = right ? area.getWidth() * (0.75f + 0.24f * hash01 (i * 7 + 2))
+                              : area.getWidth() * (0.03f + 0.50f * std::pow (hash01 (i * 7 + 2), 0.8f));
+        const float lift = 1.5f + (right ? 11.0f : 22.0f) * std::pow (hash01 (i * 7 + 3), 1.8f); // how far above the horizon
+        return { area.getX() + x, lift, 8.0f + 46.0f * hash01 (i * 7 + 4), 1.0f + 2.5f * hash01 (i * 7 + 5),
+                 0.25f + 0.55f * hash01 (i * 7 + 6), Colour (neonColours[(size_t) (hash01 (i * 7 + 7) * 5.99f)]) };
+    }
+
+    constexpr int numCityLights = 60;
+
+    void paintCity (Graphics& g, Rectangle<float> area, float horizon)
+    {
+        // the dark mass of the city, a soft shadow along the shore
+        for (auto [x0, x1, h] : { std::tuple { -0.1f, 0.6f, 26.0f }, { 0.72f, 1.1f, 15.0f } })
+        {
+            // a flat, soft-edged shadow: an ellipse squashed onto the shore
+            const float cx = area.getX() + area.getWidth() * (x0 + x1) * 0.5f;
+            const float rx = area.getWidth() * (x1 - x0) * 0.5f;
+            Graphics::ScopedSaveState state (g);
+            g.reduceClipRegion (area.withBottom (horizon).toNearestInt());
+            fillGlow (g, { cx, horizon }, rx, h / rx, Colour (0xff14101c).withAlpha (0.55f));
+        }
+
+        // the city's glow on the low sky: mint, with a blush of red
+        for (auto [x, colour] : { std::pair { 0.86f, 0xff8ff5cf }, { 0.95f, 0xffff4d5e }, { 0.30f, 0xff8ff5cf } })
+            fillGlow (g, { area.getX() + area.getWidth() * x, horizon - 4.0f }, area.getWidth() * 0.12f, 0.3f,
+                      Colour (colour).withAlpha (0.16f));
+
+        for (int i = 0; i < numCityLights; ++i)
+        {
+            const auto l = cityLight (i, area);
+            const auto core = Rectangle<float> (l.length, l.height).withCentre ({ l.x, horizon - l.lift });
+
+            // a wide haze, then the streak: fading at both ends like motion blur
+            fillGlow (g, core.getCentre(), l.length * 1.1f, 0.35f, l.colour.withAlpha (0.22f * l.alpha));
+
+            ColourGradient streak (l.colour.withAlpha (0.0f), core.getX(), 0.0f, l.colour.withAlpha (0.0f), core.getRight(), 0.0f, false);
+            streak.addColour (0.3, l.colour.withAlpha (l.alpha));
+            streak.addColour (0.7, l.colour.withAlpha (l.alpha));
+            g.setGradientFill (streak);
+            g.fillRoundedRectangle (core, core.getHeight() * 0.5f);
+        }
+    }
+
+    /** Sky, sun, clouds, the city and the sea, with no animation. */
     void paintScenery (Graphics& g, Rectangle<float> area)
     {
         const float horizon = Background::horizon (area);
+        const auto top = Point<float> (0.0f, area.getY());
 
-        // dusk sky: plum overhead, warming to gold at the horizon
-        ColourGradient sky (Colour (0xff2e2440), 0.0f, area.getY(), Colour (0xffffc983), 0.0f, horizon, false);
-        sky.addColour (0.30, Colour (0xff5e3a62));
-        sky.addColour (0.58, Colour (0xffa9507a));
-        sky.addColour (0.80, Colour (0xffe57b5c));
-        g.setGradientFill (sky);
-        g.fillRect (area.withBottom (horizon));
+        // dusk sky: night overhead, through plum and rose, to gold at the horizon
+        g.setGradientFill (smoothGradient ({ Colour (0xff141226), Colour (0xff2e2440), Colour (0xff5a3864), Colour (0xff9a4c78),
+                                             Colour (0xffd8705f), Colour (0xfff5a867), Colour (0xffffd294) },
+                                           top, { 0.0f, horizon }));
+        g.fillRect (area.withBottom (horizon + 1.0f));
 
-        // the sun, just set: a wide warm glow on the horizon
+        // the sun, just set: layered glows with no edges
         const auto sun = Point<float> (area.getX() + area.getWidth() * sunX, horizon);
-        for (auto [rx, ry, alpha] : { std::tuple { 0.55f, 0.32f, 0.35f }, { 0.22f, 0.12f, 0.45f }, { 0.08f, 0.04f, 0.6f } })
-        {
-            const float w = area.getWidth() * rx, h = area.getHeight() * ry;
-            Graphics::ScopedSaveState state (g);
-            g.addTransform (AffineTransform::scale (1.0f, h / w, sun.x, sun.y));
-            g.setGradientFill (ColourGradient (Colour (0xffffd9a0).withAlpha (alpha), sun, Colour (0x00ffb070), sun.translated (w, 0.0f), true));
-            g.fillEllipse (Rectangle<float> (w * 2.0f, w * 2.0f).withCentre (sun));
-        }
+        fillGlow (g, sun, area.getWidth() * 0.62f, 0.55f, Colour (0xffffb27a).withAlpha (0.30f));
+        fillGlow (g, sun, area.getWidth() * 0.26f, 0.42f, Colour (0xffffd59a).withAlpha (0.45f));
+        fillGlow (g, sun, area.getWidth() * 0.07f, 0.45f, Colour (0xfffff0d0).withAlpha (0.65f));
 
         // long soft clouds, lit warmer the lower they hang
         for (int i = 0; i < 9; ++i)
@@ -57,37 +166,37 @@ namespace
             const float h = 5.0f + 9.0f * hash01 (i + 41);
             const float warm = jlimit (0.0f, 1.0f, (y - area.getY()) / (horizon - area.getY()));
             const auto colour = Colour (0xff3b2a4c).interpolatedWith (Colour (0xffffb27a), 0.25f + 0.6f * warm);
-            const auto centre = Point<float> (x, y);
-
-            // an ellipse with a radial falloff, squashed flat: no hard edges
-            Graphics::ScopedSaveState state (g);
-            g.addTransform (AffineTransform::scale (1.0f, h / w, centre.x, centre.y));
-            ColourGradient puff (colour.withAlpha (0.30f + 0.15f * warm), centre, colour.withAlpha (0.0f), centre.translated (w * 0.5f, 0.0f), true);
-            puff.addColour (0.5, colour.withAlpha (0.16f + 0.1f * warm));
-            g.setGradientFill (puff);
-            g.fillEllipse (Rectangle<float> (w, w).withCentre (centre));
+            fillGlow (g, { x, y }, w * 0.5f, h / w, colour.withAlpha (0.30f + 0.15f * warm));
         }
 
-        // sea: teal, darkening towards the viewer
-        ColourGradient sea (Colour (0xff3a5566), 0.0f, horizon, Colour (0xff050d10), 0.0f, area.getBottom(), false);
-        sea.addColour (0.18, Colour (0xff1d4452));
-        sea.addColour (0.55, Colour (0xff0c2630));
-        g.setGradientFill (sea);
+        paintCity (g, area, horizon);
+
+        // sea: teal under the glow, deepening to near-black towards the viewer
+        g.setGradientFill (smoothGradient ({ Colour (0xff4a5d6a), Colour (0xff2a4a58), Colour (0xff163844), Colour (0xff0c2630),
+                                             Colour (0xff071a21), Colour (0xff040c10) },
+                                           { 0.0f, horizon }, { 0.0f, area.getBottom() }));
         g.fillRect (area.withTop (horizon));
 
-        // the horizon itself: a fine line of light
-        ColourGradient line (Colour (0x00ffd9a0), area.getX(), 0.0f, Colour (0x00ffd9a0), area.getRight(), 0.0f, false);
-        line.addColour (sunX, Colour (0xffffe2b0).withAlpha (0.7f));
-        g.setGradientFill (line);
-        g.fillRect (area.getX(), horizon - 0.5f, area.getWidth(), 1.0f);
+        // a haze where sky meets sea, so there's no hard seam
+        {
+            const auto haze = Rectangle<float> (area.getX(), horizon - 10.0f, area.getWidth(), 20.0f);
+            ColourGradient band (Colour (0x00ffc98a), 0.0f, haze.getY(), Colour (0x00ffc98a), 0.0f, haze.getBottom(), false);
+            for (int k = 1; k < 12; ++k)
+            {
+                const float t = (float) k / 12.0f;
+                band.addColour (t, Colour (0xffffc98a).withAlpha (0.28f * std::pow (std::sin (t * MathConstants<float>::pi), 2.0f)));
+            }
+            g.setGradientFill (band);
+            g.fillRect (haze);
+        }
+
+        // and a bright core on the horizon right under the sun
+        fillGlow (g, sun, area.getWidth() * 0.22f, 0.03f, Colour (0xfffff0d0).withAlpha (0.7f));
 
         // the sky's glow, mirrored softly in the water
-        ColourGradient mirror (Colour (0xffff9a6a).withAlpha (0.22f), sun, Colour (0x00ff9a6a), sun.translated (area.getWidth() * 0.3f, 0.0f), true);
         Graphics::ScopedSaveState state (g);
         g.reduceClipRegion (area.withTop (horizon).toNearestInt());
-        g.addTransform (AffineTransform::scale (1.0f, 0.5f, sun.x, sun.y));
-        g.setGradientFill (mirror);
-        g.fillRect (area.withTop (horizon).withHeight (area.getHeight()));
+        fillGlow (g, sun, area.getWidth() * 0.34f, 0.5f, Colour (0xffff9a6a).withAlpha (0.24f));
     }
 
     /** Film grain and a vignette, straight onto the cached pixels. */
@@ -103,8 +212,9 @@ namespace
             {
                 const auto c = px.getPixelColour (x, y);
                 const float dx = ((float) x - cx) / maxD, dy = ((float) y - cy) / maxD;
-                const float vignette = 1.0f - 0.55f * jlimit (0.0f, 1.0f, (dx * dx + dy * dy - 0.12f) * 1.6f);
-                const float grain = (random.nextFloat() + random.nextFloat() - 1.0f) * 0.09f; // soft, triangular
+                const float v = jlimit (0.0f, 1.0f, (dx * dx + dy * dy - 0.10f) * 1.4f);
+                const float vignette = 1.0f - 0.5f * v * v * (3.0f - 2.0f * v); // smoothstep: no ring
+                const float grain = (random.nextFloat() + random.nextFloat() - 1.0f) * 0.06f; // soft, triangular; also hides any banding
 
                 auto channel = [&] (uint8 v)
                 {
@@ -178,6 +288,44 @@ void Background::draw (Graphics& g, Rectangle<float> r, double t)
         const auto colour = Colour (0xffffd59a).interpolatedWith (Colour (0xffff7f86), jmin (1.0f, d * 1.3f));
         g.setColour (colour.withAlpha (jmin (1.0f, alpha)));
         g.fillRoundedRectangle (Rectangle<float> (length, thick).withCentre ({ x, y }), thick * 0.5f);
+    }
+
+    // the city's neon, broken up on the water below each light
+    for (int i = 0; i < numCityLights; ++i)
+    {
+        const auto l = cityLight (i, r);
+        if (l.lift > 12.0f)
+            continue; // only the low lights reach the water
+
+        for (int k = 0; k < 4; ++k)
+        {
+            const float d = (float) (k + 1) / 5.0f;
+            const float shimmer = 0.5f + 0.5f * std::sin ((float) t * (1.6f + (float) k * 0.7f) + (float) i * 1.9f + (float) k * 2.4f);
+            const float y = horizonY + 3.0f + d * d * 46.0f;
+            const float w = l.length * (0.35f + 0.5f * shimmer) * (1.0f - 0.4f * d);
+            const float dx = std::sin ((float) t * 0.8f + (float) i + (float) k * 1.3f) * (2.0f + 6.0f * d);
+
+            g.setColour (l.colour.withAlpha (l.alpha * 0.45f * (1.0f - d * 0.8f) * shimmer));
+            g.fillRect (Rectangle<float> (w, 1.0f + d).withCentre ({ l.x + dx, y }));
+        }
+    }
+
+    // now and then a light trail slides along the far shore, like headlights
+    // in a long exposure
+    for (int k = 0; k < 3; ++k)
+    {
+        const float period = 7.0f + 3.0f * (float) k;
+        const float phase = (float) std::fmod (t / period + 0.37 * k, 1.0);
+        const float travel = r.getWidth() * 0.62f;
+        const float dir = k == 1 ? -1.0f : 1.0f;
+        const float head = r.getX() + (dir > 0.0f ? phase * travel : (1.0f - phase) * travel) - 40.0f;
+        const float y = horizonY - 1.5f - (float) k * 1.2f;
+        const auto colour = Colour (k == 1 ? 0xffff4d5e : 0xffe9fff6);
+        const float fade = std::sin (phase * MathConstants<float>::pi);
+
+        ColourGradient trail (colour.withAlpha (0.0f), head - dir * 90.0f, 0.0f, colour.withAlpha (0.75f * fade), head, 0.0f, false);
+        g.setGradientFill (trail);
+        g.fillRect (Rectangle<float> (jmin (head, head - dir * 90.0f), y - 0.6f, 90.0f, 1.2f));
     }
 }
 

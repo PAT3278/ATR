@@ -35,7 +35,7 @@ public:
     void draw (juce::Graphics&, juce::Rectangle<float>, double seconds);
 
     static float animatedTop (juce::Rectangle<float> area) { return area.getY() + area.getHeight() * 0.43f; }
-    static float horizon (juce::Rectangle<float> area)     { return area.getY() + area.getHeight() * 0.56f; }
+    static float horizon (juce::Rectangle<float> area)     { return area.getY() + area.getHeight() * 0.61f; }
 
 private:
     juce::Image base; // sky, sea, grain and vignette, at the screen's pixel size
