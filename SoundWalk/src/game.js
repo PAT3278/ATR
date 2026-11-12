@@ -27,12 +27,50 @@
   function speckle(g, W, H, r, n, a) { for (let i = 0; i < n; i++) { g.fillStyle = r() < 0.5 ? D(a) : Lw(a * 0.8); g.fillRect(r() * W, r() * H, 1 + r() * 2, 1 + r() * 2); } }
 
   /* ================= textures & materials ================= */
+  // Tileable value noise and fbm for painting natural-looking ground.
+  const h2 = (x, y) => { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  function pnoise(x, y, per, seed) {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    const w = (a) => ((a % per) + per) % per, a = h2(w(xi) + seed, w(yi)), b = h2(w(xi + 1) + seed, w(yi)), c = h2(w(xi) + seed, w(yi + 1)), d = h2(w(xi + 1) + seed, w(yi + 1));
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  function fbm(x, y, per, seed, oct = 5) { let s = 0, a = 0.5, t = 0; for (let i = 0; i < oct; i++) { s += a * pnoise(x * per, y * per, per, seed + i * 131); t += a; a *= 0.5; per *= 2; } return s / t; }
+  const sst = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  function paintGround(g, S, cols, o) {
+    const img = g.createImageData(S, S), d = img.data;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const u = x / S, v = y / S;
+      const a = fbm(u, v, 3, 11), b = fbm(u, v, 5, 47), c = fbm(u, v, 4, 93), fine = fbm(u, v, 48, 7, 3);
+      let k1 = sst(0.35, 0.65, a), k2 = sst(o.dry[0], o.dry[1], b), k3 = sst(o.dirt[0], o.dirt[1], c);
+      const sh = 0.72 + 0.56 * fine;
+      const i = (y * S + x) * 4;
+      for (let ch = 0; ch < 3; ch++) {
+        let col = cols[0][ch] + (cols[1][ch] - cols[0][ch]) * k1;
+        col += (cols[2][ch] - col) * k2;
+        col += (cols[3][ch] - col) * k3;
+        d[i + ch] = Math.max(0, Math.min(255, col * sh));
+      }
+      d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }
+  const rgb = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+  const TEXSIZE = { grass: 512, path: 256 };
   const TEXDRAW = {
-    grass(g, S, r) { g.fillStyle = '#55553a'; g.fillRect(0, 0, S, S); for (let i = 0; i < 900; i++) { g.fillStyle = ['#4a4b33', '#636242', '#6d6a48', '#3f402d'][i % 4]; const x = r() * S, y = r() * S; g.fillRect(x, y, 1.5, 3 + r() * 4); } speckle(g, S, S, r, 1500, 0.05); },
+    grass(g, S, r) {
+      paintGround(g, S, ['#353f27', '#56603a', '#857a4f', '#57483a'].map(rgb), { dry: [0.5, 0.72], dirt: [0.6, 0.72] });
+      // blades, fallen needles and leaves, a few stones
+      for (let i = 0; i < 5200; i++) { const x = r() * S, y = r() * S, l = 3 + r() * 6, a = -1.57 + (r() - 0.5) * 1.3; g.strokeStyle = ['rgba(120,128,78,.5)', 'rgba(38,46,28,.55)', 'rgba(150,140,90,.4)', 'rgba(70,84,48,.5)'][i % 4]; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
+      for (let i = 0; i < 120; i++) { g.fillStyle = ['rgba(96,70,44,.75)', 'rgba(130,96,52,.7)', 'rgba(70,56,40,.75)'][i % 3]; g.beginPath(); g.ellipse(r() * S, r() * S, 2 + r() * 3, 1 + r() * 1.6, r() * 3, 0, 7); g.fill(); }
+      for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S, q = 1.5 + r() * 3.5; g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 1.5, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${120 + r() * 40},${116 + r() * 36},${104 + r() * 30})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
+    },
     paving(g, S, r) { g.fillStyle = '#cfc2a4'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { g.fillStyle = `rgba(${150 + r() * 40},${135 + r() * 35},${110 + r() * 30},.35)`; g.fillRect(x * w + 2, y * w + 2, w - 4, w - 4); } g.fillStyle = D(0.25); for (let k = 0; k <= n; k++) { g.fillRect(k * w - 1, 0, 2, S); g.fillRect(0, k * w - 1, S, 2); } speckle(g, S, S, r, 1200, 0.06); },
     slate(g, S, r) { g.fillStyle = '#3f3a33'; g.fillRect(0, 0, S, S); const n = 5, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const v = 96 + r() * 44; g.fillStyle = `rgb(${v},${v - 6},${v - 20})`; g.beginPath(); g.ellipse(x * w + w / 2 + (r() - 0.5) * 4, y * w + w / 2 + (r() - 0.5) * 4, w * (0.38 + r() * 0.08), w * (0.36 + r() * 0.08), r() * 3, 0, 7); g.fill(); } speckle(g, S, S, r, 1800, 0.07); },
     sand(g, S, r) { g.fillStyle = '#d6c08c'; g.fillRect(0, 0, S, S); speckle(g, S, S, r, 3000, 0.08); },
-    path(g, S, r) { g.fillStyle = '#6a5a46'; g.fillRect(0, 0, S, S); for (let i = 0; i < 120; i++) { g.fillStyle = r() < 0.5 ? '#58493a' : '#7c6b55'; g.beginPath(); g.arc(r() * S, r() * S, 1 + r() * 3, 0, 7); g.fill(); } speckle(g, S, S, r, 2000, 0.08); },
+    path(g, S, r) {
+      paintGround(g, S, ['#4f4233', '#6e5d47', '#857560', '#3d342a'].map(rgb), { dry: [0.5, 0.75], dirt: [0.58, 0.72] });
+      for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, q = 1 + r() * 3; g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x + 1, y + 1, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${125 + r() * 45},${118 + r() * 40},${104 + r() * 34})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
+    },
     asphalt(g, S, r) { g.fillStyle = '#2b2831'; g.fillRect(0, 0, S, S); speckle(g, S, S, r, 3000, 0.07); g.strokeStyle = D(0.4); for (let i = 0; i < 4; i++) { g.beginPath(); let x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 40; y += (r() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); } },
     checker(g, S) { const h = S / 2; g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, S, S); g.fillStyle = '#bdbdbd'; g.fillRect(0, 0, h, h); g.fillRect(h, h, h, h); },
     windows(g, S, r) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; const cols = ['#ffd27a', '#ffe9b8', '#9ff3ff', '#ff8ad8', '#ffd27a']; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { if (r() < 0.45) continue; g.fillStyle = cols[Math.floor(r() * cols.length)]; g.globalAlpha = 0.5 + r() * 0.5; g.fillRect(x * w + w * 0.2, y * w + w * 0.25, w * 0.6, w * 0.45); } g.globalAlpha = 1; },
@@ -41,7 +79,7 @@
   function tex(kind, rx = 1, ry = 1) {
     const key = `${kind}:${rx}:${ry}`;
     if (texCache[key]) return texCache[key];
-    if (!texBase[kind]) { const c = document.createElement('canvas'); c.width = c.height = 128; TEXDRAW[kind](c.getContext('2d'), 128, rng(kind.length * 977)); texBase[kind] = c; }
+    if (!texBase[kind]) { const c = document.createElement('canvas'), sz = TEXSIZE[kind] || 128; c.width = c.height = sz; TEXDRAW[kind](c.getContext('2d'), sz, rng(kind.length * 977)); texBase[kind] = c; }
     const t = new THREE.CanvasTexture(texBase[kind]);
     t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
@@ -226,7 +264,9 @@
   const circles = [], boxes = [];
   const interact = [];
 
-  const ground = plane(400, 400, mat('#ffffff', { map: tex('grass', 170, 170) }, true));
+  const ground = plane(400, 400, mat('#ffffff', { map: tex('grass', 80, 80), rough: 1 }, true));
+  ground.material.bumpMap = ground.material.map; ground.material.bumpScale = 0.035;
+  ground.material.onBeforeCompile = (sh) => { rimPatch(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'vec4 tA=mapTexelToLinear(texture2D(map,vUv));float lB=dot(mapTexelToLinear(texture2D(map,vUv*.173+.31)).rgb,vec3(4.));float lC=dot(mapTexelToLinear(texture2D(map,vUv*.031+.7)).rgb,vec3(4.));diffuseColor.rgb*=tA.rgb*mix(1.,lB,.45)*mix(1.,lC,.5);'); };
   { const gg = new THREE.PlaneGeometry(400, 400, 72, 72), gp = gg.attributes.position, col = new Float32Array(gp.count * 3);
     for (let i = 0; i < gp.count; i++) { const x = gp.getX(i), y = gp.getY(i); const v = 0.8 + 0.2 * Math.sin(x * 0.05 + Math.sin(y * 0.031) * 2.2) * Math.cos(y * 0.043 + x * 0.012); col.set([v * 0.93, v, v * 0.8], i * 3); }
     gg.setAttribute('color', new THREE.BufferAttribute(col, 3)); ground.geometry = gg; ground.material.vertexColors = true; }
