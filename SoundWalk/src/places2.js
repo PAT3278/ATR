@@ -145,7 +145,7 @@
         tr.visible = false; g.add(tr);
         tracers.push({ tr, m, life: 0 });
       }
-      const flashes = [0, 1].map(() => { const l = new THREE.PointLight(lin('#ffb060'), 0, 18, 2); g.add(l); return l; });
+      const flashes = [0].map(() => { const l = new THREE.PointLight(lin('#ffb060'), 0, 18, 2); g.add(l); return l; });
       let ti = 0, fi = 0, lastShot = -1;
       const SP = 500, spos = new Float32Array(SP * 3).fill(-999), svel = new Float32Array(SP * 3), slife = new Float32Array(SP);
       let sh = 0;
@@ -181,7 +181,7 @@
       {
         const cr = E.rng(212), X = 6.6;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
-        const bx = (w, h, d, x, y, z, m, shadow = true) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = shadow; o.receiveShadow = true; g.add(o); return o; };
+        const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
         const fig = (jacket, cap) => {
           const f = new THREE.Group(), skin = E.mat('#8a5a3c'), jm = E.mat(jacket, { rough: 0.8 }), pm = E.mat('#1d1f26');
           for (const sx of [-0.1, 0.1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.9, 8), pm); l.position.set(sx, 0.45, 0); f.add(l); }
@@ -206,7 +206,7 @@
           if (star) {
             // the window they lean out of: a lit room behind a sash that slides up
             bx(0.03, 1.7, 0.95, X - 0.012, 6.3, z0, new THREE.MeshBasicMaterial({ color: '#c98a4a' }), false);
-            sash = bx(0.06, 1.7, 0.95, X - 0.045, 6.3, z0, winDark, false);
+            sash = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 0.95), winDark); sash.position.set(X - 0.045, 6.3, z0); g.add(sash);   // a real mesh: it slides
             bx(0.16, 0.2, 1.2, X - 0.06, 7.29, z0, trimM, false); bx(0.24, 0.1, 1.15, X - 0.1, 5.4, z0, trimM, false);
             // the door swings out on its hinge; behind it the hallway is dark
             bx(0.03, 2.4, 1.15, X - 0.012, 3.0, dz, new THREE.MeshBasicMaterial({ color: '#070606' }), false);
@@ -233,6 +233,7 @@
         const walk = E.plane(4, 26, E.mat('#77736c', { map: E.tex('paving', 2, 13), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 26.3); g.add(walk); p.pick(walk);
         const box2 = bx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
         box2.rotation.y = 0.3;
+        BB.flush();
       }
       p.map = [{ t: 'rect', x: 10.6, z: 26.3, w: 8, h: 25, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
@@ -292,14 +293,14 @@
           let x = sx, y = 0.225 * 5, z = m.dz + m.zo, yaw = -Math.PI / 2 + m.yaw, lean = 0, door = 0, up = 0, vis = true, act = true;
           if (tc >= 24 && tc < 27) { const k = (tc - 24) / 3; x = lerp(sx, doorX, k); y = stairY(x); z = m.dz + m.zo * (1 - Math.min(1, k * 2)); yaw = Math.PI / 2; door = sstep(0, 0.3, k); act = false; vis = x < m.X + 0.25; }
           else if (tc >= 27 && tc < 29) { vis = false; door = 1 - sstep(27, 27.8, tc); }
-          else if (tc >= 29 && tc < 56) { up = sstep(29.2, 30.4, tc) * (1 - sstep(54.6, 55.8, tc)); x = m.X + 0.14 + (1 - up) * 0.55; y = 4.52; z = m.z0; yaw = -Math.PI / 2 + m.yaw * 0.5; lean = 0.44 * up; vis = up > 0.03; }
+          else if (tc >= 29 && tc < 56) { up = sstep(29.2, 30.4, tc) * (1 - sstep(54.6, 55.8, tc)); x = m.X + 0.56 + (1 - up) * 0.3; y = 4.52; z = m.z0; yaw = -Math.PI / 2 + m.yaw * 0.5; lean = 0.44 * up; vis = up > 0.03; }
           else if (tc >= 56 && tc < 58) { vis = false; door = sstep(57.2, 58, tc); }
           else if (tc >= 58 && tc < 61) { const k = (tc - 58) / 3; x = lerp(doorX, sx, k); y = stairY(x); z = m.dz + m.zo * Math.max(0, k * 2 - 1); door = 1 - sstep(0.6, 0.95, k); act = false; vis = x < m.X + 0.25; }
           upMax = Math.max(upMax, up);
           m.w.visible = vis;
           m.w.position.set(x, y + (act ? b * 0.05 * e + f.pulse * 0.06 : Math.abs(Math.sin(t * 9)) * 0.04), z);
           m.w.rotation.y = yaw; m.f.rotation.x = lean;
-          m.hinge.rotation.y = -1.35 * door;
+          m.hinge.rotation.y = 1.35 * door;   // swings inward, into the dark hallway, so it never crosses the performer
           const so = Math.max(up, 0); m.sash.scale.y = 1 - 0.6 * so; m.sash.position.y = 6.3 + 1.7 * 0.3 * so;
           m.torso.rotation.z = act ? Math.sin(t * 1.8 + m.s) * 0.1 * e : 0; m.head.rotation.x = act ? -f.pulse * 0.25 : 0;
           if (act) {
@@ -310,7 +311,11 @@
         stoopUp = upMax;
       };
       p.shot = (t, f) => {
-        if (Math.floor(t / 16) % 2 === 1) { const a = Math.sin(t * 0.25) * 1.8, u = stoopUp; return { pos: [0.6 - 4.6 * u, 1.15 + 0.25 * u, 24.7 + 1.6 * u + a * (1 - 0.6 * u)], look: [6.6, 2.5 + 3.5 * u, 24.7 + 1.6 * u + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 }; } // the stoop performance; pulls back and tilts up when they are at the windows
+        if (Math.floor(t / 16) % 2 === 1) {   // the stoop performance; pulls back and tilts up when they are at the windows
+          const narrow = innerWidth / innerHeight < 0.8, who = Math.floor(t / 32) % 2, u = RM ? (stoopUp > 0.5 ? 1 : 0) : stoopUp;   // a portrait screen frames one performer per cut
+          const zs = narrow ? (who ? 27.55 : 21.85) : 24.7, zw = narrow ? (who ? 29.4 : 23.2) : 26.3, zc = zs + (zw - zs) * u, a = Math.sin(t * 0.25) * (narrow ? 0.5 : 1.8);
+          return { pos: [0.6 - 4.6 * u, 1.15 + 0.25 * u, zc + a * (1 - 0.6 * u)], look: [6.6, 2.5 + 3.5 * u, zc + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 };
+        }
         const k = RM ? 0 : f.pulse * 0.05;
         const x = Math.sin(t * 0.13) * 7;
         return { pos: [x + (Math.random() - 0.5) * k, 1.15 + (Math.random() - 0.5) * k, 3], look: [x * 0.4, 1.5, -24], roll: Math.sin(t * 0.2) * 0.02 };
@@ -507,7 +512,7 @@
       p.addBox(3.2, -5.6, 1.2, 0.4);
 
       // Sea below and beyond
-      const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 420), new THREE.ShaderMaterial({
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 380), new THREE.ShaderMaterial({
         uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ffd08a') }, b: { value: new THREE.Color('#1f5f86') }, c: { value: new THREE.Color('#0d3552') } },
         vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
         fragmentShader: 'uniform float t,level;uniform vec3 a,b,c;varying vec2 vUv;void main(){float y=vUv.y;vec3 col=mix(c,b,y);' +

@@ -206,7 +206,7 @@
     fragmentShader: `uniform sampler2D tD;uniform vec2 res;uniform float time,bloom,grain,vig,expo,thr,sat,spd,flare;uniform vec2 sunUv;uniform vec3 tint;varying vec2 vUv;
     vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
     void main(){vec2 q0=vUv-.5;vec3 c=vec3(0.);float rb=spd*.014*smoothstep(.05,.6,length(q0));
-      for(int i=0;i<6;i++){c+=texture2D(tD,vUv-q0*rb*float(i)).rgb;}c/=6.;
+      if(spd>.001){for(int i=0;i<6;i++){c+=texture2D(tD,vUv-q0*rb*float(i)).rgb;}c/=6.;}else c=texture2D(tD,vUv).rgb;
       float an=atan(q0.y,q0.x);float ln=step(.975,fract(sin(floor(an*46.)*12.9898+floor(time*18.)*7.7)*43758.5453))*smoothstep(.28,.62,length(q0))*spd;c+=ln*.35;
       vec3 b=vec3(0.),sf=vec3(0.);vec2 px=1./res;
       for(int i=0;i<12;i++){float a=float(i)*.5236;vec2 d=vec2(cos(a),sin(a))*px;
@@ -229,7 +229,7 @@
   const postScene = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
   function resize() {
-    const w = cv.clientWidth || innerWidth, h = cv.clientHeight || innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
+    const w = cv.clientWidth || innerWidth, h = cv.clientHeight || innerHeight, dpr = TOUCH ? Math.min(devicePixelRatio || 1, Math.max(1, RT_H / h)) : Math.min(2, devicePixelRatio || 1);   // on phones the canvas need not exceed the 720-line scene
     renderer.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
     camera.aspect = w / h; baseFov = w / h < 0.8 ? 68 : 55; camera.fov = baseFov; camera.updateProjectionMatrix();
     const ih = Math.min(RT_H, Math.round(h * dpr)), iw = Math.max(1, Math.round((ih * w) / h));
@@ -339,15 +339,34 @@
     g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
     return (dotTex = new THREE.CanvasTexture(c));
   }
-  const E = { rng, mat, plane, tex, textTex, bench, dot };
+  // Static boxes: collected while a place is built, then drawn as one instanced mesh per material (one draw call instead of hundreds).
+  const unitBox = new THREE.BoxGeometry(1, 1, 1);
+  function batch(parent) {
+    const recs = [];
+    return {
+      box(w, h, d, x, y, z, m, shadow = true) { const o = new THREE.Object3D(); o.position.set(x, y, z); o.scale.set(w, h, d); recs.push({ o, m, shadow }); return o; },   // callers may still set rotation / visible before flush()
+      flush() {
+        const groups = new Map();
+        for (const r of recs) { if (!r.o.visible) continue; const k = r.m.uuid + (r.shadow ? 's' : 'n'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+        for (const list of groups.values()) {
+          const im = new THREE.InstancedMesh(unitBox, list[0].m, list.length);
+          list.forEach((r, i) => { r.o.updateMatrix(); im.setMatrixAt(i, r.o.matrix); });
+          im.castShadow = list[0].shadow; im.receiveShadow = true; im.frustumCulled = false;
+          parent.add(im);
+        }
+        recs.length = 0;
+      },
+    };
+  }
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
     const c = Math.cos(rot), s = Math.sin(rot);
-    const group = new THREE.Group();
-    group.position.set(song.x, 0, song.z);
-    group.rotation.y = rot;
-    scene.add(group);
+    const root = new THREE.Group(), group = new THREE.Group();   // root carries the transform and the lights; group holds the meshes and is what gets hidden
+    root.position.set(song.x, 0, song.z);
+    root.rotation.y = rot;
+    root.add(group); scene.add(root);
     const p = {
       song, idx, x: song.x, z: song.z, rot, group, dwell: 0, gain: 0, found: false,
       color: song.color || '#ffb428',
@@ -362,6 +381,7 @@
     };
     const builder = SW.PLACES[song.scene] || SW.PLACES.generic;
     builder.build(p, E);
+    { const lights = []; group.traverse((o) => { if (o.isLight) lights.push(o); }); root.updateMatrixWorld(true); lights.forEach((l) => root.attach(l)); }
     p.ground = p.ground || null;
     p.grade = prepGrade(p.grade, rot);
     return p;
@@ -485,6 +505,10 @@
 
   // Paths: a smooth ribbon from the plaza edge to each place's entrance.
   function cubic(a, b, c, d, t) { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d; }
+  // Height of the surface actually drawn at (x, z): hills are faceted meshes, so the analytic height is not enough for a ribbon lying on them.
+  scene.updateMatrixWorld(true);
+  const dray = new THREE.Raycaster(), dfrom = new THREE.Vector3(), ddown = new THREE.Vector3(0, -1, 0);
+  const surfY = (x, z) => { const g0 = groundAt(x, z); if (g0 <= 0) return 0; dray.set(dfrom.set(x, g0 + 3, z), ddown); const hit = dray.intersectObjects(pick, false)[0]; return hit ? Math.max(hit.point.y, 0) : g0; };
   const pathMat = mat('#ffffff', { map: tex('trail', 1, 1), rough: 1 }, true);
   pathMat.transparent = true; pathMat.depthWrite = false; pathMat.polygonOffset = true; pathMat.polygonOffsetFactor = -2;
   places.forEach((p) => {
@@ -500,7 +524,7 @@
     const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
     for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
     p.path = pts;
-    const pos = [], uv = [], idx = [];
+    const pos = [], uv = [], idx = [], CN = 4;
     let acc = 0;
     const draw = pts.slice(0, N + 1);
     draw.forEach((q, i) => {
@@ -508,12 +532,12 @@
       let tx = n.x - pv.x, tz = n.z - pv.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
       const w = 2.2;
       if (i > 0) acc += Math.hypot(q.x - pv.x, q.z - pv.z);
-      for (const sd of [-1, 1]) {
-        const x = q.x - tz * w * sd, z = q.z + tx * w * sd;
-        pos.push(x, groundAt(x, z) + 0.045, z);
-        uv.push(sd < 0 ? 0 : 1, acc / 4.4);
+      for (let c = 0; c <= CN; c++) {
+        const sd = -1 + (2 * c) / CN, x = q.x - tz * w * sd, z = q.z + tx * w * sd;
+        pos.push(x, surfY(x, z) + 0.06, z);
+        uv.push(c / CN, acc / 4.4);
       }
-      if (i < draw.length - 1) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); /* counter-clockwise seen from above: the top face is the front */ }
+      if (i < draw.length - 1) for (let c = 0; c < CN; c++) { const k = i * (CN + 1) + c, k2 = k + CN + 1; idx.push(k, k + 1, k2, k + 1, k2 + 1, k2); }   // counter-clockwise seen from above: the top face is the front
     });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -995,7 +1019,7 @@
       if (near) for (let i = near.i; i >= 0; i -= 2) pts.push(near.q.path[i]);
       const a = near ? Math.atan2(near.q.z, near.q.x) : Math.atan2(P.z, P.x), b = Math.atan2(p.z, p.x);
       let da = Math.atan2(Math.sin(b - a), Math.cos(b - a));
-      if (Math.abs(da) > 1.6) { const m = a + da / 2; pts.push({ x: Math.cos(m) * 7, z: Math.sin(m) * 7 }); }
+      for (let k = 1, n = Math.ceil(Math.abs(da) / 0.5); k < n; k++) { const m = a + (da * k) / n; pts.push({ x: Math.cos(m) * 8.6, z: Math.sin(m) * 8.6 }); }   // round the plaza between the well/board and the lamps
       for (let i = 0; i < p.path.length; i++) pts.push(p.path[i]);
     }
     auto = { pts, i: 0, then: then || interact.find((ia) => ia.kind === 'view' && ia.place === p) };
@@ -1227,7 +1251,7 @@
       } else if (auto) {
         const tg = auto.pts[auto.i], dx = tg.x - P.x, dz = tg.z - P.z, d = Math.hypot(dx, dz);
         const lastPt = auto.i === auto.pts.length - 1;
-        if (d < (lastPt ? 0.3 : 1.2)) {
+        if (d < (lastPt ? 0.3 : 1.2 + P.v * 0.25)) {   // faster means a wider turn, so count a waypoint as reached from further out
           if (!lastPt) auto.i++;
           else { const th = auto.then; auto = null; if (th) { faceTo(th); act(th); } }
         } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : top; }
@@ -1275,7 +1299,7 @@
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
     const vf = viewPlace ? viewPlace.f : null;
-    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, mode !== 'view' && isWater(P.x, P.z));
+    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, mode !== 'view' && gh < 0.1 && isWater(P.x, P.z));
 
     const show = focus && mode === 'walk';
     marker.visible = !!show;

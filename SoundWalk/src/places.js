@@ -192,7 +192,7 @@
       g.add(deck);
       for (const z of [RZ - 6, RZ, RZ + 6]) {
         const pier = new THREE.Mesh(new THREE.BoxGeometry(2.4, 4, 2), E.mat('#8d8578'));
-        pier.position.set(BX, 2, z); g.add(pier);
+        pier.position.set(BX, 2, z); g.add(pier); p.addBox(BX, z, 1.25, 1.05);
       }
       for (const sx of [-1.6, 1.6]) {
         const top = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 30), steel);
@@ -214,7 +214,7 @@
       // Live house under the tracks: the train runs through the upper floor, the ground floor is an open venue.
       const CZ = RZ + 42, V = new THREE.Group(); V.position.set(BX, 0, CZ); g.add(V);
       const wallM = E.mat('#6a4436', { rough: 0.95 }), stageM = E.mat('#141316', { rough: 0.7 }), gearM = E.mat('#0f0f11', { rough: 0.6, metal: 0.3 });
-      const vbox = (w, h, d, x, y, z, m = wallM) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; V.add(o); return o; };
+      const VB = E.batch(V), vbox = (w, h, d, x, y, z, m = wallM) => VB.box(w, h, d, x, y, z, m);   // static boxes, drawn instanced after VB.flush()
       const vglow = (hex, o) => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       // Ground floor: brick walls, a 7 m opening at the front. First floor: an open-sided station, the end of the line.
       const concM = E.mat('#8d8a82', { rough: 0.9 }), steelM = E.mat('#2c3a36', { rough: 0.6, metal: 0.4 }), roofM = E.mat('#33453f', { rough: 0.8 }), inM = E.mat('#151416', { rough: 0.9 });
@@ -260,8 +260,8 @@
         const m = vglow(hex, 0.16), beam = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.3, 14, 1, true), m); beam.position.set(-4.2, 1.85, z); beam.rotation.z = 0.25; V.add(beam);
         beams.push({ m, beam, s: i * 1.3 });
       });
-      const sl1 = new THREE.PointLight('#ff2a6a', 1.4, 15, 1.6); sl1.position.set(-3.6, 2.7, -3); V.add(sl1);
-      const sl2 = new THREE.PointLight('#2ad4ff', 1.4, 15, 1.6); sl2.position.set(-3.6, 2.7, 3); V.add(sl2);
+      // stage wash: coloured light on the floor and stage, faked with additive planes (real lights would cost every pixel in the world)
+      const wash = [['#ff2a6a', -3], ['#2ad4ff', 3]].map(([hex, z]) => { const m = vglow(hex, 0.05), w1 = new THREE.Mesh(new THREE.PlaneGeometry(9, 6.5), m); w1.rotation.x = -Math.PI / 2; w1.position.set(-1.6, 0.09, z); const w2 = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 6), m); w2.rotation.x = -Math.PI / 2; w2.position.set(-4.9, 0.72, z); V.add(w1, w2); return m; });
       // a few people waiting for the show
       const crowd = [], bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.25, 8).translate(0, 0.62, 0), headG = new THREE.SphereGeometry(0.17, 10, 8).translate(0, 1.45, 0), crowdM = E.mat('#141315', { rough: 0.9 }), cr = E.rng(909);
       for (let i = 0; i < 13; i++) { const f = new THREE.Group(); f.add(new THREE.Mesh(bodyG, crowdM), new THREE.Mesh(headG, crowdM)); const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2; if (Math.abs(z) < 1.4 && x < 0.6) { continue; } f.position.set(x, 0.05, z); f.scale.setScalar(0.92 + cr() * 0.18); V.add(f); crowd.push({ f, s: cr() * 6 }); p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3); }
@@ -271,6 +271,7 @@
       const marquee = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.3), new THREE.MeshBasicMaterial({ map: E.textTex(`LIVE  ${live.date}  ${live.place}`, { w: 1024, h: 208, color: '#f2e9d2', bg: '#16090a', font: '400 78px "Special Elite","Courier New",monospace' }) }));
       marquee.position.set(7.03, 4.55, 0); marquee.rotation.y = Math.PI / 2; V.add(marquee);
       const spill = new THREE.Mesh(new THREE.PlaneGeometry(9, 8), vglow('#ff6a5a', 0.1)); spill.rotation.x = -Math.PI / 2; spill.position.set(10.5, 0.06, 0); V.add(spill);
+      VB.flush();
       p.addBox(BX - 6.8, CZ, 0.35, 8); p.addBox(BX, CZ - 7.8, 7, 0.35);
       p.addBox(BX, CZ + 7.8, 7, 0.35, -1e9, 3); p.addBox(BX - 2, CZ + 7.8, 5, 0.35, 3, 1e9); p.addBox(BX + 6.5, CZ + 7.8, 0.5, 0.35, 3, 1e9);   // end wall: solid below, a doorway upstairs
       p.addBox(BX + 6.8, CZ - 5.75, 0.35, 2.25); p.addBox(BX + 6.8, CZ + 5.75, 0.35, 2.25); p.addBox(BX - 4.9, CZ, 1.7, 6.1, -1e9, 3);
@@ -285,7 +286,7 @@
       p.info(BX - 2.3, CZ, 2.6, 2.5, [`NEXT LIVE\n${live.date}  ${live.place}`]);
       const venueUpd = (t, f) => {
         beams.forEach((b) => { b.m.opacity = 0.08 + f.pulse * 0.22 + 0.05 * Math.sin(t * 2 + b.s); b.beam.rotation.x = Math.sin(t * 0.8 + b.s) * 0.25; });
-        sl1.intensity = 0.9 + f.pulse * 2.2; sl2.intensity = 0.9 + f.high * 3;
+        wash[0].opacity = 0.035 + f.pulse * 0.1; wash[1].opacity = 0.035 + f.high * 0.12;
         crowd.forEach((c) => { c.f.position.y = 0.05 + Math.abs(Math.sin(t * 3.2 + c.s)) * 0.05 * (0.4 + f.level * 2) + f.pulse * 0.05; });
       };
       p.addBox(BX, RZ + 26, 2.6, 9);
