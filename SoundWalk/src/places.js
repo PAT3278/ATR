@@ -270,16 +270,17 @@
         const pantsM = ['#17181c', '#262b36', '#3a3026'].map((c) => E.mat(c, { rough: 0.9 })), hairs = ['#0f0c0a', '#2a1a10', '#6a4a2a', '#b8b2a4'].map((c) => E.mat(c, { rough: 0.6 }));
         const legG = new THREE.BoxGeometry(0.3, 0.86, 0.2).translate(0, 0.43, 0), torsoG = new THREE.CylinderGeometry(0.21, 0.18, 0.6, 9).translate(0, 0.3, 0), headG = new THREE.SphereGeometry(0.13, 12, 9);
         const hairG = new THREE.SphereGeometry(0.14, 12, 8, 0, 6.3, 0, 1.7), armG = new THREE.CylinderGeometry(0.055, 0.045, 0.58, 7).translate(0, -0.29, 0), handG = new THREE.SphereGeometry(0.055, 7, 6);
-        const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff' });
-        for (let i = 0; i < 18; i++) {
+        const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff', side: THREE.DoubleSide });
+        for (let i = 0; i < 60 && crowd.length < 18; i++) {
           const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2;
           if (Math.abs(z) < 1.4 && x < 0.6) continue;                                          // keep the spot in front of the stage free
+          if (crowd.some((c) => Math.hypot(c.f.position.x - x, c.f.position.z - z) < 0.65)) continue;   // and nobody standing inside somebody else
           const f = new THREE.Group(), up = new THREE.Group(), skin = skins[Math.floor(cr() * skins.length)], top = tops[Math.floor(cr() * tops.length)];
           f.add(new THREE.Mesh(legG, pantsM[Math.floor(cr() * pantsM.length)]));
           up.position.y = 0.86; f.add(up);                                                      // everything above the hips sways and twists together
           const torso = new THREE.Mesh(torsoG, top); torso.scale.z = 0.68; up.add(torso);
           const head = new THREE.Mesh(headG, skin); head.position.y = 0.76; up.add(head);
-          const hair = new THREE.Mesh(hairG, hairs[Math.floor(cr() * hairs.length)]); hair.position.y = 0.78; up.add(hair);
+          const hair = new THREE.Mesh(hairG, hairs[Math.floor(cr() * hairs.length)]); hair.position.y = 0.02; head.add(hair);   // on the head, so the nod shows
           const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.26, 0.56, 0); piv.add(new THREE.Mesh(armG, top)); const hd = new THREE.Mesh(handG, skin); hd.position.y = -0.6; piv.add(hd); up.add(piv); return piv; });
           const style = Math.floor(cr() * 4);                                                   // 0 pumping one fist, 1 both hands up, 2 filming with a phone, 3 swaying
           if (style === 2) { const ph = new THREE.Mesh(lightG, lightM); ph.position.set(0, -0.68, 0.03); ph.rotation.y = Math.PI; arms[1].add(ph); }
@@ -318,12 +319,12 @@
           c.jump *= Math.exp(-dt * 5);
           c.f.position.y = 0.05 + bounce * 0.07 * k + f.pulse * 0.07 * c.e + Math.sin(Math.min(1, 1 - c.jump) * Math.PI) * 0.22 * (c.jump > 0.02 ? 1 : 0);
           c.up.rotation.z = Math.sin(ph * 0.5) * 0.09 * k; c.up.rotation.y = Math.sin(ph * 0.5 + 1) * 0.16 * k; c.up.rotation.x = 0.05 + f.pulse * 0.07;
-          c.head.rotation.x = bounce * 0.28 * k;
+          c.head.rotation.x = Math.min(0.5, bounce * 0.28 * k);
           const [L, R] = c.arms;
-          if (c.style === 0) { R.rotation.x = -2.5 + Math.sin(ph * 2) * 0.5 * k; R.rotation.z = -0.15; L.rotation.x = -0.25 - bounce * 0.3 * k; L.rotation.z = 0.12; }
-          else if (c.style === 1) { L.rotation.x = -2.7 + Math.sin(ph) * 0.3 * k; R.rotation.x = -2.7 + Math.sin(ph + 1.2) * 0.3 * k; L.rotation.z = 0.35 + Math.sin(ph) * 0.2; R.rotation.z = -0.35 - Math.sin(ph) * 0.2; }
-          else if (c.style === 2) { R.rotation.x = -2.2 + Math.sin(t * 0.9 + c.s) * 0.06; R.rotation.z = -0.1; L.rotation.x = -0.2 - bounce * 0.25 * k; L.rotation.z = 0.12; }
-          else { L.rotation.x = Math.sin(ph) * 0.5 * k - 0.2; R.rotation.x = -Math.sin(ph) * 0.5 * k - 0.2; L.rotation.z = 0.15; R.rotation.z = -0.15; }
+          if (c.style === 0) { R.rotation.x = -2.5 + Math.sin(ph * 2) * 0.5 * k; R.rotation.z = 0.15; L.rotation.x = -0.25 - bounce * 0.3 * k; L.rotation.z = -0.12; }
+          else if (c.style === 1) { L.rotation.x = -2.7 + Math.sin(ph) * 0.3 * k; R.rotation.x = -2.7 + Math.sin(ph + 1.2) * 0.3 * k; L.rotation.z = -0.35 - Math.sin(ph) * 0.2; R.rotation.z = 0.35 + Math.sin(ph) * 0.2; }   // z turns first, in the hanging-arm frame: negative on the left is outward
+          else if (c.style === 2) { R.rotation.x = -2.2 + Math.sin(t * 0.9 + c.s) * 0.06; R.rotation.z = 0.1; L.rotation.x = -0.2 - bounce * 0.25 * k; L.rotation.z = -0.12; }
+          else { L.rotation.x = Math.sin(ph) * 0.5 * k - 0.2; R.rotation.x = -Math.sin(ph) * 0.5 * k - 0.2; L.rotation.z = -0.15; R.rotation.z = 0.15; }
         });
       };
       p.addBox(BX, RZ + 26, 2.6, 9);

@@ -798,8 +798,8 @@
         body.rotation.x = 0.2 * run; hips.rotation.y = Math.sin(phase) * 0.14 * run;
         body.position.y = Math.abs(Math.sin(phase)) * (0.035 + 0.075 * run) * k;
         if (k < 0.05) { phase = 0; body.position.y = Math.sin(performance.now() / 700) * 0.006 + bob * 0.03; head.rotation.x = -bob * 0.12; }
-        if (phoneOn && k < 0.05) { arms[1].pivot.rotation.x = -0.75; arms[1].elbow.rotation.x = -1.35; arms[1].pivot.rotation.z = -0.2; head.rotation.x = 0.32; }   // looking down at the phone
         else head.rotation.x = 0;
+        if (phoneOn && k < 0.05) { arms[1].pivot.rotation.x = -0.75; arms[1].elbow.rotation.x = -1.35; arms[1].pivot.rotation.z = -0.2; head.rotation.x = 0.32; }   // looking down at the phone
       },
     };
   }
@@ -925,10 +925,14 @@
   }
   function phoneBack() { if (phView === 'home') closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
   function phoneKey(e) {
-    if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); closePhone(); return; }
-    if (e.key === 'Escape' || e.key === 'Backspace' || e.code === 'KeyX') { e.preventDefault(); phoneBack(); return; }
+    if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) closePhone(); return; }
+    if (e.key === 'Escape' || e.key === 'Backspace' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) phoneBack(); return; }
     const dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-    if (dir) { e.preventDefault(); const list = [...phScreen.querySelectorAll('button:not([disabled]), a')]; if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); } }
+    if (dir) { e.preventDefault(); phoneFocus(dir); }
+  }
+  function phoneFocus(dir) {
+    const list = [...phScreen.querySelectorAll('button:not([disabled]), a')];
+    if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); }
   }
   phScreen.addEventListener('click', (e) => {
     const b = e.target.closest('[data-go], [data-song], [data-warp]');
@@ -980,8 +984,7 @@
     let f = 0, s = 0;
     if (keys.has('f')) f += 1; if (keys.has('b')) f -= 1; if (keys.has('r')) s += 1; if (keys.has('l')) s -= 1;
     f += -stick.y; s += stick.x;
-    const gp = pad();
-    if (gp) { f += -gp.y; s += gp.x; }
+    if (padV) { f += -padV.y; s += padV.x; }
     const m = Math.hypot(f, s);
     if (m > 1) { f /= m; s /= m; }
     return { f, s, m: Math.min(1, m) };
@@ -989,7 +992,7 @@
   addEventListener('keydown', (e) => {
     if (e.key === 'Shift') running = true;
     if (mode === 'title') { if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); start(); } return; }
-    if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); closeMap(); } return; }
+    if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) closeMap(); } return; }
     if (mode === 'phone') { phoneKey(e); return; }
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
@@ -1001,8 +1004,8 @@
     else if (e.code === 'KeyE') camYaw -= 0.2;
     else if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
     else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter')) { e.preventDefault(); if (focus) act(focus); }
-    else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); openMap(); }
-    else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); openPhone(); }
+    else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); if (!e.repeat) openMap(); }
+    else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) openPhone(); }
   });
   addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; const k = KEYMAP[e.code]; if (k) keys.delete(k); });
   addEventListener('blur', () => { keys.clear(); running = false; });
@@ -1050,22 +1053,22 @@
   $('#dialog').addEventListener('click', advance);
 
   // Gamepad: left stick moves, right stick turns the view, A interacts, B backs out.
-  let padPrev = [], padRun = false;
+  let padPrev = [], padRun = false, padV = null;   // pad() is polled once a frame in every mode, so its buttons work in menus too
   function pad() {
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find((g) => g && g.connected) : null;
     if (!gp) return null;
     const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
     const pressed = gp.buttons.map((b) => b.pressed);
     const down = (i) => pressed[i] && !padPrev[i];
-    if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); }
+    if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); else if (mode === 'phone') { const a = document.activeElement; if (a && $('#phone').contains(a)) a.click(); } }
+    if (mode === 'phone') { if (down(12) || down(14)) phoneFocus(-1); else if (down(13) || down(15)) phoneFocus(1); }
     if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
     if (down(9) && mode === 'walk') openMap();
-    if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
     if (down(1) && mode === 'phone') phoneBack();
+    else if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
     padPrev = pressed;
     padRun = !!(pressed[7] || pressed[5] || pressed[2]);
-    camYaw -= dz(gp.axes[2] || 0) * 0.04;
-    camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85);
+    if (mode === 'walk') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
@@ -1314,6 +1317,7 @@
   /* ================= update ================= */
   const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3(), tmpU = new THREE.Vector3(), fwd = new THREE.Vector3();
   function update(dt) {
+    padV = pad();
     if (mode === 'walk') {
       const iv = inputVec();
       let mx = 0, mz = 0, sp = 0;
