@@ -399,14 +399,6 @@
     [wall, lip, ped, bowl].forEach((m) => { m.castShadow = m.receiveShadow = true; });
     scene.add(wall, lip, water, ped, bowl);
     circles.push({ x: 0, z: 0, r: 4.0 });
-    for (let k = 0; k < 4; k++) {
-      const a = Math.PI / 4 + (k * Math.PI) / 2, x = Math.cos(a) * 9.6, z = Math.sin(a) * 9.6;
-      const py = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, 3.6, 8), iron); py.position.set(x, 1.8, z); py.castShadow = true;
-      const lan = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.42, 0.3), new THREE.MeshBasicMaterial({ color: '#ffb766' })); lan.position.set(x, 3.75, z);
-      const capM = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.22, 4), iron); capM.position.set(x, 4.07, z); capM.rotation.y = Math.PI / 4;
-      scene.add(py, lan, capM);
-      circles.push({ x, z, r: 0.3 });
-    }
   }
 
   const worldUpd = [];
@@ -420,6 +412,36 @@
     const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.BufferAttribute(epos, 3));
     const embers = new THREE.Points(eg, new THREE.PointsMaterial({ size: 0.09, map: dot(), color: fireC.clone().multiplyScalar(2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     embers.material.userData.lin = true; embers.frustumCulled = false; scene.add(embers);
+    // Gas lamps around the plaza: cast-iron post, ladder bar, tapered glass lantern with a small flame.
+    const lampIron = mat('#171614', { rough: 0.55, metal: 0.7 }), warm = lin('#ffb766'), gas = [];
+    const haloM = () => { const m = new THREE.SpriteMaterial({ map: dot(), color: warm, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }); m.userData.lin = true; return m; };
+    for (let k = 0; k < 6; k++) {
+      const a = Math.PI / 6 + (k * Math.PI) / 3, x = Math.cos(a) * 9.7, z = Math.sin(a) * 9.7, L = new THREE.Group();
+      const add = (geo, m, y, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.y = y; o.rotation.y = ry; o.castShadow = m === lampIron; L.add(o); return o; };
+      add(new THREE.CylinderGeometry(0.2, 0.27, 0.45, 8), lampIron, 0.225);
+      add(new THREE.CylinderGeometry(0.13, 0.2, 0.3, 8), lampIron, 0.6);
+      add(new THREE.CylinderGeometry(0.15, 0.15, 0.07, 8), lampIron, 0.78);
+      add(new THREE.CylinderGeometry(0.05, 0.085, 2.6, 8), lampIron, 2.1);
+      add(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 8), lampIron, 1.25);
+      add(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 8), lampIron, 3.12);
+      const bar = add(new THREE.BoxGeometry(0.72, 0.035, 0.035), lampIron, 3.2); bar.rotation.y = -a + Math.PI / 2;
+      for (const sd of [-1, 1]) { const kn = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), lampIron); kn.position.set(sd * 0.36, 0, 0); bar.add(kn); }
+      add(new THREE.CylinderGeometry(0.17, 0.05, 0.2, 4), lampIron, 3.5, Math.PI / 4);                       // cradle
+      add(new THREE.CylinderGeometry(0.19, 0.19, 0.03, 4), lampIron, 3.61, Math.PI / 4);                     // lower frame
+      add(new THREE.CylinderGeometry(0.26, 0.17, 0.5, 4, 1, true), glowB(warm, 0.3), 3.87, Math.PI / 4);    // glass
+      for (let c = 0; c < 4; c++) { const ca = Math.PI / 4 + (c * Math.PI) / 2, rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.52, 4), lampIron); rod.position.set(Math.cos(ca) * 0.215, 3.87, Math.sin(ca) * 0.215); rod.rotation.z = -Math.cos(ca) * 0.17; rod.rotation.x = Math.sin(ca) * 0.17; L.add(rod); }
+      add(new THREE.CylinderGeometry(0.29, 0.29, 0.03, 4), lampIron, 4.13, Math.PI / 4);                     // upper frame
+      add(new THREE.ConeGeometry(0.33, 0.28, 4), lampIron, 4.28, Math.PI / 4);                               // roof
+      add(new THREE.CylinderGeometry(0.035, 0.06, 0.1, 6), lampIron, 4.46);
+      add(new THREE.SphereGeometry(0.04, 8, 6), lampIron, 4.54);
+      const flame = add(new THREE.SphereGeometry(0.05, 8, 8), glowB(lin('#ffe2b0').multiplyScalar(2.5), 1), 3.82); flame.scale.y = 1.8;
+      const halo = new THREE.Sprite(haloM()); halo.scale.set(1.9, 1.9, 1); halo.position.y = 3.87; L.add(halo);
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshBasicMaterial({ map: dot(), color: warm, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false }));
+      pool.material.userData.lin = true; pool.rotation.x = -Math.PI / 2; pool.position.y = 0.07; L.add(pool);
+      L.position.set(x, 0, z); scene.add(L);
+      circles.push({ x, z, r: 0.32 });
+      gas.push({ flame, halo, pool, s: k * 1.7 });
+    }
     // Dust and ash drifting down around the player everywhere.
     const N = 170, BX = 36, BY = 11, base = new Float32Array(N * 3), pos = new Float32Array(N * 3), rr = rng(404);
     for (let i = 0; i < N; i++) base.set([rr() * BX, rr() * BY, rr() * BX], i * 3);
@@ -431,6 +453,7 @@
       const fl = 0.8 + 0.2 * Math.sin(t * 11) * Math.sin(t * 7.3) + 0.1 * Math.sin(t * 23);
       flames.forEach((m, i) => { m.scale.set(1 + 0.12 * Math.sin(t * 9 + i * 2), fl * (1 + 0.1 * Math.sin(t * 13 + i)), 1 + 0.12 * Math.cos(t * 8 + i)); m.rotation.y = t * (1 + i); });
       fireL.intensity = 2.1 * fl + 0.5;
+      gas.forEach((q) => { const f = 0.85 + 0.1 * Math.sin(t * 9 + q.s) + 0.05 * Math.sin(t * 23 + q.s * 3); q.flame.scale.set(1, 1.8 * f, 1); q.halo.material.opacity = 0.4 * f; q.pool.material.opacity = 0.2 * f; });
       for (let i = 0; i < EN; i++) { const k = (t * (0.25 + eseed[i] * 0.3) + eseed[i] * 7) % 1, a = eseed[i] * 40 + t * 0.6; epos[i * 3] = Math.cos(a) * (0.2 + k * 1.2 * eseed[i]); epos[i * 3 + 1] = 3.9 + k * 4.5; epos[i * 3 + 2] = Math.sin(a) * (0.2 + k * 1.2 * eseed[i]); }
       eg.attributes.position.needsUpdate = true;
       for (let i = 0; i < N; i++) { const j = i * 3;

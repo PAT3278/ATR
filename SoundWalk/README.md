@@ -84,6 +84,10 @@ Vercel / GitHub Pages などにそのまま置けます。three.js r128 は cdnj
 - **ストアリンク（いまの設定）**: 各曲の `links` に `kind: 'buy'` のURLを入れるとメインボタンになります。KEYAKI / TAMA EXPRESSION / FLIP DA HOODS は LinkCore、STEREOTYPE / NO JOBB は購入先が見つからなかったので SoundCloud の視聴リンクにしています。
 - **直接販売（Stripe Checkout）**: `SW.CONFIG.checkoutEndpoint` にエンドポイントを設定し、各曲の `price`（円）を入れると「この曲を買う ¥250」ボタンが出ます。エンドポイントは `{ items: [{ name, price, quantity }] }` を受け取り、`{ url }`（Checkout の URL）を返してください。`{ sessionId }` を返す場合は `stripePublishableKey` も設定します。NS HACK サイトの `/api/stripe/checkout` にそのまま渡せる形式です（同じドメインで配信する場合）。
 
+## 今後の予定（未実装）
+
+- **Drum Fish Pond**: 池でドラムの音素材（スネア、808 など）を釣れる場所。一度に一匹ずつ、一つの音が釣れる。
+
 ## ファイル
 
 | ファイル | 内容 |
