@@ -119,6 +119,35 @@ body.viewing #hud, body.viewing #banner { opacity: 0; pointer-events: none; }
 #cfName { margin: 8px 0 2px; font-family: var(--f-head); font-size: 30px; letter-spacing: .06em; overflow-wrap: anywhere; }
 #cfHost { margin: 0; font-family: var(--f-head); font-size: 12px; letter-spacing: .1em; color: var(--dim); overflow-wrap: anywhere; }
 
+/* ---------- in-game phone ---------- */
+#phoneBtn { position: relative; }
+#phoneBtn kbd { position: absolute; right: -6px; bottom: -8px; min-width: 18px; height: 18px; font-size: 11px; padding: 1px 4px 0; }
+#phone { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); width: min(290px, calc(100% - 28px)); height: min(540px, calc(100% - 90px)); z-index: 7; display: flex; flex-direction: column; background: #0b0b0a; border: 2px solid #2a2927; border-radius: 26px; box-shadow: 0 0 0 1px #000, 0 18px 50px rgba(0, 0, 0, .75); padding: 10px 10px 8px; animation: phone-up .28s cubic-bezier(.16, 1, .3, 1); }
+@keyframes phone-up { from { transform: translateY(40%); opacity: 0; } }
+.ph-top { display: flex; align-items: center; justify-content: space-between; font-family: var(--f-head); font-size: 12px; color: var(--dim); padding: 2px 10px 8px; }
+.ph-top i { width: 54px; height: 6px; border-radius: 3px; background: #1d1c1a; }
+.ph-screen { flex: 1; min-height: 0; overflow: auto; background: #141412; border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 8px; overscroll-behavior: contain; }
+.ph-nav { display: flex; justify-content: space-around; padding-top: 6px; }
+.ph-nav button { width: 54px; height: 30px; background: none; border: 0; color: var(--dim); font-size: 18px; cursor: pointer; font-family: var(--f-head); }
+.ph-nav button:hover, .ph-nav button:focus-visible { color: var(--bone); outline: none; }
+.ph-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ph-app { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #1b1a18; border: 1px solid var(--line); border-radius: 4px; color: var(--bone); cursor: pointer; font-family: var(--f-head); font-size: 12px; letter-spacing: .14em; }
+.ph-app .ic { width: 34px; height: 34px; }
+.ph-app:hover, .ph-app:focus-visible, .ph-row:hover, .ph-row:focus-visible { background: var(--bone); color: #0a0a09; outline: none; }
+.ph-h { margin: 0 0 4px; font-family: var(--f-head); font-weight: 400; font-size: 13px; letter-spacing: .3em; color: var(--red); }
+.ph-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 10px; background: #1b1a18; border: 1px solid var(--line); border-radius: 3px; color: var(--bone); cursor: pointer; font-family: var(--f-head); font-size: 14px; }
+.ph-row[disabled] { opacity: .45; cursor: default; background: #1b1a18; color: var(--bone); }
+.ph-row .dot { width: 10px; height: 10px; flex: none; transform: rotate(45deg); }
+.ph-row .nm { display: flex; flex-direction: column; min-width: 0; }
+.ph-row .nm small { color: var(--dim); font-size: 11px; letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ph-row:hover .nm small, .ph-row:focus-visible .nm small { color: #3a372f; }
+.ph-big { margin: 6px 0 0; font-family: var(--f-head); font-size: 40px; line-height: 1.05; letter-spacing: .04em; overflow-wrap: anywhere; }
+.ph-sub { margin: 0; font-family: var(--f-head); font-size: 14px; letter-spacing: .12em; color: var(--dim); overflow-wrap: anywhere; }
+.ph-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ph-acts .btn { font-size: 14px; padding: 8px 14px 6px; }
+@media (hover: none) { #phoneBtn kbd { display: none; } #phone { right: 50%; transform: translateX(50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); } @keyframes phone-up { from { transform: translate(50%, 40%); opacity: 0; } } }
+@media (prefers-reduced-motion: reduce) { #phone { animation: none; } }
+
 /* ---------- scenic view ---------- */
 #bars { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 #bars i { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .9s cubic-bezier(.16, 1, .3, 1); }

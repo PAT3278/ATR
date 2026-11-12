@@ -748,11 +748,14 @@
       const foam = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.9, 24), additive('#ffffff', 0.25)); foam.rotation.x = -Math.PI / 2; foam.scale.set(0.9, 1.8, 1); foam.position.y = 0.03; wg.add(foam);
       return (t, bst, speed) => { const k = Math.min(1, speed / 9); wg.position.y = Math.sin(t * 3) * 0.03; wg.rotation.x = -0.05 - k * 0.07; wake.forEach((m) => { m.material.opacity = 0.35 * k; m.scale.y = 0.5 + k; }); foam.material.opacity = 0.12 + 0.2 * k + 0.05 * Math.sin(t * 9); };
     })() };
+    const handset = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.012), new THREE.MeshBasicMaterial({ color: lin('#cfe3ff') })); handset.material.userData.lin = true; handset.position.set(0, -0.36, 0.05); handset.visible = false; arms[1].elbow.add(handset);
+    let phoneOn = false;
     let cur = null, last = null, forced = null;
     let phase = 0;
     return {
       G: A,
       forceRide(i) { forced = i; if (cur) { cur.g.visible = false; cur = null; } },
+      setPhone(on) { phoneOn = on; handset.visible = on; },
       animate(dt, speed, bob, bst = 0, lean = 0, onWater = false) {
         const riding = bst > 0.3 || onWater;
         if (cur && (cur === waterRide) !== onWater) { cur.g.visible = false; cur = null; }
@@ -795,6 +798,7 @@
         body.rotation.x = 0.2 * run; hips.rotation.y = Math.sin(phase) * 0.14 * run;
         body.position.y = Math.abs(Math.sin(phase)) * (0.035 + 0.075 * run) * k;
         if (k < 0.05) { phase = 0; body.position.y = Math.sin(performance.now() / 700) * 0.006 + bob * 0.03; head.rotation.x = -bob * 0.12; }
+        if (phoneOn && k < 0.05) { arms[1].pivot.rotation.x = -0.75; arms[1].elbow.rotation.x = -1.35; arms[1].pivot.rotation.z = -0.2; head.rotation.x = 0.32; }   // looking down at the phone
         else head.rotation.x = 0;
       },
     };
@@ -871,6 +875,74 @@
     $('#locName').textContent = jp;
   }
 
+  /* ================= in-game phone ================= */
+  // The player's own device: pull it out for the map, the songs found so far, the next show and the shop.
+  const PHI = {
+    map: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg>',
+    music: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
+    live: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M8 7v10M16 7v10M11 12h2"/></svg>',
+    shop: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>',
+  };
+  let phView = 'home', phSong = null;
+  const phScreen = $('#phScreen');
+  function phRender() {
+    const d = new Date();
+    $('#phClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    $('#phCount').textContent = `♪ ${places.filter((p) => p.found).length}/${places.length}`;
+    let h = '';
+    if (phView === 'home') {
+      const apps = [['map', 'MAP'], ['music', 'MUSIC']];
+      if (CFG.live) apps.push(['live', 'LIVE']);
+      if (CFG.shop && CFG.shop.url) apps.push(['shop', 'SHOP']);
+      h = '<div class="ph-grid">' + apps.map(([k, n]) => `<button class="ph-app" type="button" data-go="${k}">${PHI[k]}<span>${n}</span></button>`).join('') + '</div>';
+    } else if (phView === 'music') {
+      h = '<h3 class="ph-h">MUSIC</h3>' + places.map((p, i) => p.found
+        ? `<button class="ph-row" type="button" data-song="${i}"><span class="dot" style="background:${esc(p.color)}"></span><span class="nm">${esc(p.song.title)}<small>${esc(p.song.artist || CFG.artist)}</small></span></button>`
+        : '<button class="ph-row" type="button" disabled><span class="dot" style="background:#55524a"></span><span class="nm">？</span></button>').join('');
+    } else if (phView === 'song' && phSong) {
+      const s = phSong.song, links = (s.links || []).map((l) => `<a class="btn${l.kind === 'buy' ? ' primary' : ''}" href="${esc(l.url)}" target="_blank" rel="noopener" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>BUY ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
+      h = `<h3 class="ph-h">MUSIC</h3><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc([(s.artist || CFG.artist), s.year].filter(Boolean).join(' · '))}</p><div class="ph-acts">${links}<button class="btn" type="button" data-warp="1">${PHI.map}<span>GO</span></button></div>`;
+    } else if (phView === 'live') {
+      h = `<h3 class="ph-h">NEXT LIVE</h3><p class="ph-big">${esc(CFG.live.date || '')}</p><p class="ph-sub">${esc(CFG.live.place || '')}</p>`;
+    } else if (phView === 'shop') {
+      let host = CFG.shop.url; try { host = new URL(CFG.shop.url).host; } catch (e) { /* keep */ }
+      h = `<h3 class="ph-h">SHOP</h3><p class="ph-big">${esc(CFG.shop.name || host)}</p><p class="ph-sub">${esc(host)}</p><div class="ph-acts"><a class="btn primary" href="${esc(CFG.shop.url)}" target="_blank" rel="noopener">GO ↗</a></div>`;
+    }
+    phScreen.innerHTML = h;
+    const first = phScreen.querySelector('button:not([disabled]), a');
+    (first || $('#phClose')).focus({ preventScroll: true });
+  }
+  function openPhone() {
+    if (mode !== 'walk') return;
+    mode = 'phone'; keys.clear(); auto = null; phView = 'home';
+    document.body.classList.add('busy'); avatar.setPhone(true);
+    $('#phone').hidden = false; phRender();
+  }
+  function closePhone() {
+    if (mode !== 'phone') return;
+    mode = 'walk'; $('#phone').hidden = true; document.body.classList.remove('busy'); avatar.setPhone(false);
+    cv.focus({ preventScroll: true });
+  }
+  function phoneBack() { if (phView === 'home') closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
+  function phoneKey(e) {
+    if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); closePhone(); return; }
+    if (e.key === 'Escape' || e.key === 'Backspace' || e.code === 'KeyX') { e.preventDefault(); phoneBack(); return; }
+    const dir = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (dir) { e.preventDefault(); const list = [...phScreen.querySelectorAll('button:not([disabled]), a')]; if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); } }
+  }
+  phScreen.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-go], [data-song], [data-warp]');
+    if (!b) return;
+    if (b.dataset.go === 'map') { closePhone(); openMap(); }
+    else if (b.dataset.go) { phView = b.dataset.go; phRender(); }
+    else if (b.dataset.song !== undefined) { phSong = places[+b.dataset.song]; phView = 'song'; phRender(); }
+    else if (b.dataset.warp && phSong) { closePhone(); warpTo(phSong); }
+  });
+  $('#phBack').addEventListener('click', phoneBack);
+  $('#phHome').addEventListener('click', () => { phView = 'home'; phRender(); });
+  $('#phClose').addEventListener('click', closePhone);
+  $('#phoneBtn').addEventListener('click', () => (mode === 'phone' ? closePhone() : openPhone()));
+
   /* ================= leaving for another site ================= */
   function openConfirm(ia) {
     if (!ia.url) return;
@@ -918,6 +990,7 @@
     if (e.key === 'Shift') running = true;
     if (mode === 'title') { if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); start(); } return; }
     if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); closeMap(); } return; }
+    if (mode === 'phone') { phoneKey(e); return; }
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
@@ -929,6 +1002,7 @@
     else if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
     else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter')) { e.preventDefault(); if (focus) act(focus); }
     else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); openMap(); }
+    else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); openPhone(); }
   });
   addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; const k = KEYMAP[e.code]; if (k) keys.delete(k); });
   addEventListener('blur', () => { keys.clear(); running = false; });
@@ -986,6 +1060,8 @@
     if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); }
     if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
     if (down(9) && mode === 'walk') openMap();
+    if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
+    if (down(1) && mode === 'phone') phoneBack();
     padPrev = pressed;
     padRun = !!(pressed[7] || pressed[5] || pressed[2]);
     camYaw -= dz(gp.axes[2] || 0) * 0.04;

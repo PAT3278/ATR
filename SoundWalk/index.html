@@ -28,19 +28,26 @@
     </div>
     <div class="hud-r">
       <button id="soundBtn" class="ibtn" type="button" aria-pressed="false" aria-label="音のオン・オフ"><svg class="ic on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 010 6M18.5 6.5a8 8 0 010 11"/></svg><svg class="ic off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></svg></button>
+      <button id="phoneBtn" class="ibtn" type="button" aria-label="スマホを出す"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg><kbd>P</kbd></button>
       <button id="mapBtn" class="minimap" type="button" aria-label="地図をひらく"><canvas id="mini" width="132" height="132"></canvas><kbd>M</kbd></button>
     </div>
   </div>
   <div id="edge" aria-hidden="true"></div>
   <div id="banner"><span class="en" id="bannerEn"></span><span class="jp" id="bannerJp"></span></div>
   <div id="prompt" hidden><kbd id="promptKey">Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span id="promptText"></span></div>
-  <div id="hint" aria-hidden="true"><span class="how pc"><span class="wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="h1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></svg><em>⟲</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>⤒</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><kbd>M</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg></span></span></div>
+  <div id="hint" aria-hidden="true"><span class="how pc"><span class="wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="h1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></svg><em>⟲</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>⤒</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><kbd>P</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg></span><span class="h1"><kbd>M</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg></span></span></div>
   <div id="stick" aria-hidden="true"><div id="knob"></div></div>
   <button id="btnA" type="button" aria-label="眺める"><small>A</small><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
 
   <button id="btnB" type="button" aria-label="ダッシュ">»</button>
 
   <div id="dialog" hidden><p id="dlgText"></p><span class="next">▼</span></div>
+
+  <div id="phone" role="dialog" aria-modal="true" aria-label="スマホ" hidden>
+    <div class="ph-top"><span id="phClock"></span><i></i><span id="phCount"></span></div>
+    <div id="phScreen" class="ph-screen"></div>
+    <div class="ph-nav"><button id="phBack" type="button" aria-label="もどる">‹</button><button id="phHome" type="button" aria-label="ホーム">○</button><button id="phClose" type="button" aria-label="しまう">✕</button></div>
+  </div>
 
   <div id="confirm" role="dialog" aria-modal="true" aria-labelledby="cfText" hidden>
     <p id="cfText">このサイトに移動しますか？</p>
@@ -75,7 +82,7 @@
       <p class="t-kick" id="tArtist">NS HACK</p>
       <h1 id="tTitle">SOUND WALK</h1>
       <button id="startBtn" class="start" type="button">▶ START</button>
-      <div class="t-how" aria-hidden="true"><span class="how pc"><span class="wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="h1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></svg><em>⟲</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>⤒</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><kbd>M</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg></span></span><span class="how touch"><span class="h1"><span class="ministick"><i></i></span></span><span class="h1"><span class="minia">A</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><span class="minia">»</span></span></span><span class="h1 hp"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0116 0v3"/><rect x="3" y="14" width="4" height="6" rx="1"/><rect x="17" y="14" width="4" height="6" rx="1"/></svg></span></div>
+      <div class="t-how" aria-hidden="true"><span class="how pc"><span class="wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="h1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></svg><em>⟲</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>⤒</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><kbd>P</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg></span><span class="h1"><kbd>M</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg></span></span><span class="how touch"><span class="h1"><span class="ministick"><i></i></span></span><span class="h1"><span class="minia">A</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><span class="minia">»</span></span></span><span class="h1 hp"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0116 0v3"/><rect x="3" y="14" width="4" height="6" rx="1"/><rect x="17" y="14" width="4" height="6" rx="1"/></svg></span></div>
     </div>
   </section>
   <div id="loading"><span>NOW LOADING</span><span class="disc"></span></div>

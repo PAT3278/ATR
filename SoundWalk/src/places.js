@@ -262,9 +262,33 @@
       });
       // stage wash: coloured light on the floor and stage, faked with additive planes (real lights would cost every pixel in the world)
       const wash = [['#ff2a6a', -3], ['#2ad4ff', 3]].map(([hex, z]) => { const m = vglow(hex, 0.05), w1 = new THREE.Mesh(new THREE.PlaneGeometry(9, 6.5), m); w1.rotation.x = -Math.PI / 2; w1.position.set(-1.6, 0.09, z); const w2 = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 6), m); w2.rotation.x = -Math.PI / 2; w2.position.set(-4.9, 0.72, z); V.add(w1, w2); return m; });
-      // a few people waiting for the show
-      const crowd = [], bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.25, 8).translate(0, 0.62, 0), headG = new THREE.SphereGeometry(0.17, 10, 8).translate(0, 1.45, 0), crowdM = E.mat('#141315', { rough: 0.9 }), cr = E.rng(909);
-      for (let i = 0; i < 13; i++) { const f = new THREE.Group(); f.add(new THREE.Mesh(bodyG, crowdM), new THREE.Mesh(headG, crowdM)); const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2; if (Math.abs(z) < 1.4 && x < 0.6) { continue; } f.position.set(x, 0.05, z); f.scale.setScalar(0.92 + cr() * 0.18); V.add(f); crowd.push({ f, s: cr() * 6 }); p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3); }
+      // The crowd: people with their own clothes, skin and hair, each with a way of moving to the music.
+      const crowd = [], cr = E.rng(909);
+      {
+        const skins = ['#f0c9a4', '#d9a57c', '#b07a52', '#8a5a3c', '#5e3d2a'].map((c) => E.mat(c, { rough: 0.7 }));
+        const tops = ['#b3161d', '#d8d2c0', '#1f3a5a', '#2c2c30', '#6a4a2a', '#3d5a3a', '#c9a52e', '#5a2a5a'].map((c) => E.mat(c, { rough: 0.85 }));
+        const pantsM = ['#17181c', '#262b36', '#3a3026'].map((c) => E.mat(c, { rough: 0.9 })), hairs = ['#0f0c0a', '#2a1a10', '#6a4a2a', '#b8b2a4'].map((c) => E.mat(c, { rough: 0.6 }));
+        const legG = new THREE.BoxGeometry(0.3, 0.86, 0.2).translate(0, 0.43, 0), torsoG = new THREE.CylinderGeometry(0.21, 0.18, 0.6, 9).translate(0, 0.3, 0), headG = new THREE.SphereGeometry(0.13, 12, 9);
+        const hairG = new THREE.SphereGeometry(0.14, 12, 8, 0, 6.3, 0, 1.7), armG = new THREE.CylinderGeometry(0.055, 0.045, 0.58, 7).translate(0, -0.29, 0), handG = new THREE.SphereGeometry(0.055, 7, 6);
+        const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff' });
+        for (let i = 0; i < 18; i++) {
+          const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2;
+          if (Math.abs(z) < 1.4 && x < 0.6) continue;                                          // keep the spot in front of the stage free
+          const f = new THREE.Group(), up = new THREE.Group(), skin = skins[Math.floor(cr() * skins.length)], top = tops[Math.floor(cr() * tops.length)];
+          f.add(new THREE.Mesh(legG, pantsM[Math.floor(cr() * pantsM.length)]));
+          up.position.y = 0.86; f.add(up);                                                      // everything above the hips sways and twists together
+          const torso = new THREE.Mesh(torsoG, top); torso.scale.z = 0.68; up.add(torso);
+          const head = new THREE.Mesh(headG, skin); head.position.y = 0.76; up.add(head);
+          const hair = new THREE.Mesh(hairG, hairs[Math.floor(cr() * hairs.length)]); hair.position.y = 0.78; up.add(hair);
+          const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.26, 0.56, 0); piv.add(new THREE.Mesh(armG, top)); const hd = new THREE.Mesh(handG, skin); hd.position.y = -0.6; piv.add(hd); up.add(piv); return piv; });
+          const style = Math.floor(cr() * 4);                                                   // 0 pumping one fist, 1 both hands up, 2 filming with a phone, 3 swaying
+          if (style === 2) { const ph = new THREE.Mesh(lightG, lightM); ph.position.set(0, -0.68, 0.03); ph.rotation.y = Math.PI; arms[1].add(ph); }
+          f.position.set(x, 0.05, z); f.rotation.y = -Math.PI / 2 + (cr() - 0.5) * 0.5;          // facing the stage
+          f.scale.setScalar(0.9 + cr() * 0.2); V.add(f);
+          crowd.push({ f, up, head, arms, style, s: cr() * 6.28, e: 0.6 + cr() * 0.7, jump: 0 });
+          p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3);
+        }
+      }
       // open entrance: lit frame, marquee, light spilling onto the ground outside
       const neon = new THREE.MeshBasicMaterial({ color: '#ff3a44' });
       for (const [w, h, d, y, z] of [[0.08, 0.08, 7.2, 3.58, 0], [0.08, 3.55, 0.08, 1.8, -3.55], [0.08, 3.55, 0.08, 1.8, 3.55]]) { const n = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), neon); n.position.set(7.04, y, z); V.add(n); }
@@ -284,10 +308,23 @@
         return 0;
       };
       p.info(BX - 2.3, CZ, 2.6, 2.5, [`NEXT LIVE\n${live.date}  ${live.place}`]);
-      const venueUpd = (t, f) => {
+      const venueUpd = (t, f, dt) => {
         beams.forEach((b) => { b.m.opacity = 0.08 + f.pulse * 0.22 + 0.05 * Math.sin(t * 2 + b.s); b.beam.rotation.x = Math.sin(t * 0.8 + b.s) * 0.25; });
         wash[0].opacity = 0.035 + f.pulse * 0.1; wash[1].opacity = 0.035 + f.high * 0.12;
-        crowd.forEach((c) => { c.f.position.y = 0.05 + Math.abs(Math.sin(t * 3.2 + c.s)) * 0.05 * (0.4 + f.level * 2) + f.pulse * 0.05; });
+        const en = 0.45 + f.level * 1.6;                                                        // how hard the room is going
+        crowd.forEach((c) => {
+          const k = en * c.e, ph = t * 3.4 + c.s, bounce = Math.abs(Math.sin(ph));
+          if (f.beat && f.bass > 0.6 && Math.sin(c.s * 7 + f.beats) > 0.2) c.jump = 1;           // some of them jump on the big hits
+          c.jump *= Math.exp(-dt * 5);
+          c.f.position.y = 0.05 + bounce * 0.07 * k + f.pulse * 0.07 * c.e + Math.sin(Math.min(1, 1 - c.jump) * Math.PI) * 0.22 * (c.jump > 0.02 ? 1 : 0);
+          c.up.rotation.z = Math.sin(ph * 0.5) * 0.09 * k; c.up.rotation.y = Math.sin(ph * 0.5 + 1) * 0.16 * k; c.up.rotation.x = 0.05 + f.pulse * 0.07;
+          c.head.rotation.x = bounce * 0.28 * k;
+          const [L, R] = c.arms;
+          if (c.style === 0) { R.rotation.x = -2.5 + Math.sin(ph * 2) * 0.5 * k; R.rotation.z = -0.15; L.rotation.x = -0.25 - bounce * 0.3 * k; L.rotation.z = 0.12; }
+          else if (c.style === 1) { L.rotation.x = -2.7 + Math.sin(ph) * 0.3 * k; R.rotation.x = -2.7 + Math.sin(ph + 1.2) * 0.3 * k; L.rotation.z = 0.35 + Math.sin(ph) * 0.2; R.rotation.z = -0.35 - Math.sin(ph) * 0.2; }
+          else if (c.style === 2) { R.rotation.x = -2.2 + Math.sin(t * 0.9 + c.s) * 0.06; R.rotation.z = -0.1; L.rotation.x = -0.2 - bounce * 0.25 * k; L.rotation.z = 0.12; }
+          else { L.rotation.x = Math.sin(ph) * 0.5 * k - 0.2; R.rotation.x = -Math.sin(ph) * 0.5 * k - 0.2; L.rotation.z = 0.15; R.rotation.z = -0.15; }
+        });
       };
       p.addBox(BX, RZ + 26, 2.6, 9);
 
@@ -346,7 +383,7 @@
       p.dock = () => { trainS = 'dwell'; trainT = 20; train.visible = true; train.position.z = STOP; };   // put the train at the platform now (used by tests)
       const board = p.interact({ kind: 'travel', lx: BX + 2.3, lz: STOP + 3, r: 2.3, mark: 7.3, y0: 3, off: true, url: shop.url, name: shop.name });
       p.update = (t, dt, f, v) => {
-        venueUpd(t, f);
+        venueUpd(t, f, dt);
         water.material.uniforms.t.value = t;
         water.material.uniforms.level.value += (f.level - water.material.uniforms.level.value) * Math.min(1, dt * 8);
         const sS = 1 + f.bass * 0.07;
