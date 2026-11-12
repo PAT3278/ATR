@@ -324,7 +324,7 @@ try {
 
   // The page follows the plugin's skin, reported in /info.
   console.log("Page follows the plugin's skin");
-  for (const skin of ["digital", "flat"]) {
+  for (const skin of ["digital", "flat", "paper"]) {
     const { proc, port } = await startDemo(["--skin", skin]);
     ({ context, page, errors } = await newPage(browser, "ja-JP"));
     await page.goto(`http://${lanAddress}:${port}/`);
@@ -332,7 +332,7 @@ try {
     const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
                                                bg: getComputedStyle(document.body).backgroundColor,
                                                theme: document.querySelector('meta[name="theme-color"]').content }));
-    check(shown.skin === skin && shown.theme === (skin === "digital" ? "#141226" : "#1c1d21"),
+    check(shown.skin === skin && shown.theme === ({ digital: "#141226", paper: "#f2efe9" }[skin] || "#1c1d21"),
           `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
     check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));

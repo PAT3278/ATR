@@ -458,7 +458,7 @@ private:
                  << ",\"auth\":" << (server.hasPassword() ? "true" : "false")
                  << ",\"listeners\":" << server.numStreaming.load()
                  << ",\"maxListeners\":" << maxListeners
-                 << ",\"skin\":\"" << (server.digitalSkin.load() ? "digital" : "flat") << "\"}";
+                 << ",\"skin\":\"" << (server.skin.load() == 1 ? "digital" : server.skin.load() == 2 ? "paper" : "flat") << "\"}";
             sendResponse (200, "application/json", json.toRawUTF8(), json.getNumBytesAsUTF8(), head);
             return;
         }

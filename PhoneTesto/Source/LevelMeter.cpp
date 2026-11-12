@@ -1,6 +1,7 @@
 #include "LevelMeter.h"
 #include "HardwareStyle.h"
 #include "DigitalStyle.h"
+#include "PaperStyle.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -45,6 +46,12 @@ void LevelMeter::paint (juce::Graphics& g)
     if (hw::skinOf (*this) == hw::Skin::digital)
     {
         paintDigital (g);
+        return;
+    }
+
+    if (hw::skinOf (*this) == hw::Skin::paper)
+    {
+        paintPaper (g);
         return;
     }
 
@@ -165,6 +172,62 @@ void LevelMeter::paintDigital (juce::Graphics& g)
                          s.hold >= -1.0f ? c::meterHigh : c::text, 0.0f);
 
         d::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 11.0f);
+    }
+}
+
+void LevelMeter::paintPaper (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace p = hw::paper;
+    namespace c = hw::paper::colours;
+
+    const auto bounds = getLocalBounds().toFloat().reduced (2.0f);
+    p::drawCard (g, bounds, 14.0f);
+
+    const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
+    auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };
+
+    g.setFont (hw::font (hw::Type::sansMedium, 9.5f));
+    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f })
+    {
+        g.setColour (c::textFaint);
+        g.drawText (String ((int) db), Rectangle<float> (bounds.getX() + 3.0f, yFor (db) - 6.0f, 24.0f, 12.0f),
+                    Justification::centredRight, false);
+    }
+
+    // two slim bars: ink, vermilion only at the very top
+    const float barsX = bounds.getX() + 36.0f;
+    const float barW = (bounds.getRight() - 12.0f - barsX - 8.0f) * 0.5f;
+
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto& s = sides[i];
+        const float x = barsX + (float) i * (barW + 8.0f);
+        const auto track = Rectangle<float> (x, top, barW, bottom - top);
+
+        g.setColour (c::surface);
+        g.fillRoundedRectangle (track, barW * 0.5f);
+
+        if (s.level > floorDb + 0.5f)
+        {
+            const auto lit = track.withTop (yFor (s.level));
+            g.setColour (s.level >= -1.0f ? c::live : c::ink);
+            g.fillRoundedRectangle (lit, jmin (barW * 0.5f, lit.getHeight() * 0.5f));
+        }
+
+        if (s.hold > floorDb + 0.5f)
+        {
+            g.setColour (s.hold >= -1.0f ? c::live : c::ink.withAlpha (0.45f));
+            g.fillRoundedRectangle (x, yFor (s.hold) - 1.0f, barW, 2.0f, 1.0f);
+        }
+
+        const auto readout = Rectangle<float> (x - 8.0f, bounds.getY() + 10.0f, barW + 16.0f, 16.0f);
+        g.setFont (hw::font (hw::Type::sansMedium, 10.5f));
+        g.setColour (s.hold >= -1.0f ? c::live : c::text);
+        g.drawText (s.hold <= floorDb + 0.5f ? String (CharPointer_UTF8 ("\xe2\x80\x93")) : String (s.hold, 1),
+                    readout, Justification::centred, false);
+
+        p::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 10.0f);
     }
 }
 

@@ -30,6 +30,7 @@ private:
     juce::Rectangle<float> plotArea() const;
     void rebuildCurve();
     void paintDigital (juce::Graphics&);
+    void paintPaper (juce::Graphics&);
 
     QrCodeComponent qr;
     juce::TextEditor password;

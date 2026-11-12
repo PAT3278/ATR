@@ -2,7 +2,7 @@
 // DAW, so the phone player page can be tried (or tested in a browser)
 // without a plugin host:
 //
-//   PhoneTestoLiveDemo [--port N] [--password P] [--rate HZ] [--seconds S] [--skin digital|flat]
+//   PhoneTestoLiveDemo [--port N] [--password P] [--rate HZ] [--seconds S] [--skin digital|flat|paper]
 //
 // Prints "READY port=<n>" once listening. Runs until --seconds elapse or
 // stdin closes.
@@ -34,7 +34,7 @@ int main (int argc, char** argv)
 
     phonetesto::LiveMonitorServer server;
     server.setPassword (password);
-    server.setDigitalSkin (skin != "flat");
+    server.setSkin (skin == "flat" ? 0 : skin == "paper" ? 2 : 1);
 
     if (! server.start (port, rate))
     {

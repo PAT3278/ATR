@@ -41,6 +41,7 @@ namespace
     juce::Font pillFont (hw::Skin skin)
     {
         return skin == hw::Skin::digital ? hw::font (hw::Type::condensedBold, 14.0f, 0.14f)
+             : skin == hw::Skin::paper   ? hw::font (hw::Type::sansSemiBold, 11.5f, 0.14f)
                                          : hw::font (hw::Type::condensedBold, 14.0f, 0.12f);
     }
 } // namespace
@@ -112,7 +113,8 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
 
     skinButton.getProperties().set (hw::compactProperty, true);
     skinButton.setTitle ("Skin");
-    skinButton.onClick = [this] { applySkin (skinButton.getToggleState() ? hw::Skin::digital : hw::Skin::flat); };
+    skinButton.setClickingTogglesState (false);
+    skinButton.onClick = [this] { applySkin (hw::skinFromIndex ((hw::skinIndex (skin) + 1) % 3)); }; // FLAT -> SUNSET -> PAPER
     panel.addAndMakeVisible (skinButton);
 
     auto& password = display.getPasswordEditor();
@@ -144,7 +146,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
 
     liveUrl = processor.getLiveMonitorUrl();
     onAirButton.setToggleState (processor.isLiveMonitorRunning(), juce::dontSendNotification);
-    applySkin (processor.getEditorSkin() == 1 ? hw::Skin::digital : hw::Skin::flat);
+    applySkin (hw::skinFromIndex (processor.getEditorSkin()));
     updateLiveState();
 
     setResizable (true, true);
@@ -179,10 +181,9 @@ void PhoneTestoAudioProcessorEditor::applySkin (hw::Skin newSkin)
 {
     skin = newSkin;
     lookAndFeel.setSkin (skin);
-    processor.setEditorSkin (skin == hw::Skin::digital ? 1 : 0);
+    processor.setEditorSkin (hw::skinIndex (skin));
 
-    skinButton.setToggleState (skin == hw::Skin::digital, juce::dontSendNotification);
-    skinButton.setButtonText (skin == hw::Skin::digital ? "SKIN: SUNSET" : "SKIN: FLAT");
+    skinButton.setButtonText (skin == hw::Skin::digital ? "SKIN: SUNSET" : skin == hw::Skin::paper ? "SKIN: PAPER" : "SKIN: FLAT");
 
     sendLookAndFeelChange(); // children pick up the skin's colours and repaint
     shownListeners = -1;      // re-lay the header
@@ -308,6 +309,8 @@ void PhoneTestoAudioProcessorEditor::paintBackground (juce::Graphics& g)
 {
     if (skin == hw::Skin::digital)
         digitalBackground.draw (g, panel.getLocalBounds().toFloat(), animationSeconds);
+    else if (skin == hw::Skin::paper)
+        hw::paper::drawPage (g, panel.getLocalBounds().toFloat());
     else
         g.fillAll (hw::colours::panel);
 }
@@ -316,6 +319,8 @@ void PhoneTestoAudioProcessorEditor::paintOverlay (juce::Graphics& g)
 {
     if (skin == hw::Skin::digital)
         paintDigitalOverlay (g);
+    else if (skin == hw::Skin::paper)
+        paintPaperOverlay (g);
     else
         paintFlatOverlay (g);
 }
@@ -455,6 +460,57 @@ void PhoneTestoAudioProcessorEditor::paintDigitalOverlay (juce::Graphics& g)
 
     g.setColour (c::text.withAlpha (0.6f));
     g.setFont (hw::font (hw::Type::sansMedium, 13.0f));
+    g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
+                      Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
+                      Justification::centredLeft, 2);
+}
+
+void PhoneTestoAudioProcessorEditor::paintPaperOverlay (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace p = hw::paper;
+    namespace c = hw::paper::colours;
+
+    // header: a quiet wordmark, the model in small type, nothing else
+    const auto logoFont = hw::font (hw::Type::sansBold, 19.0f, 0.22f);
+    const float logoW = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO");
+    g.setFont (logoFont);
+    g.setColour (c::text);
+    g.drawText ("PHONETESTO", Rectangle<float> (layout::margin, 15.0f, logoW + 4.0f, 30.0f), Justification::centredLeft, false);
+
+    p::drawLabel (g, "PT-1", { layout::margin + logoW + 14.0f, 15.0f, 40.0f, 30.0f }, Justification::centredLeft, c::textFaint, 11.0f);
+    p::drawLabel (g, "Speaker reference monitor", { layout::margin + logoW + 52.0f, 15.0f, 280.0f, 30.0f },
+                  Justification::centredLeft, c::textDim, 11.0f);
+
+    // status: a dot and words; vermilion only while on air
+    {
+        const bool live = shownLive;
+        const auto pill = statusPillBounds();
+        g.setColour (live ? c::live.withAlpha (0.10f) : c::surface.withAlpha (0.7f));
+        g.fillRoundedRectangle (pill, pill.getHeight() * 0.5f);
+        g.setColour (live ? c::live : c::textFaint);
+        g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre ({ pill.getX() + 15.0f, pill.getCentreY() }));
+        g.setColour (live ? c::live : c::textDim);
+        g.setFont (pillFont (skin));
+        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
+    }
+
+    // knob labels and readouts
+    for (auto [knob, label, centre] : { std::tuple<Slider*, const char*, Point<float>> { &mixKnob, "Mix", layout::mixCentre },
+                                         { &outputKnob, "Output", layout::outputCentre } })
+    {
+        const float alpha = knob->getAlpha();
+        p::drawLabel (g, label, Rectangle<float> (120.0f, 16.0f).withCentre (centre.translated (0.0f, -64.0f)),
+                      Justification::centred, c::textDim.withAlpha (alpha));
+
+        const auto value = knob == &mixKnob ? String (roundToInt (knob->getValue())) + "%" : outputText (knob->getValue());
+        g.setColour (c::text.withAlpha (alpha));
+        g.setFont (hw::font (hw::Type::sansMedium, 17.0f, 0.02f));
+        g.drawText (value, Rectangle<float> (140.0f, 24.0f).withCentre (centre.translated (0.0f, 63.0f)), Justification::centred, false);
+    }
+
+    g.setColour (c::textDim);
+    g.setFont (hw::font (hw::Type::sansMedium, 12.5f));
     g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
                       Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
                       Justification::centredLeft, 2);

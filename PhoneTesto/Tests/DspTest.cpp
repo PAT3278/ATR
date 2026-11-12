@@ -359,6 +359,14 @@ int main()
                "editor size and skin restored");
         check (! b->apvts.copyState().hasProperty ("editorSkin") && ! b->apvts.copyState().hasProperty ("editorScale"),
                "editor settings aren't left in the parameter tree");
+
+        a->setEditorSkin (2);
+        juce::MemoryBlock paperState;
+        a->getStateInformation (paperState);
+        auto c = makeProcessor (48000.0, 512);
+        c->setStateInformation (paperState.getData(), (int) paperState.getSize());
+        check (c->getEditorSkin() == 2, "the PAPER skin is restored too");
+        a->setEditorSkin (0);
         auto value = [&] (const char* id) { return b->apvts.getParameter (id)->convertFrom0to1 (b->apvts.getParameter (id)->getValue()); };
         check (juce::roundToInt (value (PhoneTestoAudioProcessor::deviceParamId)) == 5
                    && std::abs (value (PhoneTestoAudioProcessor::mixParamId) - 42.0f) < 0.01f
@@ -420,8 +428,10 @@ int main()
         };
         a->setEditorSkin (0);
         const bool flat = infoBody().contains ("\"skin\":\"flat\"");
+        a->setEditorSkin (2);
+        const bool paper = infoBody().contains ("\"skin\":\"paper\"");
         a->setEditorSkin (1);
-        check (flat && infoBody().contains ("\"skin\":\"digital\""), "the phone page is told the plugin's skin");
+        check (flat && paper && infoBody().contains ("\"skin\":\"digital\""), "the phone page is told the plugin's skin");
 
         check (status ("/stream?fmt=pcm16") == 401, "stream without the code is refused, even with no password set");
         check (status ("/auth?key=" + code) == 204, "the code from the QR URL is accepted");

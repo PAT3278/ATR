@@ -2,7 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-/** The editor's two looks, switchable from its header:
+/** The editor's three looks, switched in turn from its header:
 
     - FLAT: modern flat hardware -- a graphite panel, flat controls with
       hairline borders, LED indicators, one orange accent, Barlow type (the
@@ -10,6 +10,8 @@
     - SUNSET (Skin::digital in code, "digital" in saved state): a warm,
       analog look -- a grainy dusk sky over a shimmering sea, smoky panels,
       cream tape-deck keys and knobs, DM Mono numbers (see DigitalStyle.h).
+    - PAPER: simple and quiet -- warm off-white, ink type, tonal controls
+      with no outlines, one small vermilion (see PaperStyle.h).
 
     Components ask skinOf (*this) which one to draw. */
 namespace phonetesto::hw
@@ -18,8 +20,14 @@ namespace phonetesto::hw
 enum class Skin
 {
     flat,
-    digital
+    digital, // SUNSET
+    paper
 };
+
+/** Saved-state / protocol names and indices: 0 flat, 1 digital, 2 paper. */
+inline const char* skinName (Skin s) { return s == Skin::digital ? "digital" : s == Skin::paper ? "paper" : "flat"; }
+inline Skin skinFromIndex (int i)    { return i == 1 ? Skin::digital : i == 2 ? Skin::paper : Skin::flat; }
+inline int skinIndex (Skin s)        { return s == Skin::digital ? 1 : s == Skin::paper ? 2 : 0; }
 
 /** Flat skin colours. */
 namespace colours

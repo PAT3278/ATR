@@ -1,4 +1,4 @@
-// Renders the plugin editor to PNGs -- in each skin (FLAT, SUNSET), once
+// Renders the plugin editor to PNGs -- in each skin (FLAT, SUNSET, PAPER), once
 // in Emulate mode and once with Live Monitor on (QR code with the auto
 // access code, listener count) -- while a background thread feeds the
 // processor a tone so the meter is actually moving. Also prints how long a
@@ -98,20 +98,22 @@ public:
         shootSkin (0);
     }
 
+    static juce::String skinName (int skin) { return phonetesto::hw::skinName (phonetesto::hw::skinFromIndex (skin)); }
+
     /** For each skin: Emulate, then Live, then the next skin. */
     void shootSkin (int skin)
     {
-        if (skin > 1)
+        if (skin > 2)
         {
             finish (allOk ? 0 : 1);
             return;
         }
 
-        const juce::String name = skin == 1 ? "digital" : "flat";
+        const juce::String name = skinName (skin);
         processor->setEditorSkin (skin);
 
         // The editor must reopen at the size saved with the project.
-        const float savedScale = skin == 1 ? 1.25f : 1.0f;
+        const float savedScale = skin == 1 ? 1.25f : skin == 2 ? 1.1f : 1.0f;
         processor->setEditorScale (savedScale);
         editor.reset (processor->createEditor());
 
@@ -216,7 +218,7 @@ public:
 
     void goLive (int skin)
     {
-        const juce::String name = skin == 1 ? "digital" : "flat";
+        const juce::String name = skinName (skin);
         allOk &= processor->startLiveMonitor (0);
 
         juce::Timer::callAfterDelay (400, [this, skin, name]

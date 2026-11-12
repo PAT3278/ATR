@@ -288,10 +288,12 @@ int main()
 
         // the phone page follows the plugin's skin
         const bool digitalByDefault = info.bodyText().find ("\"skin\":\"digital\"") != std::string::npos;
-        server.setDigitalSkin (false);
+        server.setSkin (0);
         const bool flatAfter = get (port, "/info").bodyText().find ("\"skin\":\"flat\"") != std::string::npos;
-        server.setDigitalSkin (true);
-        check (digitalByDefault && flatAfter, "/info reports the plugin's skin (digital by default, flat after switching)");
+        server.setSkin (2);
+        const bool paperAfter = get (port, "/info").bodyText().find ("\"skin\":\"paper\"") != std::string::npos;
+        server.setSkin (1);
+        check (digitalByDefault && flatAfter && paperAfter, "/info reports the plugin's skin (digital by default, then flat, then paper)");
 
         bool fontsOk = true;
         for (auto* font : { "/fonts/PhoneTestoMono-Regular.ttf", "/fonts/PhoneTestoMono-Medium.ttf", "/fonts/Barlow-Bold.ttf" })

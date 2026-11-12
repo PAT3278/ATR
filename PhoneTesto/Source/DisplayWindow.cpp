@@ -1,6 +1,7 @@
 #include "DisplayWindow.h"
 #include "HardwareStyle.h"
 #include "DigitalStyle.h"
+#include "PaperStyle.h"
 #include "SpeakerProfiles.h"
 
 #include <juce_dsp/juce_dsp.h>
@@ -49,12 +50,14 @@ void DisplayWindow::setAutoCode (const juce::String& code)
 
 void DisplayWindow::lookAndFeelChanged()
 {
-    const bool digitalSkin = hw::skinOf (*this) == hw::Skin::digital;
-    const auto text = digitalSkin ? hw::digital::colours::text : hw::colours::text;
-    const auto dim = digitalSkin ? hw::digital::colours::textDim : hw::colours::textDim;
+    const auto skin = hw::skinOf (*this);
+    const bool digitalSkin = skin == hw::Skin::digital, paperSkin = skin == hw::Skin::paper;
+    const auto text = digitalSkin ? hw::digital::colours::text : paperSkin ? hw::paper::colours::text : hw::colours::text;
+    const auto dim = digitalSkin ? hw::digital::colours::textDim : paperSkin ? hw::paper::colours::textFaint : hw::colours::textDim;
 
     password.setColour (juce::TextEditor::textColourId, text);
     password.setFont (digitalSkin ? hw::font (hw::Type::monoRegular, 15.0f)
+                    : paperSkin   ? hw::font (hw::Type::sansMedium, 15.0f, 0.02f)
                                   : hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
     password.applyFontToAllText (password.getFont());
     password.applyColourToAllText (text);
@@ -161,6 +164,12 @@ void DisplayWindow::paint (juce::Graphics& g)
     if (hw::skinOf (*this) == hw::Skin::digital)
     {
         paintDigital (g);
+        return;
+    }
+
+    if (hw::skinOf (*this) == hw::Skin::paper)
+    {
+        paintPaper (g);
         return;
     }
 
@@ -354,6 +363,88 @@ void DisplayWindow::paintDigital (juce::Graphics& g)
     d::drawGlowText (g, String (listenerCount), listening.translated (0.0f, 16.0f).withHeight (32.0f), Justification::centredLeft,
                      hw::font (hw::Type::monoMedium, 26.0f), listenerCount > 0 ? c::accent : c::textDim,
                      listenerCount > 0 ? 1.0f : 0.0f);
+}
+
+void DisplayWindow::paintPaper (juce::Graphics& g)
+{
+    using namespace juce;
+    namespace p = hw::paper;
+    namespace c = hw::paper::colours;
+
+    const auto bounds = getLocalBounds().toFloat().reduced (2.0f);
+    p::drawCard (g, bounds, 14.0f);
+
+    const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
+    const auto small = hw::font (hw::Type::sansMedium, 10.5f, 0.02f);
+
+    if (! live)
+    {
+        p::drawLabel (g, "Response", title, Justification::centredLeft);
+
+        const auto& prof = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
+        g.setColour (c::text);
+        g.setFont (hw::font (hw::Type::sansSemiBold, 13.0f, 0.12f));
+        g.drawText (String (prof.name).toUpperCase(), title, Justification::centredRight, false);
+
+        const auto area = plotArea();
+        g.setFont (small);
+
+        for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
+        {
+            const float x = xForHz (area, hz);
+            g.setColour (c::hairline);
+            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
+            g.setColour (c::textFaint);
+            g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
+        }
+
+        for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
+        {
+            const float y = yForDb (area, db);
+            g.setColour (c::hairline);
+            g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
+            g.setColour (c::textFaint);
+            g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
+        }
+
+        Path fill (curve);
+        fill.lineTo (area.getRight(), area.getBottom());
+        fill.lineTo (area.getX(), area.getBottom());
+        fill.closeSubPath();
+        g.setGradientFill (ColourGradient (c::ink.withAlpha (0.07f), 0.0f, area.getY(), c::ink.withAlpha (0.0f), 0.0f, area.getBottom(), false));
+        g.fillPath (fill);
+
+        g.setColour (c::ink);
+        g.strokePath (curve, PathStrokeType (1.6f, PathStrokeType::curved, PathStrokeType::rounded));
+        return;
+    }
+
+    p::drawLabel (g, "Scan to listen", title, Justification::centredLeft, c::text);
+
+    if (failed)
+    {
+        g.setColour (c::text);
+        g.setFont (hw::font (hw::Type::sansSemiBold, 14.0f, 0.06f));
+        g.drawFittedText ("COULDN'T OPEN A NETWORK PORT.\nANOTHER APP MAY BE USING IT.",
+                          contentArea().toNearestInt(), Justification::centred, 3);
+        return;
+    }
+
+    const auto column = contentArea().withTrimmedLeft ((float) qr.getWidth() + 24.0f);
+
+    p::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft);
+    g.setColour (c::text);
+    g.setFont (hw::font (hw::Type::sansMedium, 19.0f, 0.02f));
+    g.drawFittedText (url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
+                      column.withTrimmedTop (16.0f).withHeight (28.0f).toNearestInt(), Justification::centredLeft, 1, 0.8f);
+
+    p::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f }, Justification::centredLeft);
+
+    const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
+    p::drawLabel (g, "Listening", listening, Justification::centredLeft);
+    g.setColour (listenerCount > 0 ? c::text : c::textFaint);
+    g.setFont (hw::font (hw::Type::sansMedium, 28.0f));
+    g.drawText (String (listenerCount), listening.translated (0.0f, 15.0f).withHeight (32.0f), Justification::centredLeft, false);
 }
 
 } // namespace phonetesto

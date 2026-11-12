@@ -79,7 +79,7 @@ plugin.
 
 ### Skins
 
-The **SKIN** button in the header switches between two looks (saved with
+The **SKIN** button in the header steps through three looks (saved with
 the project):
 
 - **SUNSET** (the default) — a warm, analog look: a grainy dusk sky,
@@ -94,6 +94,10 @@ the project):
   and PhoneTesto Mono numbers. (Saved projects and the code call it
   `digital`, its earlier name.)
 - **FLAT** — the modern flat hardware panel described above.
+- **PAPER** — simple and quiet: warm off-white paper, ink-black type,
+  white knobs with a fine ink arc, tonal keys with no outlines (the chosen
+  one turns to ink), slim ink meters, and a single vermilion for ON AIR
+  and overload. Nothing moves, so it costs nothing while idle.
 
 The phone page follows the plugin's skin (in a simpler form: the same
 colours, keys and type, over a still background).
@@ -104,7 +108,7 @@ redrawn — the sky, grain and everything over the sea come from cached
 images. That's about 2.6 ms per frame at 150 % size in JUCE's software
 renderer, ~8 % of one CPU core while the window is open; the GPU-drawn editor on Windows and
 macOS should be lighter, but that hasn't been measured yet. FLAT redraws
-nothing while idle. `PhoneTestoEditorSnapshot` prints these timings.
+nothing while idle, nor does PAPER. `PhoneTestoEditorSnapshot` prints these timings.
 
 ## Live Monitor mode
 
@@ -312,6 +316,7 @@ Source/
   PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
   HardwareStyle.h/.cpp     Fonts, skins, FLAT palette, flat knobs and LED buttons
   DigitalStyle.h/.cpp      SUNSET skin: animated sea, panels, keys, knobs, device icons
+  PaperStyle.h/.cpp        PAPER skin: page, cards, keys, switches, knobs
   LevelMeter.h/.cpp        Stereo LED output meter
   DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
   SpeakerProfiles.h        Per-device filter/drive tables

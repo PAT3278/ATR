@@ -229,6 +229,84 @@
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0h12L6 8z' fill='%23ff9a4d'/></svg>");
   }
   html[data-skin="digital"] .field option { background: #2a1f2c; }
+
+  /* PAPER skin, matching the plugin's (Source/PaperStyle.h): simple and
+     quiet. Warm off-white, ink type, tonal controls with no outlines; a
+     chosen key turns to ink, and the only colour is a small vermilion. */
+  html[data-skin="paper"] {
+    --panel: #f2efe9;
+    --surface: #e4e0d8;
+    --surface-hi: #dcd7ce;
+    --border: transparent;
+    --divider: rgba(29, 29, 31, 0.08);
+    --screen: #f8f6f2;
+    --text: #1d1d1f;
+    --text-dim: #6e6c68;
+    --text-faint: #a5a29c;
+    --accent: 29, 29, 31;
+    --live: 217, 71, 43;
+    --led-off: #c9c4bb;
+    --cond: "Barlow", -apple-system, "Helvetica Neue", sans-serif;
+    color-scheme: light;
+  }
+  html[data-skin="paper"], html[data-skin="paper"] body { background: linear-gradient(#f2efe9, #e9e5dd) fixed, #f2efe9; color: var(--text); }
+  html[data-skin="paper"] .label { font: 600 11px var(--sans); letter-spacing: 0.16em; color: var(--text-dim); }
+  html[data-skin="paper"] .logo { font: 700 19px/1 var(--sans); letter-spacing: 0.22em; }
+  html[data-skin="paper"] .badge { font: 600 11px/1 var(--sans); letter-spacing: 0.16em; color: var(--text-faint); background: none; padding: 0; }
+  html[data-skin="paper"] .conn { border: 0; background: rgba(228, 224, 216, 0.7); }
+  html[data-skin="paper"] .conn .label { white-space: nowrap; }
+  html[data-skin="paper"] .conn.ok .led { background: var(--text); box-shadow: none; }
+  html[data-skin="paper"] .conn.bad .led { box-shadow: none; }
+  html[data-skin="paper"] header { flex-wrap: wrap; row-gap: 10px; }
+  html[data-skin="paper"] .divider { background: var(--divider); }
+
+  /* cards: a shade lighter than the page, lifted by a very soft shadow */
+  html[data-skin="paper"] .well {
+    border: 0; border-radius: 14px; background: var(--screen);
+    box-shadow: 0 1.5px 2px rgba(0, 0, 0, 0.035), 0 4px 12px rgba(0, 0, 0, 0.03);
+  }
+  html[data-skin="paper"] #status { font: 500 18px var(--sans); letter-spacing: 0.01em; }
+  html[data-skin="paper"] .readouts .label { font-size: 10px; }
+  html[data-skin="paper"] .readouts b { font: 500 17px var(--sans); margin-top: 3px; }
+  html[data-skin="paper"] .note { color: var(--text-dim); }
+
+  /* keys: soft tonal shapes; the chosen one turns to ink */
+  html[data-skin="paper"] .btn {
+    border: 0; border-radius: 12px; background: var(--surface); box-shadow: none;
+    color: rgba(29, 29, 31, 0.8); font: 600 13px var(--sans); letter-spacing: 0.14em;
+  }
+  html[data-skin="paper"] .btn[aria-pressed]::before { display: none; }
+  html[data-skin="paper"] .btn:active { filter: none; background: var(--surface-hi); }
+  html[data-skin="paper"] .btn[aria-pressed="true"],
+  html[data-skin="paper"] .btn.solid[aria-pressed="true"] { background: var(--text); color: #fff; }
+  html[data-skin="paper"] #play { min-height: 64px; font-size: 15px; letter-spacing: 0.2em; gap: 14px; }
+  html[data-skin="paper"] #play::before {
+    display: block; content: ""; position: static; flex: none; margin: 0; width: 11px; height: 13px;
+    border-radius: 0; box-shadow: none; background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+  html[data-skin="paper"] #play[aria-pressed="true"]::before { width: 11px; height: 11px; clip-path: none; border-radius: 2px; }
+
+  /* KEEP SCREEN ON: a plain switch */
+  html[data-skin="paper"] #wake {
+    width: 52px; min-height: 30px; height: 30px; padding: 0; flex: none; border-radius: 99px; background: var(--surface-hi);
+  }
+  html[data-skin="paper"] #wake[aria-pressed="true"] { background: var(--text); }
+  html[data-skin="paper"] #wakeText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  html[data-skin="paper"] #wake::before {
+    display: block; content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; margin: 0;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); transition: transform 0.18s ease;
+  }
+  html[data-skin="paper"] #wake[aria-pressed="true"]::before { transform: translateX(22px); background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+
+  html[data-skin="paper"] .field {
+    border: 0; border-radius: 12px; background-color: var(--surface); color: var(--text);
+    font: 500 16px var(--sans); letter-spacing: 0.01em;
+  }
+  html[data-skin="paper"] select.field {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' fill='none' stroke='%231d1d1f' stroke-width='1.6'/></svg>");
+  }
+  html[data-skin="paper"] .field:focus { box-shadow: 0 0 0 2px rgba(29, 29, 31, 0.35); }
+  html[data-skin="paper"] .field option { background: #f8f6f2; color: var(--text); }
 </style>
 </head>
 <body>
@@ -681,8 +759,11 @@ function drawMeter() {
   const left = 18 * s, right = w - 46 * s, rowH = 18 * s, rows = [6 * s, 32 * s];
   const xFor = db => left + (Math.min(0, Math.max(FLOOR, db)) - FLOOR) / -FLOOR * (right - left);
   const digital = document.documentElement.dataset.skin === "digital";
+  const paper = document.documentElement.dataset.skin === "paper";
   const palette = digital
     ? { high: [255, 94, 98], mid: [255, 179, 71], low: [92, 200, 196], unlit: 0.07, dim: "rgba(247,236,221,0.68)", text: "#f7ecdd", faint: "rgba(247,236,221,0.4)" }
+    : paper
+    ? { high: [217, 71, 43], mid: [29, 29, 31], low: [29, 29, 31], unlit: 0.08, dim: "#6e6c68", text: "#1d1d1f", faint: "#a5a29c" }
     : { high: [255, 69, 58], mid: [255, 204, 61], low: [53, 208, 127], unlit: 0.09, dim: "#9497a0", text: "#f1f0ec", faint: "#5d6069" };
   const zone = db => db >= -1 ? palette.high : db >= -9 ? palette.mid : palette.low;
   const seg = 3 * s, pitch = 4 * s;
@@ -894,10 +975,10 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 
 // The page follows the plugin's skin (DIGITAL until /info says otherwise).
 function applySkin(skin) {
-  if (skin !== "digital" && skin !== "flat") return;
+  if (skin !== "digital" && skin !== "flat" && skin !== "paper") return;
   if (document.documentElement.dataset.skin === skin) return;
   document.documentElement.dataset.skin = skin;
-  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#141226" : "#1c1d21";
+  document.querySelector('meta[name="theme-color"]').content = skin === "digital" ? "#141226" : skin === "paper" ? "#f2efe9" : "#1c1d21";
   meter.dirty = true;
   drawMeter();
 }

@@ -100,12 +100,12 @@ public:
     void setEditorScale (float scale) noexcept { editorScale = scale; }
     float getEditorScale() const noexcept { return editorScale.load(); }
 
-    /** Editor skin (0 = FLAT, 1 = SUNSET, "digital" in code), remembered with the project. The
+    /** Editor skin (0 = FLAT, 1 = SUNSET, "digital" in code, 2 = PAPER), remembered with the project. The
         Live phone page follows it. */
     void setEditorSkin (int skin) noexcept
     {
-        editorSkin = juce::jlimit (0, 1, skin);
-        liveServer.setDigitalSkin (editorSkin.load() == 1);
+        editorSkin = juce::jlimit (0, 2, skin);
+        liveServer.setSkin (editorSkin.load());
     }
     int getEditorSkin() const noexcept { return editorSkin.load(); }
 

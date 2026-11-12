@@ -20,6 +20,7 @@ public:
 
 private:
     void paintDigital (juce::Graphics&);
+    void paintPaper (juce::Graphics&);
 
     struct Side
     {

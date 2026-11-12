@@ -109,7 +109,7 @@ jobs:
       - name: QR code in the Live snapshots decodes to the phone URL
         if: runner.os == 'Linux'
         run: |
-          for skin in flat digital; do
+          for skin in flat digital paper; do
             url=$(zbarimg -q --raw build/shots/editor-$skin-live.png)
             echo "$skin: $url"
             [[ "$url" == http://*/?k=* ]]

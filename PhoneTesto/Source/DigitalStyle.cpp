@@ -216,9 +216,9 @@ namespace
                 const float vignette = 1.0f - 0.5f * v * v * (3.0f - 2.0f * v); // smoothstep: no ring
                 const float grain = (random.nextFloat() + random.nextFloat() - 1.0f) * 0.06f; // soft, triangular; also hides any banding
 
-                auto channel = [&] (uint8 v)
+                auto channel = [&] (uint8 c8)
                 {
-                    const float f = (float) v / 255.0f * vignette + grain * (0.35f + 0.65f * (float) v / 255.0f);
+                    const float f = (float) c8 / 255.0f * vignette + grain * (0.35f + 0.65f * (float) c8 / 255.0f);
                     return (uint8) jlimit (0, 255, roundToInt (f * 255.0f));
                 };
                 px.setPixelColour (x, y, Colour (channel (c.getRed()), channel (c.getGreen()), channel (c.getBlue())));

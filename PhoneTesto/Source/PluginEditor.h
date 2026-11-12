@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "HardwareStyle.h"
 #include "DigitalStyle.h"
+#include "PaperStyle.h"
 #include "LevelMeter.h"
 #include "DisplayWindow.h"
 
@@ -14,7 +15,7 @@ namespace phonetesto
     code), a 2x4 grid of MODEL pads, a stereo meter, MIX and OUTPUT knobs
     with live readouts, and buttons for MONO, BYPASS and ON AIR. Laid out on
     a fixed 980x420 panel that's scaled as a whole when the window is
-    resized. Two skins (see HardwareStyle.h), switched from the header and
+    resized. Three skins (see HardwareStyle.h), switched from the header and
     remembered with the project. */
 class PhoneTestoAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         private juce::Timer
@@ -41,6 +42,7 @@ private:
     void paintOverlay (juce::Graphics&);
     void paintFlatOverlay (juce::Graphics&);
     void paintDigitalOverlay (juce::Graphics&);
+    void paintPaperOverlay (juce::Graphics&);
     juce::Rectangle<float> statusPillBounds() const;
     juce::String statusText() const;
     void showSelectedModel (int index);

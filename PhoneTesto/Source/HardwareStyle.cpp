@@ -1,5 +1,6 @@
 #include "HardwareStyle.h"
 #include "DigitalStyle.h"
+#include "PaperStyle.h"
 #include "BinaryData.h"
 
 namespace phonetesto::hw
@@ -55,8 +56,8 @@ LookAndFeel::LookAndFeel()
 void LookAndFeel::setSkin (Skin newSkin)
 {
     skin = newSkin;
-    const auto accent = skin == Skin::digital ? digital::colours::accent : colours::accent;
-    const auto text = skin == Skin::digital ? digital::colours::text : colours::text;
+    const auto accent = skin == Skin::digital ? digital::colours::accent : skin == Skin::paper ? paper::colours::ink : colours::accent;
+    const auto text = skin == Skin::digital ? digital::colours::text : skin == Skin::paper ? paper::colours::text : colours::text;
     setColour (juce::TextEditor::textColourId, text);
     setColour (juce::TextEditor::highlightColourId, accent.withAlpha (0.35f));
     setColour (juce::TextEditor::highlightedTextColourId, text);
@@ -89,6 +90,12 @@ void LookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, 
     if (skin == Skin::digital)
     {
         digital::drawKnob (g, bounds, pos, startAngle, endAngle);
+        return;
+    }
+
+    if (skin == Skin::paper)
+    {
+        paper::drawKnob (g, bounds, pos, startAngle, endAngle);
         return;
     }
 
@@ -133,6 +140,12 @@ void LookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& b, bo
     if (skin == Skin::digital)
     {
         digital::drawToggleButton (g, b, highlighted, down);
+        return;
+    }
+
+    if (skin == Skin::paper)
+    {
+        paper::drawToggleButton (g, b, highlighted, down);
         return;
     }
 
@@ -209,6 +222,13 @@ void LookAndFeel::fillTextEditorBackground (juce::Graphics& g, int width, int he
         return;
     }
 
+    if (skin == Skin::paper)
+    {
+        g.setColour (paper::colours::surface);
+        g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, (float) height * 0.5f);
+        return;
+    }
+
     g.setColour (colours::surface);
     g.fillRoundedRectangle (0.0f, 0.0f, (float) width, (float) height, 5.0f);
 }
@@ -217,12 +237,12 @@ void LookAndFeel::drawTextEditorOutline (juce::Graphics& g, int width, int heigh
 {
     const bool focused = editor.hasKeyboardFocus (true);
 
-    if (skin == Skin::digital)
+    if (skin == Skin::digital || skin == Skin::paper)
     {
         // no outline; a soft ring only while typing
         if (focused)
         {
-            g.setColour (digital::colours::accent.withAlpha (0.55f));
+            g.setColour (skin == Skin::paper ? paper::colours::ink.withAlpha (0.4f) : digital::colours::accent.withAlpha (0.55f));
             g.drawRoundedRectangle (0.5f, 0.5f, (float) width - 1.0f, (float) height - 1.0f, (float) height * 0.5f, 1.0f);
         }
         return;
@@ -234,7 +254,7 @@ void LookAndFeel::drawTextEditorOutline (juce::Graphics& g, int width, int heigh
 
 void LookAndFeel::drawCornerResizer (juce::Graphics& g, int w, int h, bool isMouseOver, bool isMouseDragging)
 {
-    const auto dots = skin == Skin::digital ? digital::colours::textDim : colours::textFaint;
+    const auto dots = skin == Skin::digital ? digital::colours::textDim : skin == Skin::paper ? paper::colours::textFaint : colours::textFaint;
     g.setColour (dots.withAlpha (isMouseOver || isMouseDragging ? 1.0f : 0.6f));
 
     for (int i = 0; i < 3; ++i)

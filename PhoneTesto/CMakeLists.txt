@@ -129,6 +129,7 @@ target_sources(PhoneTesto
         Source/PluginEditor.cpp
         Source/HardwareStyle.cpp
         Source/DigitalStyle.cpp
+        Source/PaperStyle.cpp
         Source/LevelMeter.cpp
         Source/DisplayWindow.cpp
         Source/LiveMonitorServer.cpp
