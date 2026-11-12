@@ -42,6 +42,13 @@
 
   <div id="dialog" hidden><p id="dlgText"></p><span class="next">▼</span></div>
 
+  <div id="confirm" role="dialog" aria-modal="true" aria-labelledby="cfText" hidden>
+    <p id="cfText">このサイトに移動しますか？</p>
+    <p id="cfName"></p>
+    <p id="cfHost"></p>
+    <div class="acts"><a id="cfYes" class="btn primary" target="_blank" rel="noopener">GO ↗</a><button id="cfNo" class="btn" type="button" aria-label="やめる">✕</button></div>
+  </div>
+
   <div id="bars" aria-hidden="true"><i></i><i></i></div>
   <div id="view" hidden>
     <button id="backBtn" class="ibtn back" type="button" aria-label="もどる"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg><kbd>Esc</kbd></button>

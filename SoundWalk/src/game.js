@@ -65,16 +65,20 @@
       for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S, q = 1.5 + r() * 3.5; g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 1.5, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${120 + r() * 40},${116 + r() * 36},${104 + r() * 30})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
     },
     paving(g, S, r) { g.fillStyle = '#cfc2a4'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { g.fillStyle = `rgba(${150 + r() * 40},${135 + r() * 35},${110 + r() * 30},.35)`; g.fillRect(x * w + 2, y * w + 2, w - 4, w - 4); } g.fillStyle = D(0.25); for (let k = 0; k <= n; k++) { g.fillRect(k * w - 1, 0, 2, S); g.fillRect(0, k * w - 1, S, 2); } speckle(g, S, S, r, 1200, 0.06); },
-    trail(g, S, r) { // grass worn down to earth by feet: bare in the middle, patchy and fading out at the edges
-      paintGround(g, S, ['#4f4335', '#6b5a45', '#7a7050', '#3f362b'].map(rgb), { dry: [0.45, 0.7], dirt: [0.62, 0.75] });
-      for (let i = 0; i < 40; i++) { const x = S * (0.3 + r() * 0.4), y = r() * S, q = 1 + r() * 2.5; g.fillStyle = `rgb(${120 + r() * 40},${114 + r() * 36},${100 + r() * 30})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
+    trail(g, S, r) { // a footpath: dark packed earth with a paler trodden line down the middle, gravel, and grass creeping in at the edges
+      paintGround(g, S, ['#3f3124', '#57432f', '#66523c', '#2f251b'].map(rgb), { dry: [0.45, 0.75], dirt: [0.6, 0.78] });
       const img = g.getImageData(0, 0, S, S), d = img.data;
       for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-        const u = x / S, v = y / S, edge = 1 - Math.abs(2 * u - 1);
-        const a = sst(0.08, 0.6, edge + (fbm(u, v, 5, 31) - 0.5) * 0.75) * (0.5 + 0.5 * sst(0.3, 0.6, fbm(u, v, 9, 57)));
-        d[(y * S + x) * 4 + 3] = Math.round(255 * Math.min(1, a));
+        const u = x / S, v = y / S, edge = 1 - Math.abs(2 * u - 1), n = fbm(u, v, 5, 31) - 0.5, i = (y * S + x) * 4;
+        const tread = sst(0.62, 0.9, edge + n * 0.5) * 0.55;                                 // paler where feet land most
+        d[i] += (150 - d[i]) * tread; d[i + 1] += (128 - d[i + 1]) * tread; d[i + 2] += (98 - d[i + 2]) * tread;
+        const core = sst(0.2, 0.36, edge + n * 0.3);                                         // solid path
+        const fray = sst(0.04, 0.24, edge + n * 0.6) * (0.3 + 0.7 * sst(0.4, 0.6, fbm(u, v, 12, 57)));   // broken edge
+        d[i + 3] = Math.round(255 * Math.min(1, Math.max(core, fray * 0.8)));
       }
       g.putImageData(img, 0, 0);
+      for (let i = 0; i < 170; i++) { const x = S * (0.16 + r() * 0.68), y = r() * S, q = 0.8 + r() * 2.6; g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 1, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${140 + r() * 55},${132 + r() * 50},${116 + r() * 44})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
+      for (let i = 0; i < 240; i++) { const x = S * (r() < 0.5 ? 0.12 + r() * 0.1 : 0.78 + r() * 0.1), y = r() * S, l = 3 + r() * 6, a = -1.57 + (r() - 0.5) * 1.2; g.strokeStyle = ['rgba(70,82,44,.85)', 'rgba(96,104,60,.8)', 'rgba(48,58,34,.85)'][i % 3]; g.lineWidth = 1.3; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke(); }
     },
     slate(g, S, r) { // pale rectangular pavers in running bond: old, cracked, chipped and stained
       g.fillStyle = '#34322c'; g.fillRect(0, 0, S, S);
@@ -349,8 +353,9 @@
       color: song.color || '#ffb428',
       toWorld: (lx, lz) => ({ x: song.x + lx * c + lz * s, z: song.z - lx * s + lz * c }),
       local: (wx, wz) => { const ax = wx - song.x, az = wz - song.z; return { x: ax * c - az * s, z: ax * s + az * c }; },
-      addCircle(lx, lz, r) { const w = p.toWorld(lx, lz); circles.push({ x: w.x, z: w.z, r }); },
-      addBox(lx, lz, hx, hz) { const w = p.toWorld(lx, lz); boxes.push({ x: w.x, z: w.z, hx, hz, c, s }); },
+      addCircle(lx, lz, r, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz); circles.push({ x: w.x, z: w.z, r, y0, y1 }); },
+      addBox(lx, lz, hx, hz, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz); boxes.push({ x: w.x, z: w.z, hx, hz, c, s, y0, y1 }); },
+      interact(o) { const w = p.toWorld(o.lx, o.lz), ia = { ...o, x: w.x, z: w.z, sx: w.x, sz: w.z }; interact.push(ia); return ia; },
       water(lx, lz, hx, hz) { const w = p.toWorld(lx, lz); waters.push({ x: w.x, z: w.z, hx, hz, c, s }); },
       pick(m) { m.userData.ground = true; pick.push(m); },
       info(lx, lz, r, mark, lines) { const w = p.toWorld(lx, lz); interact.push({ kind: 'info', x: w.x, z: w.z, sx: w.x, sz: w.z, r, mark, lines }); },
@@ -362,9 +367,9 @@
     return p;
   });
 
-  function groundAt(x, z) {
+  function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
     let h = 0;
-    for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z)); }
+    for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
     return h;
   }
 
@@ -501,14 +506,14 @@
     draw.forEach((q, i) => {
       const n = draw[Math.min(i + 1, draw.length - 1)], pv = draw[Math.max(i - 1, 0)];
       let tx = n.x - pv.x, tz = n.z - pv.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const w = 2.3;
+      const w = 2.2;
       if (i > 0) acc += Math.hypot(q.x - pv.x, q.z - pv.z);
       for (const sd of [-1, 1]) {
         const x = q.x - tz * w * sd, z = q.z + tx * w * sd;
         pos.push(x, groundAt(x, z) + 0.045, z);
-        uv.push(sd < 0 ? 0 : 1, acc / 7);
+        uv.push(sd < 0 ? 0 : 1, acc / 4.4);
       }
-      if (i < draw.length - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+      if (i < draw.length - 1) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); /* counter-clockwise seen from above: the top face is the front */ }
     });
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -800,12 +805,14 @@
   function collide(p) {
     p.x = clamp(p.x, -145, 145); p.z = clamp(p.z, -145, 145);
     for (const c of circles) {
+      if (P.y < c.y0 || P.y > c.y1) continue;
       const dx = p.x - c.x, dz = p.z - c.z, rr = c.r + PR;
       if (Math.abs(dx) > rr || Math.abs(dz) > rr) continue;
       const d = Math.hypot(dx, dz);
       if (d < rr && d > 1e-5) { p.x = c.x + (dx / d) * rr; p.z = c.z + (dz / d) * rr; }
     }
     for (const b of boxes) {
+      if (P.y < b.y0 || P.y > b.y1) continue;
       const dx = p.x - b.x, dz = p.z - b.z;
       const ux = dx * b.c - dz * b.s, uz = dx * b.s + dz * b.c;
       const ox = b.hx + PR - Math.abs(ux), oz = b.hz + PR - Math.abs(uz);
@@ -840,6 +847,21 @@
     $('#locName').textContent = jp;
   }
 
+  /* ================= leaving for another site ================= */
+  function openConfirm(ia) {
+    if (!ia.url) return;
+    mode = 'confirm'; keys.clear(); auto = null; document.body.classList.add('busy');
+    let host = ia.url; try { host = new URL(ia.url).host; } catch (e) { /* keep as written */ }
+    $('#cfName').textContent = ia.name || host;
+    $('#cfHost').textContent = host;
+    $('#cfYes').href = ia.url;
+    $('#confirm').hidden = false;
+    $('#cfYes').focus({ preventScroll: true });
+  }
+  function closeConfirm() { if (mode !== 'confirm') return; mode = 'walk'; $('#confirm').hidden = true; document.body.classList.remove('busy'); cv.focus({ preventScroll: true }); }
+  $('#cfNo').addEventListener('click', closeConfirm);
+  $('#cfYes').addEventListener('click', () => setTimeout(closeConfirm, 300));   // the link itself opens the site (a real click, so it is not blocked)
+
   /* ================= dialog ================= */
   let dlg = null;
   function say(lines) { mode = 'dialog'; keys.clear(); dlg = { lines, i: 0, shown: 0 }; $('#dialog').hidden = false; document.body.classList.add('busy'); renderDlg(); }
@@ -872,6 +894,7 @@
     if (e.key === 'Shift') running = true;
     if (mode === 'title') { if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); start(); } return; }
     if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); closeMap(); } return; }
+    if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
     if (mode !== 'walk') return;
@@ -936,8 +959,8 @@
     const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
     const pressed = gp.buttons.map((b) => b.pressed);
     const down = (i) => pressed[i] && !padPrev[i];
-    if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); }
-    if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); }
+    if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); }
+    if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
     if (down(9) && mode === 'walk') openMap();
     padPrev = pressed;
     padRun = !!(pressed[7] || pressed[5] || pressed[2]);
@@ -954,6 +977,7 @@
     if (ia.kind === 'view') { enterView(ia.place); return; }
     if (ia.kind === 'board') { openMap(); return; }
     if (ia.kind === 'info') { say(ia.lines.slice()); return; }
+    if (ia.kind === 'travel') { openConfirm(ia); return; }
     if (ia.kind === 'sign') {
       const p = ia.place, s = p.song;
       say([`この道の先：${s.place}（${s.placeEn}）`, p.found ? `♪ ${s.title} が流れている場所。近づくほど音が大きくなる。` : 'どんな曲が流れているかは、行ってみないとわからない。']);
@@ -1235,7 +1259,7 @@
       const fx = Math.sin(P.face), fz = Math.cos(P.face);
       for (const ia of interact) {
         const dx = ia.x - P.x, dz = ia.z - P.z, d = Math.hypot(dx, dz);
-        if (d > ia.r) continue;
+        if (d > ia.r || ia.off || (ia.y0 !== undefined && P.y < ia.y0) || (ia.y1 !== undefined && P.y > ia.y1)) continue;
         const dot = (dx * fx + dz * fz) / (d || 1);
         if (dot < 0.15 && d > 1.4) continue;
         const sc = d - dot;
@@ -1245,7 +1269,7 @@
       P.speed += (0 - P.speed) * Math.min(1, dt * 10); P.v = 0; P.lean = 0; boost += (0 - boost) * Math.min(1, dt * 4);
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
-    const gh = groundAt(P.x, P.z);
+    const gh = groundAt(P.x, P.z, P.y);
     if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
@@ -1447,5 +1471,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { P, places, collide, avatar, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start };
+  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start };
 })();

@@ -22,6 +22,9 @@ SW.CONFIG = {
   // The endpoint receives { items: [{ name, price, quantity }] } and should answer { url } (or { sessionId }).
   // Next show, shown in the live house beside the riverside (TAMA EXPRESSION). Edit here when it changes.
   live: { date: '12.26', place: 'TOKYO' },
+  // Where the train at the station above the live house takes you: another site, opened after a "go there?" prompt.
+  // Set url to null to leave the train as scenery.
+  shop: { name: 'CLOSET QUEST', url: 'https://claude.ai/artifact/Nb3fetixjJJ4mQEfbmMq58' },
   checkoutEndpoint: null,
   stripePublishableKey: null, // only needed if the endpoint answers { sessionId } instead of { url }
 };

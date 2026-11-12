@@ -24,7 +24,7 @@ body { background: #070706; color: var(--bone); font-family: var(--f-body); font
 button { font: inherit; color: inherit; }
 
 .ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-#np, #prompt, .card, #modal, #toast, #dialog, .ibtn { background: var(--panel); border: 1px solid var(--line); box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, .6); }
+#np, #prompt, .card, #modal, #toast, #dialog, #confirm, .ibtn { background: var(--panel); border: 1px solid var(--line); box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, .6); }
 kbd { font-family: var(--f-head); font-size: 13px; min-width: 24px; height: 24px; padding: 2px 6px 0; display: inline-flex; align-items: center; justify-content: center; background: #1a1917; color: var(--bone); border: 1px solid var(--line); border-radius: 2px; box-shadow: 0 2px 0 #000; }
 
 /* ---------- loading ---------- */
@@ -113,6 +113,11 @@ body.viewing #hud, body.viewing #banner { opacity: 0; pointer-events: none; }
 #dlgText { margin: 0; font-family: var(--f-head); font-size: 17px; line-height: 1.8; min-height: 3.4em; white-space: pre-wrap; }
 .next { position: absolute; right: 16px; bottom: 8px; color: var(--red); font-size: 12px; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+
+#confirm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); padding: 20px 24px 22px; z-index: 7; border-left: 3px solid var(--red); text-align: left; }
+#cfText { margin: 0; font-size: 14px; color: var(--dim); }
+#cfName { margin: 8px 0 2px; font-family: var(--f-head); font-size: 30px; letter-spacing: .06em; overflow-wrap: anywhere; }
+#cfHost { margin: 0; font-family: var(--f-head); font-size: 12px; letter-spacing: .1em; color: var(--dim); overflow-wrap: anywhere; }
 
 /* ---------- scenic view ---------- */
 #bars { position: absolute; inset: 0; pointer-events: none; z-index: 2; }

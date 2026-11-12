@@ -15,6 +15,7 @@
   const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const lin = (h) => new THREE.Color(h).convertSRGBToLinear();
   const basic = (hex, o = {}) => { const m = new THREE.MeshBasicMaterial({ color: lin(hex), ...o }); m.userData.lin = true; return m; };
+  const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   const glowM = (hex, opacity = 1) => basic(hex, { transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
 
   // Things that slide along local X and wrap within [-half, half].
@@ -176,7 +177,7 @@
       };
 
       // Uptown brownstones along the approach: stoops with iron rails, and two performers on the steps.
-      const perf = [];
+      const perf = []; let stoopUp = 0;
       {
         const cr = E.rng(212), X = 6.6;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
@@ -199,8 +200,20 @@
           bx(0.3, 0.18, 6.2, X - 0.05, 4.75, z0, trimM, false);                                                             // string course
           const win = (y, z, h = 1.7) => { bx(0.06, h, 0.95, X - 0.03, y, z, cr() < 0.45 ? winLit : winDark, false); bx(0.16, 0.2, 1.2, X - 0.06, y + h / 2 + 0.14, z, trimM, false); bx(0.2, 0.1, 1.15, X - 0.08, y - h / 2 - 0.05, z, trimM, false); };
           win(3.25, z0 + 0.35, 1.9); win(3.25, z0 + 2.0, 1.9); win(0.95, z0 + 1.2, 0.9);
-          for (const y of [6.3, 8.6]) for (const z of [-1.85, 0, 1.85]) win(y, z0 + z);
-          bx(0.08, 2.4, 1.15, X - 0.04, 3.0, dz, doorM, false); bx(0.3, 0.3, 1.6, X - 0.1, 4.35, dz, trimM, false);        // door and hood
+          const star = i === 1 || i === 2;                                                                                 // the two houses with a performer
+          for (const y of [6.3, 8.6]) for (const z of [-1.85, 0, 1.85]) if (!(star && y === 6.3 && z === 0)) win(y, z0 + z);
+          let sash = null, hinge = null;
+          if (star) {
+            // the window they lean out of: a lit room behind a sash that slides up
+            bx(0.03, 1.7, 0.95, X - 0.012, 6.3, z0, new THREE.MeshBasicMaterial({ color: '#c98a4a' }), false);
+            sash = bx(0.06, 1.7, 0.95, X - 0.045, 6.3, z0, winDark, false);
+            bx(0.16, 0.2, 1.2, X - 0.06, 7.29, z0, trimM, false); bx(0.24, 0.1, 1.15, X - 0.1, 5.4, z0, trimM, false);
+            // the door swings out on its hinge; behind it the hallway is dark
+            bx(0.03, 2.4, 1.15, X - 0.012, 3.0, dz, new THREE.MeshBasicMaterial({ color: '#070606' }), false);
+            hinge = new THREE.Group(); hinge.position.set(X - 0.05, 3.0, dz - 0.575); g.add(hinge);
+            const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.4, 1.15), doorM); leaf.position.z = 0.575; hinge.add(leaf);
+          } else bx(0.08, 2.4, 1.15, X - 0.04, 3.0, dz, doorM, false);
+          bx(0.3, 0.3, 1.6, X - 0.1, 4.35, dz, trimM, false);                                                              // door hood
           bx(0.1, 0.22, 0.14, X - 0.08, 3.4, dz + 0.85, winLit, false);                                                     // door lamp
           for (let k = 0; k < 8; k++) bx(0.37, 0.225 * (k + 1), 1.75, X - 2.9 + k * 0.36, 0.1125 * (k + 1), dz, stepM);    // stoop
           for (const sd of [-1, 1]) {
@@ -213,8 +226,8 @@
           p.addBox(X + 4, z0, 4.05, 3.1); p.addBox(X - 1.5, dz, 1.6, 1.0); p.addBox(X - 3.1, z0 + 1.5, 0.15, 1.55);
           if (i === 1 || i === 2) {
             const m = fig(i === 1 ? '#b3161d' : '#d8d2c0', i === 1 ? '#111111' : '#2a4a8a');
-            m.f.position.set(X - 2.9 + 4 * 0.36, 0.225 * 5, dz + (i === 1 ? 0.25 : -0.25)); m.f.rotation.y = -Math.PI / 2 + (i === 1 ? 0.3 : -0.3); g.add(m.f);
-            perf.push({ ...m, y: 0.225 * 5, s: i * 2.1 });
+            const w = new THREE.Group(); w.add(m.f); g.add(w);
+            perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1 });
           }
         }
         const walk = E.plane(4, 26, E.mat('#77736c', { map: E.tex('paving', 2, 13), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 26.3); g.add(walk); p.pick(walk);
@@ -230,7 +243,7 @@
       p.face = Math.PI;
       p.pathEnd = 11;
       p.clearR = 26;
-      p.blocks = (lx, lz) => (lx > -1 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
         // Shots on the kick, a burst on hard hits; a slow trickle so it never goes fully quiet.
@@ -269,16 +282,35 @@
           if (T.beam) { T.beam.rotation.z = Math.sin(t * 0.25 + T.seed) * 0.35; T.beam.material.opacity = 0.05 + f.mid * 0.1; }
         });
         towerM.emissiveIntensity = 0.4 + f.level * 0.6;
+        // The two performers loop through: on the stoop -> up the steps and in through the door ->
+        // leaning out of the first-floor window -> back down. 64 s per loop, matching the view's cuts.
+        let upMax = 0;
         perf.forEach((m, i) => {
-          const e = 0.35 + f.level * 1.4, b = Math.abs(Math.sin(t * 3.6 + m.s));
-          m.f.position.y = m.y + b * 0.05 * e + f.pulse * 0.06;
-          m.torso.rotation.z = Math.sin(t * 1.8 + m.s) * 0.1 * e; m.head.rotation.x = -f.pulse * 0.25;
-          m.arms[1].rotation.x = -1.9 + Math.sin(t * 2.2 + m.s) * 0.12; m.arms[1].rotation.z = -0.35;                         // mic hand up
-          m.arms[0].rotation.x = -0.9 - Math.sin(t * 3.6 + m.s) * 0.6 * e; m.arms[0].rotation.z = (i ? 1 : -1) * 0.2 - 0.3; // free hand gesturing
+          const tc = (((t - i * 1.3) % 64) + 64) % 64, e = 0.35 + f.level * 1.4, b = Math.abs(Math.sin(t * 3.6 + m.s));
+          const sx = m.X - 1.46, doorX = m.X + 0.6, lerp = (a, c, k) => a + (c - a) * k;
+          const stairY = (x) => 0.225 * (Math.max(0, Math.min(7, Math.floor((x - (m.X - 3.085)) / 0.36))) + 1);
+          let x = sx, y = 0.225 * 5, z = m.dz + m.zo, yaw = -Math.PI / 2 + m.yaw, lean = 0, door = 0, up = 0, vis = true, act = true;
+          if (tc >= 24 && tc < 27) { const k = (tc - 24) / 3; x = lerp(sx, doorX, k); y = stairY(x); z = m.dz + m.zo * (1 - Math.min(1, k * 2)); yaw = Math.PI / 2; door = sstep(0, 0.3, k); act = false; vis = x < m.X + 0.25; }
+          else if (tc >= 27 && tc < 29) { vis = false; door = 1 - sstep(27, 27.8, tc); }
+          else if (tc >= 29 && tc < 56) { up = sstep(29.2, 30.4, tc) * (1 - sstep(54.6, 55.8, tc)); x = m.X + 0.14 + (1 - up) * 0.55; y = 4.52; z = m.z0; yaw = -Math.PI / 2 + m.yaw * 0.5; lean = 0.44 * up; vis = up > 0.03; }
+          else if (tc >= 56 && tc < 58) { vis = false; door = sstep(57.2, 58, tc); }
+          else if (tc >= 58 && tc < 61) { const k = (tc - 58) / 3; x = lerp(doorX, sx, k); y = stairY(x); z = m.dz + m.zo * Math.max(0, k * 2 - 1); door = 1 - sstep(0.6, 0.95, k); act = false; vis = x < m.X + 0.25; }
+          upMax = Math.max(upMax, up);
+          m.w.visible = vis;
+          m.w.position.set(x, y + (act ? b * 0.05 * e + f.pulse * 0.06 : Math.abs(Math.sin(t * 9)) * 0.04), z);
+          m.w.rotation.y = yaw; m.f.rotation.x = lean;
+          m.hinge.rotation.y = -1.35 * door;
+          const so = Math.max(up, 0); m.sash.scale.y = 1 - 0.6 * so; m.sash.position.y = 6.3 + 1.7 * 0.3 * so;
+          m.torso.rotation.z = act ? Math.sin(t * 1.8 + m.s) * 0.1 * e : 0; m.head.rotation.x = act ? -f.pulse * 0.25 : 0;
+          if (act) {
+            m.arms[1].rotation.x = -1.9 + Math.sin(t * 2.2 + m.s) * 0.12; m.arms[1].rotation.z = -0.35;                         // mic hand up
+            m.arms[0].rotation.x = -0.9 - Math.sin(t * 3.6 + m.s) * 0.6 * e; m.arms[0].rotation.z = (i ? 1 : -1) * 0.2 - 0.3; // free hand gesturing
+          } else { const sw = Math.sin(t * 9) * 0.5; m.arms[0].rotation.set(sw, 0, 0); m.arms[1].rotation.set(-sw, 0, 0); }       // walking
         });
+        stoopUp = upMax;
       };
       p.shot = (t, f) => {
-        if (Math.floor(t / 16) % 2 === 1) { const a = Math.sin(t * 0.25) * 1.8; return { pos: [0.6, 1.15, 24.7 + a], look: [6.6, 2.5, 24.7 + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 }; } // the stoop performance
+        if (Math.floor(t / 16) % 2 === 1) { const a = Math.sin(t * 0.25) * 1.8, u = stoopUp; return { pos: [0.6 - 4.6 * u, 1.15 + 0.25 * u, 24.7 + 1.6 * u + a * (1 - 0.6 * u)], look: [6.6, 2.5 + 3.5 * u, 24.7 + 1.6 * u + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 }; } // the stoop performance; pulls back and tilts up when they are at the windows
         const k = RM ? 0 : f.pulse * 0.05;
         const x = Math.sin(t * 0.13) * 7;
         return { pos: [x + (Math.random() - 0.5) * k, 1.15 + (Math.random() - 0.5) * k, 3], look: [x * 0.4, 1.5, -24], roll: Math.sin(t * 0.2) * 0.02 };

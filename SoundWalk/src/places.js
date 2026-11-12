@@ -213,12 +213,35 @@
       emb2.position.set(BX, 1.8, RZ - 77); g.add(emb2);
       // Live house under the tracks: the train runs through the upper floor, the ground floor is an open venue.
       const CZ = RZ + 42, V = new THREE.Group(); V.position.set(BX, 0, CZ); g.add(V);
-      const wallM = E.mat('#1b1a1c', { rough: 0.9 }), stageM = E.mat('#141316', { rough: 0.7 }), gearM = E.mat('#0f0f11', { rough: 0.6, metal: 0.3 });
+      const wallM = E.mat('#6a4436', { rough: 0.95 }), stageM = E.mat('#141316', { rough: 0.7 }), gearM = E.mat('#0f0f11', { rough: 0.6, metal: 0.3 });
       const vbox = (w, h, d, x, y, z, m = wallM) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; V.add(o); return o; };
       const vglow = (hex, o) => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-      vbox(0.4, 9, 16, -6.8, 4.5, 0); vbox(14, 9, 0.4, 0, 4.5, -7.8); vbox(14, 9, 0.4, 0, 4.5, 7.8);          // back and side walls
-      vbox(0.4, 5.4, 16, 6.8, 6.3, 0); vbox(0.4, 3.6, 4.5, 6.8, 1.8, -5.75); vbox(0.4, 3.6, 4.5, 6.8, 1.8, 5.75); // front, with a 7 m opening
-      vbox(14, 0.3, 16, 0, 3.45, 0); vbox(14, 0.3, 16, 0, 8.85, 0);                                              // ceiling under the tracks, roof
+      // Ground floor: brick walls, a 7 m opening at the front. First floor: an open-sided station, the end of the line.
+      const concM = E.mat('#8d8a82', { rough: 0.9 }), steelM = E.mat('#2c3a36', { rough: 0.6, metal: 0.4 }), roofM = E.mat('#33453f', { rough: 0.8 }), inM = E.mat('#151416', { rough: 0.9 });
+      vbox(0.4, 3.6, 16, -6.8, 1.8, 0); vbox(14, 3.6, 0.4, 0, 1.8, -7.8); vbox(14, 3.6, 0.4, 0, 1.8, 7.8);
+      vbox(0.4, 3.6, 4.5, 6.8, 1.8, -5.75); vbox(0.4, 3.6, 4.5, 6.8, 1.8, 5.75);
+      vbox(13.2, 3.3, 0.06, 0, 1.65, -7.57, inM); vbox(13.2, 3.3, 0.06, 0, 1.65, 7.57, inM); vbox(0.06, 3.3, 15.2, -6.57, 1.65, 0, inM);   // dark lining inside the venue
+      vbox(14.5, 0.32, 16.5, 0, 3.45, 0, concM);                                                                   // floor slab, showing as a concrete band outside
+      for (const [z, hex] of [[-6.6, '#b3161d'], [-5.3, '#d8d2c0'], [5.3, '#2a6a8a'], [6.6, '#d8a02a']]) { const ps = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.35), new THREE.MeshBasicMaterial({ color: hex })); ps.position.set(7.02, 1.75, z); ps.rotation.y = Math.PI / 2; V.add(ps); }   // posters
+      vbox(3.4, 0.75, 16, 0, 3.98, 0, E.mat('#4a443c', { rough: 1 }));                                               // track bed
+      for (const x of [-0.72, 0.72]) vbox(0.08, 0.1, 16, x, 4.4, 0, steelM);                                         // rails
+      vbox(5.0, 1.2, 16, 4.2, 4.2, 0, concM); vbox(4.9, 1.2, 16, -4.15, 4.2, 0, concM);                              // platforms (top at 4.8)
+      { const edge = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 16), new THREE.MeshBasicMaterial({ color: '#c9a52e' })); edge.position.set(2.0, 4.81, 0); V.add(edge); }
+      vbox(0.4, 4.2, 16, -6.8, 5.7, 0);                                                                              // back wall of the station
+      for (const z of [-5.4, -1.8, 1.8, 5.4]) { const wn = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.3), new THREE.MeshBasicMaterial({ color: '#ffd9a0' })); wn.position.set(-6.58, 6.3, z); wn.rotation.y = Math.PI / 2; V.add(wn); }
+      vbox(10, 4.2, 0.4, -2, 5.7, 7.8); vbox(1, 4.2, 0.4, 6.5, 5.7, 7.8); vbox(3, 0.6, 0.4, 4.5, 7.5, 7.8);         // end wall with a doorway to the stairs
+      vbox(0.1, 1.1, 16, 6.75, 5.35, 0, steelM); vbox(4.9, 1.1, 0.1, 4.2, 5.35, -7.9, steelM);                       // railings
+      for (const z of [-7, -3.5, 0, 3.5, 7]) { vbox(0.18, 3.3, 0.18, 6.55, 6.45, z, steelM); vbox(0.18, 3.3, 0.18, 1.75, 6.45, z, steelM).visible = z !== 0; }
+      vbox(14.8, 0.16, 16.8, 0, 8.18, 0, roofM); vbox(14.8, 0.4, 0.12, 0, 7.95, -8.4, steelM); vbox(0.12, 0.4, 16.8, 7.4, 7.95, 0, steelM);   // canopy
+      for (const z of [-5, 0, 5]) { const lp = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.08, 1.6), new THREE.MeshBasicMaterial({ color: '#fff0c8' })); lp.position.set(4.2, 8.05, z); V.add(lp); }
+      vbox(2.6, 1.0, 0.35, 0, 4.85, 6.9, E.mat('#a3181e'));                                                          // buffer stop
+      { const sg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 2.6), E.mat('#e9e6dc')), st = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 2.6), new THREE.MeshBasicMaterial({ color: '#b3161d' })); sg.position.set(6.6, 7.2, -5); st.position.set(6.6, 7.2, -5); V.add(sg, st); }   // station sign: a plain board with a red stripe
+      // stairs up the end wall to the platform
+      for (let k = 0; k < 16; k++) vbox(0.5625, 0.3 * (k + 1), 2.6, -6.4 + 0.5625 * (k + 0.5), 0.15 * (k + 1), 9.3, concM);
+      vbox(4.3, 4.8, 2.6, 4.75, 2.4, 9.3, wallM);
+      { const rail = vbox(10.3, 0.08, 0.08, -1.9, 3.5, 10.55, steelM); rail.rotation.z = Math.atan2(4.8, 9); vbox(4.3, 0.08, 0.08, 4.75, 5.9, 10.55, steelM); vbox(0.08, 0.08, 2.6, 6.85, 5.9, 9.3, steelM);
+        for (let k = 0; k <= 8; k++) vbox(0.06, 1.1, 0.06, -6.4 + k * 1.125, 0.6 * k + 0.55, 10.55, steelM);
+        for (const x of [3.6, 4.75, 5.9, 6.85]) vbox(0.06, 1.1, 0.06, x, 5.35, 10.55, steelM); }
       const vfloor = E.plane(13.2, 15.2, E.mat('#2b2622', { rough: 0.65 })); vfloor.position.y = 0.05; V.add(vfloor); p.pick(vfloor);
       vbox(3.2, 0.7, 12, -4.9, 0.35, 0, stageM);                                                                  // stage
       for (const z of [-5.1, 5.1]) { vbox(0.95, 1.1, 0.95, -3.95, 1.25, z, gearM); vbox(0.85, 0.9, 0.85, -3.95, 2.25, z, gearM); } // PA stacks
@@ -241,29 +264,34 @@
       const sl2 = new THREE.PointLight('#2ad4ff', 1.4, 15, 1.6); sl2.position.set(-3.6, 2.7, 3); V.add(sl2);
       // a few people waiting for the show
       const crowd = [], bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.25, 8).translate(0, 0.62, 0), headG = new THREE.SphereGeometry(0.17, 10, 8).translate(0, 1.45, 0), crowdM = E.mat('#141315', { rough: 0.9 }), cr = E.rng(909);
-      for (let i = 0; i < 13; i++) { const f = new THREE.Group(); f.add(new THREE.Mesh(bodyG, crowdM), new THREE.Mesh(headG, crowdM)); const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2; if (Math.abs(z) < 1.4 && x < 0.6) { continue; } f.position.set(x, 0.05, z); f.scale.setScalar(0.92 + cr() * 0.18); V.add(f); crowd.push({ f, s: cr() * 6 }); p.addCircle(BX + x, CZ + z, 0.3); }
+      for (let i = 0; i < 13; i++) { const f = new THREE.Group(); f.add(new THREE.Mesh(bodyG, crowdM), new THREE.Mesh(headG, crowdM)); const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2; if (Math.abs(z) < 1.4 && x < 0.6) { continue; } f.position.set(x, 0.05, z); f.scale.setScalar(0.92 + cr() * 0.18); V.add(f); crowd.push({ f, s: cr() * 6 }); p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3); }
       // open entrance: lit frame, marquee, light spilling onto the ground outside
       const neon = new THREE.MeshBasicMaterial({ color: '#ff3a44' });
       for (const [w, h, d, y, z] of [[0.08, 0.08, 7.2, 3.58, 0], [0.08, 3.55, 0.08, 1.8, -3.55], [0.08, 3.55, 0.08, 1.8, 3.55]]) { const n = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), neon); n.position.set(7.04, y, z); V.add(n); }
       const marquee = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 1.3), new THREE.MeshBasicMaterial({ map: E.textTex(`LIVE  ${live.date}  ${live.place}`, { w: 1024, h: 208, color: '#f2e9d2', bg: '#16090a', font: '400 78px "Special Elite","Courier New",monospace' }) }));
       marquee.position.set(7.03, 4.55, 0); marquee.rotation.y = Math.PI / 2; V.add(marquee);
       const spill = new THREE.Mesh(new THREE.PlaneGeometry(9, 8), vglow('#ff6a5a', 0.1)); spill.rotation.x = -Math.PI / 2; spill.position.set(10.5, 0.06, 0); V.add(spill);
-      p.addBox(BX - 6.8, CZ, 0.35, 8); p.addBox(BX, CZ - 7.8, 7, 0.35); p.addBox(BX, CZ + 7.8, 7, 0.35);
-      p.addBox(BX + 6.8, CZ - 5.75, 0.35, 2.25); p.addBox(BX + 6.8, CZ + 5.75, 0.35, 2.25); p.addBox(BX - 4.9, CZ, 1.7, 6.1);
+      p.addBox(BX - 6.8, CZ, 0.35, 8); p.addBox(BX, CZ - 7.8, 7, 0.35);
+      p.addBox(BX, CZ + 7.8, 7, 0.35, -1e9, 3); p.addBox(BX - 2, CZ + 7.8, 5, 0.35, 3, 1e9); p.addBox(BX + 6.5, CZ + 7.8, 0.5, 0.35, 3, 1e9);   // end wall: solid below, a doorway upstairs
+      p.addBox(BX + 6.8, CZ - 5.75, 0.35, 2.25); p.addBox(BX + 6.8, CZ + 5.75, 0.35, 2.25); p.addBox(BX - 4.9, CZ, 1.7, 6.1, -1e9, 3);
+      p.addBox(BX + 6.8, CZ, 0.2, 3.5, 3, 1e9); p.addBox(BX + 1.5, CZ, 0.15, 8, 3, 1e9);                            // upstairs: railing over the entrance, platform edge
+      p.addBox(BX + 0.2, CZ + 10.65, 6.7, 0.1); p.addBox(BX + 6.95, CZ + 9.3, 0.1, 1.4);                            // stair rails
+      p.ground = (lx, lz, y) => {
+        const vx = lx - BX, vz = lz - CZ;
+        if (vz > 8 && vz < 10.6) { if (vx >= -6.4 && vx <= 2.6) return (4.8 * (vx + 6.4)) / 9; if (vx > 2.6 && vx < 6.9) return 4.8; }
+        if (Math.abs(vz) <= 8 && vx > 1.55 && vx < 6.9 && y > 3) return 4.8;
+        return 0;
+      };
       p.info(BX - 2.3, CZ, 2.6, 2.5, [`NEXT LIVE\n${live.date}  ${live.place}`]);
       const venueUpd = (t, f) => {
         beams.forEach((b) => { b.m.opacity = 0.08 + f.pulse * 0.22 + 0.05 * Math.sin(t * 2 + b.s); b.beam.rotation.x = Math.sin(t * 0.8 + b.s) * 0.25; });
         sl1.intensity = 0.9 + f.pulse * 2.2; sl2.intensity = 0.9 + f.high * 3;
         crowd.forEach((c) => { c.f.position.y = 0.05 + Math.abs(Math.sin(t * 3.2 + c.s)) * 0.05 * (0.4 + f.level * 2) + f.pulse * 0.05; });
       };
-      const hillBand = new THREE.Mesh(new THREE.BoxGeometry(14.12, 0.14, 16.12), new THREE.MeshBasicMaterial({ color: '#ffb060' }));
-      hillBand.position.set(BX, 7.9, RZ + 42); g.add(hillBand);
-      const mouth = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 4.2), new THREE.MeshBasicMaterial({ color: '#0c0a0e' }));
-      mouth.position.set(BX, 5.6, RZ + 33.95); mouth.rotation.y = Math.PI; g.add(mouth);
       p.addBox(BX, RZ + 26, 2.6, 9);
 
       // Train
-      const train = new THREE.Group();
+      const train = new THREE.Group(), doors = [];
       const bodyM = E.mat('#e8e2d2'), stripeM = E.mat('#f07a32'), winM = new THREE.MeshBasicMaterial({ color: '#ffe2a6' });
       for (let k = 0; k < 6; k++) {
         const car = new THREE.Group();
@@ -271,6 +299,7 @@
         const s = new THREE.Mesh(new THREE.BoxGeometry(2.74, 0.35, 12.6), stripeM); s.position.y = 0.7;
         const w = new THREE.Mesh(new THREE.BoxGeometry(2.76, 0.7, 11), winM); w.position.y = 1.9;
         car.add(b, s, w);
+        if (k === 0) for (const z of [-3, 3]) { const op = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.0), new THREE.MeshBasicMaterial({ color: '#ffe9bd' })); op.position.set(1.39, 1.45, z); op.rotation.y = Math.PI / 2; const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.0, 1.3), bodyM); leaf.position.set(1.4, 1.45, z); car.add(op, leaf); doors.push(leaf); }
         car.position.z = -k * 13;
         train.add(car);
       }
@@ -309,9 +338,12 @@
       p.face = Math.PI;
       p.pathEnd = 4;
       p.clearR = 9;
-      p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 9 && lz > -150 && lz < 54) || Math.hypot(lx, lz) < 8;
+      p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 10 && lz > -150 && lz < 56) || Math.hypot(lx, lz) < 8;
 
-      let trainT = 6;
+      let trainT = 6, trainS = 'wait';
+      const STOP = CZ - 0.6, shop = SW.CONFIG.shop || {};
+      p.dock = () => { trainS = 'dwell'; trainT = 20; train.visible = true; train.position.z = STOP; };   // put the train at the platform now (used by tests)
+      const board = p.interact({ kind: 'travel', lx: BX + 2.3, lz: STOP + 3, r: 2.3, mark: 7.3, y0: 3, off: true, url: shop.url, name: shop.name });
       p.update = (t, dt, f, v) => {
         venueUpd(t, f);
         water.material.uniforms.t.value = t;
@@ -322,13 +354,15 @@
         city.forEach((c) => { c.b.scale.y += (c.base * (0.65 + band(f, c.k, 24) * 0.9) - c.b.scale.y) * Math.min(1, dt * 10); });
         cityM.emissiveIntensity = 0.4 + f.mid * 1.2;
         // The train comes out of the haze across the river and disappears into the tunnel.
+        // The train comes over the bridge, stops at the platform above the live house with its doors open, then goes back.
         trainT -= dt;
-        if (trainT <= 0) {
-          train.visible = true;
-          train.position.z += dt * 24;
-          train.children.forEach((car) => { car.visible = train.position.z + car.position.z < RZ + 27; });
-          if (train.position.z - 5 * 13 > RZ + 36) { train.position.z = -230; train.visible = false; trainT = 7 + r() * 6; }
-        }
+        if (trainS === 'wait' && trainT <= 0) { trainS = 'in'; train.visible = true; train.position.z = -230; }
+        else if (trainS === 'in') { const left = STOP - train.position.z; train.position.z += Math.min(left, dt * Math.min(24, Math.max(1.2, left * 0.7))); if (left < 0.02) { trainS = 'dwell'; trainT = 22; } }
+        else if (trainS === 'dwell' && trainT <= 0) trainS = 'out';
+        else if (trainS === 'out') { const gone = STOP - train.position.z; train.position.z -= dt * Math.min(24, 1.5 + gone * 0.7); if (train.position.z < -230) { trainS = 'wait'; train.visible = false; trainT = 6 + r() * 5; } }
+        const open = trainS === 'dwell' && trainT > 1.5 && trainT < 21;
+        doors.forEach((d) => (d.visible = !open));
+        board.off = !(open && board.url);
       };
       p.shot = (t) => ({ pos: [8 + Math.sin(t * 0.07) * 3, 2.3, 3.5], look: [-10, 4, -40], roll: 0 });
     },
