@@ -55,7 +55,7 @@
     g.putImageData(img, 0, 0);
   }
   const rgb = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-  const TEXSIZE = { grass: 512, path: 256 };
+  const TEXSIZE = { grass: 512, path: 256, slate: 256 };
   const TEXDRAW = {
     grass(g, S, r) {
       paintGround(g, S, ['#353f27', '#56603a', '#857a4f', '#57483a'].map(rgb), { dry: [0.5, 0.72], dirt: [0.6, 0.72] });
@@ -65,7 +65,19 @@
       for (let i = 0; i < 26; i++) { const x = r() * S, y = r() * S, q = 1.5 + r() * 3.5; g.fillStyle = 'rgba(0,0,0,.35)'; g.beginPath(); g.ellipse(x + 1, y + 1.5, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${120 + r() * 40},${116 + r() * 36},${104 + r() * 30})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
     },
     paving(g, S, r) { g.fillStyle = '#cfc2a4'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { g.fillStyle = `rgba(${150 + r() * 40},${135 + r() * 35},${110 + r() * 30},.35)`; g.fillRect(x * w + 2, y * w + 2, w - 4, w - 4); } g.fillStyle = D(0.25); for (let k = 0; k <= n; k++) { g.fillRect(k * w - 1, 0, 2, S); g.fillRect(0, k * w - 1, S, 2); } speckle(g, S, S, r, 1200, 0.06); },
-    slate(g, S, r) { g.fillStyle = '#3f3a33'; g.fillRect(0, 0, S, S); const n = 5, w = S / n; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const v = 96 + r() * 44; g.fillStyle = `rgb(${v},${v - 6},${v - 20})`; g.beginPath(); g.ellipse(x * w + w / 2 + (r() - 0.5) * 4, y * w + w / 2 + (r() - 0.5) * 4, w * (0.38 + r() * 0.08), w * (0.36 + r() * 0.08), r() * 3, 0, 7); g.fill(); } speckle(g, S, S, r, 1800, 0.07); },
+    slate(g, S, r) { // pale rectangular pavers in running bond, worn and slightly uneven
+      g.fillStyle = '#4a4841'; g.fillRect(0, 0, S, S);
+      const cols = 4, rows = 8, bw = S / cols, bh = S / rows, j = 1.6;
+      for (let y = 0; y < rows; y++) for (let x = -1; x < cols; x++) {
+        const ox = x * bw + (y % 2 ? bw / 2 : 0), v = 168 + r() * 44, w = r() * 8;
+        const gr = g.createLinearGradient(ox, y * bh, ox + bw, y * bh + bh);
+        gr.addColorStop(0, `rgb(${v + 8},${v + 7},${v + 2 - w})`); gr.addColorStop(1, `rgb(${v - 10},${v - 11},${v - 16 - w})`);
+        for (const dx of [0, S]) { g.fillStyle = gr; g.save(); g.translate(dx, 0); g.fillRect(ox + j, y * bh + j, bw - j * 2, bh - j * 2); g.restore(); }
+      }
+      const img = g.getImageData(0, 0, S, S), d = img.data;
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const k = 0.74 + 0.4 * fbm(x / S, y / S, 4, 21) + 0.16 * (fbm(x / S, y / S, 40, 5, 2) - 0.5), i = (y * S + x) * 4; d[i] *= k; d[i + 1] *= k; d[i + 2] *= k * 0.98; }
+      g.putImageData(img, 0, 0);
+    },
     sand(g, S, r) { g.fillStyle = '#d6c08c'; g.fillRect(0, 0, S, S); speckle(g, S, S, r, 3000, 0.08); },
     path(g, S, r) {
       paintGround(g, S, ['#4f4233', '#6e5d47', '#857560', '#3d342a'].map(rgb), { dry: [0.5, 0.75], dirt: [0.58, 0.72] });
@@ -344,7 +356,8 @@
   /* ================= plaza, paths, trees ================= */
   const PLAZA_R = 11;
   {
-    const pl = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 56), mat('#9a9283', { map: tex('slate', 7, 7), rough: 0.95 }));
+    const pl = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 56), mat('#b4b1a8', { map: tex('slate', 9, 9), rough: 0.9 }, true));
+    pl.material.bumpMap = pl.material.map; pl.material.bumpScale = 0.03;
     pl.rotation.x = -Math.PI / 2; pl.position.y = 0.03; pl.receiveShadow = true;
     scene.add(pl); pick.push(pl); pl.userData.ground = true;
     const rim = new THREE.Mesh(new THREE.RingGeometry(PLAZA_R, PLAZA_R + 0.6, 56), whiteM);
