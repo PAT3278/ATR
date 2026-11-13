@@ -443,7 +443,9 @@ let key = (() => {
     return fromUrl || sessionStorage.getItem("pt-key") || "";
   } catch { return fromUrl || ""; }
 })();
-let mode = store.get("mode", "low");
+// Screen-off (background) play is the default: it keeps going with the phone
+// locked. Low latency is one tap away and remembered once chosen.
+let mode = store.get("mode", "bg");
 let wantPlaying = false;
 let player = null;
 let reconnectTimer = null;

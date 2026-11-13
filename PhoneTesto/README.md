@@ -130,13 +130,15 @@ What you get:
   Opus 96–320 kbps if the Wi-Fi is weak. Everything is sent at 48 kHz; a
   host sample-rate change doesn't disconnect anyone.
 - **Two playback modes on the phone**:
-  - *Low latency* (default): about 0.2 s behind the DAW, with a "keep
-    screen on" option. Needs the page open and the screen on. If a slow
+  - *Screen-off* (default): hands the stream to the phone's own media
+    player so it keeps playing in the background, with the screen locked
+    or another app open. About 1–3 s behind; 16-bit only.
+  - *Low latency*: about 0.2 s behind the DAW, with a "keep screen on"
+    option. Needs the page open and the screen on. If a slow
     phone's browser can't keep up (a dropout), the page notices and
     switches to a bigger buffer (about 0.35 s) for the rest of the visit,
     instead of continuing to click.
-  - *Screen-off*: hands the stream to the phone's own media player so it
-    keeps playing with the screen locked. About 1–3 s behind; 16-bit only.
+    The phone remembers whichever mode was picked last.
 - **Access code.** Live is never open to everyone on the network (on shared
   or office Wi-Fi that would let anyone listen to an unreleased mix). By
   default a random 8-character code is made each time the plugin loads; it

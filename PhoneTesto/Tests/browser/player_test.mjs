@@ -42,10 +42,13 @@ function startDemo(extraArgs = []) {
   });
 }
 
-async function newPage(browser, locale = "en-US") {
+// `mode`: the playback mode the phone last chose ("low" for the low-latency
+// tests, null for a phone opening the page for the first time).
+async function newPage(browser, locale = "en-US", mode = "low") {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale,
   });
+  if (mode) await context.addInitScript(m => { try { localStorage.setItem("pt-mode", m); } catch {} }, mode);
   const page = await context.newPage();
   // PT_CPU_THROTTLE=4 runs the page as if on a CPU 4x slower (a slow phone).
   const throttle = Number(process.env.PT_CPU_THROTTLE || 1);
@@ -116,6 +119,15 @@ try {
   let page, context, errors;
 
   for (const c of contexts) {
+    if (c === contexts[0]) {
+      // a phone opening the page for the first time gets background play
+      const first = await newPage(browser, "ja-JP", null);
+      await first.page.goto(`http://${c.host}:${port}/`);
+      const shown = await first.page.evaluate(() => ({ bg: document.getElementById("modeBg").getAttribute("aria-pressed"),
+                                                      quality: document.getElementById("qualityRow").hidden }));
+      check(shown.bg === "true" && shown.quality, `first visit opens in Screen-off (background) mode (pressed=${shown.bg})`);
+      await first.context.close();
+    }
     console.log(`Low-latency mode, every quality -- ${c.label}`);
     ({ context, page, errors } = await newPage(browser, "ja-JP"));
     await page.goto(`http://${c.host}:${port}/`);
