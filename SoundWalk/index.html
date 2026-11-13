@@ -34,10 +34,12 @@
   </div>
   <div id="edge" aria-hidden="true"></div>
   <div id="banner"><span class="en" id="bannerEn"></span><span class="jp" id="bannerJp"></span></div>
-  <div id="prompt" hidden><kbd id="promptKey">Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span id="promptText"></span></div>
+  <div id="prompt" hidden><kbd id="promptKey">Z</kbd><svg class="ic i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="ic i-car" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2"/><path d="M12 14.2V21M9.9 11.3L3.4 9.4M14.1 11.3l6.5-1.9"/></svg><svg class="ic i-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9"/></svg><span id="promptText"></span></div>
+  <div id="speedo" aria-hidden="true"><b id="spdNum">0</b><span>km/h</span><i id="spdBar"><u></u></i></div>
+  <div id="dhint" aria-hidden="true"><span class="how pc"><span class="h1"><kbd>W</kbd><em>▲</em></span><span class="h1"><kbd>S</kbd><em>▼</em></span><span class="h1"><kbd>A</kbd><kbd>D</kbd><em>◀▶</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>■</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9"/></svg></span></span></div>
   <div id="hint" aria-hidden="true"><span class="how pc"><span class="wasd"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="h1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/></svg><em>⟲</em></span><span class="h1"><kbd>Shift</kbd><em>»</em></span><span class="h1"><kbd>Space</kbd><em>⤒</em></span><span class="h1"><kbd>Z</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="h1"><kbd>P</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg></span><span class="h1"><kbd>M</kbd><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zM9 4v14M15 6v14"/></svg></span></span></div>
   <div id="stick" aria-hidden="true"><div id="knob"></div></div>
-  <button id="btnA" type="button" aria-label="眺める"><small>A</small><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  <button id="btnA" type="button" aria-label="調べる・乗る"><small>A</small><svg class="ic i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="ic i-car" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.2"/><path d="M12 14.2V21M9.9 11.3L3.4 9.4M14.1 11.3l6.5-1.9"/></svg><svg class="ic i-out" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h9"/></svg></button>
 
   <button id="btnB" type="button" aria-label="ダッシュ">»</button>
 
@@ -94,6 +96,8 @@
 <script src="src/audio.js"></script>
 <script src="src/places.js"></script>
 <script src="src/places2.js"></script>
+<script src="src/ring.js"></script>
+<script src="src/cars.js"></script>
 <script src="src/game.js"></script>
 </body>
 </html>

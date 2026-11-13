@@ -378,6 +378,7 @@
       p.pathEnd = 4;
       p.clearR = 9;
       p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 10 && lz > -150 && lz < 56) || Math.hypot(lx, lz) < 8;
+      p.noPier = (lx) => Math.abs(lx - BX) < 5.5;   // the ring road crosses the railway: no pier on the tracks
 
       let trainT = 6, trainS = 'wait';
       const STOP = CZ - 0.6, shop = SW.CONFIG.shop || {};

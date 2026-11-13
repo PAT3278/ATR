@@ -249,6 +249,7 @@
       p.face = Math.PI;
       p.pathEnd = 11;
       p.clearR = 26;
+      p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
       p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
@@ -362,40 +363,29 @@
       }
       const railM = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 });
       const rail = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.05, d), railM); m.position.set(x, H + 0.5, z); g.add(m); };
-      rail(0, -8.4, 8.6, 0.12); rail(-4.3, -1.2, 0.12, 14.5); rail(4.3, -1.2, 0.12, 14.5);
+      rail(-4.3, -1.2, 0.12, 14.5); rail(4.3, -1.2, 0.12, 14.5);   // the far end is open: it is the parking area's way onto the ring road
       p.ground = (lx, lz) => {
         if (Math.abs(lx) < 2.6 && lz >= 6 && lz <= 26) return (H * (26 - lz)) / 20;
         if (Math.abs(lx) < 4.4 && lz >= -8.6 && lz < 6) return H;
         return 0;
       };
-      p.addBox(0, -8.7, 4.6, 0.25); p.addBox(-4.55, -1.2, 0.25, 7.6); p.addBox(4.55, -1.2, 0.25, 7.6);
+      p.addBox(0, -8.7, 4.6, 0.25, H - 2); p.addBox(-4.55, -1.2, 0.25, 7.6); p.addBox(4.55, -1.2, 0.25, 7.6);   // on foot you stay off the road
+      { const hz = E.basic('#d8b020'); for (const x of [-3.6, -1.2, 1.2, 3.6]) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.22), hz); st.position.set(x, H + 0.012, -7.9); st.rotation.y = 0.6; g.add(st); } }
       p.addBox(-2.85, 16, 0.25, 10); p.addBox(2.85, 16, 0.25, 10);
 
-      // The expressway
-      const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 20, 1, WD), E.mat('#2a2a2f', { map: E.tex('asphalt', 30, 4), rough: 0.8 }));
-      deck.position.set(0, H - 0.5, ZC); deck.receiveShadow = true; g.add(deck);
-      for (const z of [ZC + WD / 2, ZC - WD / 2]) { const w = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 20, 1.4, 0.35), concD); w.position.set(0, H + 0.7, z); g.add(w); }
-      const div = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 20, 0.6, 0.5), conc); div.position.set(0, H + 0.3, ZC); g.add(div);
-      for (let x = -HALF; x <= HALF; x += 13) {
-        const pl = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.2, H - 1, 10), concD); pl.position.set(x, (H - 1) / 2, ZC); g.add(pl);
-        p.addCircle(x, ZC, 1.3);
-      }
-      // Tunnel mouths at both ends (hidden while viewing so the road seems endless)
-      const tunnels = [];
-      for (const s of [-1, 1]) {
-        const tb = new THREE.Mesh(new THREE.BoxGeometry(14, H + 9, WD + 8), concD);
-        tb.position.set(s * (HALF + 7), (H + 9) / 2, ZC); g.add(tb);
-        const hole = new THREE.Mesh(new THREE.PlaneGeometry(WD - 1, 6), basic('#050407'));
-        hole.position.set(s * HALF - s * 0.05, H + 3, ZC); hole.rotation.y = -s * Math.PI / 2; g.add(hole);
-        tunnels.push(tb, hole);
-        p.addBox(s * (HALF + 7), ZC, 7, WD / 2 + 4);
-      }
+      // The expressway. In the world it is a stretch of the ring road (drawn by the game); this straight copy is
+      // only shown while viewing, when the scenery streams past it.
+      const own = new THREE.Group(); own.visible = false; g.add(own);
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 60, 1, WD), E.mat('#2a2a2f', { map: E.tex('asphalt', 30, 4), rough: 0.8 }));
+      deck.position.set(0, H - 0.53, ZC); deck.receiveShadow = true; own.add(deck);
+      for (const z of [ZC + WD / 2, ZC - WD / 2]) { const w = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 60, 1.4, 0.35), concD); w.position.set(0, H + 0.7, z); own.add(w); }
+      const div = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 60, 0.6, 0.5), conc); div.position.set(0, H + 0.3, ZC); own.add(div);
 
       // Roadside things that stream past while viewing
-      const tm = treadmill(HALF + 30);
+      const tm = treadmill(HALF + 30), viewOnly = [];   // viewOnly: the ring road has its own lane marks and lamps
       const lampHeadM = basic('#ffb04a'), dashM = basic('#d8d2c4'), poleM = E.mat('#3a3a40', { metal: 0.5 });
       for (let x = -HALF - 30; x < HALF + 30; x += 6) {
-        for (const z of [ZC + 4, ZC - 4]) { const d = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.03, 0.18), dashM); d.position.set(x, H + 0.02, z); g.add(tm.add(d)); }
+        for (const z of [ZC + 4, ZC - 4]) { const d = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.03, 0.18), dashM); d.position.set(x, H + 0.02, z); g.add(tm.add(d)); viewOnly.push(d); }
       }
       const lampGroup = [];
       for (let x = -HALF - 30; x < HALF + 30; x += 18) {
@@ -405,7 +395,7 @@
         lp.add(pole, arm);
         for (const z of [-2.8, 2.8]) { const hd = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.5), lampHeadM); hd.position.set(0, 6.9, z); lp.add(hd); }
         lp.position.set(x, H, ZC);
-        g.add(tm.add(lp)); lampGroup.push(lp);
+        g.add(tm.add(lp)); lampGroup.push(lp); viewOnly.push(lp);
       }
       const signTex = E.textTex('SHOT  →  EXIT\n出口  1km', { w: 512, h: 256, color: '#ffffff', font: '700 72px "Hind","Noto Sans JP",sans-serif', font2: '700 56px "Noto Sans JP",sans-serif' });
       for (const x of [-30, 30]) {
@@ -437,7 +427,7 @@
       p.addBox(0, ZC - WD / 2 - 27, HALF + 30, 22);
 
       // Traffic
-      const lanes = [{ z: ZC + 2, v: 22 }, { z: ZC + 5.5, v: 27 }, { z: ZC - 2, v: -24 }, { z: ZC - 5.5, v: -29 }];
+      const lanes = [{ z: ZC - 2, v: 27 }, { z: ZC - 5.5, v: 22 }, { z: ZC + 2, v: -29 }, { z: ZC + 5.5, v: -24 }];   // keep left: +X on the outer side, fast lane by the median
       const palette = ['#d8d8dc', '#1d1f26', '#b8202a', '#2c4a8a', '#e0b030', '#5a5f66'];
       const cars = [];
       for (let i = 0; i < 18; i++) {
@@ -446,7 +436,7 @@
         c.position.set(-HALF + r() * HALF * 2, H, ln.z);
         if (ln.v < 0) c.rotation.y = Math.PI;
         c.userData.v = ln.v * (0.85 + r() * 0.3);
-        g.add(c); cars.push(c);
+        c.visible = false; g.add(c); cars.push(c);
       }
 
       p.map = [{ t: 'rect', x: 0, z: ZC, w: HALF * 2, h: WD, c: '#3a3840' }, { t: 'rect', x: 0, z: 16, w: 5, h: 20, c: '#6e6a68' }];
@@ -466,13 +456,13 @@
         speed += (target - speed) * Math.min(1, dt * (viewing ? 1.5 : 4));
         tm.move(-speed * dt);
         tm.clip(viewing, HALF - 4);
-        tunnels.forEach((o) => (o.visible = !viewing));
+        own.visible = viewing; viewOnly.forEach((o) => (o.visible = viewing));
         const L = (HALF + 30) * 2;
         cars.forEach((c) => {
           c.position.x += (c.userData.v - speed) * dt;
           if (c.position.x > HALF + 30) c.position.x -= L;
           if (c.position.x < -HALF - 30) c.position.x += L;
-          c.visible = viewing || Math.abs(c.position.x) < HALF;
+          c.visible = viewing;   // out in the world the ring road has its own traffic
         });
         lampHeadM.color.setRGB(1, 0.43, 0.06).multiplyScalar(0.8 + f.pulse * 0.9);
         cityM.emissiveIntensity = 0.35 + f.mid * 1.4;
@@ -480,7 +470,7 @@
       };
       p.shot = (t, f) => {
         const s = RM ? 0 : f.pulse * 0.06;
-        return { pos: [-40, H + 1.25 + s, ZC + 3.8 + Math.sin(t * 0.4) * 0.6], look: [10, H + 1.0, ZC + 2.5 + Math.sin(t * 0.4 + 0.6) * 1.5], roll: Math.sin(t * 0.4) * 0.02 };
+        return { pos: [-40, H + 1.25 + s, ZC - 3.8 - Math.sin(t * 0.4) * 0.6], look: [10, H + 1.0, ZC - 2.5 - Math.sin(t * 0.4 + 0.6) * 1.5], roll: -Math.sin(t * 0.4) * 0.02 };
       };
     },
   };
@@ -491,14 +481,14 @@
   PLACES.ohh = {
     build(p, E) {
       const g = p.group, r = E.rng(151);
-      const HR = 36, HH = 12, PL = 9, RZ = -15, RH = 11.5, HALF = 60;
+      const HR = 36, HH = 12, PL = 9, RZ = -15, RH = 12, HALF = 60;   // the road is level with the top of the hill
       const height = (lx, lz) => {
         const d = Math.hypot(lx, lz);
         if (d <= PL) return HH;
         if (d >= HR) return 0;
         return HH * 0.5 * (1 + Math.cos((Math.PI * (d - PL)) / (HR - PL)));
       };
-      p.ground = height;
+      p.ground = (lx, lz) => (Math.abs(lx) < 9.2 && lz < -7.9 && lz > -10.6 ? RH + 0.03 : height(lx, lz));   // the lay-by beside the road is paved flat
       const hg = new THREE.RingGeometry(0.01, HR, 56, 22);
       const hp = hg.attributes.position;
       for (let i = 0; i < hp.count; i++) {
@@ -525,6 +515,8 @@
       gr.position.set(0, HH + 0.75, -7.6); g.add(gr);
       for (let x = -6; x <= 6; x += 2) { const pp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), railM); pp.position.set(x, HH + 0.4, -7.6); g.add(pp); }
       p.addBox(0, -7.8, 6.5, 0.3);
+      p.addBox(0, -10.85, 30, 0.2, RH - 2.5);   // on foot you stay off the road
+      { const lay = E.plane(18.4, 2.75, E.mat('#4a4a4e', { map: E.tex('asphalt', 6, 1), rough: 0.85 })); lay.position.set(0, RH + 0.03, -9.2); g.add(lay); p.pick(lay); }
       E.bench(g, 3.2, -5.6, Math.PI, HH);
       p.addBox(3.2, -5.6, 1.2, 0.4);
 
@@ -557,12 +549,13 @@
       const sun = new THREE.Mesh(new THREE.CircleGeometry(16, 40), basic('#fff0c2', { fog: false }));
       sun.position.set(30, 22, -420); g.add(sun);
 
-      // Coastal viaduct running past the overlook
+      // The coastal road. In the world it is a stretch of the ring road (drawn by the game); this straight copy is
+      // only shown while viewing, when the scenery streams past it.
+      const own = new THREE.Group(); own.visible = false; g.add(own);
       const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2 + 40, 0.8, 8), E.mat('#3a393c', { map: E.tex('asphalt', 30, 2) }));
-      deck.position.set(0, RH - 0.4, RZ); deck.receiveShadow = true; g.add(deck);
+      deck.position.set(0, RH - 0.43, RZ); deck.receiveShadow = true; own.add(deck);
       for (let x = -HALF - 20; x <= HALF + 20; x += 16) {
-        const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, RH, 8), E.mat('#bdb6a8')); pl.position.set(x, RH / 2 - 0.4, RZ); g.add(pl);
-        if (Math.abs(x) > 8) p.addCircle(x, RZ, 1.2);
+        const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, RH, 8), E.mat('#bdb6a8')); pl.position.set(x, RH / 2 - 0.4, RZ); own.add(pl);
       }
       const tm = treadmill(HALF + 20);
       const dashM = basic('#f2efe4'), postM = E.mat('#e8e6df', { metal: 0.4 });
@@ -590,7 +583,7 @@
       for (let i = 0; i < 6; i++) {
         const c = car(E, palette[i % palette.length], r);
         const east = i % 2 === 0;
-        c.position.set(-HALF + r() * HALF * 2, RH, RZ + (east ? 1.9 : -1.9));
+        c.position.set(-HALF + r() * HALF * 2, RH, RZ + (east ? -1.9 : 1.9));   // keep left
         if (!east) c.rotation.y = Math.PI;
         c.userData.v = (east ? 1 : -1) * (20 + r() * 8);
         g.add(c); cars.push(c);
@@ -614,18 +607,19 @@
         const target = viewing ? 28 + f.level * 30 + f.pulse * 6 : 0;
         speed += (target - speed) * Math.min(1, dt * (viewing ? 1.2 : 4));
         tm.move(-speed * dt);
+        tm.clip(viewing, -1); own.visible = viewing;   // out in the world the ring road has its own rails and lane marks
         walls.forEach((w) => (w.visible = viewing));
         const L = (HALF + 20) * 2;
         cars.forEach((c) => {
           c.position.x += (c.userData.v - speed) * dt;
           if (c.position.x > HALF + 20) c.position.x -= L;
           if (c.position.x < -HALF - 20) c.position.x += L;
-          c.visible = !viewing || c.userData.v < 0; // keep the camera's own lane clear while driving
+          c.visible = viewing && c.userData.v < 0; // keep the camera's own lane clear while driving
         });
         const s = 1 + f.bass * 0.05;
         sun.scale.set(s, s, 1);
       };
-      p.shot = (t) => ({ pos: [-34, RH + 1.4 + Math.sin(t * 0.9) * 0.08, RZ + 1.9 + Math.sin(t * 0.35) * 0.8], look: [20, RH - 3, RZ - 30 + Math.sin(t * 0.35 + 0.8) * 8], roll: Math.sin(t * 0.35) * 0.05 });
+      p.shot = (t) => ({ pos: [-34, RH + 1.4 + Math.sin(t * 0.9) * 0.08, RZ - 1.9 + Math.sin(t * 0.35) * 0.8], look: [20, RH - 3, RZ - 30 + Math.sin(t * 0.35 + 0.8) * 8], roll: Math.sin(t * 0.35) * 0.05 });
     },
   };
 })();

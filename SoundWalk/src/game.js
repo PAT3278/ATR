@@ -320,10 +320,10 @@
   function isWater(x, z) { for (const b of waters) { const dx = x - b.x, dz = z - b.z, ux = dx * b.c - dz * b.s, uz = dx * b.s + dz * b.c; if (Math.abs(ux) < b.hx && Math.abs(uz) < b.hz) return true; } return false; }
   const interact = [];
 
-  const ground = plane(400, 400, mat('#ffffff', { map: tex('grass', 80, 80), rough: 1 }, true));
+  const ground = plane(720, 720, mat('#ffffff', { map: tex('grass', 144, 144), rough: 1 }, true));
   ground.material.bumpMap = ground.material.map; ground.material.bumpScale = 0.035;
   ground.material.onBeforeCompile = (sh) => { rimPatch(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'vec4 tA=mapTexelToLinear(texture2D(map,vUv));float lB=dot(mapTexelToLinear(texture2D(map,vUv*.173+.31)).rgb,vec3(4.));float lC=dot(mapTexelToLinear(texture2D(map,vUv*.031+.7)).rgb,vec3(4.));diffuseColor.rgb*=tA.rgb*mix(1.,lB,.45)*mix(1.,lC,.5);'); };
-  { const gg = new THREE.PlaneGeometry(400, 400, 72, 72), gp = gg.attributes.position, col = new Float32Array(gp.count * 3);
+  { const gg = new THREE.PlaneGeometry(720, 720, 110, 110), gp = gg.attributes.position, col = new Float32Array(gp.count * 3);
     for (let i = 0; i < gp.count; i++) { const x = gp.getX(i), y = gp.getY(i); const v = 0.8 + 0.2 * Math.sin(x * 0.05 + Math.sin(y * 0.031) * 2.2) * Math.cos(y * 0.043 + x * 0.012); col.set([v * 0.93, v, v * 0.8], i * 3); }
     gg.setAttribute('color', new THREE.BufferAttribute(col, 3)); ground.geometry = gg; ground.material.vertexColors = true; }
   ground.userData.ground = true;
@@ -358,7 +358,9 @@
       },
     };
   }
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch };
+  const basic = (hex, o = {}) => { const m = new THREE.MeshBasicMaterial({ color: lin(hex), ...o }); m.userData.lin = true; return m; };
+  const ring = SW.Ring.make(SW.SONGS);   // the expressway that loops the town (centre line only; its meshes are built once the places exist)
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -400,13 +402,16 @@
     return { top: lin(g.top), bottom: lin(g.bottom), fog: lin(g.fog), near: g.near, far: g.far, sun: lin(g.sun), sunInt: g.sunInt, hemi: g.hemi, sunDir: d.normalize(), tint: new THREE.Vector3(...g.tint), expo: g.expo, sat: g.sat, stars: g.stars };
   }
   const BASE = prepGrade({ top: '#565c5f', bottom: '#9a988d', fog: '#8f8d82', near: 12, far: 92, sun: '#d8d0bc', sunInt: 1.15, hemi: 0.78, sunDir: [0.4, 0.75, 0.3], tint: [1.03, 1, 0.93], expo: 0.95, sat: 0.55, stars: 0 });
-  const G = prepGrade({ top: '#000', bottom: '#000', fog: '#000', near: 0, far: 0, sun: '#000', sunInt: 0, hemi: 0, sunDir: [0, 1, 0], tint: [1, 1, 1], expo: 1, sat: 1, stars: 0 });
-  function blendGrade(a, b, k) {
-    G.top.copy(a.top).lerp(b.top, k); G.bottom.copy(a.bottom).lerp(b.bottom, k); G.fog.copy(a.fog).lerp(b.fog, k); G.sun.copy(a.sun).lerp(b.sun, k);
-    G.near = a.near + (b.near - a.near) * k; G.far = a.far + (b.far - a.far) * k;
-    G.sunInt = a.sunInt + (b.sunInt - a.sunInt) * k; G.hemi = a.hemi + (b.hemi - a.hemi) * k;
-    G.sunDir.copy(a.sunDir).lerp(b.sunDir, k).normalize(); G.tint.copy(a.tint).lerp(b.tint, k);
-    G.expo = a.expo + (b.expo - a.expo) * k; G.sat = a.sat + (b.sat - a.sat) * k; G.stars = a.stars + (b.stars - a.stars) * k;
+  // Behind the wheel the day turns to a sodium-lit night (each place still pulls the light its own way).
+  const DRIVE = prepGrade({ top: '#04050c', bottom: '#19243c', fog: '#0f1828', near: 26, far: 210, sun: '#9db6ff', sunInt: 0.34, hemi: 0.37, sunDir: [-0.35, 0.7, 0.3], tint: [0.94, 1.0, 1.08], expo: 1.3, sat: 1.05, stars: 0.3 });
+  const blank = () => prepGrade({ top: '#000', bottom: '#000', fog: '#000', near: 0, far: 0, sun: '#000', sunInt: 0, hemi: 0, sunDir: [0, 1, 0], tint: [1, 1, 1], expo: 1, sat: 1, stars: 0 });
+  const G = blank(), GB = blank();
+  function mixGrade(o, a, b, k) {
+    o.top.copy(a.top).lerp(b.top, k); o.bottom.copy(a.bottom).lerp(b.bottom, k); o.fog.copy(a.fog).lerp(b.fog, k); o.sun.copy(a.sun).lerp(b.sun, k);
+    o.near = a.near + (b.near - a.near) * k; o.far = a.far + (b.far - a.far) * k;
+    o.sunInt = a.sunInt + (b.sunInt - a.sunInt) * k; o.hemi = a.hemi + (b.hemi - a.hemi) * k;
+    o.sunDir.copy(a.sunDir).lerp(b.sunDir, k).normalize(); o.tint.copy(a.tint).lerp(b.tint, k);
+    o.expo = a.expo + (b.expo - a.expo) * k; o.sat = a.sat + (b.sat - a.sat) * k; o.stars = a.stars + (b.stars - a.stars) * k;
   }
   function applyGrade() {
     skyU.top.value.copy(G.top); skyU.bottom.value.copy(G.bottom); skyU.sunDir.value.copy(G.sunDir); skyU.sunCol.value.copy(G.sun).multiplyScalar(Math.min(1, G.sunInt / 2));
@@ -419,6 +424,14 @@
     planetM.color.copy(G.bottom).lerp(G.top, 0.35).multiplyScalar(1.15); ringM.color.copy(planetM.color);
     farM.color.copy(G.fog).lerp(G.top, 0.3).multiplyScalar(0.85); farM2.color.copy(G.fog).lerp(G.top, 0.55).multiplyScalar(0.7);
   }
+
+  /* ================= ring road ================= */
+  const ringView = SW.Ring.build(ring, E, {
+    blocked: (x, z) => places.some((p) => { if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),
+    keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
+  });
+  scene.add(ringView.group);
+  ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
 
   /* ================= plaza, paths, trees ================= */
   const PLAZA_R = 11;
@@ -553,7 +566,7 @@
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if (Math.hypot(x, z) < PLAZA_R + 5) return false;
+      if (Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 13) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -814,10 +827,10 @@
   const KEY = 'soundwalk-v1';
   const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false };
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
-  function jump() { if (mode === 'walk' && !P.air) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
+  function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
   let camYaw = Math.PI, camPitch = 0.2, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
-  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: P.x, z: P.z, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
@@ -848,6 +861,176 @@
       let nx = ux, nz = uz;
       if (ox < oz) nx = Math.sign(ux || 1) * (b.hx + PR); else nz = Math.sign(uz || 1) * (b.hz + PR);
       p.x = b.x + nx * b.c + nz * b.s; p.z = b.z - nx * b.s + nz * b.c;
+    }
+  }
+
+  /* ================= cars on the ring road ================= */
+  // A garage of cars; one waits in each parking area, picked afresh every time you leave one.
+  function plainCar(i) {   // stand-in if cars.js is missing
+    const g = new THREE.Group(), col = ['#c9ccd1', '#15161a', '#1f3a7a', '#b3161d'][i % 4];
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.7, 4.3), gloss(col, { rough: 0.3, metal: 0.4 })); body.position.y = 0.6; body.castShadow = true;
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 2.1), gloss('#0c0f14', { rough: 0.1 })); cab.position.set(0, 1.2, -0.2);
+    const head = basic('#fff3d0'), tail = basic('#ff2a2a');
+    const h = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 0.06), head); h.position.set(0, 0.7, 2.16);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 0.06), tail); tl.position.set(0, 0.75, -2.16);
+    g.add(body, cab, h, tl); g.userData = { len: 4.3, wid: 1.8, hgt: 1.5, head, tail };
+    return g;
+  }
+  const NCAR = SW.Cars ? SW.Cars.models.length : 4;
+  const makeCar = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : plainCar(i); c.rotation.order = 'YXZ'; if (c.userData.tail) c.userData.tail0 = c.userData.tail.color.clone(); return c; };
+  const carsG = new THREE.Group(), trafficG = new THREE.Group(); scene.add(carsG, trafficG);
+  const garage = Array.from({ length: NCAR }, (_, i) => { const c = makeCar(i); c.visible = false; carsG.add(c); return c; });
+  const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+  let drv = null, drvK = 0, driveHinted = false, padBrake = false, padGas = false, padFast = false;
+  const freeCar = () => { const used = new Set(ring.pas.map((q) => q.car)); if (drv) used.add(drv.car); const free = garage.filter((c) => !used.has(c)); return free[Math.floor(Math.random() * free.length)] || garage[0]; };
+  function parkAt(pa, car, pose) {
+    const u = car.userData, c = Math.cos(pose.yaw), s = Math.sin(pose.yaw);
+    pa.car = car; car.visible = true; car.position.set(pose.x, pa.y, pose.z); car.rotation.set(0, pose.yaw, 0);
+    Object.assign(pa.box, { x: pose.x, z: pose.z, c, s, hx: u.wid / 2 + 0.05, hz: u.len / 2 + 0.05, y0: pa.y - 1.5, y1: pa.y + 3 });
+    Object.assign(pa.ia, { x: pose.x, z: pose.z, sx: pose.x, sz: pose.z, mark: pa.y + u.hgt + 0.7, off: false });
+  }
+  ring.pas.forEach((pa) => {
+    pa.place = places.find((p) => p.song.scene === pa.id);
+    pa.box = { x: 0, z: 0, hx: 1, hz: 2, c: 1, s: 0, y0: 1e9, y1: 1e9 }; boxes.push(pa.box);
+    pa.ia = { kind: 'car', pa, x: 0, z: 0, sx: 0, sz: 0, r: 3.4, mark: 0, y0: pa.y - 1.2, y1: pa.y + 2.5 }; interact.push(pa.ia);
+    pa.out = { kind: 'exit', pa, x: 0, z: 0, mark: 0 };
+    parkAt(pa, freeCar(), pa.slot);
+  });
+  function startDrive(pa) {
+    if (drv || !pa.car) return;
+    const car = pa.car;
+    drv = { car, from: pa, pa, x: car.position.x, z: car.position.z, y: pa.y, yaw: car.rotation.y, v: 0, st: 0, hint: -1, side: -1, hit: 0, wall: 0 };
+    ring.pas.forEach((q) => { if (q !== pa && q.car) q.car.visible = false; q.box.y0 = 1e9; q.ia.off = true; });   // the other bays stay clear, so there is always room to pull in
+    pa.car = null;
+    avatar.G.visible = false; auto = null; keys.clear(); boost = 0; P.v = 0; P.air = false; P.vy = 0;
+    document.body.classList.add('driving');
+    snapCam(); camBlendDur = RM ? 0.01 : 0.9;
+    if (!driveHinted) { driveHinted = true; const h = $('#dhint'); h.classList.add('show'); setTimeout(() => h.classList.remove('show'), 9000); }
+  }
+  // pa = the parking area we stopped in; null = give the car back (warping away, for instance)
+  function endDrive(pa) {
+    const d = drv; if (!d) return;
+    drv = null; keys.clear();
+    document.body.classList.remove('driving'); $('#dhint').classList.remove('show');
+    avatar.G.visible = true;
+    const home = pa || d.from;
+    ring.pas.forEach((q) => (q.car = null));
+    parkAt(home, d.car, pa ? { x: d.x, z: d.z, yaw: d.yaw } : home.slot);
+    ring.pas.forEach((q) => { if (q !== home) parkAt(q, freeCar(), q.slot); });
+    garage.forEach((c) => { if (!ring.pas.some((q) => q.car === c)) c.visible = false; });
+    let spot = null;
+    if (pa) {
+      const fx = Math.sin(d.yaw), fz = Math.cos(d.yaw), w = d.car.userData.wid / 2 + 0.75, l = d.car.userData.len / 2 + 0.8;
+      spot = [[-fz * w, fx * w], [fz * w, -fx * w], [-fx * l, -fz * l], [fx * l, fz * l]].map(([ox, oz]) => ({ x: d.x + ox, z: d.z + oz })).find((q) => pa.canStand(q.x, q.z));   // driver's side first
+    }
+    if (!spot) spot = { x: home.place.vx, z: home.place.vz };
+    P.x = spot.x; P.z = spot.z; P.y = groundAt(P.x, P.z, home.y); P.v = 0; P.air = false;
+    P.face = Math.atan2(d.x - P.x, d.z - P.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face);
+    snapCam(); camBlendDur = RM ? 0.01 : 0.8;
+    regionKey = ''; save();
+  }
+  const rp = { i: -1 }, rq = { s: 0, d: 0 }, ra = {};
+  // The car is steered freely, but the road carries it round its bends and it settles back into its lane when you
+  // let go of the wheel, so holding "forward" is enough to do a lap. Walls and the median are solid.
+  function driveUpdate(dt, idle) {
+    const d = drv, iv = idle ? { f: 0, s: 0 } : inputVec(), u = d.car.userData;
+    if (!idle && padGas) iv.f = Math.max(iv.f, 1);   // pad: right trigger is the accelerator, left trigger the brake
+    const fast = !idle && (running || dashOn || padFast), brake = idle || keys.has('brake') || padBrake, vmax = fast ? 58 : 41;
+    let a = 0;
+    if (iv.f > 0.05) a = d.v < -0.5 ? 30 * iv.f : 17 * iv.f * Math.max(0, 1 - d.v / vmax);
+    else if (iv.f < -0.05) a = d.v > 0.5 ? 36 * iv.f : 10 * iv.f * Math.max(0, 1 + d.v / 9);
+    d.v += a * dt;
+    d.v -= d.v * 0.05 * dt + Math.sign(d.v) * Math.min(Math.abs(d.v), (Math.abs(iv.f) < 0.05 ? 2.2 : 0) * dt);
+    if (d.v > vmax) d.v -= (d.v - vmax) * Math.min(1, dt * 1.2);
+    if (brake) d.v -= Math.sign(d.v) * Math.min(Math.abs(d.v), (idle ? 14 : 44) * dt);
+    d.st += (iv.s - d.st) * Math.min(1, dt * 8);
+    ring.proj(d.x, d.z, d.hint, rp);
+    const tau0 = Math.atan2(rp.tx, rp.tz);
+    d.yaw -= d.st * (d.v / (5.5 + (d.v * d.v) / 34)) * dt;   // yaw grows to the left, so steering right lowers it
+    d.x += Math.sin(d.yaw) * d.v * dt; d.z += Math.cos(d.yaw) * d.v * dt;
+    ring.proj(d.x, d.z, rp.i, rq); d.hint = rq.i;
+    const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45, m = 1.4;
+    if (!med) d.side = rq.d >= 0 ? 1 : -1;
+    const lo = med && d.side > 0 ? 1.3 : -(rq.hw - m), hi = med && d.side < 0 ? -1.3 : rq.hw - m;
+    const inBand = rq.d >= lo && rq.d <= hi;
+    const body = { yaw: d.yaw, len: u.len, wid: u.wid };
+    let pa = inBand ? null : ring.pas.find((q) => q.inside(d.x, d.z, body)) || null;
+    if (!inBand && !pa) {
+      if (d.pa) {   // against the edge of a parking area: the car stops there (speed falls to what it actually moved)
+        const w = d.pa.clamp(d.x, d.z, body), push = Math.hypot(w.x - d.x, w.z - d.z), went = Math.abs(d.v) * dt;
+        d.x = w.x; d.z = w.z; pa = d.pa; d.v *= clamp(1 - push / (went + 1e-6), 0, 1);
+      }
+      else {   // scraping a wall: pushed back in, turned along it, slowed a little
+        const k = clamp(rq.d, lo, hi) - rq.d; d.x += rq.tz * k; d.z -= rq.tx * k; rq.d += k;
+        const rel = wrapA(d.yaw - tau), off = wrapA(rel - (Math.abs(rel) < Math.PI / 2 ? 0 : Math.PI));
+        d.yaw -= off * Math.min(1, dt * 9); d.v -= d.v * Math.min(0.9, (Math.abs(Math.sin(off)) * 5 + 0.4) * dt);
+        d.wall = 1;
+      }
+    }
+    d.pa = pa;
+    {
+      if (!pa) d.yaw += wrapA(tau - tau0);
+      const rel = wrapA(d.yaw - tau), lane = med || pa ? (d.side > 0 ? 0 : Math.PI) : Math.abs(rel) < Math.PI / 2 ? 0 : Math.PI;
+      let off = wrapA(rel - lane), way = lane ? -1 : 1; if (Math.abs(off) > 1.75) { off = wrapA(off - Math.PI); way = -way; }   // deliberately facing the other way: line up that way instead
+      // ...and drift to the middle of the nearest lane (yaw grows to the left, which is +d when heading with s)
+      const ad = Math.abs(rq.d), slow = laneD(rq.hw), mid = med && ad < (2.5 + slow) / 2 ? 2.5 : slow, side = pa ? -1 : Math.sign(rq.d || d.side);
+      off -= way * (d.v < 0 ? -1 : 1) * clamp((side * mid - rq.d) * (pa ? 0.16 : 0.07), pa ? -0.34 : -0.12, pa ? 0.34 : 0.12);   // reversing, the same nose angle carries the car the other way
+      // in a parking area this only helps a car that is already pointing along the road (a lay-by): it eases it out into the lane
+      if (!pa || Math.abs(wrapA(rel - lane)) < 0.7) {   // turns in harder the further off line it is (pulling out of a parking area), but never tighter than the car could steer
+        const turn = off * Math.min(1, dt * (1.8 + 2.2 * Math.abs(off))) * clamp(Math.abs(d.v) / 8, 0, 1) * (1 - Math.min(1, Math.abs(d.st) * 1.6)), most = (Math.abs(d.v) / 3.5) * dt;
+        d.yaw -= clamp(turn, -most, most);
+      }
+    }
+    // ease off behind a slower car in the same lane instead of running into it (steer out to overtake)
+    { const hx = Math.sin(d.yaw), hz = Math.cos(d.yaw);
+      for (const c of traffic) {
+        const dx = c.car.position.x - d.x, dz = c.car.position.z - d.z, ahead = dx * hx + dz * hz;
+        if (ahead < 2 || ahead > 9 + d.v * 0.7 || Math.abs(dx * hz - dz * hx) > 1.5 || Math.cos(wrapA(d.yaw - c.car.rotation.y)) < 0.5) continue;
+        const cap = c.v + Math.max(0, ahead - 8) * 0.9; if (d.v > cap) d.v -= Math.min(d.v - cap, 32 * dt);
+      } }
+    for (const c of traffic) {   // other cars are solid too: box against box, in the other car's frame
+      const dx = d.x - c.car.position.x, dz = d.z - c.car.position.z;
+      if (Math.abs(dx) > 6 || Math.abs(dz) > 6 || Math.abs(d.y - c.car.position.y) > 2) continue;
+      const cy = c.car.rotation.y, ax = Math.sin(cy), az = Math.cos(cy), along = dx * ax + dz * az, lat = dx * az - dz * ax, cu = c.car.userData;
+      const co = Math.abs(Math.cos(d.yaw - cy)), si = Math.abs(Math.sin(d.yaw - cy));
+      const pA = (cu.len + co * u.len + si * u.wid) / 2 - Math.abs(along), pL = (cu.wid + co * u.wid + si * u.len) / 2 - Math.abs(lat);
+      if (pA <= 0 || pL <= 0) continue;
+      if (pL < pA) { const k = Math.sign(lat || 1) * pL; d.x += az * k; d.z -= ax * k; if (pL > 0.03 && d.hit < 0.3) d.v *= 0.9; }   // a side swipe
+      else { const k = Math.sign(along || 1) * pA; d.x += ax * k; d.z += az * k; if (pA > 0.03 && d.hit < 0.3) d.v = Math.cos(wrapA(d.yaw - cy)) > 0 ? Math.min(d.v, c.v * 0.85) : -Math.abs(d.v) * 0.25; }
+      if (Math.min(pA, pL) > 0.03) d.hit = 1;   // resting against one another is not a new knock
+    }
+    d.hit = Math.max(0, d.hit - dt * 3); d.wall = Math.max(0, d.wall - dt * 4);
+    d.y += ((pa ? pa.y : rq.y) - d.y) * Math.min(1, dt * 12);
+    const slope = (ring.Y[(rq.i + 1) % ring.N] - ring.Y[(rq.i + ring.N - 1) % ring.N]) / (2 * ring.ds);
+    d.car.position.set(d.x, d.y, d.z);
+    d.car.rotation.set(pa ? 0 : -Math.atan(slope * Math.cos(wrapA(d.yaw - tau))), d.yaw, clamp(d.st * d.v * 0.0022, -0.07, 0.07));
+    if (u.tail0) u.tail.color.copy(u.tail0).multiplyScalar(brake || iv.f < -0.05 ? 2.4 : 1);
+    P.x = d.x; P.z = d.z; P.y = d.y; P.face = d.yaw; P.v = 0; P.speed = 0; P.lean = 0; boost = 0;
+    // You can get out once the car is stopped in a parking area with its whole body clear of the traffic lane.
+    const here = idle ? null : ring.pas.find((q) => q.inside(d.x, d.z, body));
+    const relY = wrapA(d.yaw - tau), reach = (Math.abs(Math.sin(relY)) * u.len + Math.abs(Math.cos(relY)) * u.wid) / 2;
+    focus = here && Math.abs(d.v) < 5 && Math.abs(rq.d) - reach > laneD(rq.hw) + 1.15 ? Object.assign(here.out, { x: d.x, z: d.z, mark: d.y + u.hgt + 0.8 }) : null;
+  }
+  // Light traffic in the slow lane each way; it keeps its distance from the car in front, and from you.
+  const traffic = [];
+  { const r = rng(606); for (let k = 0; k < 12; k++) { const car = makeCar(Math.floor(r() * NCAR)), v0 = 19 + r() * 6; trafficG.add(car); traffic.push({ car, dir: k % 2 ? 1 : -1, s: ((k + r() * 0.6) / 12) * ring.L, v: v0, v0 }); } }
+  const laneD = (hw) => 1.83 + 3.87 * clamp((hw - 4.5) / 3.5, 0, 1);
+  function updTraffic(dt) {
+    const L = ring.L, pv = drv ? drv.v : 0;
+    for (const c of traffic) {
+      let vt = c.v0;
+      for (const o of traffic) { if (o === c || o.dir !== c.dir) continue; const gap = ((((o.s - c.s) * c.dir) % L) + L) % L; if (gap < 18) vt = Math.min(vt, gap < 9 ? 0 : o.v); }
+      if (drv && !drv.pa && Math.abs(rq.d - c.dir * laneD(rq.hw)) < 2.3) {
+        const gap = ((((rq.s - c.s) * c.dir) % L) + L) % L;
+        if (gap < 20) vt = Math.min(vt, gap < 9 ? 0 : Math.max(0, pv * Math.cos(wrapA(drv.yaw - c.car.rotation.y))));
+      }
+      c.v += (vt - c.v) * Math.min(1, dt * (vt < c.v ? 3 : 0.8));
+      c.s = (c.s + c.dir * c.v * dt + L) % L;
+      ring.at(c.s, 0, ra);
+      const dl = c.dir * laneD(ra.hw), slope = (ring.Y[(ra.i + 1) % ring.N] - ring.Y[ra.i]) / ring.ds;
+      c.car.position.set(ra.x + ra.tz * dl, ra.y, ra.z - ra.tx * dl);
+      c.car.rotation.set(-Math.atan(slope) * c.dir, Math.atan2(ra.tx, ra.tz) + (c.dir < 0 ? Math.PI : 0), 0);
+      c.car.visible = Math.abs(ra.x - P.x) < 210 && Math.abs(ra.z - P.z) < 210;
     }
   }
 
@@ -1002,12 +1185,12 @@
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
     if (e.code === 'KeyQ') camYaw += 0.2;
     else if (e.code === 'KeyE') camYaw -= 0.2;
-    else if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) jump(); }
+    else if (e.code === 'Space') { e.preventDefault(); if (drv) keys.add('brake'); else if (!e.repeat) jump(); }
     else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter')) { e.preventDefault(); if (focus) act(focus); }
     else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); if (!e.repeat) openMap(); }
     else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) openPhone(); }
   });
-  addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; const k = KEYMAP[e.code]; if (k) keys.delete(k); });
+  addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; if (e.code === 'Space') keys.delete('brake'); const k = KEYMAP[e.code]; if (k) keys.delete(k); });
   addEventListener('blur', () => { keys.clear(); running = false; });
 
   let drag = null;
@@ -1028,6 +1211,7 @@
   cv.addEventListener('pointercancel', () => (drag = null));
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function tap(cx, cy) {
+    if (drv) return;
     const r = cv.getBoundingClientRect();
     ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
@@ -1056,7 +1240,7 @@
   let padPrev = [], padRun = false, padV = null;   // pad() is polled once a frame in every mode, so its buttons work in menus too
   function pad() {
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find((g) => g && g.connected) : null;
-    if (!gp) return null;
+    if (!gp) { padRun = padBrake = padGas = padFast = false; padPrev = []; return null; }   // a pad that drops out must not leave its triggers held
     const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
     const pressed = gp.buttons.map((b) => b.pressed);
     const down = (i) => pressed[i] && !padPrev[i];
@@ -1067,18 +1251,20 @@
     if (down(1) && mode === 'phone') phoneBack();
     else if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
     padPrev = pressed;
-    padRun = !!(pressed[7] || pressed[5] || pressed[2]);
+    padRun = !!(pressed[7] || pressed[5] || pressed[2]); padBrake = !!(pressed[6] || pressed[4]); padGas = !!pressed[7]; padFast = !!(pressed[5] || pressed[2]);
     if (mode === 'walk') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
-  function pressA() { if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else jump(); } }
+  function pressA() { if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else if (!drv) jump(); } }
   $('#btnB').addEventListener('pointerdown', (e) => { e.preventDefault(); dashOn = !dashOn; $('#btnB').classList.toggle('on', dashOn); });
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
   function act(ia) {
     auto = null; keys.clear();
     if (ia.kind === 'view') { enterView(ia.place); return; }
     if (ia.kind === 'board') { openMap(); return; }
+    if (ia.kind === 'car') { startDrive(ia.pa); return; }
+    if (ia.kind === 'exit') { endDrive(ia.pa); return; }
     if (ia.kind === 'info') { say(ia.lines.slice()); return; }
     if (ia.kind === 'travel') { openConfirm(ia); return; }
     if (ia.kind === 'sign') {
@@ -1145,6 +1331,7 @@
     if (mode !== 'view') return;
     snapCam(); camBlendDur = RM ? 0.01 : 0.9;
     mode = 'walk'; viewPlace = null;
+    collide(P);   // the viewpoint may have a parked car standing on it: step out from inside it
     document.body.classList.remove('busy', 'viewing');
     $('#view').hidden = true;
     cv.focus({ preventScroll: true });
@@ -1194,6 +1381,9 @@
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 3 * MAP_S;
     places.forEach((p) => { g.beginPath(); p.path.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke(); });
     g.fillStyle = '#8a8376'; g.beginPath(); g.arc(...toMap(0, 0), PLAZA_R * MAP_S, 0, 7); g.fill();
+    g.lineJoin = 'round'; g.strokeStyle = '#4a4e58'; g.lineWidth = 15 * MAP_S; g.beginPath();   // the ring road, with the parking areas where a car waits
+    for (let i = 0; i < ring.N; i += 2) { const [x, y] = toMap(ring.X[i], ring.Z[i]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.closePath(); g.stroke(); g.strokeStyle = 'rgba(232,226,208,.7)'; g.lineWidth = 1.5; g.setLineDash([9, 9]); g.stroke(); g.setLineDash([]);
     g.textAlign = 'center';
     places.forEach((p) => {
       const [x, y] = toMap(p.vx, p.vz);
@@ -1203,6 +1393,8 @@
       g.font = '700 18px sans-serif'; g.textBaseline = 'middle'; g.fillStyle = '#141412';
       g.fillText(p.found ? '♪' : '?', x, y + 1);
     });
+    ring.pas.forEach((pa) => { const [x, y] = toMap(...Object.values(pa.f.toWorld(10, -10))); g.save(); g.translate(x, y); g.fillStyle = '#e8e2d0'; g.strokeStyle = '#141412'; g.lineWidth = 2;
+      g.beginPath(); g.rect(-9, -5, 18, 8); g.rect(-5, -10, 10, 5); g.fill(); g.stroke(); g.fillStyle = '#141412'; g.beginPath(); g.arc(-5, 4, 3, 0, 7); g.arc(5, 4, 3, 0, 7); g.fill(); g.restore(); });
     const [px, py] = toMap((at || P).x, (at || P).z);
     g.save(); g.translate(px, py); g.rotate(at ? 0 : -P.face + Math.PI); if (at) g.scale(1.6, 1.6);
     g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill();
@@ -1219,6 +1411,7 @@
   function warpTo(p) {
     const f = $('#fade'); f.classList.add('on'); mode = 'fade';
     setTimeout(() => {
+      if (drv) { endDrive(null); camBlend = 1; }   // no camera glide from the road: the fade covers the jump
       const q = p.path[Math.max(0, p.path.length - 9)];
       P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z); P.v = 0; auto = null;
       P.face = Math.atan2(p.vx - q.x, p.vz - q.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face); camYaw = P.face + Math.PI;
@@ -1255,7 +1448,9 @@
     const x = ((e.clientX - r.left) / r.width) * mapCv.width / MAP_S - 150, z = ((e.clientY - r.top) / r.height) * mapCv.height / MAP_S - 150;
     let best = null, bd = 14;
     places.forEach((p) => { const d = Math.hypot(p.vx - x, p.vz - z); if (d < bd) { bd = d; best = p; } });
+    if (drv && !best) return;   // behind the wheel a tap on open ground means nothing
     closeMap();
+    if (drv && !best.found) endDrive(null);   // hand the car back and set off on foot
     if (best && best.found) warpTo(best);
     else if (best) routeTo(best);
     else auto = { pts: [{ x, z }], i: 0 };
@@ -1269,7 +1464,7 @@
   /* ================= audio + discovery ================= */
   const R_AUD = 34, R_VIEW = 3.2;
   const SILENT = { bass: 0, mid: 0, high: 0, level: 0, beat: false, pulse: 0, beats: 0, spectrum: null };
-  let npT = 0;
+  let npT = 0, loudP = null;
   function updateAudio(dt) {
     const A = SW.Audio, on = A.started;
     const rx = Math.cos(camYaw), rz = -Math.sin(camYaw), fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
@@ -1277,10 +1472,12 @@
     places.forEach((p) => {
       const dx = p.vx - P.x, dz = p.vz - P.z, d = Math.hypot(dx, dz);
       const viewing = viewPlace === p;
-      const pp = viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1);
+      // Behind the wheel the car radio picks up whichever song you are driving past: by direction, not distance.
+      const radio = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
+      const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), radio * 0.85);
       p.dwell = (d < 4.5 || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);
       const prox = 0.4 * pp * pp;
-      p.gain = prox + (1 - prox) * ease(p.dwell) * pp;
+      p.gain = Math.max(prox + (1 - prox) * ease(p.dwell) * pp, radio * 0.5);
       p.pp = pp;
       if (!p.found && d < 20 && on) {
         p.found = true; refreshLabels(p); updateFound(); save();
@@ -1289,7 +1486,7 @@
       }
       if (!on) { p.f = SILENT; return; }
       const ch = A.channels[p.idx];
-      if (d < R_AUD * 1.1 || viewing) ch.start();
+      if (d < R_AUD * 1.1 || viewing || radio > 0) ch.start();
       else if (d > R_AUD * 1.3 && ch.gain < 0.002) ch.stop();
       const cut = 260 * Math.pow(20000 / 260, clamp(pp * 1.25, 0, 1));
       const side = d > 0.01 ? (dx * rx + dz * rz) / d : 0;
@@ -1299,6 +1496,7 @@
       p.dir = Math.atan2((dx * rx + dz * rz), (dx * fx + dz * fz));
       if (p.gain > 0.012 && (!loud || p.gain > loud.gain)) loud = p;
     });
+    loudP = loud;
     npT -= dt;
     if (npT <= 0) {
       npT = 0.08;
@@ -1316,9 +1514,11 @@
 
   /* ================= update ================= */
   const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3(), tmpU = new THREE.Vector3(), fwd = new THREE.Vector3();
+  let lastKmh = -1;
   function update(dt) {
     padV = pad();
-    if (mode === 'walk') {
+    if (drv) driveUpdate(dt, mode !== 'walk');
+    else if (mode === 'walk') {
       const iv = inputVec();
       let mx = 0, mz = 0, sp = 0;
       // Hold run (or auto-travel a long way) to hop on the board: speed builds up, turns get wider.
@@ -1375,7 +1575,8 @@
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
     const gh = groundAt(P.x, P.z, P.y);
-    if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
+    if (drv) { /* the car sets the height */ }
+    else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
@@ -1388,25 +1589,30 @@
     const fkey = show ? focus : null;
     if (fkey !== lastFocus) {
       lastFocus = fkey;
-      $('#prompt').hidden = !fkey;
+      $('#prompt').hidden = !fkey; $('#prompt').className = fkey ? 'k-' + fkey.kind : '';
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
         $('#promptText').textContent = !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
-    $('#btnA').classList.toggle('ready', !!fkey);
+    { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
 
     updateAudio(dt);
+    updTraffic(dt);
 
     // Lighting: blend towards the closest place's grade.
     let bp = null, bw = 0;
     places.forEach((p) => {
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
-      const w = viewPlace === p ? 1 : smooth(48, 16, d);
+      const w = viewPlace === p ? 1 : smooth(48, 16, d - (drv ? 20 : 0));   // from the road the places are a little further off, so reach for them sooner
       if (w > bw) { bw = w; bp = p; }
     });
-    if (bp) blendGrade(BASE, bp.grade, bw); else blendGrade(BASE, BASE, 0);
+    drvK += ((drv ? 1 : 0) - drvK) * Math.min(1, dt * 0.9);
+    mixGrade(GB, BASE, DRIVE, ease(clamp(drvK, 0, 1)));
+    mixGrade(G, GB, bp ? bp.grade : GB, bp ? bw : 0);
     applyGrade();
+    ringView.upd(clamp(1 - G.sunInt / 1.1, 0, 1), loudP && loudP.f ? loudP.f.pulse : 0);
+    ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;   // a view shows only its own place
 
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, Math.hypot(P.x - p.vx, P.z - p.vz));
@@ -1430,9 +1636,14 @@
       fwd.copy(tmpL).sub(tmpV).normalize();
       tmpU.set(0, 1, 0).applyAxisAngle(fwd, s.roll || 0);
     } else {
+      let cd = camDist + boost * 1.8;
       if (mode === 'title') { camYaw += dt * 0.06; }
+      else if (drv) {   // chase camera: it swings round behind the car unless you are dragging the view
+        if (!drag) { camYaw += wrapA(drv.yaw + Math.PI - camYaw) * Math.min(1, dt * (2.5 + Math.abs(drv.v) * 0.1)); camPitch += (0.19 - camPitch) * Math.min(1, dt * 2); }
+        cd = 6.4 + Math.abs(drv.v) * 0.04; ty = P.y + 1.3 + (drv.hit > 0.4 && !RM ? Math.sin(t * 55) * 0.05 * drv.hit : 0);
+      }
       else { const sh = 0.62 * (1 - boost * 0.6); tx += Math.cos(camYaw) * sh; tz -= Math.sin(camYaw) * sh; }
-      let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * (camDist + boost * 1.8), cy = ty + Math.sin(camPitch) * (camDist + boost * 1.8), cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * (camDist + boost * 1.8);
+      let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * cd, cy = ty + Math.sin(camPitch) * cd, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * cd;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
       cx = clamp(cx, -160, 160); cz = clamp(cz, -160, 160); cy = Math.min(40, Math.max(groundAt(cx, cz) + 0.5, cy));
       tmpV.set(cx, cy, cz); tmpL.set(tx, ty - 0.1, tz); tmpU.set(0, 1, 0);
@@ -1442,15 +1653,22 @@
       const k = ease(camBlend);
       tmpV.lerpVectors(camFrom.pos, tmpV, k); tmpL.lerpVectors(camFrom.look, tmpL, k); tmpU.lerpVectors(camFrom.up, tmpU, k).normalize();
     }
-    const fv = baseFov + (RM ? 0 : boost * 15 + clamp(P.v / 7.5, 0, 1) * (1 - boost) * 4);
+    const dv = drv ? Math.abs(drv.v) : 0;
+    const fv = baseFov + (RM ? 0 : drv ? clamp(dv / 58, 0, 1) * 24 : boost * 15 + clamp(P.v / 7.5, 0, 1) * (1 - boost) * 4);
     if (Math.abs(camera.fov - fv) > 0.05) { camera.fov = fv; camera.updateProjectionMatrix(); }
-    const spd = boost * clamp(P.v / 16, 0, 1);
+    const spd = drv ? clamp((dv - 22) / 34, 0, 1) : boost * clamp(P.v / 16, 0, 1);
     post.uniforms.spd.value = RM ? 0 : spd;
-    if (wind) { const ct = SW.Audio.ctx.currentTime; wind.g.gain.setTargetAtTime(0.035 * spd * spd, ct, 0.15); wind.f.frequency.setTargetAtTime(380 + 500 * spd, ct, 0.15); wind.hg.gain.setTargetAtTime(0.05 * Math.min(1, boost * 1.4) * (0.4 + 0.6 * spd), ct, 0.12); wind.o1.frequency.setTargetAtTime(82 + 58 * spd, ct, 0.2); wind.o2.frequency.setTargetAtTime(123.5 + 87 * spd, ct, 0.2); }
+    if (wind && drv) {   // the same two voices play the engine: pitch climbs through each gear and drops on the shift
+      const ct = SW.Audio.ctx.currentTime, GEARS = [0, 9, 18, 28, 40, 62]; let gi = 0; while (gi < 4 && dv >= GEARS[gi + 1]) gi++;
+      const rpm = 0.3 + 0.7 * clamp((dv - GEARS[gi]) / (GEARS[gi + 1] - GEARS[gi]), 0, 1);
+      wind.g.gain.setTargetAtTime(0.012 + 0.03 * spd * spd, ct, 0.15); wind.f.frequency.setTargetAtTime(300 + 500 * clamp(dv / 58, 0, 1), ct, 0.15);
+      wind.hg.gain.setTargetAtTime(0.03 + 0.03 * rpm, ct, 0.1); wind.o1.frequency.setTargetAtTime(44 + 62 * rpm, ct, 0.07); wind.o2.frequency.setTargetAtTime(66 + 93 * rpm, ct, 0.07);
+    } else if (wind) { const ct = SW.Audio.ctx.currentTime; wind.g.gain.setTargetAtTime(0.035 * spd * spd, ct, 0.15); wind.f.frequency.setTargetAtTime(380 + 500 * spd, ct, 0.15); wind.hg.gain.setTargetAtTime(0.05 * Math.min(1, boost * 1.4) * (0.4 + 0.6 * spd), ct, 0.12); wind.o1.frequency.setTargetAtTime(82 + 58 * spd, ct, 0.2); wind.o2.frequency.setTargetAtTime(123.5 + 87 * spd, ct, 0.2); }
     camera.position.copy(tmpV); camera.up.copy(tmpU); camera.lookAt(tmpL); camLook.copy(tmpL);
     sky.position.copy(camera.position); stars.position.copy(camera.position);
     planet.position.set(camera.position.x - 260, camera.position.y + 250, camera.position.z - 380);
     worldUpd.forEach((f) => f(t, dt));
+    if (drv) { const kmh = Math.round(dv * 3.6); if (kmh !== lastKmh) { lastKmh = kmh; $('#spdNum').textContent = kmh; $('#spdBar').firstElementChild.style.width = Math.min(100, kmh / 2.1) + '%'; } }
     farGroup.visible = !(viewPlace && camBlend >= 1); farLights.opacity = Math.sin(t * 2.2) > 0.2 ? 1 : 0.15;
     sun.position.set(P.x + G.sunDir.x * 60, P.y + G.sunDir.y * 60, P.z + G.sunDir.z * 60);
     sun.target.position.set(P.x, P.y, P.z);
@@ -1467,6 +1685,10 @@
     g.fillStyle = 'rgba(12,12,11,.88)'; g.fillRect(0, 0, S, S);
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round';
     places.forEach((p) => { g.beginPath(); for (let i = 0; i < p.path.length; i += 3) { const [x, y] = tr(p.path[i].x, p.path[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); });
+    g.strokeStyle = 'rgba(96,104,118,.95)'; g.lineWidth = 6; g.beginPath();   // the ring road
+    for (let i = 0; i <= ring.N; i += 2) { const [x, y] = tr(ring.X[i % ring.N], ring.Z[i % ring.N]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.stroke(); g.strokeStyle = 'rgba(232,226,208,.55)'; g.lineWidth = 1; g.setLineDash([4, 5]); g.stroke(); g.setLineDash([]);
+    ring.pas.forEach((pa) => { const [x, y] = tr(pa.slot.x, pa.slot.z); g.fillStyle = '#2f6fd0'; g.fillRect(x - 5, y - 5, 10, 10); g.strokeStyle = '#e8e2d0'; g.lineWidth = 1.5; g.strokeRect(x - 5, y - 5, 10, 10); });   // parking areas
     const [px, py] = tr(0, 0);
     g.fillStyle = '#8a8376'; g.beginPath(); g.arc(px, py, PLAZA_R * k, 0, 7); g.fill();
     g.restore();
@@ -1576,5 +1798,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start };
+  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
