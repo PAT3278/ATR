@@ -182,7 +182,7 @@
       const PARTS = p.song.parts || [{ at: 0, who: 'stvn' }], LEN = p.song.length || 125.2;
       const whoAt = (T) => { let w = PARTS[0].who; for (const s of PARTS) if (T >= s.at) w = s.who; return w; };
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
-      const CUTAWAYS = [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]]; // short cuts to the firefight; none while they are on the move
+      const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
         const cr = E.rng(212), X = 6.6;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
@@ -246,8 +246,10 @@
         sun: '#9fb4ff', sunInt: 0.3, hemi: 0.28, sunDir: [0.2, 0.8, -0.4],
         tint: [0.96, 1.0, 1.1], expo: 1.25, sat: 0.95, stars: 0.15,
       };
-      p.face = Math.PI;
-      p.pathEnd = 11;
+      p.face = Math.PI / 2;   // facing the stoops
+      p.soloView = true;
+      p.vp = [2, 26.3];   // the music lives on the pavement in front of the two performers, not in the office
+      p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
       p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
@@ -369,7 +371,7 @@
         if (Math.abs(lx) < 4.4 && lz >= -8.6 && lz < 6) return H;
         return 0;
       };
-      p.addBox(0, -8.7, 4.6, 0.25, H - 2); p.addBox(-4.55, -1.2, 0.25, 7.6); p.addBox(4.55, -1.2, 0.25, 7.6);   // on foot you stay off the road
+      p.addBox(0, -8.7, 4.6, 0.25); p.addBox(-3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(-4.55, -1.2, 0.25, 7.6); p.addBox(4.55, -1.2, 0.25, 7.6);   // on foot you stay off the road
       { const hz = E.basic('#d8b020'); for (const x of [-3.6, -1.2, 1.2, 3.6]) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.22), hz); st.position.set(x, H + 0.012, -7.9); st.rotation.y = 0.6; g.add(st); } }
       p.addBox(-2.85, 16, 0.25, 10); p.addBox(2.85, 16, 0.25, 10);
 
@@ -506,8 +508,9 @@
         if (lz > -2 && Math.abs(lx) < 6) continue;
         const s = 0.8 + r() * 1.8;
         const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), r() < 0.5 ? rockM : rockD);
-        m.position.set(lx, height(lx, lz) + s * 0.3, lz); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true; g.add(m);
-        p.addCircle(lx, lz, s * 0.8);
+        m.position.set(lx, height(lx, lz) + s * 0.3, lz); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true;
+        if (lz + s > RZ - 4.5 && lz - s < (Math.abs(lx) < 9.2 + s ? -7.9 : RZ + 4.5) && height(lx, lz) + s * 1.3 > RH - 0.9) continue;   // it would poke up through the road or the lay-by
+        g.add(m); p.addCircle(lx, lz, s * 0.8);
       }
       // Overlook: guardrail at the edge, a bench
       const railM = E.mat('#d8d6cf', { metal: 0.5, rough: 0.4 });
@@ -515,7 +518,7 @@
       gr.position.set(0, HH + 0.75, -7.6); g.add(gr);
       for (let x = -6; x <= 6; x += 2) { const pp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), railM); pp.position.set(x, HH + 0.4, -7.6); g.add(pp); }
       p.addBox(0, -7.8, 6.5, 0.3);
-      p.addBox(0, -10.85, 30, 0.2, RH - 2.5);   // on foot you stay off the road
+      p.addBox(0, -10.85, 30, 0.2, RH - 2.5); p.addBox(0, -15.3, 14, 4.6);   // ...and the hill under the deck is too high to stand on   // on foot you stay off the road
       { const lay = E.plane(18.4, 2.75, E.mat('#4a4a4e', { map: E.tex('asphalt', 6, 1), rough: 0.85 })); lay.position.set(0, RH + 0.03, -9.2); g.add(lay); p.pick(lay); }
       E.bench(g, 3.2, -5.6, Math.PI, HH);
       p.addBox(3.2, -5.6, 1.2, 0.4);

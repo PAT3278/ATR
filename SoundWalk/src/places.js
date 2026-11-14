@@ -358,8 +358,9 @@
       for (let i = 0; i < 38; i++) {
         const bgeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
         const b = new THREE.Mesh(bgeo, cityM);
-        const base = 4 + r() * 12;
+        let base = 4 + r() * 12;
         b.position.set(-80 + i * 4.3 + r() * 2, 0, -62 - r() * 16);
+        { const w = p.toWorld(b.position.x, b.position.z); if (E.ring && E.ring.dist(w.x, w.z) < 12) base = Math.min(base, 6); }   // under the ring road: stay below the deck
         b.scale.set(3 + r() * 2, base, 3 + r() * 2);
         g.add(b);
         city.push({ b, base, k: i % 24 });

@@ -527,13 +527,14 @@
   places.forEach((p) => {
     const len = Math.hypot(p.x, p.z), ux = p.x / len, uz = p.z / len;
     const a = { x: ux * (PLAZA_R - 0.5), z: uz * (PLAZA_R - 0.5) };
-    const e = p.toWorld(0, p.pathEnd), eIn = p.toWorld(0, p.pathEnd + 14);
+    const [vlx, vlz] = p.vp || [0, 0];   // a place may put its viewpoint (and so its sound) somewhere other than its own origin
+    const e = p.toWorld(vlx, p.pathEnd), eIn = p.toWorld(vlx, p.pathEnd + 14);
     const b = { x: a.x + ux * 12, z: a.z + uz * 12 };
     const pts = [];
     const N = 70;
     for (let i = 0; i <= N; i++) { const t = i / N; pts.push({ x: cubic(a.x, b.x, eIn.x, e.x, t), z: cubic(a.z, b.z, eIn.z, e.z, t) }); }
     // continue straight to the viewpoint
-    const vp = p.toWorld(0, 0), last = pts[pts.length - 1];
+    const vp = p.toWorld(vlx, vlz), last = pts[pts.length - 1];
     const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
     for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
     p.path = pts;
@@ -604,7 +605,7 @@
   /* ================= per-place beacons, labels, signposts ================= */
   const additive = (color, opacity) => { const m = new THREE.MeshBasicMaterial({ color: lin(color), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }); m.userData.lin = true; return m; };
   places.forEach((p) => {
-    const vp = p.toWorld(0, 0), gy = groundAt(vp.x, vp.z);
+    const vp = p.toWorld(...(p.vp || [0, 0])), gy = groundAt(vp.x, vp.z);
     p.vx = vp.x; p.vz = vp.z; p.vy = gy;
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 70, 20, 1, true).translate(0, 35, 0), additive(p.color, 0.12));
     beam.position.set(vp.x, gy, vp.z);
@@ -1580,6 +1581,7 @@
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
+    avatar.G.visible = !drv && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
     const vf = viewPlace ? viewPlace.f : null;
     avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, mode !== 'view' && gh < 0.1 && isWater(P.x, P.z));
 
@@ -1617,7 +1619,7 @@
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, Math.hypot(P.x - p.vx, P.z - p.vz));
       const f = p.f || SILENT;
-      if (v > 0.001 || viewPlace === p) p.update(t, dt, f, v, viewPlace === p);
+      if (v > 0.001 || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
       p.group.visible = !viewPlace || viewPlace === p || camBlend < 1;
       const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
