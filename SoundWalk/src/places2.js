@@ -198,12 +198,12 @@
           f.traverse((m) => { if (m.isMesh) m.castShadow = true; });
           return { f, arms, torso, head };
         };
-        // stvn, modelled in more detail: puffer jacket with a hood, baggy trousers, trainers, a cuffed beanie, a chain, and arms that bend.
+        // The two performers, modelled in detail. stvn: red puffer with a hood, cuffed beanie, chain. vas: white track jacket with a stripe, blue cap, lighter jeans.
         // Same handles as fig() (f, arms, torso, head), so the performance code drives both.
-        const figStvn = () => {
+        const figPro = (o) => {
           const f = new THREE.Group(), M = (hex, o) => E.mat(hex, { ...o, emissive: hex, emissiveIntensity: 0.42 });   // lit a little from within, as if by a stoop lamp: the street is dark
-          const skin = M('#8a5a3c', { rough: 0.7 }), skinD = M('#6f452c', { rough: 0.7 }), red = M('#b3161d', { rough: 0.75 }), redD = M('#8c1016', { rough: 0.8 }), blk = M('#141416', { rough: 0.85 });
-          const denim = M('#23262e', { rough: 0.9 }), white = M('#e6e2d6', { rough: 0.6 }), sole = M('#f4f1e6', { rough: 0.5 }), gold = M('#d9b24a', { rough: 0.3, metal: 0.8 }), eye = M('#0d0c0b', { rough: 0.3 });
+          const skin = M(o.skin, { rough: 0.7 }), skinD = M(o.skinD, { rough: 0.7 }), red = M(o.jacket, { rough: 0.75 }), redD = M(o.jacketD, { rough: 0.8 }), blk = M(o.trim, { rough: 0.85 });
+          const denim = M(o.pants, { rough: 0.9 }), white = M(o.shoe, { rough: 0.6 }), capM = M(o.hat, { rough: 0.8 }), sole = M('#f4f1e6', { rough: 0.5 }), gold = M('#d9b24a', { rough: 0.3, metal: 0.8 }), eye = M('#0d0c0b', { rough: 0.3 });
           const add = (par, geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); par.add(o); return o; };
           const cyl = (rt, rb, h, n = 10) => new THREE.CylinderGeometry(rt, rb, h, n), sph = (r, a = 12, b = 9) => new THREE.SphereGeometry(r, a, b);
           // legs: baggy, stacked at the ankle, over chunky trainers (front of the figure is +Z)
@@ -213,30 +213,40 @@
             add(f, cyl(0.112, 0.118, 0.07), denim, sx, 0.135, 0.008);                                   // the stack
             add(f, new THREE.BoxGeometry(0.125, 0.075, 0.3), white, sx, 0.075, 0.045);
             add(f, new THREE.BoxGeometry(0.13, 0.035, 0.31), sole, sx, 0.02, 0.045);
-            add(f, new THREE.BoxGeometry(0.127, 0.03, 0.1), red, sx, 0.085, 0.02);
+            add(f, new THREE.BoxGeometry(0.127, 0.03, 0.1), o.puffer ? red : capM, sx, 0.085, 0.02);
           }
           add(f, cyl(0.2, 0.19, 0.16), denim, 0, 0.93, 0).scale.z = 0.72;                               // hips
           // jacket: quilted puffer in three rolls, wider at the shoulders, with a collar and a hood down the back
           const torso = new THREE.Group(); torso.position.y = 1.2; f.add(torso);
-          [[-0.24, 0.235, 0.215], [-0.07, 0.25, 0.24], [0.1, 0.262, 0.25], [0.245, 0.25, 0.262]].forEach(([y, rt, rb], k) => { const o = add(torso, cyl(rt, rb, 0.165, 12), k % 2 ? red : redD, 0, y, 0); o.scale.z = 0.74; });
+          if (o.puffer) [[-0.24, 0.235, 0.215], [-0.07, 0.25, 0.24], [0.1, 0.262, 0.25], [0.245, 0.25, 0.262]].forEach(([y, rt, rb], k) => { const q = add(torso, cyl(rt, rb, 0.165, 12), k % 2 ? red : redD, 0, y, 0); q.scale.z = 0.74; });
+          else {   // track jacket: smooth body, a coloured band across the chest, a pocket line
+            add(torso, cyl(0.245, 0.205, 0.5, 14), red, 0, -0.07, 0).scale.z = 0.72; add(torso, cyl(0.235, 0.247, 0.15, 14), red, 0, 0.255, 0).scale.z = 0.72;
+            add(torso, cyl(0.249, 0.246, 0.07, 14), capM, 0, 0.12, 0).scale.z = 0.725; add(torso, cyl(0.25, 0.248, 0.018, 14), blk, 0, 0.07, 0).scale.z = 0.725;
+          }
           add(torso, cyl(0.205, 0.22, 0.05, 12), blk, 0, -0.335, 0).scale.z = 0.74;                      // hem band
           add(torso, new THREE.BoxGeometry(0.03, 0.6, 0.02), blk, 0, 0, 0.185);                          // zip
           add(torso, new THREE.TorusGeometry(0.115, 0.045, 6, 12), red, 0, 0.345, 0.0, Math.PI / 2).scale.set(1, 0.8, 1);   // collar
-          add(torso, sph(0.15, 10, 8), redD, 0, 0.29, -0.15).scale.set(1.15, 0.85, 0.6);                 // hood
-          add(torso, new THREE.TorusGeometry(0.1, 0.008, 4, 16, Math.PI), gold, 0, 0.22, 0.165, 0.25, 0, Math.PI);          // chain
-          add(torso, new THREE.BoxGeometry(0.035, 0.045, 0.012), gold, 0, 0.115, 0.19);
+          if (o.puffer) add(torso, sph(0.15, 10, 8), redD, 0, 0.29, -0.15).scale.set(1.15, 0.85, 0.6);                 // hood
+          if (o.chain) { add(torso, new THREE.TorusGeometry(0.1, 0.008, 4, 16, Math.PI), gold, 0, 0.22, 0.165, 0.25, 0, Math.PI); add(torso, new THREE.BoxGeometry(0.035, 0.045, 0.012), gold, 0, 0.115, 0.19); }
           add(f, cyl(0.055, 0.062, 0.1, 8), skin, 0, 1.56, 0);                                           // neck
           // head: skull, jaw, ears, nose, brow, eyes, a short beard, and a beanie with a cuff
           const head = new THREE.Group(); head.position.y = 1.68; f.add(head);
           add(head, sph(0.122, 14, 11), skin, 0, 0.005, 0).scale.set(0.94, 1.06, 1);
           add(head, sph(0.095, 10, 8), skin, 0, -0.062, 0.02).scale.set(0.95, 0.8, 0.95);                // jaw
-          add(head, sph(0.097, 10, 8), skinD, 0, -0.075, 0.018).scale.set(0.97, 0.62, 0.97);             // beard shadow
+          if (o.beard) add(head, sph(0.097, 10, 8), skinD, 0, -0.075, 0.018).scale.set(0.97, 0.62, 0.97);             // beard shadow
           for (const sx of [-1, 1]) { add(head, sph(0.03, 6, 5), skin, sx * 0.116, -0.005, -0.005).scale.set(0.5, 1, 0.8); add(head, sph(0.014, 6, 5), eye, sx * 0.043, 0.012, 0.108); add(head, new THREE.BoxGeometry(0.045, 0.012, 0.02), eye, sx * 0.043, 0.04, 0.104, 0, 0, -sx * 0.12); }
           add(head, new THREE.ConeGeometry(0.02, 0.055, 5), skin, 0, -0.012, 0.122, 1.25);               // nose
           add(head, new THREE.BoxGeometry(0.05, 0.008, 0.01), skinD, 0, -0.058, 0.105);                  // mouth
-          add(head, new THREE.SphereGeometry(0.132, 14, 9, 0, 6.3, 0, 1.45), blk, 0, 0.035, -0.004);     // beanie
-          add(head, cyl(0.136, 0.134, 0.055, 14), M('#232326', { rough: 0.9 }), 0, 0.045, -0.004);       // its cuff
-          add(head, sph(0.03, 6, 5), blk, 0, 0.165, -0.01);
+          if (o.beanie) {
+            add(head, new THREE.SphereGeometry(0.132, 14, 9, 0, 6.3, 0, 1.45), capM, 0, 0.035, -0.004);
+            add(head, cyl(0.136, 0.134, 0.055, 14), M('#232326', { rough: 0.9 }), 0, 0.045, -0.004);       // its cuff
+            add(head, sph(0.03, 6, 5), capM, 0, 0.165, -0.01);
+          } else {   // baseball cap, brim forward and a touch up; short hair showing at the back
+            add(head, new THREE.SphereGeometry(0.13, 14, 9, 0, 6.3, 0, 1.25), capM, 0, 0.045, -0.004);
+            add(head, cyl(0.105, 0.115, 0.012, 12), capM, 0, 0.062, 0.115, 0.12).scale.set(1, 1, 0.75);
+            add(head, sph(0.012, 5, 4), capM, 0, 0.175, -0.004);
+            add(head, new THREE.SphereGeometry(0.126, 12, 8, 0, 6.3, 1.2, 0.75), M('#15100c', { rough: 0.9 }), 0, 0.02, -0.012);
+          }
           // arms: puffer sleeves with an elbow, ribbed cuff, hand with a thumb. The mic is in the right hand.
           const arms = [-1, 1].map((sd) => {
             const piv = new THREE.Group(); piv.position.set(sd * 0.3, 1.46, 0); f.add(piv);
@@ -285,7 +295,9 @@
           bx(0.04, 0.04, 3.0, X - 3.1, 0.8, z0 + 1.5, ironM, false);
           p.addBox(X + 4, z0, 4.05, 3.1); p.addBox(X - 1.5, dz, 1.6, 1.0); p.addBox(X - 3.1, z0 + 1.5, 0.15, 1.55);
           if (i === 1 || i === 2) {
-            const m = i === 1 ? figStvn() : fig('#d8d2c0', '#2a4a8a');
+            const m = figPro(i === 1
+              ? { puffer: true, chain: true, beard: true, beanie: true, skin: '#8a5a3c', skinD: '#6f452c', jacket: '#b3161d', jacketD: '#8c1016', trim: '#141416', hat: '#141416', pants: '#23262e', shoe: '#e6e2d6' }
+              : { skin: '#b07a52', skinD: '#8f5f3d', jacket: '#dcd6c4', jacketD: '#c4bda9', trim: '#16181c', hat: '#2a4a8a', pants: '#4a5d78', shoe: '#17181c' });
             const w = new THREE.Group(); w.add(m.f); g.add(w);
             perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1, name: i === 1 ? 'stvn' : 'vas', off: i === 1 ? 0 : 9.4, amp: 0.3, up: 0 });   // red jacket = stvn, white jacket = vas
           }
