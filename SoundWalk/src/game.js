@@ -130,10 +130,16 @@
     checker(g, S) { const h = S / 2; g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, S, S); g.fillStyle = '#bdbdbd'; g.fillRect(0, 0, h, h); g.fillRect(h, h, h, h); },
     windows(g, S, r) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; const cols = ['#ffd27a', '#ffe9b8', '#9ff3ff', '#ff8ad8', '#ffd27a']; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { if (r() < 0.45) continue; g.fillStyle = cols[Math.floor(r() * cols.length)]; g.globalAlpha = 0.5 + r() * 0.5; g.fillRect(x * w + w * 0.2, y * w + w * 0.25, w * 0.6, w * 0.45); } g.globalAlpha = 1; },
   };
-  const texBase = {}, texCache = {};
+  const texBase = {}, texCache = {}, texLoader = new THREE.TextureLoader();
+  const PHOTO = { grass: 1.5, slate: 1, asphalt: 1, paving: 1, sand: 1, concrete: 1, brick: 1, bark: 1 };   // kind -> how many times finer than the old drawn tile
   function tex(kind, rx = 1, ry = 1) {
     const key = `${kind}:${rx}:${ry}`;
     if (texCache[key]) return texCache[key];
+    if (PHOTO[kind]) {   // photographed surfaces (CC0, Poly Haven): colour plus a normal map riding along as .nrm
+      const k = PHOTO[kind], mk = (suf, srgb) => { const t = texLoader.load(`tex/${kind}_${suf}.jpg`); if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx * k, ry * k); return t; };
+      const t = mk('d', true); t.nrm = mk('n', false);
+      return (texCache[key] = t);
+    }
     if (!texBase[kind]) { const c = document.createElement('canvas'), sz = TEXSIZE[kind] || 128; c.width = c.height = sz; TEXDRAW[kind](c.getContext('2d'), sz, rng(kind.length * 977)); texBase[kind] = c; }
     const t = new THREE.CanvasTexture(texBase[kind]);
     t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
@@ -152,6 +158,7 @@
     if (!unique && matCache[key]) return matCache[key];
     const m = new THREE.MeshStandardMaterial({ color: hex, roughness: o.rough ?? 0.85, metalness: o.metal ?? 0, flatShading: !!o.flat, map: o.map || null, emissiveMap: o.emissiveMap || null, emissive: o.emissive || '#000000', emissiveIntensity: o.emissiveIntensity ?? 1 });
     m.color.convertSRGBToLinear(); m.emissive.convertSRGBToLinear(); m.userData.lin = true;
+    if (o.map && o.map.nrm) { m.normalMap = o.map.nrm; m.normalScale.set(o.bump ?? 1, o.bump ?? 1); }
     m.onBeforeCompile = rimPatch;
     if (!unique) matCache[key] = m;
     return m;
@@ -321,7 +328,7 @@
   const interact = [];
 
   const ground = plane(720, 720, mat('#ffffff', { map: tex('grass', 144, 144), rough: 1 }, true));
-  ground.material.bumpMap = ground.material.map; ground.material.bumpScale = 0.035;
+  if (!ground.material.normalMap) { ground.material.bumpMap = ground.material.map; ground.material.bumpScale = 0.035; }
   ground.material.onBeforeCompile = (sh) => { rimPatch(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', 'vec4 tA=mapTexelToLinear(texture2D(map,vUv));float lB=dot(mapTexelToLinear(texture2D(map,vUv*.173+.31)).rgb,vec3(4.));float lC=dot(mapTexelToLinear(texture2D(map,vUv*.031+.7)).rgb,vec3(4.));diffuseColor.rgb*=tA.rgb*mix(1.,lB,.45)*mix(1.,lC,.5);'); };
   { const gg = new THREE.PlaneGeometry(720, 720, 110, 110), gp = gg.attributes.position, col = new Float32Array(gp.count * 3);
     for (let i = 0; i < gp.count; i++) { const x = gp.getX(i), y = gp.getY(i); const v = 0.8 + 0.2 * Math.sin(x * 0.05 + Math.sin(y * 0.031) * 2.2) * Math.cos(y * 0.043 + x * 0.012); col.set([v * 0.93, v, v * 0.8], i * 3); }
@@ -437,7 +444,7 @@
   const PLAZA_R = 11;
   {
     const pl = new THREE.Mesh(new THREE.CircleGeometry(PLAZA_R, 56), mat('#b4b1a8', { map: tex('slate', 9, 9), rough: 0.9 }, true));
-    pl.material.bumpMap = pl.material.map; pl.material.bumpScale = 0.05;
+    if (!pl.material.normalMap) { pl.material.bumpMap = pl.material.map; pl.material.bumpScale = 0.05; }
     pl.rotation.x = -Math.PI / 2; pl.position.y = 0.03; pl.receiveShadow = true;
     scene.add(pl); pick.push(pl); pl.userData.ground = true;
     const rim = new THREE.Mesh(new THREE.RingGeometry(PLAZA_R, PLAZA_R + 0.6, 56), whiteM);
