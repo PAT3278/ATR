@@ -122,6 +122,7 @@ Vercel / GitHub Pages などにそのまま置けます。three.js r128 は cdnj
 | `index.html` / `style.css` | 画面と HUD |
 | `src/songs.js` | 曲と場所の設定（編集するのは基本ここだけ） |
 | `src/places.js` / `src/places2.js` | 場所ごとの3Dジオラマ・景色のカメラ・音への反応 |
+| `src/buildings.js` | ビルのデザイン6種類（ガラスの高層・段々の塔・レンガのアパート・横長窓のオフィス・バルコニー付きの板状棟・低層＋塔）。高さに応じて無作為に選ばれ、FIELD・SHOT・環状線の外の街並みで使用 |
 | `src/ring.js` | 環状線（中心線の計算と、路面・壁・橋脚・街灯・遠景のビル） |
 | `src/cars.js` | 車のモデル7台 |
 | `src/game.js` | 描画（低解像度レンダリング＋ブルーム）、ワールド、アバター、操作、運転、近接オーディオ、購入 UI |

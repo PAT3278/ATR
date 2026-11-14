@@ -283,14 +283,14 @@
       } }
 
     // A lit skyline outside the loop (kept off the sea, the other places and the walkable square).
-    const skyM = E.mat('#12151d', { emissiveMap: E.tex('windows', 2, 8), emissive: '#ffffff', emissiveIntensity: 0.5, rough: 0.62 });
+    const skyKit = SW.Buildings.kit(E, 3);
     { const r = E.rng(4242), list = [];
       for (let k = 0; k < 400 && list.length < 84; k++) {
         const a = r() * Math.PI * 2, d = 176 + r() * 110, x = Math.cos(a) * d, z = Math.sin(a) * d, w = 9 + r() * 12, dp = 9 + r() * 12, h = 22 + r() * 70 * (0.4 + r() * 0.6);
         if (Math.max(Math.abs(x), Math.abs(z)) < 164 || (o.keepOut && o.keepOut(x, z))) continue;
-        list.push({ x, y: h / 2, z, yaw: r() * 3, sx: w, sy: h, sz: dp });
+        list.push({ x, z, yaw: r() * 3, w, h, d: dp });
       }
-      inst(new THREE.BoxGeometry(1, 1, 1), skyM, list, false); }
+      g.add(skyKit.bake(list, E.rng(4343))); }
 
     return {
       group: g, piers,
@@ -299,7 +299,7 @@
         headM.color.setRGB(1, 0.43, 0.06).multiplyScalar(0.75 + pulse * 0.8 + night * 0.25);
         glowM.opacity = 0.12 + night * 0.6 + pulse * 0.15;
         poolM.opacity = 0.02 + night * 0.075 + pulse * 0.04;
-        skyM.emissiveIntensity = 0.3 + night * 0.7 + pulse * 0.25;
+        skyKit.glow(0.3 + night * 0.7 + pulse * 0.25);
       },
     };
   }

@@ -112,15 +112,14 @@
 
       // Manhattan outside the glass
       const winTex = E.tex('windows', 2, 10);
-      const towerM = E.mat('#141821', { emissiveMap: winTex, emissive: '#ffffff', emissiveIntensity: 0.55, rough: 0.6 });
+      const fieldKit = SW.Buildings.kit(E, 1), kr = E.rng(7101);
       const towers = [];
       for (let i = 0; i < 70; i++) {
         const lx = (r() - 0.5) * 190, lz = -36 - r() * 110;
         if (Math.abs(lx) < 24 && lz > -40) continue;
         const w = 6 + r() * 9, d = 6 + r() * 9, h = 25 + r() * 95;
-        const b = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), towerM);
-        b.position.set(lx, 0, lz); b.scale.set(w, h, d); g.add(b);
-        if (r() < 0.25) { const sp = new THREE.Mesh(new THREE.ConeGeometry(w * 0.25, h * 0.25, 4), towerM); sp.position.set(lx, h + h * 0.12, lz); g.add(sp); }
+        const b = fieldKit.mesh(w, h, d, kr);   // one of several designs
+        b.position.set(lx, 0, lz); g.add(b); r();
         p.addBox(lx, lz, w / 2 + 0.3, d / 2 + 0.3);
         towers.push({ b, k: i % 24, h });
       }
@@ -357,7 +356,7 @@
         towers.forEach((T) => {
           if (T.beam) { T.beam.rotation.z = Math.sin(t * 0.25 + T.seed) * 0.35; T.beam.material.opacity = 0.05 + f.mid * 0.1; }
         });
-        towerM.emissiveIntensity = 0.4 + f.level * 0.6;
+        fieldKit.glow(0.4 + f.level * 0.6);
         // The two performers follow the song (p.songT, the track's playback position): whoever has the verse leads,
         // the other backs them up. First half on the stoop, then up the steps and in through the door to perform
         // from the first-floor windows for the second half, and back down for the loop.
@@ -481,7 +480,7 @@
       }
       // City blocks around the expressway
       const winTex = E.tex('windows', 2, 6);
-      const cityM = E.mat('#17141f', { emissiveMap: winTex, emissive: '#ffffff', emissiveIntensity: 0.6 });
+      const shotKit = SW.Buildings.kit(E, 2), kr = E.rng(7202);
       const blocks = [];
       for (let i = 0; i < 46; i++) {
         const x = -HALF - 30 + r() * (HALF * 2 + 60);
@@ -489,8 +488,8 @@
         const z = far ? ZC - WD / 2 - 6 - r() * 40 : ZC + WD / 2 + 4 + r() * 3;
         if (!far && Math.abs(x) < 14) continue;
         const w = 7 + r() * 8, d = 7 + r() * 8, h = far ? 10 + r() * 34 : 4 + r() * 4;
-        const b = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), cityM);
-        b.position.set(x, 0, z); b.scale.set(w, h, d); g.add(tm.add(b));
+        const b = shotKit.mesh(w, h, d, kr);
+        b.position.set(x, 0, z); g.add(tm.add(b));
         blocks.push({ b, h, k: i % 24 });
       }
       p.addBox(0, ZC - WD / 2 - 27, HALF + 30, 22);
@@ -534,7 +533,7 @@
           c.visible = viewing;   // out in the world the ring road has its own traffic
         });
         lampHeadM.color.setRGB(1, 0.43, 0.06).multiplyScalar(0.8 + f.pulse * 0.9);
-        cityM.emissiveIntensity = 0.35 + f.mid * 1.4;
+        shotKit.glow(0.35 + f.mid * 1.4);
         blocks.forEach((B) => { B.b.scale.y += (B.h * (0.75 + band(f, B.k, 24) * 0.5) - B.b.scale.y) * Math.min(1, dt * 8); });
       };
       p.shot = (t, f) => {
