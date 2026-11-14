@@ -60,55 +60,43 @@ level), adding a convolution stage per profile is the natural next step.
 
 ## The panel
 
-A modern, flat hardware-style panel (graphite, one orange accent, LED
-indicators):
+The panel is drawn as real hardware:
 
 - **Display** — plots the selected model's frequency response; with Live on
   it shows the QR code, address, password and how many phones are listening.
-- **MODEL** — eight pads under the display; the lit one is active.
-- **Meter** — stereo LED meter on the output (−60…0 dBFS) with peak hold and
-  a numeric peak readout per side.
-- **MIX** / **OUTPUT** knobs with their values shown underneath;
-  double-click to reset.
-- **MONO**, **BYPASS** and **ON AIR** (Live) buttons; the header shows
+- **Speaker model** — eight keys under the display; the lit one is active.
+- **Meter** — the stereo output (−60…0 dBFS) with peak hold.
+- **MIX** / **OUTPUT** knobs over printed 0–10 scales, with seven-segment
+  readouts underneath; double-click to reset.
+- **MONO**, **BYPASS** and **ON AIR** (Live); the header lamp shows
   EMULATE or ON AIR with the number of phones listening.
 
 Drag the window's corner to resize; the whole panel scales, and the size is
-saved with the project. Fonts are Barlow / Barlow Condensed, embedded in the
-plugin.
+saved with the project. Fonts are Barlow / Barlow Condensed and DSEG7 for
+the readouts, embedded in the plugin.
 
 ### Skins
 
-The **SKIN** button in the header steps through three looks (saved with
-the project):
+The skin key in the header steps through three looks (saved with the
+project), each taken from a kind of vintage gear:
 
-- **SUNSET** (the default) — a warm, analog look: a grainy dusk sky,
-  shading smoothly from night through plum and rose to gold, over a teal
-  sea, where the sun's reflection glints and drifts and slow swells roll
-  in; on the far shore a city's neon (mint, white, red) smears sideways as
-  in a long-exposure photo, shimmers on the water, and now and then a light
-  trail slides along the coast; smoky translucent panels with no outlines; cream tape-deck keys
-  that sit pressed in and light up orange when chosen (coral for ON AIR,
-  whose broadcast icon pulses while live); cream knobs with a coral
-  pointer; MONO and BYPASS as sliding switches; Barlow Condensed labels
-  and PhoneTesto Mono numbers. (Saved projects and the code call it
-  `digital`, its earlier name.)
-- **FLAT** — the modern flat hardware panel described above.
-- **PAPER** — simple and quiet: warm off-white paper, ink-black type,
-  white knobs with a fine ink arc, tonal keys with no outlines (the chosen
-  one turns to ink), slim ink meters, and a single vermilion for ON AIR
-  and overload. Nothing moves, so it costs nothing while idle.
+- **RECEIVER** (the default) — a 70s hi-fi receiver: champagne brushed
+  aluminium between walnut cheeks, the response curve on an amber-lit
+  black-glass dial with a tuning-dial frequency scale, two backlit needle
+  VU meters (−18 dBFS reads 0 VU) with peak lamps, spun-aluminium knobs,
+  aluminium keys with amber pilot lamps, bat-handle toggles for MONO and
+  BYPASS.
+- **DECK** — an 80s silver cassette deck: brushed aluminium, black knurled
+  knobs, dark keys with small LEDs, a cyan vacuum-fluorescent display, a
+  green/amber/red LED ladder meter with seven-segment peak readouts.
+- **LAB** — test equipment: grey hammertone paint, slotted screws, printed
+  section boxes, bakelite chicken-head knobs, toggles and jewel lamps, a
+  green phosphor CRT with a graticule, red LED bars and readouts, a red ON
+  AIR key.
 
-The phone page follows the plugin's skin (in a simpler form: the same
-colours, keys and type, over a still background).
-
-The SUNSET animation runs at 30 fps, timed by the clock (so its speed
-doesn't depend on how often the host redraws), and only the sea is
-redrawn — the sky, grain and everything over the sea come from cached
-images. That's about 2.6 ms per frame at 150 % size in JUCE's software
-renderer, ~8 % of one CPU core while the window is open; the GPU-drawn editor on Windows and
-macOS should be lighter, but that hasn't been measured yet. FLAT redraws
-nothing while idle, nor does PAPER. `PhoneTestoEditorSnapshot` prints these timings.
+Nothing animates: the faceplate is rendered once and cached, so the editor
+costs nothing while idle beyond the meter. The phone page follows the
+plugin's skin, with the same materials, windows, keys and lamps.
 
 ## Live Monitor mode
 
@@ -268,11 +256,9 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   is exercised), the screen-off mode, the password flow including the QR
   code's `?k=` link, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
-- **PhoneTestoEditorSnapshot** — renders the editor in both skins (Emulate
-  and Live) to PNGs for checking the layout, checks it reopens at its saved
-  size, and prints what a SUNSET animation frame costs to draw
-  (`PT_ANIM_FRAMES=60` also saves animation frames, with their real times
-  in `anim-times.txt`).
+- **PhoneTestoEditorSnapshot** — renders the editor in all three skins
+  (Emulate and Live) to PNGs for checking the layout, checks it reopens at
+  its saved size, and prints what a full redraw costs.
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
@@ -312,13 +298,12 @@ Resources/
   player-worklet.js        Its playback core (AudioWorklet or ScriptProcessor): gapless
                            playback, jitter buffer, drift control
   thirdparty/              opus-decoder (WASM Opus for plain-HTTP pages) + its licence
-  fonts/                   Barlow and PhoneTesto Mono fonts + their licences (OFL)
+  fonts/                   Barlow and DSEG7 fonts + their licences (OFL)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
   PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
-  HardwareStyle.h/.cpp     Fonts, skins, FLAT palette, flat knobs and LED buttons
-  DigitalStyle.h/.cpp      SUNSET skin: animated sea, panels, keys, knobs, device icons
-  PaperStyle.h/.cpp        PAPER skin: page, cards, keys, switches, knobs
+  HardwareStyle.h/.cpp     Fonts, the skin list, the LookAndFeel
+  GearStyle.h/.cpp         The three skins: faceplates, windows, keys, knobs, lamps, readouts
   LevelMeter.h/.cpp        Stereo LED output meter
   DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
   SpeakerProfiles.h        Per-device filter/drive tables
@@ -342,11 +327,9 @@ Tests/
 - [Barlow](https://github.com/jpt/barlow) fonts — SIL Open Font License 1.1
   (`Resources/fonts/OFL.txt`); these are included in the repo and embedded in
   the plugin.
-- PhoneTesto Mono — SIL Open Font License 1.1
-  (`Resources/fonts/PhoneTestoMono-OFL.txt`). A Modified Version of
-  [DM Mono](https://github.com/googlefonts/dm-mono) (its zero redrawn
-  without the slash, renamed so it isn't mistaken for the original);
-  embedded in the plugin.
+- [DSEG7 Classic](https://github.com/keshikan/DSEG) by keshikan — SIL Open
+  Font License 1.1 (`Resources/fonts/DSEG-OFL.txt`); unmodified, embedded in
+  the plugin and served to the phone page.
 - [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
   Ethan Halsall — MIT, wrapping libopus (BSD)
   (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo

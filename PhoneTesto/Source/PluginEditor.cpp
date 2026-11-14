@@ -1,5 +1,4 @@
 #include "PluginEditor.h"
-#include "DigitalStyle.h"
 
 namespace phonetesto
 {
@@ -32,17 +31,17 @@ namespace layout
 
 namespace
 {
-    juce::String outputText (double percent)
-    {
-        return percent <= 0.0 ? juce::String ("-INF dB")
-                              : juce::String (juce::Decibels::gainToDecibels (percent / 100.0), 1) + " dB";
-    }
-
     juce::Font pillFont (hw::Skin skin)
     {
-        return skin == hw::Skin::digital ? hw::font (hw::Type::condensedBold, 14.0f, 0.14f)
-             : skin == hw::Skin::paper   ? hw::font (hw::Type::sansSemiBold, 11.5f, 0.14f)
-                                         : hw::font (hw::Type::condensedBold, 14.0f, 0.12f);
+        return skin == hw::Skin::lab      ? hw::font (hw::Type::condensedBold, 13.0f, 0.03f)
+             : skin == hw::Skin::receiver ? hw::font (hw::Type::sansMedium, 11.5f, 0.10f)
+                                          : hw::font (hw::Type::sansSemiBold, 11.5f, 0.05f);
+    }
+
+    /** The output knob's value as the readout shows it: dB, or dashes when off. */
+    juce::String outputDigits (double percent)
+    {
+        return percent <= 0.0 ? juce::String ("---") : juce::String (juce::Decibels::gainToDecibels (percent / 100.0), 1);
     }
 } // namespace
 
@@ -97,8 +96,6 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
         [this] (float value) { showSelectedModel (juce::roundToInt (value)); });
     modelAttachment->sendInitialUpdate();
 
-    onAirButton.getProperties().set (hw::ledColourProperty, (int) hw::colours::live.getARGB());
-    onAirButton.getProperties().set (hw::solidWhenOnProperty, true);
     onAirButton.getProperties().set (hw::liveProperty, true);
 
     monoButton.getProperties().set (hw::switchProperty, true);
@@ -114,7 +111,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     skinButton.getProperties().set (hw::compactProperty, true);
     skinButton.setTitle ("Skin");
     skinButton.setClickingTogglesState (false);
-    skinButton.onClick = [this] { applySkin (hw::skinFromIndex ((hw::skinIndex (skin) + 1) % 3)); }; // FLAT -> SUNSET -> PAPER
+    skinButton.onClick = [this] { applySkin (hw::skinFromIndex ((hw::skinIndex (skin) + 1) % 3)); }; // DECK -> RECEIVER -> LAB
     panel.addAndMakeVisible (skinButton);
 
     auto& password = display.getPasswordEditor();
@@ -155,8 +152,8 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     setSize (juce::roundToInt (faceWidth * savedScale), juce::roundToInt (faceHeight * savedScale));
     sizeRestored = true;
 
-    lastTimerSeconds = animationStart = juce::Time::getMillisecondCounterHiRes() * 0.001;
-    startTimerHz (30); // meter, Live state, and the SUNSET animation's frame rate
+    lastTimerSeconds = juce::Time::getMillisecondCounterHiRes() * 0.001;
+    startTimerHz (30); // meter and Live state
 }
 
 PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
@@ -183,7 +180,7 @@ void PhoneTestoAudioProcessorEditor::applySkin (hw::Skin newSkin)
     lookAndFeel.setSkin (skin);
     processor.setEditorSkin (hw::skinIndex (skin));
 
-    skinButton.setButtonText (skin == hw::Skin::digital ? "SKIN: SUNSET" : skin == hw::Skin::paper ? "SKIN: PAPER" : "SKIN: FLAT");
+    skinButton.setButtonText (hw::skinLabel (skin));
 
     sendLookAndFeelChange(); // children pick up the skin's colours and repaint
     shownListeners = -1;      // re-lay the header
@@ -275,20 +272,6 @@ void PhoneTestoAudioProcessorEditor::timerCallback()
 
     meter.update (processor.getOutputPeak (0), processor.getOutputPeak (1), (float) dt);
     updateLiveState();
-
-    if (skin == hw::Skin::digital)
-    {
-        // Straight from the clock, so the motion keeps its speed however
-        // often the host lets this timer run.
-        animationSeconds = now - animationStart;
-
-        // only the band where the sea moves; the controls over it come from cached images
-        const auto top = (int) hw::digital::Background::animatedTop (panel.getLocalBounds().toFloat());
-        panel.repaint (0, top, faceWidth, faceHeight - top);
-
-        if (onAirButton.getToggleState())
-            onAirButton.repaint(); // its broadcast icon breathes while on air
-    }
 }
 
 //==============================================================================
@@ -301,219 +284,150 @@ juce::String PhoneTestoAudioProcessorEditor::statusText() const
 
 juce::Rectangle<float> PhoneTestoAudioProcessorEditor::statusPillBounds() const
 {
-    const float w = juce::GlyphArrangement::getStringWidth (pillFont (skin), statusText()) + 40.0f;
-    return { (float) faceWidth - layout::margin - w, layout::pillY, w, layout::pillHeight };
+    const float w = juce::GlyphArrangement::getStringWidth (pillFont (skin), statusText()) + 26.0f;
+    return { (float) faceWidth - layout::margin - w - 8.0f, layout::pillY, w, layout::pillHeight };
 }
 
 void PhoneTestoAudioProcessorEditor::paintBackground (juce::Graphics& g)
 {
-    if (skin == hw::Skin::digital)
-        digitalBackground.draw (g, panel.getLocalBounds().toFloat(), animationSeconds);
-    else if (skin == hw::Skin::paper)
-        hw::paper::drawPage (g, panel.getLocalBounds().toFloat());
-    else
-        g.fillAll (hw::colours::panel);
+    faceplate.draw (g, panel.getLocalBounds().toFloat(), skin);
 }
 
 void PhoneTestoAudioProcessorEditor::paintOverlay (juce::Graphics& g)
 {
-    if (skin == hw::Skin::digital)
-        paintDigitalOverlay (g);
-    else if (skin == hw::Skin::paper)
-        paintPaperOverlay (g);
-    else
-        paintFlatOverlay (g);
-}
-
-void PhoneTestoAudioProcessorEditor::paintFlatOverlay (juce::Graphics& g)
-{
     using namespace juce;
-    namespace c = hw::colours;
+    namespace gear = hw::gear;
+    const auto& look = gear::look (skin);
+    const float left = layout::margin + (skin == hw::Skin::receiver ? 8.0f : 0.0f);
 
-    // header
-    const auto logoFont = hw::font (hw::Type::condensedBold, 30.0f, 0.02f);
-    const float logoW = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO");
-    g.setFont (logoFont);
-    g.setColour (c::text);
-    g.drawText ("PHONETESTO", Rectangle<float> (layout::margin, 14.0f, logoW + 4.0f, 32.0f), Justification::centredLeft, false);
-
-    const auto badge = Rectangle<float> (layout::margin + logoW + 12.0f, 19.0f, 42.0f, 22.0f);
-    g.setColour (c::accent);
-    g.fillRoundedRectangle (badge, 4.0f);
-    g.setColour (c::panel);
-    g.setFont (hw::font (hw::Type::condensedBold, 17.0f, 0.04f));
-    g.drawText ("PT-1", badge, Justification::centred, false);
-
-    hw::drawLabel (g, "Speaker reference monitor", { badge.getRight() + 14.0f, 19.0f, 260.0f, 22.0f },
-                   Justification::centredLeft, c::textDim, 14.0f);
-
-    // status pill
+    // --- header: the maker's wordmark, the model, what it is
+    switch (skin)
     {
-        const bool live = shownLive;
-        const auto pill = statusPillBounds();
+        case hw::Skin::deck:
+        {
+            const auto logo = hw::font (hw::Type::sansBold, 25.0f, -0.01f);
+            const float w = GlyphArrangement::getStringWidth (logo, "PhoneTesto");
+            g.setFont (logo);
+            g.setColour (look.legend);
+            g.drawText ("PhoneTesto", Rectangle<float> (left, 14.0f, w + 4.0f, 32.0f), Justification::centredLeft, false);
 
-        g.setColour (live ? c::live.withAlpha (0.15f) : c::surface);
-        g.fillRoundedRectangle (pill, 13.0f);
-        g.setColour (live ? c::live.withAlpha (0.7f) : c::border);
-        g.drawRoundedRectangle (pill.reduced (0.5f), 13.0f, 1.0f);
-        g.setColour (live ? c::live : c::textFaint);
-        g.fillEllipse (Rectangle<float> (7.0f, 7.0f).withCentre ({ pill.getX() + 15.0f, pill.getCentreY() }));
-        g.setColour (live ? c::text : c::textDim);
-        g.setFont (pillFont (skin));
-        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
+            // the model number on a black screened block
+            const auto badge = Rectangle<float> (left + w + 12.0f, 20.0f, 44.0f, 19.0f);
+            g.setColour (look.legend);
+            g.fillRect (badge);
+            g.setColour (look.plateTop);
+            g.setFont (hw::font (hw::Type::condensedBold, 14.0f, 0.06f));
+            g.drawText ("PT-1", badge, Justification::centred, false);
+            gear::drawLegend (g, "Stereo speaker reference monitor", { badge.getRight() + 12.0f, 20.0f, 300.0f, 19.0f },
+                              Justification::centredLeft, skin, 10.5f, true);
+
+            g.setColour (look.legend);
+            g.fillRect (layout::margin, layout::headerHeight, (float) faceWidth - 2.0f * layout::margin, 1.5f);
+            break;
+        }
+        case hw::Skin::receiver:
+        {
+            const auto logo = hw::font (hw::Type::sansMedium, 20.0f, 0.34f);
+            const float w = GlyphArrangement::getStringWidth (logo, "PHONETESTO");
+            g.setFont (logo);
+            g.setColour (look.legend);
+            g.drawText ("PHONETESTO", Rectangle<float> (left, 14.0f, w + 4.0f, 32.0f), Justification::centredLeft, false);
+            gear::drawLegend (g, "Stereo monitor receiver   Model PT-1", { left + w + 18.0f, 20.0f, 320.0f, 19.0f },
+                              Justification::centredLeft, skin, 10.0f, true);
+
+            // an engraved line: a cut, lit on its lower lip
+            const float x0 = left, x1 = (float) faceWidth - left;
+            g.setColour (Colours::black.withAlpha (0.35f));
+            g.fillRect (x0, layout::headerHeight, x1 - x0, 1.0f);
+            g.setColour (Colours::white.withAlpha (0.6f));
+            g.fillRect (x0, layout::headerHeight + 1.0f, x1 - x0, 1.0f);
+            break;
+        }
+        case hw::Skin::lab:
+        {
+            const auto logo = hw::font (hw::Type::condensedBold, 28.0f, 0.0f);
+            const float w = GlyphArrangement::getStringWidth (logo, "PHONETESTO");
+            g.setFont (logo);
+            g.setColour (look.legend);
+            g.drawText ("PHONETESTO", Rectangle<float> (left, 13.0f, w + 4.0f, 34.0f), Justification::centredLeft, false);
+
+            const auto model = Rectangle<float> (left + w + 12.0f, 19.0f, 64.0f, 21.0f);
+            g.drawRect (model, 1.2f);
+            gear::drawLegend (g, "PT-1", model, Justification::centred, skin, 12.0f);
+            gear::drawLegend (g, "Speaker reference monitor", { model.getRight() + 12.0f, 19.0f, 300.0f, 21.0f },
+                              Justification::centredLeft, skin, 11.0f, true);
+
+            g.setColour (look.legend);
+            g.fillRect (layout::margin, layout::headerHeight, (float) faceWidth - 2.0f * layout::margin, 1.2f);
+            break;
+        }
     }
 
-    g.setColour (c::divider);
-    g.fillRect (0.0f, layout::headerHeight, (float) faceWidth, 1.0f);
+    // --- status: a lamp and its legend, as a panel would show power / on air
+    {
+        const auto status = statusPillBounds();
+        const bool live = shownLive;
+        gear::drawLamp (g, { status.getX() + 8.0f, status.getCentreY() }, 3.6f, live ? look.live : look.lamp, true, skin);
+        g.setFont (pillFont (skin));
+        g.setColour (live ? look.live.darker (0.35f) : look.legend);
+        g.drawText (statusText(), status.withTrimmedLeft (22.0f), Justification::centredLeft, false);
+    }
 
-    // knob labels and readouts
+    // --- knobs: their legends, and seven-segment readouts beneath
     for (auto [knob, label, centre] : { std::tuple<Slider*, const char*, Point<float>> { &mixKnob, "Mix", layout::mixCentre },
                                          { &outputKnob, "Output", layout::outputCentre } })
     {
         const float alpha = knob->getAlpha();
-        hw::drawLabel (g, label, Rectangle<float> (120.0f, 16.0f).withCentre (centre.translated (0.0f, -66.0f)),
-                       Justification::centred, c::textDim.withAlpha (alpha));
+        if (alpha < 1.0f)
+            g.beginTransparencyLayer (alpha);
+        gear::drawLegend (g, label, Rectangle<float> (120.0f, 14.0f).withCentre (centre.translated (0.0f, -64.0f)),
+                          Justification::centred, skin, 11.5f);
 
-        const auto value = knob == &mixKnob ? String (roundToInt (knob->getValue())) + "%" : outputText (knob->getValue());
-        g.setColour (c::text.withAlpha (alpha));
-        g.setFont (hw::font (hw::Type::condensedBold, 20.0f, 0.02f));
-        g.drawText (value, Rectangle<float> (130.0f, 24.0f).withCentre (centre.translated (0.0f, 64.0f)), Justification::centred, false);
-    }
-
-    g.setColour (c::textFaint);
-    g.setFont (hw::font (hw::Type::sansMedium, 13.0f));
-    g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
-                      Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
-                      Justification::centredLeft, 2);
-}
-
-void PhoneTestoAudioProcessorEditor::paintDigitalOverlay (juce::Graphics& g)
-{
-    using namespace juce;
-    namespace d = hw::digital;
-    namespace c = hw::digital::colours;
-
-    // header: logo, a sun-coloured badge, spaced subtitle
-    const auto logoFont = hw::font (hw::Type::condensedBold, 30.0f, 0.02f);
-    const float logoW = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO") + 4.0f;
-    const auto logoArea = Rectangle<float> (layout::margin, 15.0f, logoW, 32.0f);
-    g.setFont (logoFont);
-    g.setColour (Colours::black.withAlpha (0.2f));
-    g.drawText ("PHONETESTO", logoArea.translated (0.0f, 1.5f), Justification::centredLeft, false);
-    g.setColour (c::text);
-    g.drawText ("PHONETESTO", logoArea, Justification::centredLeft, false);
-
-    const auto badge = Rectangle<float> (layout::margin + logoW + 8.0f, 19.0f, 40.0f, 22.0f);
-    g.setColour (c::accent);
-    g.fillRoundedRectangle (badge, 6.0f);
-    g.setColour (Colour (0xff2a1810));
-    g.setFont (hw::font (hw::Type::condensedBold, 15.0f, 0.04f));
-    g.drawText ("PT-1", badge.translated (0.0f, 0.5f), Justification::centred, false);
-
-    d::drawLabel (g, "Speaker reference monitor", { badge.getRight() + 14.0f, 18.0f, 280.0f, 24.0f },
-                  Justification::centredLeft, c::text.withAlpha (0.7f), 11.5f);
-
-    // status pill
-    {
-        const bool live = shownLive;
-        const auto pill = statusPillBounds();
-        const float corner = pill.getHeight() * 0.5f;
-
-        // a smoky capsule, warming to coral while on air
-        g.setColour (live ? c::live.withAlpha (0.55f) : Colour (0xff140a12).withAlpha (0.36f));
-        g.fillRoundedRectangle (pill, corner);
-
-        const auto dot = Point<float> (pill.getX() + 15.0f, pill.getCentreY());
-        const auto dotColour = live ? Colour (0xfffff0e6) : c::teal;
-        g.setColour (dotColour.withAlpha (0.3f));
-        g.fillEllipse (Rectangle<float> (13.0f, 13.0f).withCentre (dot));
-        g.setColour (dotColour);
-        g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre (dot));
-
-        g.setColour (live ? c::text : c::textDim);
+        const bool isMix = knob == &mixKnob;
+        const auto window = Rectangle<float> (70.0f, 26.0f).withCentre (centre.translated (-10.0f, 68.0f));
+        gear::drawWindow (g, window, skin, 2.0f);
+        gear::drawSevenSegment (g, isMix ? String (roundToInt (knob->getValue())).paddedLeft (' ', 3) : outputDigits (knob->getValue()).paddedLeft (' ', 5),
+                                window.reduced (6.0f, 0.0f), Justification::centredRight, look.segment, 15.0f);
         g.setFont (pillFont (skin));
-        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
+        g.setColour (look.legend);
+        g.drawText (isMix ? "%" : "dB", Rectangle<float> (26.0f, 26.0f).withPosition (window.getRight() + 4.0f, window.getY()),
+                    Justification::centredLeft, false);
+        if (alpha < 1.0f)
+            g.endTransparencyLayer();
     }
 
-    // header rule: a warm hairline fading out at both ends
+    // --- the speaker-model keys' legend, in the gap above them
+    gear::drawLegend (g, "Speaker model", Rectangle<float> ((float) layout::pads.getX(), (float) layout::display.getBottom() + 1.0f, 200.0f, 11.0f),
+                      Justification::centredLeft, skin, 9.0f, true);
+
+    // LAB: section boxes printed round groups of controls
+    if (skin == hw::Skin::lab)
     {
-        ColourGradient rule (c::text.withAlpha (0.0f), 0.0f, 0.0f, c::text.withAlpha (0.0f), (float) faceWidth, 0.0f, false);
-        rule.addColour (0.25, c::text.withAlpha (0.28f));
-        rule.addColour (0.75, c::text.withAlpha (0.28f));
-        g.setGradientFill (rule);
-        g.fillRect (0.0f, layout::headerHeight, (float) faceWidth, 1.0f);
+        auto box = [&] (Rectangle<float> r, const String& title)
+        {
+            const auto f = hw::font (hw::Type::condensedBold, 10.0f, 0.04f);
+            const float tw = GlyphArrangement::getStringWidth (f, title) + 10.0f;
+            g.setColour (look.legend);
+            Path p;
+            p.startNewSubPath (r.getX() + 10.0f, r.getY());
+            p.lineTo (r.getX(), r.getY());
+            p.lineTo (r.getX(), r.getBottom());
+            p.lineTo (r.getRight(), r.getBottom());
+            p.lineTo (r.getRight(), r.getY());
+            p.lineTo (r.getX() + 10.0f + tw, r.getY());
+            g.strokePath (p, PathStrokeType (1.0f));
+            g.setFont (f);
+            g.drawText (title, Rectangle<float> (r.getX() + 10.0f, r.getY() - 6.0f, tw, 12.0f), Justification::centred, false);
+        };
+        box ({ 676.0f, 72.0f, 292.0f, 228.0f }, "MONITOR");
+        box ({ 676.0f, 309.0f, 292.0f, 99.0f }, "LIVE TO PHONES");
     }
 
-    // knob labels and readouts
-    for (auto [knob, label, centre] : { std::tuple<Slider*, const char*, Point<float>> { &mixKnob, "Mix", layout::mixCentre },
-                                         { &outputKnob, "Output", layout::outputCentre } })
-    {
-        const float alpha = knob->getAlpha();
-        d::drawLabel (g, label, Rectangle<float> (120.0f, 16.0f).withCentre (centre.translated (0.0f, -64.0f)),
-                      Justification::centred, c::text.withAlpha (0.75f * alpha));
-
-        const auto value = knob == &mixKnob ? String (roundToInt (knob->getValue())) + "%" : outputText (knob->getValue());
-        g.setColour (c::text.withAlpha (alpha));
-        g.setFont (hw::font (hw::Type::monoMedium, 17.0f));
-        g.drawText (value, Rectangle<float> (140.0f, 24.0f).withCentre (centre.translated (0.0f, 63.0f)), Justification::centred, false);
-    }
-
-    g.setColour (c::text.withAlpha (0.6f));
-    g.setFont (hw::font (hw::Type::sansMedium, 13.0f));
-    g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
-                      Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
-                      Justification::centredLeft, 2);
-}
-
-void PhoneTestoAudioProcessorEditor::paintPaperOverlay (juce::Graphics& g)
-{
-    using namespace juce;
-    namespace p = hw::paper;
-    namespace c = hw::paper::colours;
-
-    // header: a quiet wordmark, the model in small type, nothing else
-    const auto logoFont = hw::font (hw::Type::sansBold, 19.0f, 0.22f);
-    const float logoW = GlyphArrangement::getStringWidth (logoFont, "PHONETESTO");
-    g.setFont (logoFont);
-    g.setColour (c::text);
-    g.drawText ("PHONETESTO", Rectangle<float> (layout::margin, 15.0f, logoW + 4.0f, 30.0f), Justification::centredLeft, false);
-
-    p::drawLabel (g, "PT-1", { layout::margin + logoW + 14.0f, 15.0f, 40.0f, 30.0f }, Justification::centredLeft, c::textFaint, 11.0f);
-    p::drawLabel (g, "Speaker reference monitor", { layout::margin + logoW + 52.0f, 15.0f, 280.0f, 30.0f },
-                  Justification::centredLeft, c::textDim, 11.0f);
-
-    // status: a dot and words; vermilion only while on air
-    {
-        const bool live = shownLive;
-        const auto pill = statusPillBounds();
-        g.setColour (live ? c::live.withAlpha (0.10f) : c::surface.withAlpha (0.7f));
-        g.fillRoundedRectangle (pill, pill.getHeight() * 0.5f);
-        g.setColour (live ? c::live : c::textFaint);
-        g.fillEllipse (Rectangle<float> (6.0f, 6.0f).withCentre ({ pill.getX() + 15.0f, pill.getCentreY() }));
-        g.setColour (live ? c::live : c::textDim);
-        g.setFont (pillFont (skin));
-        g.drawText (statusText(), pill.withTrimmedLeft (26.0f).withTrimmedRight (12.0f), Justification::centredLeft, false);
-    }
-
-    // knob labels and readouts
-    for (auto [knob, label, centre] : { std::tuple<Slider*, const char*, Point<float>> { &mixKnob, "Mix", layout::mixCentre },
-                                         { &outputKnob, "Output", layout::outputCentre } })
-    {
-        const float alpha = knob->getAlpha();
-        p::drawLabel (g, label, Rectangle<float> (120.0f, 16.0f).withCentre (centre.translated (0.0f, -64.0f)),
-                      Justification::centred, c::textDim.withAlpha (alpha));
-
-        const auto value = knob == &mixKnob ? String (roundToInt (knob->getValue())) + "%" : outputText (knob->getValue());
-        g.setColour (c::text.withAlpha (alpha));
-        g.setFont (hw::font (hw::Type::sansMedium, 17.0f, 0.02f));
-        g.drawText (value, Rectangle<float> (140.0f, 24.0f).withCentre (centre.translated (0.0f, 63.0f)), Justification::centred, false);
-    }
-
-    g.setColour (c::textDim);
-    g.setFont (hw::font (hw::Type::sansMedium, 12.5f));
-    g.drawFittedText ("Streams this output to phones on your Wi-Fi.\nScan the code on the display.",
-                      Rectangle<int> (layout::onAir.getX(), layout::onAir.getBottom() + 8, layout::onAir.getWidth(), 34),
-                      Justification::centredLeft, 2);
+    // --- what ON AIR does
+    gear::drawLegend (g, "Streams this output to phones on your Wi-Fi.", Rectangle<float> ((float) layout::onAir.getX(), (float) layout::onAir.getBottom() + 8.0f,
+                      (float) layout::onAir.getWidth(), 14.0f), Justification::centredLeft, skin, 9.5f, true);
+    gear::drawLegend (g, "Scan the code on the display.", Rectangle<float> ((float) layout::onAir.getX(), (float) layout::onAir.getBottom() + 22.0f,
+                      (float) layout::onAir.getWidth(), 14.0f), Justification::centredLeft, skin, 9.5f, true);
 }
 
 } // namespace phonetesto

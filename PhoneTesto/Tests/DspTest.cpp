@@ -353,7 +353,7 @@ int main()
         a->getStateInformation (state);
 
         auto b = makeProcessor (48000.0, 512);
-        check (b->getEditorSkin() == 1, "new instances open in the SUNSET skin");
+        check (b->getEditorSkin() == 1, "new instances open in the RECEIVER skin");
         b->setStateInformation (state.getData(), (int) state.getSize());
         check (std::abs (b->getEditorScale() - 1.25f) < 0.001f && b->getEditorSkin() == 0,
                "editor size and skin restored");
@@ -361,11 +361,11 @@ int main()
                "editor settings aren't left in the parameter tree");
 
         a->setEditorSkin (2);
-        juce::MemoryBlock paperState;
-        a->getStateInformation (paperState);
+        juce::MemoryBlock labState;
+        a->getStateInformation (labState);
         auto c = makeProcessor (48000.0, 512);
-        c->setStateInformation (paperState.getData(), (int) paperState.getSize());
-        check (c->getEditorSkin() == 2, "the PAPER skin is restored too");
+        c->setStateInformation (labState.getData(), (int) labState.getSize());
+        check (c->getEditorSkin() == 2, "the LAB skin is restored too");
         a->setEditorSkin (0);
         auto value = [&] (const char* id) { return b->apvts.getParameter (id)->convertFrom0to1 (b->apvts.getParameter (id)->getValue()); };
         check (juce::roundToInt (value (PhoneTestoAudioProcessor::deviceParamId)) == 5
@@ -427,11 +427,11 @@ int main()
             return got.toString();
         };
         a->setEditorSkin (0);
-        const bool flat = infoBody().contains ("\"skin\":\"flat\"");
+        const bool deck = infoBody().contains ("\"skin\":\"deck\"");
         a->setEditorSkin (2);
-        const bool paper = infoBody().contains ("\"skin\":\"paper\"");
+        const bool lab = infoBody().contains ("\"skin\":\"lab\"");
         a->setEditorSkin (1);
-        check (flat && paper && infoBody().contains ("\"skin\":\"digital\""), "the phone page is told the plugin's skin");
+        check (deck && lab && infoBody().contains ("\"skin\":\"receiver\""), "the phone page is told the plugin's skin");
 
         check (status ("/stream?fmt=pcm16") == 401, "stream without the code is refused, even with no password set");
         check (status ("/auth?key=" + code) == 204, "the code from the QR URL is accepted");

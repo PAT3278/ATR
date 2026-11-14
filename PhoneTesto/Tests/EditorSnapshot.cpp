@@ -1,8 +1,8 @@
-// Renders the plugin editor to PNGs -- in each skin (FLAT, SUNSET, PAPER), once
+// Renders the plugin editor to PNGs -- in each skin (DECK, RECEIVER, LAB), once
 // in Emulate mode and once with Live Monitor on (QR code with the auto
 // access code, listener count) -- while a background thread feeds the
-// processor a tone so the meter is actually moving. Also prints how long a
-// SUNSET animation frame takes to draw. Lets the layout be checked without
+// processor a tone so the meter is actually moving. Also prints how long the
+// whole editor takes to draw. Lets the layout be checked without
 // a DAW. Needs a display; on headless Linux run it under xvfb-run. Exits
 // non-zero unless every image was written.
 //
@@ -13,7 +13,6 @@
 // which the dispatch loop returns at once and nothing is rendered.
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
-#include "../Source/DigitalStyle.h"
 
 #include <atomic>
 #include <cstdio>
@@ -127,24 +126,11 @@ public:
         {
             allOk &= snapshot (*editor, dir.getChildFile ("editor-" + name + "-emulate.png"), scale);
 
-            // what a frame costs to draw: the whole editor (controls come
-            // from cached images), and for SUNSET its animated background alone
+            // what a full redraw costs (the faceplate and controls come from cached images)
             {
                 juce::Image frame (juce::Image::RGB, editor->getWidth(), editor->getHeight(), false);
                 const auto ms = timeMs ([&] { juce::Graphics g (frame); editor->paintEntireComponent (g, true); });
                 std::printf ("%s: whole editor %.2f ms\n", name.toRawUTF8(), ms);
-
-                if (skin == 1)
-                {
-                    // what the animation actually redraws each frame: the band the waves move in
-                    const auto panelBounds = juce::Rectangle<float> (0.0f, 0.0f, (float) phonetesto::PhoneTestoAudioProcessorEditor::faceWidth,
-                                                                     (float) phonetesto::PhoneTestoAudioProcessorEditor::faceHeight);
-                    const float top = phonetesto::hw::digital::Background::animatedTop (panelBounds) * savedScale;
-                    const auto band = juce::Rectangle<int> (0, (int) top, editor->getWidth(), editor->getHeight() - (int) top);
-                    const auto bandMs = timeMs ([&] { juce::Graphics g (frame); g.reduceClipRegion (band); editor->paintEntireComponent (g, true); });
-                    std::printf ("%s: animation frame (wave band) %.2f ms -> %.1f%% of one core at 30 fps\n",
-                                 name.toRawUTF8(), bandMs, bandMs * 30.0 / 10.0);
-                }
 
                 if (std::getenv ("PT_PROFILE_CHILDREN") != nullptr)
                     if (auto* panel = editor->getChildComponent (0))
@@ -156,64 +142,10 @@ public:
                                          childMs, child->getWidth(), child->getHeight());
                         }
 
-                if (skin == 1 && std::getenv ("PT_PROFILE_BG") != nullptr)
-                {
-                    for (float s : { 1.0f, 1.25f, 1.5f })
-                    {
-                        const int w = juce::roundToInt (980 * s), h = juce::roundToInt (420 * s);
-                        juce::Image target (juce::Image::RGB, w, h, false), half (juce::Image::RGB, w / 2, h / 2, true);
-                        const auto up = timeMs ([&] { juce::Graphics g (target); g.setImageResamplingQuality (juce::Graphics::mediumResamplingQuality); g.drawImage (half, target.getBounds().toFloat()); });
-                        const auto upLow = timeMs ([&] { juce::Graphics g (target); g.setImageResamplingQuality (juce::Graphics::lowResamplingQuality); g.drawImage (half, target.getBounds().toFloat()); });
-                        const auto blit = timeMs ([&] { juce::Graphics g (target); g.drawImageAt (half, 0, 0); });
-                        phonetesto::hw::digital::Background bg;
-                        double t = 0.0;
-                        const auto all = timeMs ([&] { juce::Graphics g (target); bg.draw (g, target.getBounds().toFloat(), t += 0.04); });
-                        std::printf ("  %.2fx: background %.2f ms | (for comparison: image upscale medium %.2f, low %.2f, blit %.2f)\n", s, all, up, upLow, blit);
-                        const auto rf = target.getBounds().toFloat();
-                        const auto lin = timeMs ([&] { juce::Graphics g (target); juce::ColourGradient cg (juce::Colours::navy, 0, 0, juce::Colours::black, 0, rf.getBottom(), false); cg.addColour (0.5, juce::Colours::darkblue); g.setGradientFill (cg); g.fillRect (rf); });
-                        const auto c0 = juce::Point<float> (rf.getWidth() * 0.2f, rf.getHeight() * 0.08f);
-                        const float rad = rf.getWidth() * 0.6f;
-                        const auto radial = timeMs ([&] { juce::Graphics g (target); g.setGradientFill (juce::ColourGradient (juce::Colour (0x403f8dff), c0, juce::Colour (0x003f8dff), c0.translated (rad, 0), true)); g.fillRect (juce::Rectangle<float> (rad * 2, rad * 2).withCentre (c0).getIntersection (rf)); });
-                        const auto solid = timeMs ([&] { juce::Graphics g (target); g.fillAll (juce::Colours::navy); });
-                        std::printf ("         linear gradient %.2f, radial bloom %.2f, solid fill %.2f\n", lin, radial, solid);
-                    }
-                }
-
-                if (skin == 1)
-                {
-                    phonetesto::hw::digital::Background background;
-                    double t = 0.0;
-                    const auto bgMs = timeMs ([&] { juce::Graphics g (frame); background.draw (g, frame.getBounds().toFloat(), t += 0.04); });
-                    std::printf ("%s: background alone %.2f ms per frame\n", name.toRawUTF8(), bgMs);
-                }
             }
-
-            // PT_ANIM_FRAMES=n: also save n frames of the SUNSET animation
-            if (skin == 1)
-                if (const int frames = juce::String (std::getenv ("PT_ANIM_FRAMES")).getIntValue(); frames > 0)
-                {
-                    captureFrames (0, frames, [this, skin] { goLive (skin); });
-                    return;
-                }
 
             goLive (skin);
         });
-    }
-
-    /** Saves frames as fast as it can, with each one's real time in
-        anim-times.txt (so a preview can play them back at true speed). */
-    void captureFrames (int index, int total, std::function<void()> then)
-    {
-        if (index >= total)
-        {
-            dir.getChildFile ("anim-times.txt").replaceWithText (frameTimes.joinIntoString ("\n"));
-            then();
-            return;
-        }
-
-        frameTimes.add (juce::String (juce::Time::getMillisecondCounterHiRes(), 1));
-        allOk &= snapshot (*editor, dir.getChildFile ("anim-" + juce::String (index).paddedLeft ('0', 3) + ".png"), 1.0f);
-        juce::Timer::callAfterDelay (1000 / 30, [this, index, total, then] { captureFrames (index + 1, total, then); });
     }
 
     void goLive (int skin)
@@ -252,7 +184,6 @@ private:
     juce::File dir;
     float scale = 1.5f;
     bool allOk = true;
-    juce::StringArray frameTimes;
     std::unique_ptr<phonetesto::PhoneTestoAudioProcessor> processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor;
     std::atomic<bool> feeding { true };

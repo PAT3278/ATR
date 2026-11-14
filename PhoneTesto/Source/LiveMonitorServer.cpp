@@ -436,8 +436,7 @@ private:
             { "/fonts/Barlow-Medium.ttf",            BinaryData::BarlowMedium_ttf,            BinaryData::BarlowMedium_ttfSize },
             { "/fonts/Barlow-SemiBold.ttf",          BinaryData::BarlowSemiBold_ttf,          BinaryData::BarlowSemiBold_ttfSize },
             { "/fonts/Barlow-Bold.ttf",              BinaryData::BarlowBold_ttf,              BinaryData::BarlowBold_ttfSize },
-            { "/fonts/PhoneTestoMono-Regular.ttf",   BinaryData::PhoneTestoMonoRegular_ttf,   BinaryData::PhoneTestoMonoRegular_ttfSize },
-            { "/fonts/PhoneTestoMono-Medium.ttf",    BinaryData::PhoneTestoMonoMedium_ttf,    BinaryData::PhoneTestoMonoMedium_ttfSize },
+            { "/fonts/DSEG7Classic-Bold.ttf",        BinaryData::DSEG7ClassicBold_ttf,        BinaryData::DSEG7ClassicBold_ttfSize },
         };
 
         for (auto& f : fonts)
@@ -458,7 +457,7 @@ private:
                  << ",\"auth\":" << (server.hasPassword() ? "true" : "false")
                  << ",\"listeners\":" << server.numStreaming.load()
                  << ",\"maxListeners\":" << maxListeners
-                 << ",\"skin\":\"" << (server.skin.load() == 1 ? "digital" : server.skin.load() == 2 ? "paper" : "flat") << "\"}";
+                 << ",\"skin\":\"" << (server.skin.load() == 1 ? "receiver" : server.skin.load() == 2 ? "lab" : "deck") << "\"}";
             sendResponse (200, "application/json", json.toRawUTF8(), json.getNumBytesAsUTF8(), head);
             return;
         }

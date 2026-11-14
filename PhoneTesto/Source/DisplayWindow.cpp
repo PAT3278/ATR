@@ -1,7 +1,6 @@
 #include "DisplayWindow.h"
 #include "HardwareStyle.h"
-#include "DigitalStyle.h"
-#include "PaperStyle.h"
+#include "GearStyle.h"
 #include "SpeakerProfiles.h"
 
 #include <juce_dsp/juce_dsp.h>
@@ -30,11 +29,10 @@ DisplayWindow::DisplayWindow()
 {
     addChildComponent (qr);
 
-    password.setColour (juce::TextEditor::textColourId, hw::colours::text);
-    password.setFont (hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
+    password.setFont (hw::font (hw::Type::condensedSemiBold, 17.0f, 0.08f));
     password.setJustification (juce::Justification::centredLeft);
     password.setIndents (10, 4);
-    password.setTextToShowWhenEmpty ("AUTO", hw::colours::textFaint);
+    password.setTextToShowWhenEmpty ("AUTO", juce::Colours::grey);
     password.setInputRestrictions (32);
     addChildComponent (password);
 
@@ -50,18 +48,13 @@ void DisplayWindow::setAutoCode (const juce::String& code)
 
 void DisplayWindow::lookAndFeelChanged()
 {
-    const auto skin = hw::skinOf (*this);
-    const bool digitalSkin = skin == hw::Skin::digital, paperSkin = skin == hw::Skin::paper;
-    const auto text = digitalSkin ? hw::digital::colours::text : paperSkin ? hw::paper::colours::text : hw::colours::text;
-    const auto dim = digitalSkin ? hw::digital::colours::textDim : paperSkin ? hw::paper::colours::textFaint : hw::colours::textDim;
+    const auto trace = hw::gear::look (hw::skinOf (*this)).trace;
 
-    password.setColour (juce::TextEditor::textColourId, text);
-    password.setFont (digitalSkin ? hw::font (hw::Type::monoRegular, 15.0f)
-                    : paperSkin   ? hw::font (hw::Type::sansMedium, 15.0f, 0.02f)
-                                  : hw::font (hw::Type::condensedBold, 17.0f, 0.06f));
+    password.setColour (juce::TextEditor::textColourId, trace);
+    password.setFont (hw::font (hw::Type::condensedSemiBold, 17.0f, 0.08f));
     password.applyFontToAllText (password.getFont());
-    password.applyColourToAllText (text);
-    password.setTextToShowWhenEmpty (autoCode.isNotEmpty() ? autoCode : juce::String ("AUTO"), dim);
+    password.applyColourToAllText (trace);
+    password.setTextToShowWhenEmpty (autoCode.isNotEmpty() ? autoCode : juce::String ("AUTO"), trace.withAlpha (0.45f));
     repaint();
 }
 
@@ -156,295 +149,158 @@ void DisplayWindow::rebuildCurve()
     }
 }
 
+void DisplayWindow::paintGraticule (juce::Graphics& g, juce::Rectangle<float> area)
+{
+    using namespace juce;
+    const auto skin = hw::skinOf (*this);
+    const auto trace = hw::gear::look (skin).trace;
+    const auto small = hw::font (hw::Type::condensedSemiBold, 10.0f, 0.04f);
+    g.setFont (small);
+
+    if (skin == hw::Skin::lab)
+    {
+        // a CRT graticule: 10 x 6 divisions, minor ticks on the centre lines
+        g.setColour (trace.withAlpha (0.16f));
+        for (int i = 0; i <= 10; ++i)
+            g.drawVerticalLine ((int) (area.getX() + area.getWidth() * (float) i / 10.0f), area.getY(), area.getBottom());
+        for (int j = 0; j <= 6; ++j)
+            g.drawHorizontalLine ((int) (area.getY() + area.getHeight() * (float) j / 6.0f), area.getX(), area.getRight());
+
+        g.setColour (trace.withAlpha (0.28f));
+        const float cx = area.getCentreX(), cy = area.getCentreY();
+        for (int i = 0; i <= 50; ++i)
+        {
+            const float x = area.getX() + area.getWidth() * (float) i / 50.0f;
+            g.drawVerticalLine ((int) x, cy - 2.0f, cy + 2.0f);
+        }
+        for (int j = 0; j <= 30; ++j)
+        {
+            const float y = area.getY() + area.getHeight() * (float) j / 30.0f;
+            g.drawHorizontalLine ((int) y, cx - 2.0f, cx + 2.0f);
+        }
+        return;
+    }
+
+    if (skin == hw::Skin::receiver)
+    {
+        // a tuning-dial scale along the bottom: long and short ticks, and frequencies
+        const float base = area.getBottom() + 4.0f;
+        g.setColour (trace.withAlpha (0.55f));
+        g.drawHorizontalLine ((int) base, area.getX(), area.getRight());
+        for (float decade : { 10.0f, 100.0f, 1000.0f, 10000.0f })
+            for (int m = 1; m <= 9; ++m)
+            {
+                const float hz = decade * (float) m;
+                if (hz < minHz || hz > maxHz) continue;
+                const float x = xForHz (area, hz);
+                g.drawVerticalLine ((int) x, base - (m == 1 ? 7.0f : m == 5 ? 5.0f : 3.0f), base);
+            }
+        for (auto [hz, label] : { std::pair<float, const char*> { 20.0f, "20" }, { 50.0f, "50" }, { 100.0f, "100" }, { 200.0f, "200" },
+                                  { 500.0f, "500" }, { 1000.0f, "1k" }, { 2000.0f, "2k" }, { 5000.0f, "5k" }, { 10000.0f, "10k" }, { 20000.0f, "20k" } })
+            g.drawText (label, Rectangle<float> (30.0f, 12.0f).withCentre ({ xForHz (area, hz), base + 9.0f }), Justification::centred, false);
+        return;
+    }
+
+    // DECK: a VFD's faint dot grid, and its printed frequency legends
+    g.setColour (trace.withAlpha (0.07f));
+    for (float y = area.getY(); y <= area.getBottom(); y += 6.0f)
+        for (float x = area.getX(); x <= area.getRight(); x += 6.0f)
+            g.fillRect (x, y, 1.2f, 1.2f);
+    g.setColour (trace.withAlpha (0.5f));
+    for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
+        g.drawText (label, Rectangle<float> (40.0f, 12.0f).withCentre ({ xForHz (area, hz), area.getBottom() + 10.0f }), Justification::centred, false);
+    for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
+        g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, yForDb (area, db) - 12.0f, 30.0f, 11.0f), Justification::left, false);
+}
+
 void DisplayWindow::paint (juce::Graphics& g)
 {
     using namespace juce;
-    namespace c = hw::colours;
-
-    if (hw::skinOf (*this) == hw::Skin::digital)
-    {
-        paintDigital (g);
-        return;
-    }
-
-    if (hw::skinOf (*this) == hw::Skin::paper)
-    {
-        paintPaper (g);
-        return;
-    }
-
-    const auto bounds = getLocalBounds().toFloat();
-    g.setColour (c::screen);
-    g.fillRoundedRectangle (bounds, 8.0f);
-    g.setColour (c::divider);
-    g.drawRoundedRectangle (bounds.reduced (0.5f), 8.0f, 1.0f);
-
-    const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
-    const auto small = hw::font (hw::Type::condensedSemiBold, 12.0f, 0.04f);
-
-    if (! live)
-    {
-        hw::drawLabel (g, "Response", title, Justification::centredLeft);
-
-        const auto& p = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::condensedBold, 19.0f, 0.04f));
-        g.drawText (String (p.name).toUpperCase(), title, Justification::centredRight, false);
-
-        const auto area = plotArea();
-        g.setFont (small);
-
-        for (float hz : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f, 20000.0f })
-        {
-            g.setColour (Colours::white.withAlpha (0.04f));
-            g.drawVerticalLine ((int) xForHz (area, hz), area.getY(), area.getBottom());
-        }
-
-        for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
-        {
-            const float x = xForHz (area, hz);
-            g.setColour (Colours::white.withAlpha (0.08f));
-            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
-            g.setColour (c::textFaint);
-            g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
-        }
-
-        for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
-        {
-            const float y = yForDb (area, db);
-            g.setColour (Colours::white.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.08f : 0.04f));
-            g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
-            g.setColour (c::textFaint);
-            g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
-        }
-
-        Path fill (curve);
-        fill.lineTo (area.getRight(), area.getBottom());
-        fill.lineTo (area.getX(), area.getBottom());
-        fill.closeSubPath();
-        g.setGradientFill (ColourGradient (c::accent.withAlpha (0.20f), 0.0f, area.getY(),
-                                           c::accent.withAlpha (0.0f), 0.0f, area.getBottom(), false));
-        g.fillPath (fill);
-
-        g.setColour (c::accent);
-        g.strokePath (curve, PathStrokeType (2.2f, PathStrokeType::curved, PathStrokeType::rounded));
-        return;
-    }
-
-    hw::drawLabel (g, "Scan to listen", title, Justification::centredLeft, c::accent);
-
-    if (failed)
-    {
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::condensedBold, 18.0f, 0.04f));
-        g.drawFittedText ("COULDN'T OPEN A NETWORK PORT.\nANOTHER APP MAY BE USING IT.",
-                          contentArea().toNearestInt(), Justification::centred, 3);
-        return;
-    }
-
-    const auto column = contentArea().withTrimmedLeft ((float) qr.getWidth() + 24.0f);
-
-    hw::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft, c::textDim, 12.0f);
-    g.setColour (c::text);
-    g.setFont (hw::font (hw::Type::condensedBold, 24.0f, 0.02f));
-    g.drawFittedText (url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
-                      column.withTrimmedTop (16.0f).withHeight (28.0f).toNearestInt(), Justification::centredLeft, 1, 0.8f);
-
-    hw::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },
-                   Justification::centredLeft, c::textDim, 12.0f);
-
-    const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
-    hw::drawLabel (g, "Listening", listening, Justification::centredLeft, c::textDim, 12.0f);
-    g.setColour (listenerCount > 0 ? c::accent : c::textFaint);
-    g.setFont (hw::font (hw::Type::condensedBold, 32.0f));
-    g.drawText (String (listenerCount), listening.translated (0.0f, 14.0f).withHeight (32.0f), Justification::centredLeft, false);
-}
-
-void DisplayWindow::paintDigital (juce::Graphics& g)
-{
-    using namespace juce;
-    namespace d = hw::digital;
-    namespace c = hw::digital::colours;
-
-    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    d::drawGlass (g, bounds, 16.0f);
-
-    // a dark, warm screen set into the panel, like a tape deck's window
-    {
-        const auto screen = bounds.reduced (5.0f);
-        g.setGradientFill (ColourGradient (Colour (0xe0140c12), 0.0f, screen.getY(), Colour (0xe00d080c), 0.0f, screen.getBottom(), false));
-        g.fillRoundedRectangle (screen, 12.0f);
-        g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.35f), 0.0f, screen.getY(), Colours::black.withAlpha (0.0f), 0.0f, screen.getY() + 8.0f, false));
-        g.fillRoundedRectangle (screen.withHeight (12.0f), 12.0f);
-    }
-
-    const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
-    const auto small = hw::font (hw::Type::monoRegular, 10.0f);
-
-    if (! live)
-    {
-        d::drawLabel (g, "Response", title, Justification::centredLeft);
-
-        const auto& p = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::condensedBold, 16.0f, 0.10f));
-        g.drawText (String (p.name).toUpperCase(), title, Justification::centredRight, false);
-
-        const auto area = plotArea();
-        g.setFont (small);
-
-        for (float hz : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f, 20000.0f })
-        {
-            g.setColour (c::cream.withAlpha (0.04f));
-            g.drawVerticalLine ((int) xForHz (area, hz), area.getY(), area.getBottom());
-        }
-
-        for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
-        {
-            const float x = xForHz (area, hz);
-            g.setColour (c::cream.withAlpha (0.08f));
-            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
-            g.setColour (c::textFaint);
-            g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
-        }
-
-        for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
-        {
-            const float y = yForDb (area, db);
-            g.setColour (c::cream.withAlpha (juce::exactlyEqual (db, 0.0f) ? 0.12f : 0.05f));
-            g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
-            g.setColour (c::textFaint);
-            g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
-        }
-
-        Path fill (curve);
-        fill.lineTo (area.getRight(), area.getBottom());
-        fill.lineTo (area.getX(), area.getBottom());
-        fill.closeSubPath();
-        g.setGradientFill (ColourGradient (c::accent.withAlpha (0.32f), 0.0f, area.getY(),
-                                           c::accent.withAlpha (0.0f), 0.0f, area.getBottom(), false));
-        g.fillPath (fill);
-
-        d::strokeGlow (g, curve, Colour (0xffffc48a), 2.0f);
-        return;
-    }
-
-    d::drawLabel (g, "Scan to listen", title, Justification::centredLeft, c::accent);
-
-    if (failed)
-    {
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::sansBold, 15.0f, 0.06f));
-        g.drawFittedText ("COULDN'T OPEN A NETWORK PORT.\nANOTHER APP MAY BE USING IT.",
-                          contentArea().toNearestInt(), Justification::centred, 3);
-        return;
-    }
-
-    // halo behind the QR code (the code itself stays black on white so it scans)
-    const auto qrArea = qr.getBounds().toFloat();
-    for (auto [grow, alpha] : { std::pair { 10.0f, 0.05f }, { 5.0f, 0.10f } })
-    {
-        g.setColour (c::cream.withAlpha (alpha));
-        g.fillRoundedRectangle (qrArea.expanded (grow), 6.0f + grow);
-    }
-
-    const auto column = contentArea().withTrimmedLeft ((float) qr.getWidth() + 24.0f);
-
-    d::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft, c::textDim, 11.0f);
-    d::drawGlowText (g, url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
-                     column.withTrimmedTop (16.0f).withHeight (28.0f), Justification::centredLeft,
-                     hw::font (hw::Type::monoMedium, 17.0f), c::text, 0.0f);
-
-    d::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },
-                  Justification::centredLeft, c::textDim, 11.0f);
-
-    const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
-    d::drawLabel (g, "Listening", listening, Justification::centredLeft, c::textDim, 11.0f);
-    d::drawGlowText (g, String (listenerCount), listening.translated (0.0f, 16.0f).withHeight (32.0f), Justification::centredLeft,
-                     hw::font (hw::Type::monoMedium, 26.0f), listenerCount > 0 ? c::accent : c::textDim,
-                     listenerCount > 0 ? 1.0f : 0.0f);
-}
-
-void DisplayWindow::paintPaper (juce::Graphics& g)
-{
-    using namespace juce;
-    namespace p = hw::paper;
-    namespace c = hw::paper::colours;
+    const auto skin = hw::skinOf (*this);
+    const auto& look = hw::gear::look (skin);
+    const auto trace = look.trace;
 
     const auto bounds = getLocalBounds().toFloat().reduced (2.0f);
-    p::drawCard (g, bounds, 14.0f);
+    hw::gear::drawWindow (g, bounds, skin, skin == hw::Skin::lab ? 12.0f : 3.0f);
+
+    if (skin == hw::Skin::lab)
+    {
+        // the CRT's face: slightly lit in the middle, darker toward its curved edges
+        const auto tube = bounds.reduced (6.0f);
+        g.setGradientFill (ColourGradient (Colour (0xff0b1a10), tube.getCentreX(), tube.getCentreY(),
+                                           Colour (0xff020503), tube.getX(), tube.getY(), true));
+        g.fillRoundedRectangle (tube, 14.0f);
+    }
 
     const auto title = bounds.reduced (padding, 0.0f).withTrimmedTop (padding - 4.0f).withHeight (24.0f);
-    const auto small = hw::font (hw::Type::sansMedium, 10.5f, 0.02f);
+    const auto titleFont = hw::font (hw::Type::condensedSemiBold, 13.0f, 0.10f);
+
+    auto glowText = [&] (const String& text, Rectangle<float> area, Justification just, const Font& f, Colour c)
+    {
+        g.setFont (f);
+        g.setColour (c.withAlpha (0.25f));
+        for (auto [dx, dy] : { std::pair { -0.8f, 0.0f }, { 0.8f, 0.0f }, { 0.0f, -0.8f }, { 0.0f, 0.8f } })
+            g.drawText (text, area.translated (dx, dy), just, false);
+        g.setColour (c);
+        g.drawText (text, area, just, false);
+    };
 
     if (! live)
     {
-        p::drawLabel (g, "Response", title, Justification::centredLeft);
-
-        const auto& prof = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::sansSemiBold, 13.0f, 0.12f));
-        g.drawText (String (prof.name).toUpperCase(), title, Justification::centredRight, false);
+        glowText ("RESPONSE", title, Justification::centredLeft, titleFont, trace.withAlpha (0.7f));
+        const auto& p = getSpeakerProfiles()[(size_t) jlimit (0, (int) getSpeakerProfiles().size() - 1, profile)];
+        glowText (String (p.name).toUpperCase(), title, Justification::centredRight, hw::font (hw::Type::condensedSemiBold, 16.0f, 0.08f), trace);
 
         const auto area = plotArea();
-        g.setFont (small);
-
-        for (auto [hz, label] : { std::pair<float, const char*> { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } })
-        {
-            const float x = xForHz (area, hz);
-            g.setColour (c::hairline);
-            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
-            g.setColour (c::textFaint);
-            g.drawText (label, Rectangle<float> (40.0f, 14.0f).withCentre ({ x, area.getBottom() + 10.0f }), Justification::centred, false);
-        }
-
-        for (float db : { 0.0f, -12.0f, -24.0f, -36.0f })
-        {
-            const float y = yForDb (area, db);
-            g.setColour (c::hairline);
-            g.drawHorizontalLine ((int) y, area.getX(), area.getRight());
-            g.setColour (c::textFaint);
-            g.drawText (String ((int) db), Rectangle<float> (area.getX() + 2.0f, y - 13.0f, 30.0f, 12.0f), Justification::left, false);
-        }
+        paintGraticule (g, area);
 
         Path fill (curve);
         fill.lineTo (area.getRight(), area.getBottom());
         fill.lineTo (area.getX(), area.getBottom());
         fill.closeSubPath();
-        g.setGradientFill (ColourGradient (c::ink.withAlpha (0.07f), 0.0f, area.getY(), c::ink.withAlpha (0.0f), 0.0f, area.getBottom(), false));
+        g.setGradientFill (ColourGradient (trace.withAlpha (skin == hw::Skin::receiver ? 0.18f : 0.10f), 0.0f, area.getY(),
+                                           trace.withAlpha (0.0f), 0.0f, area.getBottom(), false));
         g.fillPath (fill);
 
-        g.setColour (c::ink);
-        g.strokePath (curve, PathStrokeType (1.6f, PathStrokeType::curved, PathStrokeType::rounded));
+        // the trace, with the glow a VFD, a lamp or phosphor gives it
+        for (auto [width, alpha] : { std::pair { 9.0f, 0.06f }, { 5.0f, 0.12f }, { 2.6f, 0.3f } })
+        {
+            g.setColour (trace.withAlpha (alpha));
+            g.strokePath (curve, PathStrokeType (width, PathStrokeType::curved, PathStrokeType::rounded));
+        }
+        g.setColour (trace.interpolatedWith (Colours::white, 0.35f));
+        g.strokePath (curve, PathStrokeType (1.4f, PathStrokeType::curved, PathStrokeType::rounded));
         return;
     }
 
-    p::drawLabel (g, "Scan to listen", title, Justification::centredLeft, c::text);
+    glowText ("SCAN TO LISTEN", title, Justification::centredLeft, titleFont, trace);
 
     if (failed)
     {
-        g.setColour (c::text);
-        g.setFont (hw::font (hw::Type::sansSemiBold, 14.0f, 0.06f));
-        g.drawFittedText ("COULDN'T OPEN A NETWORK PORT.\nANOTHER APP MAY BE USING IT.",
-                          contentArea().toNearestInt(), Justification::centred, 3);
+        glowText ("COULDN'T OPEN A NETWORK PORT. ANOTHER APP MAY BE USING IT.", contentArea(), Justification::centred,
+                  hw::font (hw::Type::condensedSemiBold, 15.0f, 0.06f), trace);
         return;
     }
 
+    // the QR code stays black on white so it scans: a white card behind it
+    g.setColour (Colours::white);
+    g.fillRoundedRectangle (qr.getBounds().toFloat().expanded (3.0f), 2.0f);
+
     const auto column = contentArea().withTrimmedLeft ((float) qr.getWidth() + 24.0f);
+    const auto labelFont = hw::font (hw::Type::condensedSemiBold, 11.0f, 0.10f);
 
-    p::drawLabel (g, "Address", column.withHeight (14.0f), Justification::centredLeft);
-    g.setColour (c::text);
-    g.setFont (hw::font (hw::Type::sansMedium, 19.0f, 0.02f));
-    g.drawFittedText (url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
-                      column.withTrimmedTop (16.0f).withHeight (28.0f).toNearestInt(), Justification::centredLeft, 1, 0.8f);
+    glowText ("ADDRESS", column.withHeight (14.0f), Justification::centredLeft, labelFont, trace.withAlpha (0.6f));
+    glowText (url.fromFirstOccurrenceOf ("://", false, false).upToFirstOccurrenceOf ("/", false, false),
+              column.withTrimmedTop (16.0f).withHeight (28.0f), Justification::centredLeft,
+              hw::font (hw::Type::condensedSemiBold, 22.0f, 0.04f), trace);
 
-    p::drawLabel (g, "Password", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f }, Justification::centredLeft);
+    glowText ("PASSWORD", { column.getX(), (float) password.getY() - 16.0f, column.getWidth(), 14.0f },
+              Justification::centredLeft, labelFont, trace.withAlpha (0.6f));
 
     const auto listening = Rectangle<float> (column.getX(), (float) password.getBottom() + 10.0f, column.getWidth(), 14.0f);
-    p::drawLabel (g, "Listening", listening, Justification::centredLeft);
-    g.setColour (listenerCount > 0 ? c::text : c::textFaint);
-    g.setFont (hw::font (hw::Type::sansMedium, 28.0f));
-    g.drawText (String (listenerCount), listening.translated (0.0f, 15.0f).withHeight (32.0f), Justification::centredLeft, false);
+    glowText ("LISTENING", listening, Justification::centredLeft, labelFont, trace.withAlpha (0.6f));
+    hw::gear::drawSevenSegment (g, String (listenerCount).paddedLeft (' ', 2), listening.translated (0.0f, 17.0f).withHeight (30.0f).withWidth (60.0f),
+                                Justification::centredLeft, trace, 22.0f);
 }
 
 } // namespace phonetesto

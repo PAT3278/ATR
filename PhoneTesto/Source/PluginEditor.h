@@ -3,8 +3,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "HardwareStyle.h"
-#include "DigitalStyle.h"
-#include "PaperStyle.h"
+#include "GearStyle.h"
 #include "LevelMeter.h"
 #include "DisplayWindow.h"
 
@@ -40,9 +39,6 @@ private:
     void timerCallback() override;
     void paintBackground (juce::Graphics&);
     void paintOverlay (juce::Graphics&);
-    void paintFlatOverlay (juce::Graphics&);
-    void paintDigitalOverlay (juce::Graphics&);
-    void paintPaperOverlay (juce::Graphics&);
     juce::Rectangle<float> statusPillBounds() const;
     juce::String statusText() const;
     void showSelectedModel (int index);
@@ -54,13 +50,13 @@ private:
     const float savedScale;
     bool sizeRestored = false;
     hw::LookAndFeel lookAndFeel;
-    hw::Skin skin = hw::Skin::flat;
-    hw::digital::Background digitalBackground;
+    hw::Skin skin = hw::Skin::receiver;
+    hw::gear::Faceplate faceplate;
 
     // `panel` holds every control and paints the background; `overlay` sits
     // behind the controls and paints the static text (header, labels,
-    // readouts). The overlay and controls are cached as images, so the
-    // SUNSET skin's moving background is the only thing redrawn per frame.
+    // readouts). The faceplate, overlay and controls are all cached as
+    // images; only the meter and the display redraw as things change.
     Painted panel, overlay;
 
     LevelMeter meter;
@@ -75,7 +71,6 @@ private:
     int shownListeners = -1;
     bool shownLive = false;
     double lastTimerSeconds = 0.0;
-    double animationStart = 0.0, animationSeconds = 0.0;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;

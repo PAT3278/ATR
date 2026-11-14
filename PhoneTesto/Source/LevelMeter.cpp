@@ -1,7 +1,6 @@
 #include "LevelMeter.h"
 #include "HardwareStyle.h"
-#include "DigitalStyle.h"
-#include "PaperStyle.h"
+#include "GearStyle.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -17,7 +16,7 @@ void LevelMeter::update (float peakLeft, float peakRight, float dt)
     {
         auto& s = sides[i];
         const float db = juce::Decibels::gainToDecibels (peaks[i], floorDb);
-        const float previousLevel = s.level, previousHold = s.hold;
+        const float previousLevel = s.level, previousHold = s.hold, previousVu = s.vu;
 
         s.level = db > s.level ? db : juce::jmax (db, s.level - 24.0f * dt); // instant attack, 24 dB/s release
 
@@ -31,7 +30,12 @@ void LevelMeter::update (float peakLeft, float peakRight, float dt)
             s.hold = juce::jmax (floorDb, s.hold - 30.0f * dt);
         }
 
-        changed |= std::abs (s.level - previousLevel) > 0.05f || std::abs (s.hold - previousHold) > 0.05f;
+        // VU needle: -18 dBFS reads 0 VU; ~300 ms to settle, like a real movement
+        const float target = juce::jlimit (-22.0f, 4.0f, s.level + 18.0f);
+        s.vu += (target - s.vu) * juce::jmin (1.0f, dt / 0.09f);
+
+        changed |= std::abs (s.level - previousLevel) > 0.05f || std::abs (s.hold - previousHold) > 0.05f
+                    || std::abs (s.vu - previousVu) > 0.03f;
     }
 
     if (changed)
@@ -40,43 +44,44 @@ void LevelMeter::update (float peakLeft, float peakRight, float dt)
 
 void LevelMeter::paint (juce::Graphics& g)
 {
+    switch (hw::skinOf (*this))
+    {
+        case hw::Skin::receiver: paintNeedles (g); break;
+        case hw::Skin::lab:      paintLadder (g, true); break;
+        case hw::Skin::deck:     paintLadder (g, false); break;
+    }
+}
+
+void LevelMeter::paintLadder (juce::Graphics& g, bool lab)
+{
     using namespace juce;
-    namespace c = hw::colours;
+    const auto skin = lab ? hw::Skin::lab : hw::Skin::deck;
+    const auto& look = hw::gear::look (skin);
 
-    if (hw::skinOf (*this) == hw::Skin::digital)
-    {
-        paintDigital (g);
-        return;
-    }
+    const auto bounds = getLocalBounds().toFloat().reduced (2.0f);
+    hw::gear::drawWindow (g, bounds, skin);
 
-    if (hw::skinOf (*this) == hw::Skin::paper)
-    {
-        paintPaper (g);
-        return;
-    }
-
-    const auto bounds = getLocalBounds().toFloat();
-    g.setColour (c::screen);
-    g.fillRoundedRectangle (bounds, 8.0f);
-    g.setColour (c::divider);
-    g.drawRoundedRectangle (bounds.reduced (0.5f), 8.0f, 1.0f);
-
-    const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
+    const float top = bounds.getY() + 34.0f, bottom = bounds.getBottom() - 24.0f;
     auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };
-    auto zoneColour = [] (float db) { return db >= -1.0f ? c::meterHigh : db >= -9.0f ? c::meterMid : c::meterLow; };
 
-    // dB scale
-    g.setFont (hw::font (hw::Type::condensedSemiBold, 11.0f));
+    // DECK: green, amber, red LEDs. LAB: all red, like an instrument's bar display.
+    auto zoneColour = [lab] (float db)
+    {
+        if (lab) return Colour (0xffff3b22);
+        return db >= -1.0f ? Colour (0xffff3324) : db >= -9.0f ? Colour (0xffffb000) : Colour (0xff46f56e);
+    };
+
+    g.setFont (hw::font (hw::Type::condensedSemiBold, 9.5f));
     for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f })
     {
-        g.setColour (c::textFaint);
-        g.drawText (String ((int) db), Rectangle<float> (bounds.getX() + 4.0f, yFor (db) - 6.0f, 24.0f, 12.0f),
+        g.setColour (Colours::white.withAlpha (0.45f));
+        g.drawText (String ((int) -db), Rectangle<float> (bounds.getX() + 2.0f, yFor (db) - 6.0f, 20.0f, 12.0f),
                     Justification::centredRight, false);
     }
 
-    const float barsX = bounds.getX() + 34.0f;
+    const float barsX = bounds.getX() + 27.0f;
     const float barW = (bounds.getRight() - 8.0f - barsX - 6.0f) * 0.5f;
-    constexpr float segment = 3.0f, pitch = 4.0f;
+    constexpr float segment = 2.0f, pitch = 3.0f;
 
     for (int i = 0; i < 2; ++i)
     {
@@ -87,147 +92,110 @@ void LevelMeter::paint (juce::Graphics& g)
         {
             const float segDb = jmap (y + segment * 0.5f, bottom, top, floorDb, 0.0f);
             const auto colour = zoneColour (segDb);
-            g.setColour (segDb <= s.level ? colour : colour.withAlpha (0.09f));
+            const bool on = segDb <= s.level || std::abs (segDb - s.hold) < 0.9f;
+            g.setColour (on ? colour : colour.withMultipliedBrightness (0.16f));
             g.fillRect (x, y, barW, segment);
         }
 
-        if (s.hold > floorDb + 0.5f)
-        {
-            g.setColour (zoneColour (s.hold));
-            g.fillRect (x, yFor (s.hold) - 1.0f, barW, 2.0f);
-        }
+        // held peak, in seven segments over each bar
+        const auto readout = Rectangle<float> (x - 6.0f, bounds.getY() + 9.0f, barW + 12.0f, 14.0f);
+        hw::gear::drawSevenSegment (g, s.hold <= floorDb + 0.5f ? String ("--") : String (roundToInt (-s.hold)),
+                                    readout, Justification::centred, lab ? look.segment : zoneColour (s.hold), 9.0f);
 
-        // held-peak readout above, channel letter below
-        const auto readout = Rectangle<float> (x - 6.0f, bounds.getY() + 10.0f, barW + 12.0f, 16.0f);
-        g.setFont (hw::font (hw::Type::condensedBold, 13.0f));
-        g.setColour (s.hold >= -1.0f ? c::meterHigh : c::text);
-        g.drawText (s.hold <= floorDb + 0.5f ? String (CharPointer_UTF8 ("\xe2\x80\x93")) : String (s.hold, 1),
-                    readout, Justification::centred, false);
-
-        hw::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 12.0f);
+        g.setFont (hw::font (hw::Type::condensedBold, 10.0f));
+        g.setColour (Colours::white.withAlpha (0.55f));
+        g.drawText (i == 0 ? "L" : "R", Rectangle<float> (x, bottom + 6.0f, barW, 12.0f), Justification::centred, false);
     }
 }
 
-void LevelMeter::paintDigital (juce::Graphics& g)
+void LevelMeter::paintNeedles (juce::Graphics& g)
 {
     using namespace juce;
-    namespace d = hw::digital;
-    namespace c = hw::digital::colours;
-
-    const auto bounds = getLocalBounds().toFloat().reduced (1.0f);
-    d::drawGlass (g, bounds, 16.0f);
-    g.setColour (Colour (0xd0120b10));
-    g.fillRoundedRectangle (bounds.reduced (5.0f), 12.0f);
-
-    const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
-    auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };
-    auto zoneColour = [] (float db) { return db >= -1.0f ? c::meterHigh : db >= -9.0f ? c::meterMid : c::meterLow; };
-
-    g.setFont (hw::font (hw::Type::monoRegular, 9.0f));
-    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f })
-    {
-        g.setColour (c::textFaint);
-        g.drawText (String ((int) db), Rectangle<float> (bounds.getX() + 3.0f, yFor (db) - 6.0f, 24.0f, 12.0f),
-                    Justification::centredRight, false);
-    }
-
-    const float barsX = bounds.getX() + 33.0f;
-    const float barW = (bounds.getRight() - 9.0f - barsX - 6.0f) * 0.5f;
-    constexpr float segment = 2.0f, pitch = 3.0f;
-
-    for (int i = 0; i < 2; ++i)
-    {
-        const auto& s = sides[i];
-        const float x = barsX + (float) i * (barW + 6.0f);
-
-        // glow behind the lit part of the bar
-        if (s.level > floorDb + 0.5f)
-        {
-            const auto lit = Rectangle<float> (x, yFor (s.level), barW, bottom - yFor (s.level));
-            g.setColour (zoneColour (s.level).withAlpha (0.10f));
-            g.fillRoundedRectangle (lit.expanded (4.0f, 3.0f), 4.0f);
-            g.setColour (zoneColour (s.level).withAlpha (0.16f));
-            g.fillRoundedRectangle (lit.expanded (1.5f, 1.0f), 2.0f);
-        }
-
-        for (float y = bottom - segment; y >= top - 0.5f; y -= pitch)
-        {
-            const float segDb = jmap (y + segment * 0.5f, bottom, top, floorDb, 0.0f);
-            g.setColour (segDb <= s.level ? zoneColour (segDb) : c::cream.withAlpha (0.05f));
-            g.fillRect (x, y, barW, segment);
-        }
-
-        if (s.hold > floorDb + 0.5f)
-        {
-            const auto colour = zoneColour (s.hold);
-            g.setColour (colour.withAlpha (0.3f));
-            g.fillRect (x - 2.0f, yFor (s.hold) - 3.0f, barW + 4.0f, 6.0f);
-            g.setColour (Colour (0xfffff3e4));
-            g.fillRect (x, yFor (s.hold) - 1.0f, barW, 2.0f);
-        }
-
-        const auto readout = Rectangle<float> (x - 8.0f, bounds.getY() + 10.0f, barW + 16.0f, 16.0f);
-        d::drawGlowText (g, s.hold <= floorDb + 0.5f ? String (CharPointer_UTF8 ("\xe2\x80\x93")) : String (s.hold, 1),
-                         readout, Justification::centred, hw::font (hw::Type::condensedBold, 13.0f),
-                         s.hold >= -1.0f ? c::meterHigh : c::text, 0.0f);
-
-        d::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 11.0f);
-    }
-}
-
-void LevelMeter::paintPaper (juce::Graphics& g)
-{
-    using namespace juce;
-    namespace p = hw::paper;
-    namespace c = hw::paper::colours;
+    const auto skin = hw::Skin::receiver;
 
     const auto bounds = getLocalBounds().toFloat().reduced (2.0f);
-    p::drawCard (g, bounds, 14.0f);
-
-    const float top = bounds.getY() + 36.0f, bottom = bounds.getBottom() - 28.0f;
-    auto yFor = [&] (float db) { return jmap (jlimit (floorDb, 0.0f, db), floorDb, 0.0f, bottom, top); };
-
-    g.setFont (hw::font (hw::Type::sansMedium, 9.5f));
-    for (float db : { 0.0f, -6.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f })
-    {
-        g.setColour (c::textFaint);
-        g.drawText (String ((int) db), Rectangle<float> (bounds.getX() + 3.0f, yFor (db) - 6.0f, 24.0f, 12.0f),
-                    Justification::centredRight, false);
-    }
-
-    // two slim bars: ink, vermilion only at the very top
-    const float barsX = bounds.getX() + 36.0f;
-    const float barW = (bounds.getRight() - 12.0f - barsX - 8.0f) * 0.5f;
+    const float gap = 10.0f;
+    const float h = (bounds.getHeight() - gap) * 0.5f;
 
     for (int i = 0; i < 2; ++i)
     {
         const auto& s = sides[i];
-        const float x = barsX + (float) i * (barW + 8.0f);
-        const auto track = Rectangle<float> (x, top, barW, bottom - top);
+        const auto box = bounds.withHeight (h).translated (0.0f, (float) i * (h + gap));
+        hw::gear::drawWindow (g, box, skin, 4.0f);
 
-        g.setColour (c::surface);
-        g.fillRoundedRectangle (track, barW * 0.5f);
-
-        if (s.level > floorDb + 0.5f)
+        // the lamp-lit face: warm paper, brightest in the middle
+        const auto face = box.reduced (4.0f);
         {
-            const auto lit = track.withTop (yFor (s.level));
-            g.setColour (s.level >= -1.0f ? c::live : c::ink);
-            g.fillRoundedRectangle (lit, jmin (barW * 0.5f, lit.getHeight() * 0.5f));
+            Graphics::ScopedSaveState state (g);
+            g.reduceClipRegion (face.toNearestInt());
+            g.setGradientFill (ColourGradient (Colour (0xffffd98e), face.getCentreX(), face.getY() + face.getHeight() * 0.55f,
+                                               Colour (0xffb5661e), face.getX() - 10.0f, face.getBottom(), true));
+            g.fillRect (face);
+
+            // scale arc from -20 to +3 VU round a pivot low on the face
+            constexpr float sweep = 0.78f; // radians either side of centre
+            const float radius = (face.getWidth() - 16.0f) / (2.0f * std::sin (sweep));
+            const auto pivot = Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.88f);
+            auto angleFor = [] (float vu)
+            {
+                // deflection follows voltage, as on a real VU movement
+                const float p = std::pow (10.0f, jlimit (-22.0f, 4.0f, vu) / 20.0f) / std::pow (10.0f, 3.0f / 20.0f);
+                return -sweep + 2.0f * sweep * jlimit (0.0f, 1.04f, p);
+            };
+            auto at = [&] (float vu, float r) { return pivot.getPointOnCircumference (r, angleFor (vu)); };
+
+            Path arc, red;
+            arc.startNewSubPath (at (-20.0f, radius));
+            for (int k = 1; k <= 80; ++k)
+                arc.lineTo (at (-20.0f + 0.25f * (float) k, radius));
+            red.startNewSubPath (at (0.0f, radius));
+            for (int k = 1; k <= 12; ++k)
+                red.lineTo (at (0.25f * (float) k, radius));
+            g.setColour (Colour (0xff2a1a0e));
+            g.strokePath (arc, PathStrokeType (1.2f));
+            g.setColour (Colour (0xffc2271b));
+            g.strokePath (red, PathStrokeType (3.0f));
+
+            g.setFont (hw::font (hw::Type::condensedSemiBold, 7.5f));
+            for (int v : { -20, -10, -7, -5, -3, -1, 0, 1, 2, 3 })
+            {
+                const float vu = (float) v;
+                Path tick;
+                tick.startNewSubPath (at (vu, radius));
+                tick.lineTo (at (vu, radius + 4.0f));
+                g.setColour (vu > 0.0f ? Colour (0xffc2271b) : Colour (0xff2a1a0e));
+                g.strokePath (tick, PathStrokeType (1.0f));
+                if (v == -20 || v == -10 || v == -5 || v == 0 || v == 3)
+                    g.drawText (v > 0 ? "+" + String (v) : String (v),
+                                Rectangle<float> (16.0f, 8.0f).withCentre (at (vu, radius + 9.5f)), Justification::centred, false);
+            }
+
+            g.setColour (Colour (0xff2a1a0e));
+            g.setFont (hw::font (hw::Type::sansSemiBold, 10.0f, 0.06f));
+            g.drawText ("VU", Rectangle<float> (face.getX(), pivot.y - radius * 0.62f, face.getWidth(), 12.0f), Justification::centred, false);
+            g.setFont (hw::font (hw::Type::sansSemiBold, 15.0f, 0.04f));
+            g.drawText (i == 0 ? "L" : "R", Rectangle<float> (face.getX(), face.getY() + 8.0f, face.getWidth(), 18.0f), Justification::centred, false);
+
+            // peak lamp
+            const bool peak = s.hold >= -1.0f;
+            g.setFont (hw::font (hw::Type::sansSemiBold, 7.0f, 0.08f));
+            g.drawText ("PEAK", Rectangle<float> (face.getX(), face.getY() + 36.0f, face.getWidth(), 9.0f), Justification::centred, false);
+            hw::gear::drawLamp (g, { face.getCentreX(), face.getY() + 51.0f }, 2.6f, Colour (0xffff3a22), peak, hw::Skin::deck);
+
+            // the needle and its shadow
+            Path needle;
+            needle.startNewSubPath (pivot);
+            needle.lineTo (pivot.getPointOnCircumference (radius + 6.0f, angleFor (s.vu)));
+            g.setColour (Colours::black.withAlpha (0.18f));
+            g.strokePath (needle, PathStrokeType (1.4f), AffineTransform::translation (2.0f, 1.5f));
+            g.setColour (Colour (0xff1a120b));
+            g.strokePath (needle, PathStrokeType (1.2f));
+
+            // the movement's cover over the pivot
+            g.setColour (Colour (0xff1c140d));
+            g.fillEllipse (Rectangle<float> (16.0f, 16.0f).withCentre (pivot));
+            g.fillRect (face.withTop (pivot.y));
         }
-
-        if (s.hold > floorDb + 0.5f)
-        {
-            g.setColour (s.hold >= -1.0f ? c::live : c::ink.withAlpha (0.45f));
-            g.fillRoundedRectangle (x, yFor (s.hold) - 1.0f, barW, 2.0f, 1.0f);
-        }
-
-        const auto readout = Rectangle<float> (x - 8.0f, bounds.getY() + 10.0f, barW + 16.0f, 16.0f);
-        g.setFont (hw::font (hw::Type::sansMedium, 10.5f));
-        g.setColour (s.hold >= -1.0f ? c::live : c::text);
-        g.drawText (s.hold <= floorDb + 0.5f ? String (CharPointer_UTF8 ("\xe2\x80\x93")) : String (s.hold, 1),
-                    readout, Justification::centred, false);
-
-        p::drawLabel (g, i == 0 ? "L" : "R", { x, bottom + 8.0f, barW, 14.0f }, Justification::centred, c::textDim, 10.0f);
     }
 }
 

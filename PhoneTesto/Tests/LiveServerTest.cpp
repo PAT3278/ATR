@@ -287,18 +287,18 @@ int main()
                "GET /info reports 48 kHz, no password: " + info.bodyText());
 
         // the phone page follows the plugin's skin
-        const bool digitalByDefault = info.bodyText().find ("\"skin\":\"digital\"") != std::string::npos;
+        const bool receiverByDefault = info.bodyText().find ("\"skin\":\"receiver\"") != std::string::npos;
         server.setSkin (0);
-        const bool flatAfter = get (port, "/info").bodyText().find ("\"skin\":\"flat\"") != std::string::npos;
+        const bool deckAfter = get (port, "/info").bodyText().find ("\"skin\":\"deck\"") != std::string::npos;
         server.setSkin (2);
-        const bool paperAfter = get (port, "/info").bodyText().find ("\"skin\":\"paper\"") != std::string::npos;
+        const bool labAfter = get (port, "/info").bodyText().find ("\"skin\":\"lab\"") != std::string::npos;
         server.setSkin (1);
-        check (digitalByDefault && flatAfter && paperAfter, "/info reports the plugin's skin (digital by default, then flat, then paper)");
+        check (receiverByDefault && deckAfter && labAfter, "/info reports the plugin's skin (receiver by default, then deck, then lab)");
 
         bool fontsOk = true;
-        for (auto* font : { "/fonts/PhoneTestoMono-Regular.ttf", "/fonts/PhoneTestoMono-Medium.ttf", "/fonts/Barlow-Bold.ttf" })
+        for (auto* font : { "/fonts/DSEG7Classic-Bold.ttf", "/fonts/BarlowCondensed-Bold.ttf", "/fonts/Barlow-Bold.ttf" })
             fontsOk &= get (port, font).status() == 200;
-        check (fontsOk, "serves the SUNSET skin's fonts");
+        check (fontsOk, "serves the skins' fonts");
 
         check (get (port, "/nope").status() == 404, "unknown path -> 404");
         check (get (port, "/auth").status() == 204, "/auth with no password set -> 204");

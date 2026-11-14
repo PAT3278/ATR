@@ -6,7 +6,7 @@
 namespace phonetesto
 {
 
-/** The panel's main display. In Emulate mode it plots the
+/** The panel's main display (a VFD, a lit dial or a CRT, by skin). In Emulate mode it plots the
     selected speaker profile's frequency response; with Live on it shows the
     QR code, URL, password field and listener count. */
 class DisplayWindow : public juce::Component
@@ -29,8 +29,7 @@ private:
     juce::Rectangle<float> contentArea() const;
     juce::Rectangle<float> plotArea() const;
     void rebuildCurve();
-    void paintDigital (juce::Graphics&);
-    void paintPaper (juce::Graphics&);
+    void paintGraticule (juce::Graphics&, juce::Rectangle<float> plot);
 
     QrCodeComponent qr;
     juce::TextEditor password;

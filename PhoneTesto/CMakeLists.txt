@@ -87,8 +87,7 @@ juce_add_binary_data(PhoneTestoAssets SOURCES
     Resources/fonts/Barlow-Medium.ttf
     Resources/fonts/Barlow-SemiBold.ttf
     Resources/fonts/Barlow-Bold.ttf
-    Resources/fonts/PhoneTestoMono-Regular.ttf
-    Resources/fonts/PhoneTestoMono-Medium.ttf
+    Resources/fonts/DSEG7Classic-Bold.ttf
 )
 
 # --- AAX ------------------------------------------------------------------
@@ -128,8 +127,7 @@ target_sources(PhoneTesto
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/HardwareStyle.cpp
-        Source/DigitalStyle.cpp
-        Source/PaperStyle.cpp
+        Source/GearStyle.cpp
         Source/LevelMeter.cpp
         Source/DisplayWindow.cpp
         Source/LiveMonitorServer.cpp

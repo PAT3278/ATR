@@ -152,10 +152,10 @@ try {
         const fonts = await page.evaluate(async () => {
           await document.fonts.ready;
           return { skin: document.documentElement.dataset.skin,
-                   digital: document.fonts.check('500 20px "PhoneTesto Mono"'), barlow: document.fonts.check('700 12px "Barlow Condensed"') };
+                   segments: document.fonts.check('700 20px "DSEG7"'), barlow: document.fonts.check('700 12px "Barlow Condensed"') };
         });
-        check(fonts.skin === "digital" && fonts.digital && fonts.barlow,
-              `SUNSET look with the plugin's fonts (skin=${fonts.skin}, PhoneTesto Mono ${fonts.digital}, Barlow Condensed ${fonts.barlow})`);
+        check(fonts.skin === "receiver" && fonts.segments && fonts.barlow,
+              `RECEIVER look with the plugin's fonts (skin=${fonts.skin}, DSEG7 ${fonts.segments}, Barlow Condensed ${fonts.barlow})`);
         check(eng.output === c.output, `playback engine: ${eng.output} (want ${c.output})`);
         check(c.keepAwake.includes(eng.keepAwake), `keep-screen-on via: ${eng.keepAwake || "nothing"} (want ${c.keepAwake.join(" or ")})`);
       }
@@ -336,7 +336,7 @@ try {
 
   // The page follows the plugin's skin, reported in /info.
   console.log("Page follows the plugin's skin");
-  for (const skin of ["digital", "flat", "paper"]) {
+  for (const skin of ["receiver", "deck", "lab"]) {
     const { proc, port } = await startDemo(["--skin", skin]);
     ({ context, page, errors } = await newPage(browser, "ja-JP"));
     await page.goto(`http://${lanAddress}:${port}/`);
@@ -344,7 +344,7 @@ try {
     const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
                                                bg: getComputedStyle(document.body).backgroundColor,
                                                theme: document.querySelector('meta[name="theme-color"]').content }));
-    check(shown.skin === skin && shown.theme === ({ digital: "#141226", paper: "#f2efe9" }[skin] || "#1c1d21"),
+    check(shown.skin === skin && shown.theme === { deck: "#c9cbcc", receiver: "#cfc5ad", lab: "#bcbeb7" }[skin],
           `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
     check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));
