@@ -412,7 +412,7 @@
   // Behind the wheel the day turns to a sodium-lit night (each place still pulls the light its own way).
   const DRIVE = prepGrade({ top: '#04050c', bottom: '#19243c', fog: '#0f1828', near: 26, far: 210, sun: '#9db6ff', sunInt: 0.34, hemi: 0.37, sunDir: [-0.35, 0.7, 0.3], tint: [0.94, 1.0, 1.08], expo: 1.3, sat: 1.05, stars: 0.3 });
   const blank = () => prepGrade({ top: '#000', bottom: '#000', fog: '#000', near: 0, far: 0, sun: '#000', sunInt: 0, hemi: 0, sunDir: [0, 1, 0], tint: [1, 1, 1], expo: 1, sat: 1, stars: 0 });
-  const G = blank(), GB = blank();
+  const G = blank(), GB = blank(), GA = blank(), GR = blank();
   function mixGrade(o, a, b, k) {
     o.top.copy(a.top).lerp(b.top, k); o.bottom.copy(a.bottom).lerp(b.bottom, k); o.fog.copy(a.fog).lerp(b.fog, k); o.sun.copy(a.sun).lerp(b.sun, k);
     o.near = a.near + (b.near - a.near) * k; o.far = a.far + (b.far - a.far) * k;
@@ -531,23 +531,9 @@
   const surfY = (x, z) => { const g0 = groundAt(x, z); if (g0 <= 0) return 0; dray.set(dfrom.set(x, g0 + 3, z), ddown); const hit = dray.intersectObjects(pick, false)[0]; return hit ? Math.max(hit.point.y, 0) : g0; };
   const pathMat = mat('#ffffff', { map: tex('trail', 1, 1), rough: 1 }, true);
   pathMat.transparent = true; pathMat.depthWrite = false; pathMat.polygonOffset = true; pathMat.polygonOffsetFactor = -2;
-  places.forEach((p) => {
-    const len = Math.hypot(p.x, p.z), ux = p.x / len, uz = p.z / len;
-    const a = { x: ux * (PLAZA_R - 0.5), z: uz * (PLAZA_R - 0.5) };
-    const [vlx, vlz] = p.vp || [0, 0];   // a place may put its viewpoint (and so its sound) somewhere other than its own origin
-    const e = p.toWorld(vlx, p.pathEnd), eIn = p.toWorld(vlx, p.pathEnd + 14);
-    const b = { x: a.x + ux * 12, z: a.z + uz * 12 };
-    const pts = [];
-    const N = 70;
-    for (let i = 0; i <= N; i++) { const t = i / N; pts.push({ x: cubic(a.x, b.x, eIn.x, e.x, t), z: cubic(a.z, b.z, eIn.z, e.z, t) }); }
-    // continue straight to the viewpoint
-    const vp = p.toWorld(vlx, vlz), last = pts[pts.length - 1];
-    const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
-    for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
-    p.path = pts;
+  function layTrail(draw) {
     const pos = [], uv = [], idx = [], CN = 4;
     let acc = 0;
-    const draw = pts.slice(0, N + 1);
     draw.forEach((q, i) => {
       const n = draw[Math.min(i + 1, draw.length - 1)], pv = draw[Math.max(i - 1, 0)];
       let tx = n.x - pv.x, tz = n.z - pv.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
@@ -567,14 +553,34 @@
     const ribbon = new THREE.Mesh(geo, pathMat);
     ribbon.receiveShadow = true; ribbon.userData.ground = true;
     scene.add(ribbon); pick.push(ribbon);
+  }
+  places.forEach((p) => {
+    const len = Math.hypot(p.x, p.z), ux = p.x / len, uz = p.z / len;
+    const a = { x: ux * (PLAZA_R - 0.5), z: uz * (PLAZA_R - 0.5) };
+    const [vlx, vlz] = p.vp || [0, 0];   // a place may put its viewpoint (and so its sound) somewhere other than its own origin
+    const e = p.toWorld(vlx, p.pathEnd), eIn = p.toWorld(vlx, p.pathEnd + 14);
+    const b = { x: a.x + ux * 12, z: a.z + uz * 12 };
+    const pts = [];
+    const N = 70;
+    for (let i = 0; i <= N; i++) { const t = i / N; pts.push({ x: cubic(a.x, b.x, eIn.x, e.x, t), z: cubic(a.z, b.z, eIn.z, e.z, t) }); }
+    // continue straight to the viewpoint
+    const vp = p.toWorld(vlx, vlz), last = pts[pts.length - 1];
+    const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
+    for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
+    p.path = pts;
+    layTrail(pts.slice(0, N + 1));
   });
+  // A loop trail through the woods joins the spokes, so you can walk from one place to the next without going back to the plaza.
+  const LOOP_R = 30, LOOP_AT = 1.8, LOOP_DIP = 12, loopPath = [];
+  for (let i = 0; i <= 180; i++) { const a = (i / 180) * Math.PI * 2, r = LOOP_R - LOOP_DIP * (1 - smooth(0.12, 0.62, Math.abs(Math.atan2(Math.sin(a - LOOP_AT), Math.cos(a - LOOP_AT))))); loopPath.push({ x: Math.cos(a) * r, z: Math.sin(a) * r }); }   // it swings inside the live house
+  layTrail(loopPath);
   function distToPath(x, z, path) { let best = 1e9, bi = 0; for (let i = 0; i < path.length; i++) { const d = Math.hypot(path[i].x - x, path[i].z - z); if (d < best) { best = d; bi = i; } } return { d: best, i: bi }; }
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if (Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 13) return false;   // nothing grows up through the ring road
+      if (Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -1387,6 +1393,7 @@
       });
     });
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 3 * MAP_S;
+    g.beginPath(); loopPath.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
     places.forEach((p) => { g.beginPath(); p.path.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke(); });
     g.fillStyle = '#8a8376'; g.beginPath(); g.arc(...toMap(0, 0), PLAZA_R * MAP_S, 0, 7); g.fill();
     g.lineJoin = 'round'; g.strokeStyle = '#4a4e58'; g.lineWidth = 15 * MAP_S; g.beginPath();   // the ring road, with the parking areas where a car waits
@@ -1610,15 +1617,19 @@
     updTraffic(dt);
 
     // Lighting: blend towards the closest place's grade.
-    let bp = null, bw = 0;
+    let bp = null, bw = 0, wsum = 0, wfar = 0;
     places.forEach((p) => {
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
       const w = viewPlace === p ? 1 : smooth(48, 16, d - (drv ? 20 : 0));   // from the road the places are a little further off, so reach for them sooner
       if (w > bw) { bw = w; bp = p; }
+      // the wider region: every place within ~115 m pulls the light a little its way, so day does not flip to night at a line
+      const wf = viewPlace ? 0 : smooth(115, 28, d) ** 2;
+      if (wf > 0) { wsum += wf; mixGrade(GA, GA, p.grade, wf / wsum); wfar = Math.max(wfar, wf); }
     });
     drvK += ((drv ? 1 : 0) - drvK) * Math.min(1, dt * 0.9);
     mixGrade(GB, BASE, DRIVE, ease(clamp(drvK, 0, 1)));
-    mixGrade(G, GB, bp ? bp.grade : GB, bp ? bw : 0);
+    mixGrade(GR, GB, wsum > 0 ? GA : GB, wsum > 0 ? 0.55 * wfar : 0);
+    mixGrade(G, GR, bp ? bp.grade : GR, bp ? bw : 0);
     applyGrade();
     ringView.upd(clamp(1 - G.sunInt / 1.1, 0, 1), loudP && loudP.f ? loudP.f.pulse : 0);
     ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;   // a view shows only its own place
@@ -1693,6 +1704,7 @@
     g.save(); g.beginPath(); g.arc(c, c, Rm, 0, 7); g.clip();
     g.fillStyle = 'rgba(12,12,11,.88)'; g.fillRect(0, 0, S, S);
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); for (let i = 0; i < loopPath.length; i += 2) { const [x, y] = tr(loopPath[i].x, loopPath[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke();
     places.forEach((p) => { g.beginPath(); for (let i = 0; i < p.path.length; i += 3) { const [x, y] = tr(p.path[i].x, p.path[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); });
     g.strokeStyle = 'rgba(96,104,118,.95)'; g.lineWidth = 6; g.beginPath();   // the ring road
     for (let i = 0; i <= ring.N; i += 2) { const [x, y] = tr(ring.X[i % ring.N], ring.Z[i % ring.N]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
@@ -1807,5 +1819,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
