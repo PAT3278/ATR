@@ -396,14 +396,24 @@
     return p;
   });
 
-  // Buildings a place lets spill out into the woods (FLIP's outskirts) give way to every other place and its path.
+  // Buildings a place lets spill out into the woods (FLIP's outskirts, FIELD's neighbourhood) give way to every other
+  // place proper (p.core, or its blocks) and to its viewpoint; where two places' spill overlaps, the higher p.spillRank keeps it.
+  const coreOf = (q) => q.core || q.blocks;
   places.forEach((p) => {
     if (!p.spill) return;
     for (let i = p.spill.length - 1; i >= 0; i--) {
       const f = p.spill[i], w = p.toWorld(f.x, f.z), r = Math.max(f.w, f.d) / 2 + 3;
-      const hit = places.some((q) => q !== p && [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const l = q.local(w.x + ox, w.z + oz); return q.blocks(l.x, l.z); }))
+      const hit = places.some((q) => q !== p && [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const l = q.local(w.x + ox, w.z + oz); return coreOf(q)(l.x, l.z); }))
         || places.some((q) => q !== p && Math.hypot(w.x - q.toWorld(...(q.vp || [0, 0])).x, w.z - q.toWorld(...(q.vp || [0, 0])).z) < r + 10);
       if (hit) { f.b.parent.remove(f.b); boxes.splice(boxes.indexOf(f.box), 1); p.spill.splice(i, 1); }
+    }
+  });
+  places.forEach((p) => {
+    if (!p.spill) return;
+    for (let i = p.spill.length - 1; i >= 0; i--) {
+      const f = p.spill[i], w = p.toWorld(f.x, f.z), r = Math.max(f.w, f.d) / 2;
+      const beaten = places.some((q) => q !== p && q.spill && (q.spillRank || 0) > (p.spillRank || 0) && q.spill.some((o) => { const v = q.toWorld(o.x, o.z); return Math.hypot(v.x - w.x, v.z - w.z) < r + Math.max(o.w, o.d) / 2 + 3; }));
+      if (beaten) { f.b.parent.remove(f.b); boxes.splice(boxes.indexOf(f.box), 1); p.spill.splice(i, 1); }
     }
   });
 

@@ -440,10 +440,15 @@
       const spots = [];
       for (const x of [-25, -13, 13, 25]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
       spots.push([-4, -33], [6, -33]);
-      const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12, coreFeet = [];   // the middle of the block: the tallest towers stand here
+      const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12, coreFeet = [];
+      // The side that faces FIELD's brownstones turns into their kind of street: brick walk-ups, lower, the nearer they stand.
+      const fieldSong = SW.SONGS.find((q) => q.scene === 'field'), fieldAt = fieldSong ? (() => { const f = SW.Ring.frame(fieldSong), a = f.toWorld(2, 13), b = f.toWorld(2, 45); return p.local((a.x + b.x) / 2, (a.z + b.z) / 2); })() : null;
+      const fieldWard = (x, z) => (fieldAt ? 1 - Math.max(0, Math.min(1, (Math.hypot(x - fieldAt.x, z - fieldAt.z) - 22) / 34)) : 0);   // 1 next to the row, 0 far from it
+      const nyStyle = (t, rr) => (t > 0.55 ? 2 : t > 0.2 ? (rr() < 0.5 ? 2 : 1) : undefined);   // the middle of the block: the tallest towers stand here
       spots.forEach(([x, z], i) => {
         const w = 8 + r() * 3, d = 8 + r() * 3, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
-        const b = kit.mesh(w, h, d, kr, undefined, true), m = b.material[0];
+        const ft = fieldWard(x, z), hh = h + (12 + r() * 5 - h) * Math.min(1, ft * 1.3);
+        const b = kit.mesh(w, hh, d, kr, nyStyle(ft, kr), true), m = b.material[0];
         b.position.set(x + (r() - 0.5) * 2, 0, z + (r() - 0.5) * 2); coreFeet.push({ x: b.position.x, z: b.position.z, w, d });
         b.castShadow = true;
         city.add(b);
@@ -452,9 +457,9 @@
         const nm = new THREE.MeshBasicMaterial({ color: nc.clone() });
         nm.userData.lin = true;
         const face = Math.abs(x) > 1 ? -Math.sign(x) : 1;
-        const sign = new THREE.Mesh(new THREE.BoxGeometry(0.35, Math.min(9, h * 0.45), 1.4), nm);
-        if (Math.abs(x) > 1) sign.position.set(b.position.x + face * (w / 2 + 0.25), h * 0.55, b.position.z + d * 0.3);
-        else sign.position.set(b.position.x, h * 0.55, b.position.z + d / 2 + 0.25);
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(0.35, Math.min(9, hh * 0.45), 1.4), nm); sign.visible = ft < 0.55;   // no neon on the brownstone side
+        if (Math.abs(x) > 1) sign.position.set(b.position.x + face * (w / 2 + 0.25), hh * 0.55, b.position.z + d * 0.3);
+        else sign.position.set(b.position.x, hh * 0.55, b.position.z + d / 2 + 0.25);
         if (Math.abs(x) <= 1) sign.rotation.y = Math.PI / 2;
         city.add(sign);
         buildings.push({ m, k: i % 24, nm, nc, seed: r() * 6 });
@@ -503,7 +508,7 @@
           if (E.ring && E.ring.dist(wp.x, wp.z) < 13) continue;                  // the ring road
           if (others.some((q) => Math.hypot(wp.x - q.x, wp.z - q.z) < 30)) continue;   // the neighbouring places
           if (others.some((q) => { const L = Math.hypot(q.x, q.z), t = Math.max(0, Math.min(1, (wp.x * q.x + wp.z * q.z) / (L * L))); return Math.hypot(wp.x - q.x * t, wp.z - q.z * t) < 8; })) continue;   // their paths from the plaza
-          const b = kit.mesh(w, h, d, kr); b.position.set(x, 0, z); b.rotation.y = Math.round(or() * 4) * (Math.PI / 2) + (or() - 0.5) * 0.3; b.castShadow = true;
+          const ft = fieldWard(x, z), b = kit.mesh(w, ft > 0.2 ? Math.min(h, 10 + or() * 4) : h, d, kr, nyStyle(ft, or)); b.position.set(x, 0, z); b.rotation.y = Math.round(or() * 4) * (Math.PI / 2) + (or() - 0.5) * 0.3; b.castShadow = true;
           const box = p.addBox(x, z, Math.max(w, d) / 2 + 0.3, Math.max(w, d) / 2 + 0.3);
           outskirts.add(b); feet.push({ x, z, w, d, rot: b.rotation.y, b, box });
         } }
@@ -565,6 +570,7 @@
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
+      p.core = (lx, lz) => Math.abs(lx) < 34 && lz > -40 && lz < 20;   // the block itself; the outskirts are negotiable
       p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;

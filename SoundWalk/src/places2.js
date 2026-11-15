@@ -183,7 +183,7 @@
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
       const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
-        const cr = E.rng(212), X = 6.6; var neonM = null;
+        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [];
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
         const fig = (jacket, cap) => {
@@ -353,6 +353,48 @@
         const box2 = bx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
         box2.rotation.y = 0.3;
         BB.flush();
+
+        // The neighbourhood between here and FLIP DA HOODS: streets of rowhouses like these across the way, then taller
+        // brick apartment blocks the nearer you get to FLIP's towers. Anything that would land on FLIP, a path or another
+        // place is dropped by the game (p.spill); the survivors are drawn once that is settled (p.afterSpill).
+        {
+          const NB = E.batch(g), nb = NB.box, nr = E.rng(4747), kit = SW.Buildings.kit(E, 5), kr = E.rng(4848);
+          const walls = ['#6a4636', '#7d4034', '#5c4136', '#86563f', '#6e4a3a', '#5a3a30', '#7a5240'].map((c) => E.mat(c, { rough: 0.9 }));
+          const paveM = E.mat('#77736c', { map: E.tex('paving', 1, 1), rough: 0.9 });
+          const spill = [], holder = new THREE.Group(); g.add(holder);
+          // xb0..xb1: the body across x; o: which way the front faces (+1 = +x, -1 = -x)
+          const rowhouse = (xb0, xb1, o, zc, H) => {
+            const wall = walls[Math.floor(nr() * walls.length)], xm = (xb0 + xb1) / 2, xf = o > 0 ? xb1 : xb0, dz = zc - 1.6, lit = () => (nr() < 0.4 ? winLit : winDark);
+            return () => {
+              nb(xb1 - xb0, H, 6.1, xm, H / 2, zc, wall);
+              nb(0.7, 0.5, 6.3, xf + o * 0.15, H - 0.1, zc, trimM); nb(0.3, 0.18, 6.2, xf + o * 0.05, 4.75, zc, trimM, false);
+              const win = (y, z, h = 1.7) => { nb(0.06, h, 0.95, xf + o * 0.03, y, z, lit(), false); nb(0.16, 0.2, 1.2, xf + o * 0.06, y + h / 2 + 0.14, z, trimM, false); nb(0.2, 0.1, 1.15, xf + o * 0.08, y - h / 2 - 0.05, z, trimM, false); };
+              win(3.25, zc + 0.35, 1.9); win(3.25, zc + 2.0, 1.9); win(0.95, zc + 1.2, 0.9);
+              for (let y = 6.3; y < H - 1.2; y += 2.3) for (const z of [-1.85, 0, 1.85]) win(y, zc + z);
+              nb(0.08, 2.4, 1.15, xf + o * 0.04, 3.0, dz, doorM, false); nb(0.3, 0.3, 1.6, xf + o * 0.1, 4.35, dz, trimM, false); nb(0.1, 0.22, 0.14, xf + o * 0.08, 3.4, dz + 0.85, winLit, false);
+              for (let k = 0; k < 8; k++) nb(0.37, 0.225 * (k + 1), 1.75, xf + o * (2.9 - k * 0.36), 0.1125 * (k + 1), dz, stepM);
+              for (const sd of [-1, 1]) { const rl = nb(3.45, 0.05, 0.05, xf + o * 1.5, 1.85, dz + sd * 0.95, ironM, false); rl.rotation.z = -o * 0.556; nb(0.12, 1.15, 0.12, xf + o * 3.1, 0.58, dz + sd * 0.95, ironM, false); }
+              for (let k = 0; k < 9; k++) nb(0.03, 0.8, 0.03, xf + o * 3.1, 0.4, zc + 0.1 + k * 0.34, ironM, false);
+              nb(4.4, 0.08, 6.1, xf + o * 2.2, 0.04, zc, paveM, false);                                                // the pavement in front
+              p.addBox(xf + o * 1.5, dz, 1.6, 1.0);
+            };
+          };
+          const place = (x, z, w, d, b, draw) => { b = b || new THREE.Object3D(); if (!b.parent) holder.add(b); spill.push({ x, z, w, d, b, draw, box: p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05) }); };
+          for (let k = 0; k < 8; k++) {
+            const zc = 13 + k * 6.2;
+            const ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, hb = 11 + nr() * 1.6;
+            place(-15.5, zc, 8, 6.1, null, rowhouse(-19.5, -11.5, 1, zc, ha));    // across the street, facing this row
+            place(-23.5, zc, 8, 6.1, null, rowhouse(-27.5, -19.5, -1, zc, hb));   // back to back with it, facing the next street
+          }
+          for (let k = 0; k < 6; k++) {                                            // the next street over: brick blocks, taller towards FLIP
+            const zc = 14 + k * 9.5, w = 9, d = 8.5, h = 13 + k * 1.6 + kr() * 4;
+            const b = kit.mesh(w, h, d, kr, kr() < 0.7 ? 2 : 1); b.position.set(-40, 0, zc); b.castShadow = true;
+            place(-40, zc, w, d, b, () => nb(4, 0.08, d, -40 + w / 2 + 2, 0.04, zc, paveM, false));
+          }
+          p.spill = spill;
+          p.afterSpill = () => { spill.forEach((f) => f.draw && f.draw()); NB.flush(); };
+          neighbourhood = spill;
+        }
       }
       p.map = [{ t: 'rect', x: 10.6, z: 29.4, w: 8, h: 31, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
@@ -366,7 +408,9 @@
       p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
-      p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.core = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
+      p.spillRank = 1;   // its rowhouses win over FLIP's outskirts where they meet
+      p.blocks = (lx, lz) => neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
         if (neonM) neonM.opacity = Math.sin(t * 37) > 0.97 || (t % 7 > 6.85) ? 0.25 : 1;   // the deli's OPEN sign, buzzing

@@ -17,14 +17,14 @@
 
   // ---- facade textures: VARIANTS x [daytime face, lit windows] per design ----
   // Each variant has its own wall colour and its own mix of window light: warm homes, cool offices, or a mixed street
-  // with the odd coloured room (a pink lamp, a green fluorescent, a blue TV, a red darkroom).
+  // with the odd coloured room (a green fluorescent, a blue TV, a violet lamp, a lime grow light).
   const VARIANTS = 3;
   const PALS = [
     ['#ffd27a', '#ffe9b8', '#ffc864', '#fff1cf', '#ffb35c', '#ffdca0', '#ff9f4a'],
     ['#bfe9ff', '#dff4ff', '#9fd8ff', '#f2f6ff', '#cfe0ff', '#e9fff6', '#fffbe8'],
     ['#ffd27a', '#fff1cf', '#bfe9ff', '#f2f6ff', '#ffb35c', '#9fd8ff', '#ffe9b8'],
   ];
-  const ACCENT = ['#ff7ab8', '#8affc1', '#6f8cff', '#ff6a4a', '#c49bff', '#5ff0e0', '#ffef6a', '#ff4fd8'];
+  const ACCENT = ['#8affc1', '#6f8cff', '#c49bff', '#5ff0e0', '#ffef6a', '#c8ff6a', '#3fd0b8', '#a8c8ff'];   // no pinks or reds
   const ACCENT_P = [0.07, 0.06, 0.2], LIT_K = [1, 0.85, 1.15];
   function facades(E, seed) {
     const r = E.rng(seed), S = 256, c = S / CELLS;
