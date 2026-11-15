@@ -118,6 +118,7 @@
         const lx = (r() - 0.5) * 190, lz = -36 - r() * 110;
         if (Math.abs(lx) < 24 && lz > -40) continue;
         const w = 6 + r() * 9, d = 6 + r() * 9, h = 25 + r() * 95;
+        { const wp = p.toWorld(lx, lz); if (E.ring && E.ring.dist(wp.x, wp.z) < Math.max(w, d) / 2 + 8) continue; }   // the expressway threads between the towers
         const b = fieldKit.mesh(w, h, d, kr);   // one of several designs
         b.position.set(lx, 0, lz); g.add(b); r();
         p.addBox(lx, lz, w / 2 + 0.3, d / 2 + 0.3);

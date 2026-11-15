@@ -144,16 +144,54 @@
       // How far a point is from the centre line (for keeping trees and towers out of the way).
       dist(x, z) { const i = nearest(x, z); return Math.hypot(x - X[i], z - Z[i]); },
     };
+    R.id = 'ring'; R.closed = true;
+
+    // --- a C1-style branch: it peels off the outer side of the loop on the east, winds through a string of tight
+    // corners between the towers, rising and dipping, and merges back further round. Two lanes, high concrete walls.
+    {
+      const pol = [[-40, 126.5, 9], [-35, 127.5, 9], [-30, 130.5, 9], [-24, 135, 9.2], [-16, 144, 9.8], [-9, 159, 10.8], [-1, 164, 11.8], [6, 155, 11.8], [13, 150, 10.8], [20, 160, 9.6],
+        [28, 169, 8.4], [36, 163, 8.6], [43, 153, 9.8], [51, 157, 11.2], [59, 167, 12], [67, 161, 11], [73, 146, 10], [78, 136, 9.2], [83, 130.5, 9], [88, 127.5, 9], [93, 126.5, 9]];   // the ends sit over the loop's outer lane, so you drift in and out
+      const ctlB = pol.map(([a, r, y]) => new THREE.Vector3(Math.cos(a * DEG) * r, y, Math.sin(a * DEG) * r));
+      const cb = new THREE.CatmullRomCurve3(ctlB, false, 'centripetal'), NB = Math.round(cb.getLength() / 2), pb = cb.getSpacedPoints(NB - 1);
+      const B = { id: 'c1', closed: false, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(4.6), GAP: new Uint8Array(NB), urban: true, lift: 0.015 };
+      pb.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; });
+      let LB = 0;
+      for (let i = 0; i < NB; i++) { const a = Math.max(0, i - 1), b = Math.min(NB - 1, i + 1), dx = B.X[b] - B.X[a], dz = B.Z[b] - B.Z[a], l = Math.hypot(dx, dz) || 1; B.TX[i] = dx / l; B.TZ[i] = dz / l; if (i < NB - 1) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); }
+      B.L = LB; B.ds = LB / (NB - 1);
+      const nearB = (x, z) => { let bi = 0, bd = 1e18; for (let i = 0; i < NB; i++) { const dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } return bi; };
+      B.proj = (x, z, hint, out) => {
+        let bi = 0, bd = 1e18;
+        if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
+        else bi = nearB(x, z);
+        const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
+        out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
+        out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi];
+        out.tx = B.TX[bi]; out.tz = B.TZ[bi]; out.R = B;
+        out.off = (bi === 0 && a < 0) || (bi === NB - 1 && a > 0);   // past either end
+        return out;
+      };
+      B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
+      // where it runs alongside the loop: no wall between the two, and the loop's band reaches across onto it
+      R.OGAP = new Uint8Array(N); R.XO = new Float32Array(N);
+      for (let i = 0; i < NB; i++) { const j = nearest(B.X[i], B.Z[i]); if (Math.hypot(B.X[i] - X[j], B.Z[i] - Z[j]) < HW[j] + B.HW[i] + 1.6) B.GAP[i] = 1; }
+      for (let i = 0; i < N; i++) { const j = nearB(X[i], Z[i]); const dc = Math.hypot(B.X[j] - X[i], B.Z[j] - Z[i]); if (dc < HW[i] + B.HW[j] + 1.6) { R.OGAP[i] = 1; R.XO[i] = Math.max(0, dc + B.HW[j] - 1.4 - (HW[i] - 1.4)); } }
+      R.branch = B; R.roads = [R, B];
+      const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), B.dist(x, z));
+    }
+    const rProj = R.proj; R.proj = (x, z, hint, out) => { rProj(x, z, hint, out); out.R = R; out.off = false; return out; };
     return R;
   }
 
   /* ---------------------------------------------------------------- meshes */
   function build(R, E, o = {}) {
-    const { N, X, Y, Z, TX, TZ, HW, GAP, ds } = R;
-    const g = new THREE.Group();
-    const wr = (i) => ((i % N) + N) % N;
+    const g = new THREE.Group(), parts = R.roads.map((Rd) => buildRoad(Rd, R, E, o, g));
+    return { group: g, piers: [].concat(...parts.map((p) => p.piers)), upd(night, pulse) { parts.forEach((p) => p.upd(night, pulse)); } };
+  }
+  function buildRoad(Rd, R, E, o, g) {
+    const { N, X, Y, Z, TX, TZ, HW, GAP } = Rd, closed = Rd.closed !== false, ds = Rd.ds, OG = Rd.OGAP || new Uint8Array(N), lift = Rd.lift || 0;
+    const wr = closed ? (i) => ((i % N) + N) % N : (i) => Math.max(0, Math.min(N - 1, i));
     const v = new THREE.Vector3();
-    const at = (i, d, y) => { i = wr(i); return v.set(X[i] + TZ[i] * d, Y[i] + y, Z[i] - TX[i] * d); };
+    const at = (i, d, y) => { i = wr(i); return v.set(X[i] + TZ[i] * d, Y[i] + y + lift, Z[i] - TX[i] * d); };
 
     // Sweep a cross-section along the road. prof(i) -> [[d, y], ...] (or null for "nothing here"); faces point
     // outwards when the section goes: +d along a top, down the +d side, -d along a bottom, up the -d side.
@@ -163,7 +201,7 @@
       return {
         add(prof, opt = {}) {
           const P = []; for (let i = 0; i < N; i++) P.push(prof(i));
-          for (let i = 0; i < N; i++) {
+          for (let i = 0; i < (closed ? N : N - 1); i++) {
             const a = P[i], b = P[(i + 1) % N];
             if (!a || !b || a.length !== b.length || (opt.seg && !opt.seg(i))) continue;
             const v0 = (i * ds) / (opt.vs || 8), v1 = ((i + 1) * ds) / (opt.vs || 8);
@@ -186,7 +224,7 @@
       };
     }
 
-    const city = (i) => sm(5, 7.5, HW[wr(i)]);            // 1 = city expressway (concrete walls), 0 = coast road (guard rails)
+    const city = Rd.urban ? () => 1 : (i) => sm(5, 7.5, HW[wr(i)]);            // 1 = city expressway (concrete walls), 0 = coast road (guard rails)
     const medH = (i) => 0.75 * sm(7.2, 7.95, HW[wr(i)]);  // the median fades out where the road narrows
     const hasMed = (i) => HW[wr(i)] > 7.2;
 
@@ -197,19 +235,19 @@
     // side walls (they shrink to a kerb along the coast), with gaps at the parking areas
     const wallH = (i) => 0.18 + 0.95 * city(i);
     strip()
-      .add((i) => { const w = HW[i], h = wallH(i); return [[w - 0.4, 0], [w - 0.4, h], [w, h], [w, 0]]; })
+      .add((i) => { if (OG[i]) return null; const w = HW[i], h = wallH(i); return [[w - 0.4, 0], [w - 0.4, h], [w, h], [w, 0]]; })
       .add((i) => { if (GAP[i]) return null; const w = HW[i], h = wallH(i); return [[-w, 0], [-w, h], [-w + 0.4, h], [-w + 0.4, 0]]; })
       .add((i) => { const h = medH(i); return h > 0.02 ? [[-0.3, 0], [-0.24, h], [0.24, h], [0.3, 0]] : null; })
       .mesh(concD, true);
     // guard rails where the walls are low
     const railM = E.mat('#d8d6cf', { metal: 0.5, rough: 0.4 });
-    const rail = (sd) => (i) => { if (city(i) > 0.6 || (sd < 0 && GAP[i])) return null; const d = sd * (HW[i] - 0.2); return [[d - 0.06, 0.6], [d - 0.06, 0.86], [d + 0.06, 0.86], [d + 0.06, 0.6], [d - 0.06, 0.6]]; };
+    const rail = (sd) => (i) => { if (city(i) > 0.6 || (sd < 0 && GAP[i]) || (sd > 0 && OG[i])) return null; const d = sd * (HW[i] - 0.2); return [[d - 0.06, 0.6], [d - 0.06, 0.86], [d + 0.06, 0.86], [d + 0.06, 0.6], [d - 0.06, 0.6]]; };
     strip().add(rail(1)).add(rail(-1)).mesh(railM, false);
     // paint
     const paint = E.basic('#cfc9bb');
     const line = (d, w) => [[d - w, 0.025], [d + w, 0.025]];
     strip()
-      .add((i) => line(HW[i] - 0.85, 0.07)).add((i) => line(-HW[i] + 0.85, 0.07))
+      .add((i) => (OG[i] ? null : line(HW[i] - 0.85, 0.07))).add((i) => (GAP[i] && !Rd.pas ? null : line(-HW[i] + 0.85, 0.07)))
       .add((i) => (hasMed(i) ? line(0.8, 0.06) : null)).add((i) => (hasMed(i) ? line(-0.8, 0.06) : null))
       .add((i) => (hasMed(i) ? line(HW[i] / 2 + 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
       .add((i) => (hasMed(i) ? line(-HW[i] / 2 - 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
@@ -249,6 +287,12 @@
       for (const d of [-2.8, 2.8]) { at(i, d, 7.08); headL.push({ x: v.x, y: v.y, z: v.z, yaw: yw }); glowP.push(v.x, v.y - 0.1, v.z); }
       poolL.push({ x: X[i], y: Y[i] + 0.05, z: Z[i], yaw: yw });
     }
+    if (Rd.urban) for (let i = 4, k = 0; i < N - 2; i += 7, k++) {   // no median: lamps on alternate walls, the arm reaching over the lanes
+      if (GAP[i]) continue;
+      const sd = k % 2 ? 1 : -1, yw = yawOf(i); at(i, sd * (HW[i] - 0.25), 0); const bx = v.x, by = v.y, bz = v.z;
+      poleL.push({ x: bx, y: by + 3.6, z: bz, sy: 6 }); at(i, sd * (HW[i] - 1.6), 6.6); armL.push({ x: v.x, y: v.y, z: v.z, yaw: yw, sx: 0.47 });
+      at(i, sd * (HW[i] - 2.9), 6.48); headL.push({ x: v.x, y: v.y, z: v.z, yaw: yw }); glowP.push(v.x, v.y - 0.1, v.z); at(i, sd * (HW[i] - 3), 0.05); poolL.push({ x: v.x, y: v.y, z: v.z, yaw: yw });
+    }
     inst(new THREE.CylinderGeometry(0.1, 0.13, 1, 6), poleM, poleL, false);
     inst(new THREE.BoxGeometry(6, 0.12, 0.12), poleM, armL, false);
     inst(new THREE.BoxGeometry(0.9, 0.16, 0.5), headM, headL, false);
@@ -261,17 +305,17 @@
 
     // delineator posts along the coast rails
     const postL = [];
-    for (let i = 0; i < N; i += 3) { if (city(i) > 0.6) continue; for (const sd of [-1, 1]) { if (sd < 0 && GAP[i]) continue; at(i, sd * (HW[i] - 0.2), 0.45); postL.push({ x: v.x, y: v.y, z: v.z, yaw: yawOf(i) }); } }
+    for (let i = 0; i < N; i += 3) { if (city(i) > 0.6) continue; for (const sd of [-1, 1]) { if ((sd < 0 && GAP[i]) || (sd > 0 && OG[i])) continue; at(i, sd * (HW[i] - 0.2), 0.45); postL.push({ x: v.x, y: v.y, z: v.z, yaw: yawOf(i) }); } }
     inst(new THREE.BoxGeometry(0.14, 0.9, 0.14), railM, postL, false);
 
     // A blue "P" plate on the inner side at each end of a parking area, facing the traffic that can pull in.
-    { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    if (Rd.pas) { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
       x.fillStyle = '#1f55b8'; x.fillRect(0, 0, 128, 128); x.strokeStyle = '#f4f1e6'; x.lineWidth = 7; x.strokeRect(7, 7, 114, 114);
       x.fillStyle = '#f4f1e6'; x.font = '700 96px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('P', 64, 70);
       const tx = new THREE.CanvasTexture(c); tx.encoding = THREE.sRGBEncoding;
       const plateM = new THREE.MeshBasicMaterial({ map: tx }); plateM.userData.lin = true;
       const postM2 = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 });
-      for (const pa of R.pas) {
+      for (const pa of Rd.pas) {
         const idx = []; for (let i = 0; i < N; i++) if (GAP[i]) { const l = pa.f.local(X[i], Z[i]); if (Math.abs(l.x) < pa.gap + 1 && Math.abs(l.z - ROAD_Z) < 6) idx.push(i); }
         if (!idx.length) continue;
         for (const [i, face] of [[idx[0] - 2, -1], [idx[idx.length - 1] + 2, 1]]) {   // face: +1 looks up the road (towards +s), -1 down it
@@ -282,24 +326,24 @@
         }
       } }
 
-    // A lit skyline outside the loop (kept off the sea, the other places and the walkable square).
-    const skyKit = SW.Buildings.kit(E, 3);
-    { const r = E.rng(4242), list = [];
+    // A lit skyline outside the loop (kept off the sea, the other places, the walkable square and the roads).
+    const skyKit = Rd.pas ? SW.Buildings.kit(E, 3) : null;
+    if (skyKit) { const r = E.rng(4242), list = [];
       for (let k = 0; k < 400 && list.length < 84; k++) {
         const a = r() * Math.PI * 2, d = 176 + r() * 110, x = Math.cos(a) * d, z = Math.sin(a) * d, w = 9 + r() * 12, dp = 9 + r() * 12, h = 22 + r() * 70 * (0.4 + r() * 0.6);
-        if (Math.max(Math.abs(x), Math.abs(z)) < 164 || (o.keepOut && o.keepOut(x, z))) continue;
+        if (Math.max(Math.abs(x), Math.abs(z)) < 164 || (o.keepOut && o.keepOut(x, z)) || R.dist(x, z) < Math.max(w, dp) / 2 + 9) continue;
         list.push({ x, z, yaw: r() * 3, w, h, d: dp });
       }
       g.add(skyKit.bake(list, E.rng(4343))); }
 
     return {
-      group: g, piers,
+      piers,
       // night 0..1 (how dark it is), pulse 0..1 (the beat of whatever is playing)
       upd(night, pulse) {
         headM.color.setRGB(1, 0.43, 0.06).multiplyScalar(0.75 + pulse * 0.8 + night * 0.25);
         glowM.opacity = 0.12 + night * 0.6 + pulse * 0.15;
         poolM.opacity = 0.02 + night * 0.075 + pulse * 0.04;
-        skyKit.glow(0.3 + night * 0.7 + pulse * 0.25);
+        if (skyKit) skyKit.glow(0.3 + night * 0.7 + pulse * 0.25);
       },
     };
   }

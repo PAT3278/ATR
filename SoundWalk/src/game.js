@@ -944,7 +944,7 @@
   function startDrive(pa) {
     if (drv || !pa.car) return;
     const car = pa.car;
-    drv = { car, from: pa, pa, x: car.position.x, z: car.position.z, y: pa.y, yaw: car.rotation.y, v: 0, st: 0, hint: -1, side: -1, hit: 0, wall: 0 };
+    drv = { car, from: pa, pa, x: car.position.x, z: car.position.z, y: pa.y, yaw: car.rotation.y, v: 0, st: 0, hint: -1, hints: {}, road: ring, side: -1, hit: 0, wall: 0 };
     ring.pas.forEach((q) => { if (q !== pa && q.car) q.car.visible = false; q.box.y0 = 1e9; q.ia.off = true; });   // the other bays stay clear, so there is always room to pull in
     pa.car = null;
     avatar.G.visible = false; auto = null; keys.clear(); boost = 0; P.v = 0; P.air = false; P.vy = 0;
@@ -974,7 +974,7 @@
     snapCam(); camBlendDur = RM ? 0.01 : 0.8;
     regionKey = ''; save();
   }
-  const rp = { i: -1 }, rq = { s: 0, d: 0 }, ra = {};
+  const rp = { i: -1 }, rq = { s: 0, d: 0 }, ra = {}, rqs = {};
   // The car is steered freely, but the road carries it round its bends and it settles back into its lane when you
   // let go of the wheel, so holding "forward" is enough to do a lap. Walls and the median are solid.
   function driveUpdate(dt, idle) {
@@ -989,15 +989,31 @@
     if (d.v > vmax) d.v -= (d.v - vmax) * Math.min(1, dt * 1.2);
     if (brake) d.v -= Math.sign(d.v) * Math.min(Math.abs(d.v), (idle ? 14 : 44) * dt);
     d.st += (iv.s - d.st) * Math.min(1, dt * 8);
-    ring.proj(d.x, d.z, d.hint, rp);
-    const tau0 = Math.atan2(rp.tx, rp.tz);
+    const R0 = d.road || ring;
+    R0.proj(d.x, d.z, d.hints[R0.id] ?? -1, rp);
+    let tau0 = Math.atan2(rp.tx, rp.tz);
     d.yaw -= d.st * (d.v / (5.5 + (d.v * d.v) / 34)) * dt;   // yaw grows to the left, so steering right lowers it
     d.x += Math.sin(d.yaw) * d.v * dt; d.z += Math.cos(d.yaw) * d.v * dt;
-    ring.proj(d.x, d.z, rp.i, rq); d.hint = rq.i;
-    const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45, m = 1.4;
+    // Which road is the car on? The loop and the branch run side by side where they meet; take whichever the car is
+    // more squarely on (the current one unless the other is clearly better), else stay on the one it was on.
+    const m = 1.4, band = (o) => {
+      const med = o.hw > 7.45, xo = o.R.XO ? o.R.XO[o.i] : 0, side = med ? (o.d >= 0 ? 1 : -1) : 0;
+      return [med && side > 0 ? 1.3 : -(o.hw - m), (med && side < 0 ? -1.3 : o.hw - m) + (o.d > 0 ? xo : 0)];
+    };
+    let best = null, bestK = 1e9;
+    for (const Rd of ring.roads) {
+      const o = rqs[Rd.id] || (rqs[Rd.id] = {}); Rd.proj(d.x, d.z, d.hints[Rd.id] ?? -1, o); d.hints[Rd.id] = o.i;
+      if (o.off || Math.abs(o.y - d.y) > 3) continue;
+      const [lo2, hi2] = band(o); if (o.d < lo2 || o.d > hi2) continue;
+      const k = Math.abs(o.d) / o.hw - (Rd === R0 ? 0.25 : 0); if (k < bestK) { bestK = k; best = o; }
+    }
+    Object.assign(rq, best || rqs[R0.id]);
+    if (rq.R !== R0) tau0 = Math.atan2(rq.tx, rq.tz);   // just changed road: no jump in heading
+    d.road = rq.R; d.hint = rq.i;
+    const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45;
     if (!med) d.side = rq.d >= 0 ? 1 : -1;
-    const lo = med && d.side > 0 ? 1.3 : -(rq.hw - m), hi = med && d.side < 0 ? -1.3 : rq.hw - m;
-    const inBand = rq.d >= lo && rq.d <= hi;
+    const [lo, hi] = (() => { const b = band(rq); if (med) { if (d.side > 0) b[0] = 1.3; else b[1] = -1.3; } return b; })();
+    const inBand = !!best;
     const body = { yaw: d.yaw, len: u.len, wid: u.wid };
     let pa = inBand ? null : ring.pas.find((q) => q.inside(d.x, d.z, body)) || null;
     if (!inBand && !pa) {
@@ -1046,7 +1062,7 @@
     }
     d.hit = Math.max(0, d.hit - dt * 3); d.wall = Math.max(0, d.wall - dt * 4);
     d.y += ((pa ? pa.y : rq.y) - d.y) * Math.min(1, dt * 12);
-    const slope = (ring.Y[(rq.i + 1) % ring.N] - ring.Y[(rq.i + ring.N - 1) % ring.N]) / (2 * ring.ds);
+    const RR = rq.R, slope = (RR.Y[Math.min(RR.N - 1, rq.i + 1) % RR.N] - RR.Y[Math.max(0, rq.i - 1 + (RR.closed ? RR.N : 0)) % RR.N]) / (2 * RR.ds);
     d.car.position.set(d.x, d.y, d.z);
     d.car.rotation.set(pa ? 0 : -Math.atan(slope * Math.cos(wrapA(d.yaw - tau))), d.yaw, clamp(d.st * d.v * 0.0022, -0.07, 0.07));
     if (u.tail0) u.tail.color.copy(u.tail0).multiplyScalar(brake || iv.f < -0.05 ? 2.4 : 1);
@@ -1065,7 +1081,7 @@
     for (const c of traffic) {
       let vt = c.v0;
       for (const o of traffic) { if (o === c || o.dir !== c.dir) continue; const gap = ((((o.s - c.s) * c.dir) % L) + L) % L; if (gap < 18) vt = Math.min(vt, gap < 9 ? 0 : o.v); }
-      if (drv && !drv.pa && Math.abs(rq.d - c.dir * laneD(rq.hw)) < 2.3) {
+      if (drv && !drv.pa && rq.R === ring && Math.abs(rq.d - c.dir * laneD(rq.hw)) < 2.3) {
         const gap = ((((rq.s - c.s) * c.dir) % L) + L) % L;
         if (gap < 20) vt = Math.min(vt, gap < 9 ? 0 : Math.max(0, pv * Math.cos(wrapA(drv.yaw - c.car.rotation.y))));
       }
@@ -1429,7 +1445,7 @@
     g.fillStyle = '#8a8376'; g.beginPath(); g.arc(...toMap(0, 0), PLAZA_R * MAP_S, 0, 7); g.fill();
     g.lineJoin = 'round'; g.strokeStyle = '#4a4e58'; g.lineWidth = 15 * MAP_S; g.beginPath();   // the ring road, with the parking areas where a car waits
     for (let i = 0; i < ring.N; i += 2) { const [x, y] = toMap(ring.X[i], ring.Z[i]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
-    g.closePath(); g.stroke(); g.strokeStyle = 'rgba(232,226,208,.7)'; g.lineWidth = 1.5; g.setLineDash([9, 9]); g.stroke(); g.setLineDash([]);
+    g.closePath(); { const B = ring.branch; g.moveTo(...toMap(B.X[0], B.Z[0])); for (let i = 1; i < B.N; i++) g.lineTo(...toMap(B.X[i], B.Z[i])); } g.stroke(); g.strokeStyle = 'rgba(232,226,208,.7)'; g.lineWidth = 1.5; g.setLineDash([9, 9]); g.stroke(); g.setLineDash([]);
     g.textAlign = 'center';
     places.forEach((p) => {
       const [x, y] = toMap(p.vx, p.vz);
@@ -1740,6 +1756,7 @@
     places.forEach((p) => { g.beginPath(); for (let i = 0; i < p.path.length; i += 3) { const [x, y] = tr(p.path[i].x, p.path[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); });
     g.strokeStyle = 'rgba(96,104,118,.95)'; g.lineWidth = 6; g.beginPath();   // the ring road
     for (let i = 0; i <= ring.N; i += 2) { const [x, y] = tr(ring.X[i % ring.N], ring.Z[i % ring.N]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    { const B = ring.branch; g.moveTo(...tr(B.X[0], B.Z[0])); for (let i = 2; i < B.N; i += 2) g.lineTo(...tr(B.X[i], B.Z[i])); }
     g.stroke(); g.strokeStyle = 'rgba(232,226,208,.55)'; g.lineWidth = 1; g.setLineDash([4, 5]); g.stroke(); g.setLineDash([]);
     ring.pas.forEach((pa) => { const [x, y] = tr(pa.slot.x, pa.slot.z); g.fillStyle = '#2f6fd0'; g.fillRect(x - 5, y - 5, 10, 10); g.strokeStyle = '#e8e2d0'; g.lineWidth = 1.5; g.strokeRect(x - 5, y - 5, 10, 10); });   // parking areas
     const [px, py] = tr(0, 0);
