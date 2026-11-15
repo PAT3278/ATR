@@ -298,7 +298,6 @@
       <button id="modeLow" class="btn" type="button" aria-pressed="true">Low latency</button>
       <button id="modeBg" class="btn" type="button" aria-pressed="false">Screen-off</button>
     </div>
-    <p id="modeNote" class="note"></p>
   </section>
 
   <section id="qualityRow" class="panel">
@@ -312,7 +311,6 @@
       <option value="opus-128">Opus 128 kbps</option>
       <option value="opus-96">Opus 96 kbps</option>
     </select>
-    <p id="qualityNote" class="note"></p>
   </section>
 
   <div id="wakeRow" class="row">
@@ -320,8 +318,6 @@
     <button id="wake" class="btn" type="button" aria-pressed="true"><span id="wakeText">On</span></button>
   </div>
 
-  <div class="divider"></div>
-  <p class="note" data-i18n="hintIos"></p>
 
   <audio id="bg" playsinline preload="none"></audio>
 </main>
@@ -338,28 +334,18 @@ const I18N = {
     tapToListen: "Tap LISTEN", connecting: "Connecting…", playing: "Playing",
     reconnecting: "Reconnecting…", offline: "Plugin not reachable",
     full: "Too many listeners right now",
-    passwordHint: "Scan the QR code on the plugin again, or enter the password shown there.",
+    passwordHint: "Scan the plugin's QR code again, or enter its password.",
     wrongPassword: "Wrong password", needPassword: "Enter the password first",
     locked: "Too many wrong attempts. Wait a minute and try again.",
-    noteLow: "Lowest delay (≈0.1–0.3 s). Keep this page open and the screen on.",
-    noteBg: "Keeps playing with the screen locked, using the phone's media player. Adds ≈1–3 s of delay; 16-bit only.",
-    opusNote: "PCM is lossless. Opus uses less Wi-Fi — pick it if the sound drops out.",
-    opusUnsupported: "This browser can't decode Opus — PCM only.",
-    hintIos: "iPhone: if you hear nothing, turn the volume up and check the silent switch.",
     listening: n => `${n} listening`, connected: "Connected",
   },
   ja: {
     tapToListen: "タップして再生", connecting: "接続中…", playing: "再生中",
     reconnecting: "再接続中…", offline: "プラグインに接続できません",
     full: "接続数が上限に達しています",
-    passwordHint: "プラグインのQRコードを読み取り直すか、表示されているパスワードを入力してください。",
+    passwordHint: "QRコードを読み直すか、パスワードを入力",
     wrongPassword: "パスワードが違います", needPassword: "先にパスワードを入力してください",
     locked: "間違いが続いたため一時的にロックされました。1分ほど待ってから試してください。",
-    noteLow: "遅延が最小（約0.1〜0.3秒）。このページを開いたまま画面をつけておいてください。",
-    noteBg: "スマホのメディアプレーヤーで再生するため、画面ロック中も鳴り続けます。遅延は約1〜3秒、16bitのみ。",
-    opusNote: "PCMはロスレス。OpusはWi-Fiの帯域を節約します。音が途切れる場合に選んでください。",
-    opusUnsupported: "このブラウザはOpusに非対応のため、PCMのみ使えます。",
-    hintIos: "iPhoneで音が出ない場合：音量を上げ、消音スイッチを確認してください。",
     listening: n => `${n}台が受信中`, connected: "接続済み",
   },
 };
@@ -908,7 +894,6 @@ $("authForm").addEventListener("submit", async ev => {
 function applyMode() {
   $("modeLow").setAttribute("aria-pressed", String(mode === "low"));
   $("modeBg").setAttribute("aria-pressed", String(mode === "bg"));
-  $("modeNote").textContent = mode === "low" ? T.noteLow : T.noteBg;
   $("qualityRow").hidden = mode !== "low";
   $("wakeRow").hidden = mode !== "low";
 }
@@ -1001,7 +986,6 @@ function frame(now) {
   }
   document.querySelectorAll('#quality option[value^="opus"]').forEach(o => { o.disabled = !opusOK; });
   if (!opusOK && $("quality").value.startsWith("opus")) $("quality").value = "pcm16";
-  $("qualityNote").textContent = opusOK ? T.opusNote : T.opusUnsupported;
 
   applyMode();
   if (document.fonts) document.fonts.ready.then(() => { meter.dirty = true; });
