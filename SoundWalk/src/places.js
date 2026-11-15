@@ -271,16 +271,30 @@
         const legG = new THREE.BoxGeometry(0.3, 0.86, 0.2).translate(0, 0.43, 0), torsoG = new THREE.CylinderGeometry(0.21, 0.18, 0.6, 9).translate(0, 0.3, 0), headG = new THREE.SphereGeometry(0.13, 12, 9);
         const hairG = new THREE.SphereGeometry(0.14, 12, 8, 0, 6.3, 0, 1.7), armG = new THREE.CylinderGeometry(0.055, 0.045, 0.58, 7).translate(0, -0.29, 0), handG = new THREE.SphereGeometry(0.055, 7, 6);
         const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff', side: THREE.DoubleSide });
+        // more detail, shared geometry: two legs and trainers, a neck, a hood or a collar, a cap / beanie / bucket hat, a bag strap
+        const legG1 = new THREE.CylinderGeometry(0.085, 0.07, 0.84, 7).translate(0, 0.42, 0), shoeG = new THREE.BoxGeometry(0.12, 0.08, 0.27).translate(0, 0.04, 0.04), neckG = new THREE.CylinderGeometry(0.055, 0.06, 0.12, 7);
+        const hoodG = new THREE.SphereGeometry(0.14, 9, 6), collarG = new THREE.TorusGeometry(0.11, 0.035, 5, 10), capG = new THREE.SphereGeometry(0.142, 10, 6, 0, 6.3, 0, 1.4), brimG = new THREE.CylinderGeometry(0.1, 0.11, 0.012, 10);
+        const beanieG = new THREE.SphereGeometry(0.145, 10, 7, 0, 6.3, 0, 1.55), bucketG = new THREE.CylinderGeometry(0.14, 0.2, 0.1, 12), strapG = new THREE.TorusGeometry(0.24, 0.012, 4, 16);
+        const shoeMs = ['#e8e4da', '#151517', '#8a2a24', '#d8d0b8'].map((c) => E.mat(c, { rough: 0.6 })), hatMs = ['#141416', '#2a3a5a', '#6a5a3a', '#7a2a24', '#c9c2b0'].map((c) => E.mat(c, { rough: 0.8 })), strapM = E.mat('#1c1a18', { rough: 0.7 });
         for (let i = 0; i < 60 && crowd.length < 18; i++) {
           const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2;
           if (Math.abs(z) < 1.4 && x < 0.6) continue;                                          // keep the spot in front of the stage free
           if (crowd.some((c) => Math.hypot(c.f.position.x - x, c.f.position.z - z) < 0.65)) continue;   // and nobody standing inside somebody else
           const f = new THREE.Group(), up = new THREE.Group(), skin = skins[Math.floor(cr() * skins.length)], top = tops[Math.floor(cr() * tops.length)];
-          f.add(new THREE.Mesh(legG, pantsM[Math.floor(cr() * pantsM.length)]));
+          { const pm = pantsM[Math.floor(cr() * pantsM.length)], sm = shoeMs[Math.floor(cr() * shoeMs.length)];
+            for (const sd of [-1, 1]) { const l = new THREE.Mesh(legG1, pm); l.position.x = sd * 0.09; f.add(l); const sh = new THREE.Mesh(shoeG, sm); sh.position.x = sd * 0.09; f.add(sh); } }
           up.position.y = 0.86; f.add(up);                                                      // everything above the hips sways and twists together
           const torso = new THREE.Mesh(torsoG, top); torso.scale.z = 0.68; up.add(torso);
           const head = new THREE.Mesh(headG, skin); head.position.y = 0.76; up.add(head);
+          { const nk = new THREE.Mesh(neckG, skin); nk.position.y = 0.64; up.add(nk);
+            if (cr() < 0.5) { const hd = new THREE.Mesh(hoodG, top); hd.position.set(0, 0.58, -0.13); hd.scale.set(1.1, 0.75, 0.6); up.add(hd); }   // a hoodie
+            else { const cl = new THREE.Mesh(collarG, top); cl.rotation.x = Math.PI / 2; cl.position.y = 0.6; cl.scale.set(1, 0.8, 1); up.add(cl); }      // a jacket
+            if (cr() < 0.3) { const st = new THREE.Mesh(strapG, strapM); st.rotation.set(0, Math.PI / 2, 0.75); st.position.y = 0.32; st.scale.set(1, 1, 0.7); up.add(st); } }   // a bag across the body
           const hair = new THREE.Mesh(hairG, hairs[Math.floor(cr() * hairs.length)]); hair.position.y = 0.02; head.add(hair);   // on the head, so the nod shows
+          { const k = cr(), hm = hatMs[Math.floor(cr() * hatMs.length)];
+            if (k < 0.3) { const c = new THREE.Mesh(capG, hm); c.position.y = 0.025; head.add(c); const b = new THREE.Mesh(brimG, hm); b.position.set(0, 0.035, 0.12); b.rotation.x = 0.15; b.scale.z = 0.8; head.add(b); if (cr() < 0.3) c.rotation.y = Math.PI; }
+            else if (k < 0.5) { const c = new THREE.Mesh(beanieG, hm); c.position.y = 0.03; head.add(c); }
+            else if (k < 0.62) { const c = new THREE.Mesh(bucketG, hm); c.position.y = 0.09; head.add(c); } }
           const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.26, 0.56, 0); piv.add(new THREE.Mesh(armG, top)); const hd = new THREE.Mesh(handG, skin); hd.position.y = -0.6; piv.add(hd); up.add(piv); return piv; });
           const style = Math.floor(cr() * 4);                                                   // 0 pumping one fist, 1 both hands up, 2 filming with a phone, 3 swaying
           if (style === 2) { const ph = new THREE.Mesh(lightG, lightM); ph.position.set(0, -0.68, 0.03); ph.rotation.y = Math.PI; arms[1].add(ph); }
