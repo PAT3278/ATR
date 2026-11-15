@@ -382,7 +382,7 @@
       toWorld: (lx, lz) => ({ x: song.x + lx * c + lz * s, z: song.z - lx * s + lz * c }),
       local: (wx, wz) => { const ax = wx - song.x, az = wz - song.z; return { x: ax * c - az * s, z: ax * s + az * c }; },
       addCircle(lx, lz, r, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz); circles.push({ x: w.x, z: w.z, r, y0, y1 }); },
-      addBox(lx, lz, hx, hz, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz); boxes.push({ x: w.x, z: w.z, hx, hz, c, s, y0, y1 }); },
+      addBox(lx, lz, hx, hz, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz), b = { x: w.x, z: w.z, hx, hz, c, s, y0, y1 }; boxes.push(b); return b; },
       interact(o) { const w = p.toWorld(o.lx, o.lz), ia = { ...o, x: w.x, z: w.z, sx: w.x, sz: w.z }; interact.push(ia); return ia; },
       water(lx, lz, hx, hz) { const w = p.toWorld(lx, lz); waters.push({ x: w.x, z: w.z, hx, hz, c, s }); },
       pick(m) { m.userData.ground = true; pick.push(m); },
@@ -394,6 +394,17 @@
     p.ground = p.ground || null;
     p.grade = prepGrade(p.grade, rot);
     return p;
+  });
+
+  // Buildings a place lets spill out into the woods (FLIP's outskirts) give way to every other place and its path.
+  places.forEach((p) => {
+    if (!p.spill) return;
+    for (let i = p.spill.length - 1; i >= 0; i--) {
+      const f = p.spill[i], w = p.toWorld(f.x, f.z), r = Math.max(f.w, f.d) / 2 + 3;
+      const hit = places.some((q) => q !== p && [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const l = q.local(w.x + ox, w.z + oz); return q.blocks(l.x, l.z); }))
+        || places.some((q) => q !== p && Math.hypot(w.x - q.toWorld(...(q.vp || [0, 0])).x, w.z - q.toWorld(...(q.vp || [0, 0])).z) < r + 10);
+      if (hit) { f.b.parent.remove(f.b); boxes.splice(boxes.indexOf(f.box), 1); p.spill.splice(i, 1); }
+    }
   });
 
   function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
@@ -575,6 +586,15 @@
   for (let i = 0; i <= 180; i++) { const a = (i / 180) * Math.PI * 2, r = LOOP_R - LOOP_DIP * (1 - smooth(0.12, 0.62, Math.abs(Math.atan2(Math.sin(a - LOOP_AT), Math.cos(a - LOOP_AT))))); loopPath.push({ x: Math.cos(a) * r, z: Math.sin(a) * r }); }   // it swings inside the live house
   layTrail(loopPath);
   function distToPath(x, z, path) { let best = 1e9, bi = 0; for (let i = 0; i < path.length; i++) { const d = Math.hypot(path[i].x - x, path[i].z - z); if (d < best) { best = d; bi = i; } } return { d: best, i: bi }; }
+
+  // ...and the paths, now that they exist.
+  places.forEach((p) => {
+    if (!p.spill) return;
+    for (let i = p.spill.length - 1; i >= 0; i--) {
+      const f = p.spill[i], w = p.toWorld(f.x, f.z), r = Math.max(f.w, f.d) / 2 + 4;
+      if (places.some((q) => q !== p && distToPath(w.x, w.z, q.path).d < r) || distToPath(w.x, w.z, loopPath).d < r) { f.b.parent.remove(f.b); boxes.splice(boxes.indexOf(f.box), 1); p.spill.splice(i, 1); }
+    }
+  });
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {

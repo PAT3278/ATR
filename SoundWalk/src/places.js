@@ -440,13 +440,11 @@
       const spots = [];
       for (const x of [-25, -13, 13, 25]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
       spots.push([-4, -33], [6, -33]);
+      const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12;   // the middle of the block: the tallest towers stand here
       spots.forEach(([x, z], i) => {
-        const w = 8 + r() * 3, d = 8 + r() * 3, h = 12 + r() * 26;
-        const tex = E.tex('windows', Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 4))).clone();
-        tex.needsUpdate = true;
-        const m = E.mat('#1b1724', { emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: 0.6, rough: 0.7 }, true);
-        const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
-        b.position.set(x + (r() - 0.5) * 2, h / 2, z + (r() - 0.5) * 2);
+        const w = 8 + r() * 3, d = 8 + r() * 3, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
+        const b = kit.mesh(w, h, d, kr, undefined, true), m = b.material[0];
+        b.position.set(x + (r() - 0.5) * 2, 0, z + (r() - 0.5) * 2);
         b.castShadow = true;
         city.add(b);
         p.addBox(b.position.x, b.position.z, w / 2 + 0.3, d / 2 + 0.3);
@@ -462,6 +460,29 @@
         buildings.push({ m, k: i % 24, nm, nc, seed: r() * 6 });
       });
       g.add(city);
+
+      // Outskirts: the city thins out into the woods. Buildings get lower and further apart the further out they are,
+      // and the trees grow in the gaps between them (see p.blocks below).
+      const outskirts = new THREE.Group(), feet = [], others = SW.SONGS.filter((q) => q !== p.song);
+      { const or = E.rng(3131);
+        for (let k = 0; k < 2500 && feet.length < 90; k++) {
+          const a = or() * Math.PI * 2, dist = 31 + Math.pow(or(), 0.9) * 44, x = CX + Math.cos(a) * dist, z = CZ + Math.sin(a) * dist;
+          const fade = (dist - 31) / 44;                                         // 0 at the edge of the block, 1 deep in the woods
+          if (or() < fade * 0.7) continue;                                      // fewer and fewer
+          if (Math.abs(x) < 9 && z > 6) continue;                                // keep the path in from the plaza clear
+          const w = 6 + or() * 6 * (1 - fade * 0.5), d = 6 + or() * 6 * (1 - fade * 0.5), h = Math.max(4, (22 - fade * 18) * (0.7 + or() * 0.6));
+          if (feet.some((f) => Math.abs(f.x - x) < (f.w + w) / 2 + 2 + fade * 3 && Math.abs(f.z - z) < (f.d + d) / 2 + 2 + fade * 3)) continue;   // wider gaps further out, for the trees
+          const wp = p.toWorld(x, z), R = Math.hypot(wp.x, wp.z);
+          if (R < 18 || Math.abs(R - 30) < 5.5) continue;                          // the plaza and the loop trail
+          if (E.ring && E.ring.dist(wp.x, wp.z) < 13) continue;                  // the ring road
+          if (others.some((q) => Math.hypot(wp.x - q.x, wp.z - q.z) < 30)) continue;   // the neighbouring places
+          if (others.some((q) => { const L = Math.hypot(q.x, q.z), t = Math.max(0, Math.min(1, (wp.x * q.x + wp.z * q.z) / (L * L))); return Math.hypot(wp.x - q.x * t, wp.z - q.z * t) < 8; })) continue;   // their paths from the plaza
+          const b = kit.mesh(w, h, d, kr); b.position.set(x, 0, z); b.rotation.y = Math.round(or() * 4) * (Math.PI / 2) + (or() - 0.5) * 0.3; b.castShadow = true;
+          const box = p.addBox(x, z, Math.max(w, d) / 2 + 0.3, Math.max(w, d) / 2 + 0.3);
+          outskirts.add(b); feet.push({ x, z, w, d, b, box });
+        } }
+      g.add(outskirts);
+      p.spill = feet;   // the game drops any of these that land on another place once every place is built
 
       // Billboard at the end of the street
       const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#ff3fb0', glow: '#ff3fb0', font: '700 150px "Hind", sans-serif' });
@@ -492,10 +513,11 @@
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
-      p.blocks = (lx, lz) => Math.abs(lx) < 34 && lz > -40 && lz < 20;
+      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;
       p.update = (t, dt, f) => {
+        kit.glow(0.35 + f.mid * 1.1);   // the outskirts
         buildings.forEach((b) => {
           b.m.emissiveIntensity = 0.25 + band(f, b.k, 24) * 2.2;
           const s = 0.55 + 0.45 * Math.sin(t * 2 + b.seed) * 0.3 + f.pulse * 0.7;

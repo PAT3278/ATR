@@ -15,9 +15,20 @@
   const SW = (window.SW = window.SW || {});
   const BAY = 3, FLOOR = 3.25, CELLS = 4;   // one texture tile is 4 bays by 4 floors
 
-  // ---- facade textures: [daytime face, lit windows] per design ----
+  // ---- facade textures: VARIANTS x [daytime face, lit windows] per design ----
+  // Each variant has its own wall colour and its own mix of window light: warm homes, cool offices, or a mixed street
+  // with the odd coloured room (a pink lamp, a green fluorescent, a blue TV, a red darkroom).
+  const VARIANTS = 3;
+  const PALS = [
+    ['#ffd27a', '#ffe9b8', '#ffc864', '#fff1cf', '#ffb35c', '#ffdca0', '#ff9f4a'],
+    ['#bfe9ff', '#dff4ff', '#9fd8ff', '#f2f6ff', '#cfe0ff', '#e9fff6', '#fffbe8'],
+    ['#ffd27a', '#fff1cf', '#bfe9ff', '#f2f6ff', '#ffb35c', '#9fd8ff', '#ffe9b8'],
+  ];
+  const ACCENT = ['#ff7ab8', '#8affc1', '#6f8cff', '#ff6a4a', '#c49bff', '#5ff0e0', '#ffef6a', '#ff4fd8'];
+  const ACCENT_P = [0.07, 0.06, 0.2], LIT_K = [1, 0.85, 1.15];
   function facades(E, seed) {
     const r = E.rng(seed), S = 256, c = S / CELLS;
+    let v = 0;
     const make = (wall, paint) => {
       const out = [0, 1].map(() => { const cv = document.createElement('canvas'); cv.width = cv.height = S; return cv; });
       const a = out[0].getContext('2d'), b = out[1].getContext('2d');
@@ -26,29 +37,36 @@
       for (let y = 0; y < CELLS; y++) for (let x = 0; x < CELLS; x++) paint(a, b, x * c, y * c, c, r);
       return out.map((cv) => { const t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t; });
     };
-    const warm = ['#ffd27a', '#ffe9b8', '#ffc864', '#fff1cf'], cool = ['#bfe9ff', '#dff4ff', '#9fd8ff', '#ffe9b8'];
-    const win = (a, b, x, y, w, h, r, pal, lit, glass = '#161c26') => {
+    const win = (a, b, x, y, w, h, r, lit, glass = '#161c26') => {
       a.fillStyle = glass; a.fillRect(x, y, w, h); a.fillStyle = 'rgba(160,190,220,.10)'; a.fillRect(x, y, w, h * 0.45);
-      if (r() < lit) { b.fillStyle = pal[Math.floor(r() * pal.length)]; b.globalAlpha = 0.55 + r() * 0.45; b.fillRect(x, y, w, h); b.globalAlpha = 1; if (r() < 0.3) { b.fillStyle = 'rgba(0,0,0,.45)'; b.fillRect(x, y, w, h * (0.3 + r() * 0.4)); } }
+      if (r() < lit * LIT_K[v]) {
+        const col = r() < ACCENT_P[v] ? ACCENT[Math.floor(r() * ACCENT.length)] : PALS[v][Math.floor(r() * PALS[v].length)];
+        b.fillStyle = col; b.globalAlpha = 0.45 + r() * 0.55; b.fillRect(x, y, w, h); b.globalAlpha = 1;
+        const k = r();
+        if (k < 0.25) { b.fillStyle = 'rgba(0,0,0,.5)'; b.fillRect(x, y, w, h * (0.3 + r() * 0.4)); }                                   // curtain half drawn
+        else if (k < 0.4) { b.fillStyle = 'rgba(0,0,0,.35)'; for (let yy = y + 2; yy < y + h; yy += 4) b.fillRect(x, yy, w, 1.5); }          // blinds
+        else if (k < 0.5) { b.fillStyle = 'rgba(0,0,0,.6)'; b.fillRect(x + w * (0.2 + r() * 0.5), y + h * 0.35, w * 0.12, h * 0.65); }      // someone standing in the room
+      }
     };
-    return [
+    const DESIGNS = [
       // 0 glass: floor-to-ceiling panes between thin mullions
-      make('#27313d', (a, b, x, y, c, r) => { win(a, b, x + 2, y + 5, c / 2 - 3, c - 8, r, cool, 0.5, '#1a2733'); win(a, b, x + c / 2 + 1, y + 5, c / 2 - 3, c - 8, r, cool, 0.5, '#1a2733'); a.fillStyle = '#3a4756'; a.fillRect(x, y, c, 3); }),
-      // 1 deco: tall narrow windows in pale stone piers
-      make('#7a7468', (a, b, x, y, c, r) => { for (const k of [0.16, 0.58]) win(a, b, x + c * k, y + c * 0.18, c * 0.26, c * 0.66, r, warm, 0.42); a.fillStyle = 'rgba(0,0,0,.18)'; a.fillRect(x, y, 2, c); }),
+      [['#27313d', '#22302e', '#2e2a38'], (a, b, x, y, c, r) => { win(a, b, x + 2, y + 5, c / 2 - 3, c - 8, r, 0.5, '#1a2733'); win(a, b, x + c / 2 + 1, y + 5, c / 2 - 3, c - 8, r, 0.5, '#1a2733'); a.fillStyle = 'rgba(255,255,255,.12)'; a.fillRect(x, y, c, 3); }],
+      // 1 deco: tall narrow windows in stone piers
+      [['#7a7468', '#6e6a5e', '#857a66'], (a, b, x, y, c, r) => { for (const k of [0.16, 0.58]) win(a, b, x + c * k, y + c * 0.18, c * 0.26, c * 0.66, r, 0.42); a.fillStyle = 'rgba(0,0,0,.18)'; a.fillRect(x, y, 2, c); }],
       // 2 brick: courses of brick, sash windows with pale sills and lintels
-      make('#6a3a2c', (a, b, x, y, c, r) => {
+      [['#6a3a2c', '#5a4636', '#7a4a30'], (a, b, x, y, c, r) => {
         a.strokeStyle = 'rgba(30,14,10,.5)'; a.lineWidth = 1; for (let k = 0; k < 8; k++) { a.beginPath(); a.moveTo(x, y + k * c / 8); a.lineTo(x + c, y + k * c / 8); a.stroke(); }
-        win(a, b, x + c * 0.3, y + c * 0.22, c * 0.4, c * 0.56, r, warm, 0.38);
+        win(a, b, x + c * 0.3, y + c * 0.22, c * 0.4, c * 0.56, r, 0.4);
         a.fillStyle = '#b9ab95'; a.fillRect(x + c * 0.26, y + c * 0.78, c * 0.48, 3); a.fillRect(x + c * 0.26, y + c * 0.17, c * 0.48, 3); a.fillStyle = '#2a1712'; a.fillRect(x + c * 0.3, y + c * 0.49, c * 0.4, 2);
-      }),
+      }],
       // 3 office: a ribbon of window over a concrete spandrel
-      make('#8a8a86', (a, b, x, y, c, r) => { win(a, b, x, y + c * 0.2, c / 2 - 1, c * 0.42, r, cool, 0.55); win(a, b, x + c / 2 + 1, y + c * 0.2, c / 2 - 2, c * 0.42, r, cool, 0.55); a.fillStyle = 'rgba(0,0,0,.2)'; a.fillRect(x, y + c * 0.62, c, 2); }),
+      [['#8a8a86', '#6f747a', '#93887a'], (a, b, x, y, c, r) => { win(a, b, x, y + c * 0.2, c / 2 - 1, c * 0.42, r, 0.55); win(a, b, x + c / 2 + 1, y + c * 0.2, c / 2 - 2, c * 0.42, r, 0.55); a.fillStyle = 'rgba(0,0,0,.2)'; a.fillRect(x, y + c * 0.62, c, 2); }],
       // 4 slab: a window and a balcony door per bay, painted render
-      make('#9a9488', (a, b, x, y, c, r) => { win(a, b, x + c * 0.1, y + c * 0.26, c * 0.3, c * 0.44, r, warm, 0.45); win(a, b, x + c * 0.56, y + c * 0.16, c * 0.3, c * 0.7, r, warm, 0.45); a.fillStyle = 'rgba(0,0,0,.25)'; a.fillRect(x, y + c - 4, c, 4); }),
+      [['#9a9488', '#8a8f96', '#a39078'], (a, b, x, y, c, r) => { win(a, b, x + c * 0.1, y + c * 0.26, c * 0.3, c * 0.44, r, 0.45); win(a, b, x + c * 0.56, y + c * 0.16, c * 0.3, c * 0.7, r, 0.45); a.fillStyle = 'rgba(0,0,0,.25)'; a.fillRect(x, y + c - 4, c, 4); }],
       // 5 podium and tower: dark glass grid
-      make('#1f2630', (a, b, x, y, c, r) => { for (let k = 0; k < 3; k++) win(a, b, x + 2 + (k * c) / 3, y + 4, c / 3 - 3, c - 7, r, cool, 0.4, '#152030'); a.fillStyle = '#39424e'; a.fillRect(x, y, c, 2); }),
+      [['#1f2630', '#262626', '#1c2a2c'], (a, b, x, y, c, r) => { for (let k = 0; k < 3; k++) win(a, b, x + 2 + (k * c) / 3, y + 4, c / 3 - 3, c - 7, r, 0.4, '#152030'); a.fillStyle = 'rgba(255,255,255,.1)'; a.fillRect(x, y, c, 2); }],
     ];
+    return DESIGNS.map(([walls, paint]) => { const out = []; for (v = 0; v < VARIANTS; v++) out.push(make(walls[v], paint)); return out; });
   }
 
   // ---- geometry: boxes with wall quads (facade) and everything else (trim); 1 unit tall ----
@@ -102,34 +120,36 @@
   function kit(E, seed = 1) {
     const tex = facades(E, 900 + seed);
     const trim = [E.lin('#2a2d33'), E.lin('#4a463e'), E.lin('#3a2620'), E.lin('#5a5a58'), E.lin('#6a665e'), E.lin('#20252c')];
-    const mats = tex.map(([day, lit], i) => {
+    const mats = tex.map((vars, i) => vars.map(([day, lit]) => {   // mats[design][variant] = [facade, trim]
       const f = new THREE.MeshStandardMaterial({ map: day, emissiveMap: lit, emissive: new THREE.Color(1, 1, 1), emissiveIntensity: 0.5, roughness: i === 0 || i === 5 ? 0.35 : 0.85, metalness: i === 0 || i === 5 ? 0.3 : 0 });
       const t = new THREE.MeshStandardMaterial({ color: trim[i], roughness: 0.9 });
       f.userData.lin = t.userData.lin = true;
       return [f, t];
-    });
+    }));
     // tall things lean towards towers, low things towards blocks
     const pick = (h, r) => { const k = r(); return h > 45 ? (k < 0.38 ? 0 : k < 0.62 ? 1 : k < 0.82 ? 5 : 3) : h > 20 ? (k < 0.2 ? 0 : k < 0.36 ? 1 : k < 0.56 ? 3 : k < 0.76 ? 4 : k < 0.9 ? 5 : 2) : (k < 0.42 ? 2 : k < 0.7 ? 3 : k < 0.9 ? 4 : 5); };
     return {
       mats,
-      mesh(w, h, d, r, style) {
-        const s = style === undefined ? pick(h, r) : style, { F, T } = shape(s, w, d, h, r), m = new THREE.Mesh(toGeo(F, T), mats[s]);
+      // own: the building gets its own facade material, so its windows can glow on their own (e.g. to one band of the music)
+      mesh(w, h, d, r, style, own) {
+        const s = style === undefined ? pick(h, r) : style, v = Math.floor(r() * VARIANTS), { F, T } = shape(s, w, d, h, r);
+        const m = new THREE.Mesh(toGeo(F, T), own ? [mats[s][v][0].clone(), mats[s][v][1]] : mats[s][v]);
         m.scale.y = h; m.userData.style = s;
         return m;
       },
       bake(list, r) {
-        const acc = mats.map(() => ({ F: { p: [], u: [] }, T: { p: [], u: [] } })), g = new THREE.Group();
+        const acc = mats.map((vs) => vs.map(() => ({ F: { p: [], u: [] }, T: { p: [], u: [] } }))), g = new THREE.Group();
         for (const b of list) {
-          const s = pick(b.h, r), { F, T } = shape(s, b.w, b.d, b.h, r), c = Math.cos(b.yaw || 0), sn = Math.sin(b.yaw || 0);
-          for (const [src, dst] of [[F, acc[s].F], [T, acc[s].T]]) {
+          const s = pick(b.h, r), v = Math.floor(r() * VARIANTS), { F, T } = shape(s, b.w, b.d, b.h, r), c = Math.cos(b.yaw || 0), sn = Math.sin(b.yaw || 0);
+          for (const [src, dst] of [[F, acc[s][v].F], [T, acc[s][v].T]]) {
             for (let i = 0; i < src.p.length; i += 3) { const x = src.p[i], z = src.p[i + 2]; dst.p.push(b.x + x * c + z * sn, src.p[i + 1] * b.h, b.z - x * sn + z * c); }
             for (let i = 0; i < src.u.length; i++) dst.u.push(src.u[i]);
           }
         }
-        acc.forEach((a, s) => { if (!a.F.p.length) return; const m = new THREE.Mesh(toGeo(a.F, a.T), mats[s]); m.frustumCulled = false; g.add(m); });
+        acc.forEach((vs, s) => vs.forEach((a, v) => { if (!a.F.p.length) return; const m = new THREE.Mesh(toGeo(a.F, a.T), mats[s][v]); m.frustumCulled = false; g.add(m); }));
         return g;
       },
-      glow(v) { for (const [f] of mats) f.emissiveIntensity = v; },
+      glow(v) { for (const vs of mats) for (const [f] of vs) f.emissiveIntensity = v; },
     };
   }
 
