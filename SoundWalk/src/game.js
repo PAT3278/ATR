@@ -453,14 +453,6 @@
     farM.color.copy(G.fog).lerp(G.top, 0.3).multiplyScalar(0.85); farM2.color.copy(G.fog).lerp(G.top, 0.55).multiplyScalar(0.7);
   }
 
-  /* ================= ring road ================= */
-  const ringView = SW.Ring.build(ring, E, {
-    blocked: (x, z) => places.some((p) => { if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),
-    keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
-  });
-  scene.add(ringView.group);
-  ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
-
   /* ================= plaza, paths, trees ================= */
   const PLAZA_R = 11;
   {
@@ -606,6 +598,14 @@
     }
   });
   places.forEach((p) => p.afterSpill && p.afterSpill());
+
+  /* ================= ring road ================= */
+  const ringView = SW.Ring.build(ring, E, {
+    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
+    keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
+  });
+  scene.add(ringView.group);
+  ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
@@ -1009,7 +1009,7 @@
     // Which road is the car on? The loop and the branch run side by side where they meet; take whichever the car is
     // more squarely on (the current one unless the other is clearly better), else stay on the one it was on.
     const m = 1.4, band = (o) => {
-      const med = o.hw > 7.45, xo = o.R.XO ? o.R.XO[o.i] : 0, side = med ? (o.d >= 0 ? 1 : -1) : 0;
+      const med = o.hw > 7.45 && !(o.R.MGAP && o.R.MGAP[o.i]), xo = o.R.XO ? o.R.XO[o.i] : 0, side = med ? (o.d >= 0 ? 1 : -1) : 0;
       return [med && side > 0 ? 1.3 : -(o.hw - m), (med && side < 0 ? -1.3 : o.hw - m) + (o.d > 0 ? xo : 0)];
     };
     let best = null, bestK = 1e9;
@@ -1017,12 +1017,13 @@
       const o = rqs[Rd.id] || (rqs[Rd.id] = {}); Rd.proj(d.x, d.z, d.hints[Rd.id] ?? -1, o); d.hints[Rd.id] = o.i;
       if (o.off || Math.abs(o.y - d.y) > 3) continue;
       const [lo2, hi2] = band(o); if (o.d < lo2 || o.d > hi2) continue;
-      const k = Math.abs(o.d) / o.hw - (Rd === R0 ? 0.25 : 0); if (k < bestK) { bestK = k; best = o; }
+      const al = Math.abs(Math.cos(d.yaw - Math.atan2(o.tx, o.tz)));   // how well the car points along this road
+      const k = Math.abs(o.d) / o.hw + 0.9 * (1 - al) - (Rd === R0 ? 0.25 : 0); if (k < bestK) { bestK = k; best = o; }
     }
     Object.assign(rq, best || rqs[R0.id]);
     if (rq.R !== R0) tau0 = Math.atan2(rq.tx, rq.tz);   // just changed road: no jump in heading
     d.road = rq.R; d.hint = rq.i;
-    const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45;
+    const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45 && !(rq.R.MGAP && rq.R.MGAP[rq.i]);
     if (!med) d.side = rq.d >= 0 ? 1 : -1;
     const [lo, hi] = (() => { const b = band(rq); if (med) { if (d.side > 0) b[0] = 1.3; else b[1] = -1.3; } return b; })();
     const inBand = !!best;

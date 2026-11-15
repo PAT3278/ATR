@@ -146,14 +146,23 @@
     };
     R.id = 'ring'; R.closed = true;
 
-    // --- a C1-style branch: it peels off the outer side of the loop on the east, winds through a string of tight
-    // corners between the towers, rising and dipping, and merges back further round. Two lanes, high concrete walls.
+    // --- a C1-style branch: it leaves the inner side of the loop on the east, winds right through the middle of town
+    // high over the walks (just south of the plaza), and joins the loop again on the west. Each end is a T: the median
+    // opens there, so you can turn in from either direction. Two lanes, high concrete walls.
     {
-      const pol = [[-40, 126.5, 9], [-35, 127.5, 9], [-30, 130.5, 9], [-24, 135, 9.2], [-16, 144, 9.8], [-9, 159, 10.8], [-1, 164, 11.8], [6, 155, 11.8], [13, 150, 10.8], [20, 160, 9.6],
-        [28, 169, 8.4], [36, 163, 8.6], [43, 153, 9.8], [51, 157, 11.2], [59, 167, 12], [67, 161, 11], [73, 146, 10], [78, 136, 9.2], [83, 130.5, 9], [88, 127.5, 9], [93, 126.5, 9]];   // the ends sit over the loop's outer lane, so you drift in and out
-      const ctlB = pol.map(([a, r, y]) => new THREE.Vector3(Math.cos(a * DEG) * r, y, Math.sin(a * DEG) * r));
+      const tee = (deg, y) => { const th = deg * DEG; let bi = 0, bd = 1e9; for (let i = 0; i < N; i++) { let a = Math.atan2(Z[i], X[i]) - th; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))); if (a < bd) { bd = a; bi = i; } }
+        const nx = -TZ[bi], nz = TX[bi]; let ix = -X[bi], iz = -Z[bi]; const s = Math.sign(nx * ix + nz * iz) || 1;   // the side towards the middle
+        return { i: bi, at: (k, yy = Y[bi]) => [X[bi] + nx * s * k, Z[bi] + nz * s * k, yy] }; };
+      const ta = tee(-30), tb = tee(176);
+      const pts = [ta.at(3), ta.at(10), ta.at(20, 9.6),
+        [78, -46, 10.6], [62, -36, 11.8], [44, -37, 12.8], [28, -24, 13.6], [10, -23, 14], [-8, -14, 14], [-24, -13, 13.8], [-40, -2, 13.4], [-58, -1, 12.8], [-76, 8, 12.2],
+        tb.at(24, 11.5), tb.at(12), tb.at(3)].map(([x, z, y]) => [x, y, z]);
+      // ease the wiggles a little (every inner point drawn a third of the way to the midpoint of its neighbours), so the
+      // tightest corners stay drivable at speed: about 18-40 m
+      for (let pass = 0; pass < 1; pass++) for (let i = 3; i < pts.length - 3; i++) { const a = pts[i - 1], b = pts[i + 1]; for (const k of [0, 2]) pts[i][k] += ((a[k] + b[k]) / 2 - pts[i][k]) * 0.33; }
+      const ctlB = pts.map(([x, y, z]) => new THREE.Vector3(x, y, z));
       const cb = new THREE.CatmullRomCurve3(ctlB, false, 'centripetal'), NB = Math.round(cb.getLength() / 2), pb = cb.getSpacedPoints(NB - 1);
-      const B = { id: 'c1', closed: false, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(4.6), GAP: new Uint8Array(NB), urban: true, lift: 0.015 };
+      const B = { id: 'c1', closed: false, avoidRing: true, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(4.6), GAP: new Uint8Array(NB), urban: true, lift: 0.015 };
       pb.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; });
       let LB = 0;
       for (let i = 0; i < NB; i++) { const a = Math.max(0, i - 1), b = Math.min(NB - 1, i + 1), dx = B.X[b] - B.X[a], dz = B.Z[b] - B.Z[a], l = Math.hypot(dx, dz) || 1; B.TX[i] = dx / l; B.TZ[i] = dz / l; if (i < NB - 1) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); }
@@ -171,10 +180,11 @@
         return out;
       };
       B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
-      // where it runs alongside the loop: no wall between the two, and the loop's band reaches across onto it
-      R.OGAP = new Uint8Array(N); R.XO = new Float32Array(N);
-      for (let i = 0; i < NB; i++) { const j = nearest(B.X[i], B.Z[i]); if (Math.hypot(B.X[i] - X[j], B.Z[i] - Z[j]) < HW[j] + B.HW[i] + 1.6) B.GAP[i] = 1; }
-      for (let i = 0; i < N; i++) { const j = nearB(X[i], Z[i]); const dc = Math.hypot(B.X[j] - X[i], B.Z[j] - Z[i]); if (dc < HW[i] + B.HW[j] + 1.6) { R.OGAP[i] = 1; R.XO[i] = Math.max(0, dc + B.HW[j] - 1.4 - (HW[i] - 1.4)); } }
+      // the junctions: the branch's own walls stop where it reaches the loop's deck; the loop's inner wall opens and its
+      // median drops away for a stretch either side, so traffic both ways can turn in
+      B.OGAP = new Uint8Array(NB); R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N);
+      for (let i = 0; i < NB; i++) { const j = nearest(B.X[i], B.Z[i]); if (Math.hypot(B.X[i] - X[j], B.Z[i] - Z[j]) < HW[j] + 0.6) { B.GAP[i] = 1; B.OGAP[i] = 1; } }
+      for (const t of [ta, tb]) for (let k = -9; k <= 9; k++) { const i = (t.i + k + N) % N; R.MGAP[i] = 1; if (Math.abs(k) <= 3) { R.JGAP[i] = 1; GAP[i] = 1; } }
       R.branch = B; R.roads = [R, B];
       const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), B.dist(x, z));
     }
@@ -188,7 +198,7 @@
     return { group: g, piers: [].concat(...parts.map((p) => p.piers)), upd(night, pulse) { parts.forEach((p) => p.upd(night, pulse)); } };
   }
   function buildRoad(Rd, R, E, o, g) {
-    const { N, X, Y, Z, TX, TZ, HW, GAP } = Rd, closed = Rd.closed !== false, ds = Rd.ds, OG = Rd.OGAP || new Uint8Array(N), lift = Rd.lift || 0;
+    const { N, X, Y, Z, TX, TZ, HW, GAP } = Rd, closed = Rd.closed !== false, ds = Rd.ds, OG = Rd.OGAP || new Uint8Array(N), MG = Rd.MGAP || new Uint8Array(N), JG = Rd.JGAP || new Uint8Array(N), lift = Rd.lift || 0;
     const wr = closed ? (i) => ((i % N) + N) % N : (i) => Math.max(0, Math.min(N - 1, i));
     const v = new THREE.Vector3();
     const at = (i, d, y) => { i = wr(i); return v.set(X[i] + TZ[i] * d, Y[i] + y + lift, Z[i] - TX[i] * d); };
@@ -225,8 +235,8 @@
     }
 
     const city = Rd.urban ? () => 1 : (i) => sm(5, 7.5, HW[wr(i)]);            // 1 = city expressway (concrete walls), 0 = coast road (guard rails)
-    const medH = (i) => 0.75 * sm(7.2, 7.95, HW[wr(i)]);  // the median fades out where the road narrows
-    const hasMed = (i) => HW[wr(i)] > 7.2;
+    const medH = (i) => (MG[wr(i)] ? 0 : 0.75 * sm(7.2, 7.95, HW[wr(i)]));  // the median fades out where the road narrows, and opens at a junction
+    const hasMed = (i) => HW[wr(i)] > 7.2 && !MG[wr(i)];
 
     // deck
     strip().add((i) => [[-HW[i], 0], [HW[i], 0]], { us: 8, vs: 8 }).mesh(E.mat('#2c2c31', { map: E.tex('asphalt', 1, 1), rough: 0.82 }), false);
@@ -247,7 +257,7 @@
     const paint = E.basic('#cfc9bb');
     const line = (d, w) => [[d - w, 0.025], [d + w, 0.025]];
     strip()
-      .add((i) => (OG[i] ? null : line(HW[i] - 0.85, 0.07))).add((i) => (GAP[i] && !Rd.pas ? null : line(-HW[i] + 0.85, 0.07)))
+      .add((i) => (OG[i] ? null : line(HW[i] - 0.85, 0.07))).add((i) => (GAP[i] && (!Rd.pas || JG[i]) ? null : line(-HW[i] + 0.85, 0.07)))
       .add((i) => (hasMed(i) ? line(0.8, 0.06) : null)).add((i) => (hasMed(i) ? line(-0.8, 0.06) : null))
       .add((i) => (hasMed(i) ? line(HW[i] / 2 + 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
       .add((i) => (hasMed(i) ? line(-HW[i] / 2 - 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
@@ -269,6 +279,7 @@
     const piers = [], pierL = [], capL = [];
     for (let i = 3; i < N; i += 8) {
       if (o.blocked && o.blocked(X[i], Z[i])) continue;
+      if (Rd.avoidRing && R.dist && (() => { let b = 1e9; for (let k = 0; k < R.N; k += 2) b = Math.min(b, Math.hypot(R.X[k] - X[i], R.Z[k] - Z[i])); return b < R.HW[0] + 3; })()) continue;   // not through the loop's deck
       const h = Y[i] - 2.3;
       pierL.push({ x: X[i], y: h / 2, z: Z[i], sy: h });
       capL.push({ x: X[i], y: Y[i] - 1.8, z: Z[i], yaw: yawOf(i), sx: HW[i] * 2 - 3 });
