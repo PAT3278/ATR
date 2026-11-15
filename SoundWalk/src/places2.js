@@ -775,7 +775,10 @@
       gr.position.set(0, HH + 0.75, -7.6); g.add(gr);
       for (let x = -6; x <= 6; x += 2) { const pp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), railM); pp.position.set(x, HH + 0.4, -7.6); g.add(pp); }
       p.addBox(0, -7.8, 6.5, 0.3);
-      p.addBox(0, -10.85, 30, 0.2, RH - 2.5); p.addBox(0, -15.3, 14, 4.6);   // ...and the hill under the deck is too high to stand on   // on foot you stay off the road
+      // ...and the hill under the deck is too high to stand on. Both barriers stop either side of the river channel, so
+      // the craft can run out of the tunnel to the sea.
+      for (let x = -30; x < 30; x += 2) { if (chanD(x + 1, -10.85) > 7) p.addBox(x + 1, -10.85, 1, 0.2, -1e9, RH - 2.5); }
+      for (let x = -14; x < 14; x += 2) for (let z = -19.9; z < -10.7; z += 2.3) { if (chanD(x + 1, z + 1.15) > 6.5) p.addBox(x + 1, z + 1.15, 1, 1.15); }   // on foot you stay off the road
       { const lay = E.plane(18.4, 2.75, E.mat('#4a4a4e', { map: E.tex('asphalt', 6, 1), rough: 0.85 })); lay.position.set(0, RH + 0.03, -9.2); g.add(lay); p.pick(lay); }
       E.bench(g, 3.2, -5.6, Math.PI, HH);
       p.addBox(3.2, -5.6, 1.2, 0.4);
