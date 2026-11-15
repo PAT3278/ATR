@@ -7,6 +7,11 @@
 namespace phonetesto
 {
 
+namespace
+{
+    constexpr float vuSweep = 0.78f; // RECEIVER's VU needle: radians either side of centre
+}
+
 void LevelMeter::update (float peakLeft, float peakRight, float dt)
 {
     bool changed = false;
@@ -133,16 +138,15 @@ void LevelMeter::paintNeedles (juce::Graphics& g)
             g.fillRect (face);
 
             // scale arc from -20 to +3 VU round a pivot low on the face
-            constexpr float sweep = 0.78f; // radians either side of centre
-            const float radius = (face.getWidth() - 16.0f) / (2.0f * std::sin (sweep));
+            const float radius = (face.getWidth() - 16.0f) / (2.0f * std::sin (vuSweep));
             const auto pivot = Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.88f);
-            auto angleFor = [] (float vu)
+            auto angleFor = [] (float vu) -> float
             {
                 // deflection follows voltage, as on a real VU movement
                 const float p = std::pow (10.0f, jlimit (-22.0f, 4.0f, vu) / 20.0f) / std::pow (10.0f, 3.0f / 20.0f);
-                return -sweep + 2.0f * sweep * jlimit (0.0f, 1.04f, p);
+                return -vuSweep + 2.0f * vuSweep * jlimit (0.0f, 1.04f, p);
             };
-            auto at = [&] (float vu, float r) { return pivot.getPointOnCircumference (r, angleFor (vu)); };
+            auto at = [&] (float vu, float r) -> Point<float> { const float a = angleFor (vu); return pivot.getPointOnCircumference (r, a); };
 
             Path arc, red;
             arc.startNewSubPath (at (-20.0f, radius));
@@ -185,7 +189,8 @@ void LevelMeter::paintNeedles (juce::Graphics& g)
             // the needle and its shadow
             Path needle;
             needle.startNewSubPath (pivot);
-            needle.lineTo (pivot.getPointOnCircumference (radius + 6.0f, angleFor (s.vu)));
+            const float needleAngle = angleFor (s.vu);
+            needle.lineTo (pivot.getPointOnCircumference (radius + 6.0f, needleAngle));
             g.setColour (Colours::black.withAlpha (0.18f));
             g.strokePath (needle, PathStrokeType (1.4f), AffineTransform::translation (2.0f, 1.5f));
             g.setColour (Colour (0xff1a120b));
