@@ -578,35 +578,145 @@ void drawKnob (Graphics& g, Rectangle<float> bounds, float pos, float startAngle
 namespace
 {
     /** A key: a cap sitting in a hole in the plate. Returns the cap. */
-    Rectangle<float> drawKey (Graphics& g, Rectangle<float> r, Skin skin, bool latched, bool highlighted, bool down, bool live)
+    struct KeyMaterial { Colour faceTop, faceBottom, wallTop, wallBottom; float sheen; };
+
+    /** Fine grain for key faces (matte plastic, bead-blasted aluminium):
+        a small tile of noise, made once and shared. */
+    struct Grain
     {
-        const float corner = skin == Skin::lab ? 2.0f : 3.0f;
+        Grain() : speckle (Image::ARGB, 128, 128, true), brushed (Image::ARGB, 256, 128, true)
+        {
+            Random random (311);
+            {
+                Image::BitmapData px (speckle, Image::BitmapData::writeOnly);
+                for (int y = 0; y < speckle.getHeight(); ++y)
+                    for (int x = 0; x < speckle.getWidth(); ++x)
+                    {
+                        const float v = random.nextFloat() - 0.5f;
+                        px.setPixelColour (x, y, (v > 0.0f ? Colours::white : Colours::black).withAlpha (std::abs (v) * 0.35f));
+                    }
+            }
+            {
+                // long horizontal strokes, as from a satin finish
+                Image::BitmapData px (brushed, Image::BitmapData::writeOnly);
+                for (int y = 0; y < brushed.getHeight(); ++y)
+                {
+                    float stroke = random.nextFloat() - 0.5f;
+                    for (int x = 0; x < brushed.getWidth(); ++x)
+                    {
+                        stroke += ((random.nextFloat() - 0.5f) - stroke) * 0.04f;
+                        const float v = stroke * 1.6f + (random.nextFloat() - 0.5f) * 0.25f;
+                        px.setPixelColour (x, y, (v > 0.0f ? Colours::white : Colours::black).withAlpha (jmin (1.0f, std::abs (v)) * 0.5f));
+                    }
+                }
+            }
+        }
+        Image speckle, brushed;
+    };
 
-        // the hole: just a shadow, darker along the top
-        g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.42f), 0.0f, r.getY(), Colours::black.withAlpha (0.12f), 0.0f, r.getBottom(), false));
-        g.fillRoundedRectangle (r, corner + 1.0f);
-
-        auto cap = r.reduced (1.5f);
-        const float travel = latched ? 1.5f : (down ? 1.0f : 0.0f);
-        cap = cap.withTrimmedTop (travel).withTrimmedBottom (latched ? 0.0f : 1.5f - travel);
-
-        Colour top, bottom;
+    KeyMaterial keyMaterial (Skin skin, bool live)
+    {
         switch (skin)
         {
-            case Skin::deck:     top = Colour (0xff3a3b3d); bottom = Colour (0xff1c1d1e); break;
-            case Skin::receiver: top = Colour (0xfff0ebdf); bottom = Colour (0xffb8af9c); break;
-            case Skin::lab:      top = live ? Colour (0xffb8463a) : Colour (0xffe6e5df); bottom = live ? Colour (0xff7c2219) : Colour (0xffc4c3bb); break;
+            case Skin::receiver: // brushed aluminium cap on a darker anodised wall
+                return { Colour (0xfff6f2e8), Colour (0xffcec5b1), Colour (0xffa69d89), Colour (0xff6f6858), 0.55f };
+            case Skin::lab:
+                if (live) return { Colour (0xffcf5244), Colour (0xff9a2a1f), Colour (0xff76201a), Colour (0xff4c120d), 0.30f };
+                return { Colour (0xfff0efe9), Colour (0xffd3d2ca), Colour (0xffacaba3), Colour (0xff7f7e77), 0.55f };
+            case Skin::deck: break; // satin black plastic
         }
-        if (latched) { top = top.darker (0.10f); bottom = bottom.darker (0.10f); }
-        if (highlighted && ! latched) top = top.brighter (0.08f);
+        return { Colour (0xff4a4c50), Colour (0xff26272a), Colour (0xff17181a), Colour (0xff0a0a0b), 0.20f };
+    }
 
-        g.setGradientFill (ColourGradient (top, 0.0f, cap.getY(), bottom, 0.0f, cap.getBottom(), false));
-        g.fillRoundedRectangle (cap, corner);
+    /** A key: a cap with real side walls, standing in a hole in the plate.
+        Returns the cap's face (where its legend and lamp go). */
+    Rectangle<float> drawKey (Graphics& g, Rectangle<float> r, Skin skin, bool latched, bool highlighted, bool down, bool live)
+    {
+        const float corner = skin == Skin::lab ? 2.5f : 3.5f;
+        const auto m = keyMaterial (skin, live);
 
-        // the cap's lit top edge
-        g.setColour (Colours::white.withAlpha (skin == Skin::deck ? 0.18f : 0.6f));
-        g.fillRect (cap.reduced (corner, 0.0f).withHeight (1.0f));
-        return cap;
+        // how far the cap stands proud of the plate: a latched key stays down
+        const float height = latched ? 1.5f : (down ? 2.0f : 4.0f);
+
+        // the hole: shaded at the top, catching light on its lower lip
+        g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.32f), 0.0f, r.getY(), Colours::black.withAlpha (0.12f), 0.0f, r.getBottom(), false));
+        g.fillRoundedRectangle (r, corner + 1.0f);
+        g.setColour (Colours::white.withAlpha (0.35f));
+        g.fillRoundedRectangle (r.withTop (r.getBottom() - 1.0f).reduced (corner, 0.0f), 0.5f);
+        const auto body = r.reduced (1.5f);
+        for (int k = 3; k >= 1; --k)
+        {
+            g.setColour (Colours::black.withAlpha (latched ? 0.10f : 0.14f));
+            g.fillRoundedRectangle (body.translated (0.0f, (float) k * 0.8f).expanded ((float) k * 0.5f), corner + (float) k * 0.5f);
+        }
+
+        // side walls: visible below the face, darker toward the plate
+        g.setGradientFill (ColourGradient (m.wallTop, 0.0f, body.getBottom() - height - 2.0f, m.wallBottom, 0.0f, body.getBottom(), false));
+        g.fillRoundedRectangle (body, corner);
+
+        // the face
+        auto face = body.withTrimmedBottom (height).withTrimmedTop (latched ? 1.0f : 0.0f);
+        auto top = m.faceTop, bottom = m.faceBottom;
+        if (latched)                   { top = top.darker (0.12f); bottom = bottom.darker (0.10f); }
+        else if (highlighted && ! down) { top = top.brighter (0.06f); bottom = bottom.brighter (0.04f); }
+        g.setGradientFill (ColourGradient (top, 0.0f, face.getY(), bottom, 0.0f, face.getBottom(), false));
+        g.fillRoundedRectangle (face, corner);
+
+        {
+            Graphics::ScopedSaveState state (g);
+            Path facePath;
+            facePath.addRoundedRectangle (face, corner);
+            g.reduceClipRegion (facePath);
+
+            // the surface's grain
+            {
+                Graphics::ScopedSaveState grainState (g);
+                SharedResourcePointer<Grain> grain;
+                if (skin == Skin::receiver) g.setTiledImageFill (grain->brushed, 0, 0, 0.35f);
+                else                        g.setTiledImageFill (grain->speckle, 0, 0, skin == Skin::deck ? 0.30f : 0.22f);
+                g.addTransform (AffineTransform::scale (0.5f).translated (face.getX(), face.getY())); // finer than a logical pixel
+                g.fillRect (face.withPosition (0.0f, 0.0f) * 2.0f);
+                g.fillRect (face);
+            }
+
+            // a slight dome: light pooling on the upper middle of the cap
+            const auto c = Point<float> (face.getCentreX(), face.getY() + face.getHeight() * 0.15f);
+            ColourGradient dome (Colours::white.withAlpha (m.sheen * 0.35f), c, Colours::white.withAlpha (0.0f),
+                                 c.translated (face.getWidth() * 0.55f, 0.0f), true);
+            g.setGradientFill (dome);
+            g.fillEllipse (Rectangle<float> (face.getWidth() * 1.1f, face.getHeight() * 1.3f).withCentre (c));
+
+            // a latched key sits inside the hole: its rim shades the face's top edge
+            if (latched)
+            {
+                g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.30f), 0.0f, face.getY(),
+                                                   Colours::black.withAlpha (0.0f), 0.0f, face.getY() + 5.0f, false));
+                g.fillRect (face.withHeight (5.0f));
+            }
+
+            // the face's own rounded edge: a bright rim on top, a soft shade along the bottom
+            g.setGradientFill (ColourGradient (Colours::black.withAlpha (0.0f), 0.0f, face.getBottom() - 5.0f,
+                                               Colours::black.withAlpha (skin == Skin::deck ? 0.35f : 0.16f), 0.0f, face.getBottom(), false));
+            g.fillRect (face.withTop (face.getBottom() - 5.0f));
+        }
+
+        g.setColour (Colours::white.withAlpha (m.sheen));
+        g.fillRoundedRectangle (face.reduced (corner * 0.8f, 0.0f).withHeight (1.0f).translated (0.0f, 0.5f), 0.5f);
+        g.setColour (Colours::white.withAlpha (m.sheen * 0.35f));
+        g.fillRect (face.reduced (0.0f, corner).withWidth (1.0f).translated (0.5f, 0.0f));
+        return face;
+    }
+
+    /** Legend printed on a key: a hairline of light under dark ink, or of
+        shadow over light ink, so it reads as printed into the surface. */
+    void drawKeyLegend (Graphics& g, const String& text, Rectangle<float> area, Justification just, const Font& f, Colour ink)
+    {
+        g.setFont (f);
+        const bool lightInk = ink.getPerceivedBrightness() > 0.5f;
+        g.setColour (lightInk ? Colours::black.withAlpha (0.55f) : Colours::white.withAlpha (0.45f));
+        g.drawText (text, area.translated (0.0f, lightInk ? -0.8f : 0.8f), just, false);
+        g.setColour (ink);
+        g.drawText (text, area, just, false);
     }
 
     /** A bat-handle toggle: chrome nut, lever up for on. */
@@ -670,9 +780,7 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
     if (compact)
     {
         const auto cap = drawKey (g, r, skin, false, highlighted, down, false);
-        g.setFont (legendFont (skin, 10.0f));
-        g.setColour (capLegend);
-        g.drawText (text, cap, Justification::centred, false);
+        drawKeyLegend (g, text, cap, Justification::centred, legendFont (skin, 10.0f), capLegend);
         return;
     }
 
@@ -686,14 +794,21 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
         case Skin::deck:
         {
             // a small rectangular LED set into the key's top-left
-            const auto led = Rectangle<float> (12.0f, 3.5f).withPosition (cap.getX() + 8.0f, cap.getY() + 5.0f);
+            // a bar LED behind a small lens, set into the key's top-left
+            const auto led = Rectangle<float> (13.0f, 3.5f).withPosition (cap.getX() + 8.0f, cap.getY() + 5.0f);
+            g.setColour (Colours::black.withAlpha (0.7f));
+            g.fillRoundedRectangle (led.expanded (1.0f), 1.5f);
             if (on)
-            {
-                g.setColour (lit.withAlpha (0.3f));
-                g.fillRoundedRectangle (led.expanded (2.5f), 2.5f);
-            }
-            g.setColour (on ? lit : lit.withMultipliedBrightness (0.22f));
+                for (auto [grow, alpha] : { std::pair { 4.0f, 0.10f }, { 2.0f, 0.22f } })
+                {
+                    g.setColour (lit.withAlpha (alpha));
+                    g.fillRoundedRectangle (led.expanded (grow), 1.0f + grow);
+                }
+            g.setGradientFill (ColourGradient (on ? lit.brighter (0.5f) : lit.withMultipliedBrightness (0.26f), 0.0f, led.getY(),
+                                               on ? lit : lit.withMultipliedBrightness (0.14f), 0.0f, led.getBottom(), false));
             g.fillRoundedRectangle (led, 1.0f);
+            g.setColour (Colours::white.withAlpha (on ? 0.7f : 0.18f));
+            g.fillRect (led.reduced (1.5f, 0.0f).withHeight (0.8f).translated (0.0f, 0.5f));
             textArea = textArea.withTrimmedTop (5.0f);
             break;
         }
@@ -732,9 +847,7 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
 
     const auto f = legendFont (skin, icon >= 0 ? 11.0f : 12.5f);
     const float fits = jmin (1.0f, textArea.getWidth() / jmax (1.0f, GlyphArrangement::getStringWidth (f, text.toUpperCase())));
-    g.setFont (f.withHorizontalScale (jmax (0.8f, fits)));
-    g.setColour (capLegend);
-    g.drawText (text.toUpperCase(), textArea, just, false);
+    drawKeyLegend (g, text.toUpperCase(), textArea, just, f.withHorizontalScale (jmax (0.8f, fits)), capLegend);
 }
 
 

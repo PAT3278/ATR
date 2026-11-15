@@ -214,21 +214,51 @@
   html[data-skin] .field:focus { box-shadow: 0 0 0 2px rgba(var(--trace), 0.5); }
   html[data-skin] .field option { background: #111; color: #eee; }
 
-  /* keys: a cap in a hole in the plate */
-  html[data-skin] .btn {
-    background: linear-gradient(var(--key-top), var(--key-bottom)); color: var(--key-text);
-    border: 0; border-radius: 3px; text-shadow: none;
-    font: var(--legend-font); font-size: 14px; letter-spacing: var(--legend-track);
-    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, var(--key-light)), 0 2px 1px rgba(0, 0, 0, 0.18);
-    transition: transform 0.06s ease;
+  /* keys: a cap with real side walls, standing in a hole in the plate,
+     casting a soft shadow; a slight dome of light on the face and a fine
+     grain (brushed on RECEIVER's aluminium, a speckle on plastic). A
+     latched key sinks, its walls hidden and its top edge shaded by the rim. */
+  html[data-skin="deck"] { --key-wall: #121314; --key-grain: var(--speckle); }
+  html[data-skin="receiver"] { --key-wall: #8b8370; --key-grain: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 0.5px, rgba(0, 0, 0, 0.05) 0.5px 1px, transparent 1px 1.5px); }
+  html[data-skin="lab"] { --key-wall: #9b9a91; --key-grain: var(--speckle); }
+  html[data-skin] {
+    --speckle: linear-gradient(transparent, transparent); /* plain: a noise image costs paint time while audio starts */
   }
-  html[data-skin="lab"] .btn { border-radius: 2px; font-size: 15px; }
-  html[data-skin] .btn:active { filter: brightness(0.94); transform: translateY(1px); }
+  html[data-skin] .btn {
+    background:
+      radial-gradient(ellipse 75% 120% at 50% 8%, rgba(255, 255, 255, calc(var(--key-light) * 0.35)), transparent 70%),
+      var(--key-grain),
+      linear-gradient(var(--key-top), var(--key-bottom));
+    color: var(--key-text); border: 0; border-radius: 3.5px; text-shadow: 0 1px 0 rgba(255, 255, 255, calc(var(--key-light) * 0.6));
+    font: var(--legend-font); font-size: 14px; letter-spacing: var(--legend-track);
+    margin-bottom: 4px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, var(--key-light)),
+      inset 0 -5px 6px -4px rgba(0, 0, 0, 0.22),
+      0 4px 0 var(--key-wall),
+      0 4px 0 1px rgba(0, 0, 0, 0.18),
+      0 6px 7px rgba(0, 0, 0, 0.28);
+    transition: transform 0.06s ease, box-shadow 0.06s ease;
+  }
+  html[data-skin="deck"] .btn { text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6); }
+  html[data-skin="lab"] .btn { border-radius: 2.5px; font-size: 15px; }
+  html[data-skin] .btn:active {
+    filter: none; transform: translateY(2px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, var(--key-light)), inset 0 -5px 6px -4px rgba(0, 0, 0, 0.22),
+                0 2px 0 var(--key-wall), 0 2px 0 1px rgba(0, 0, 0, 0.2), 0 3px 4px rgba(0, 0, 0, 0.28);
+  }
   html[data-skin] .btn[aria-pressed="true"],
   html[data-skin] .btn.solid[aria-pressed="true"] {
-    background: linear-gradient(var(--key-top), var(--key-bottom)); color: var(--key-text);
-    filter: brightness(0.9); transform: translateY(1.5px);
-    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, calc(var(--key-light) * 0.6));
+    background:
+      linear-gradient(rgba(0, 0, 0, 0.26), transparent 6px),
+      var(--key-grain),
+      linear-gradient(var(--key-top), var(--key-bottom));
+    color: var(--key-text); filter: brightness(0.9); transform: translateY(3px);
+    box-shadow: inset 0 -4px 6px -4px rgba(0, 0, 0, 0.22), 0 1px 0 var(--key-wall), 0 1px 0 1px rgba(0, 0, 0, 0.24), 0 2px 3px rgba(0, 0, 0, 0.25);
+  }
+  html[data-skin="lab"] #play {
+    background: radial-gradient(ellipse 75% 120% at 50% 8%, rgba(255, 255, 255, 0.18), transparent 70%), var(--speckle), linear-gradient(#cf5244, #9a2a1f);
+    color: #fff2ec; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); --key-wall: #6a1a13;
   }
   /* the lamp: a bar LED (DECK), a round pilot lamp (RECEIVER), a jewel (LAB) */
   html[data-skin] .btn[aria-pressed]::before {
@@ -249,7 +279,6 @@
   html[data-skin="receiver"] #play[aria-pressed="true"]::before { box-shadow: 0 0 0 2px #d9d6cf, 0 0 9px 3px rgba(var(--live), 0.6); }
   html[data-skin="lab"] #play[aria-pressed="true"]::before { box-shadow: 0 0 0 2.5px #d6d7d2, 0 0 10px 3px rgba(var(--live), 0.6); }
   html[data-skin] #play { min-height: 64px; font-size: 18px; letter-spacing: 0.14em; }
-  html[data-skin="lab"] #play { background: linear-gradient(#b8463a, #7c2219); color: #fff2ec; }
   html[data-skin] #wake { width: 104px; }
   /* keep legends clear of their lamps */
   html[data-skin="deck"] .btn[aria-pressed] { padding-top: 6px; }
