@@ -642,6 +642,7 @@
   PLACES.ohh = {
     build(p, E) {
       const g = p.group, r = E.rng(151);
+      let tunnelLamps = null, chanMap = [];
       const HR = 36, HH = 12, PL = 9, RZ = -15, RH = 12, HALF = 60;   // the road is level with the top of the hill
       const height = (lx, lz) => {
         const d = Math.hypot(lx, lz);
@@ -649,12 +650,37 @@
         if (d >= HR) return 0;
         return HH * 0.5 * (1 + Math.cos((Math.PI * (d - PL)) / (HR - PL)));
       };
-      p.ground = (lx, lz) => (Math.abs(lx) < 9.2 && lz < -7.9 && lz > -10.6 ? RH + 0.03 : height(lx, lz));   // the lay-by beside the road is paved flat
-      const hg = new THREE.RingGeometry(0.01, HR, 56, 22);
+      // TAMA EXPRESSION's river runs on through a tunnel under this hill and out across the beach into the sea.
+      // The channel is a smooth curve in this place's frame: from the end of the river, into the hill, out on the sea side.
+      const tama = SW.SONGS.find((q) => q.scene === 'tama');
+      let chan = null, inChan = () => false, chanD = () => 1e9;
+      if (tama) {
+        const tf = SW.Ring.frame(tama), a = p.local(...Object.values(tf.toWorld(50, -14))), a2 = p.local(...Object.values(tf.toWorld(38, -14)));   // the river's west end, the one by this hill
+        const dx = a.x - a2.x, dz = a.z - a2.z, dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl;   // the way the river flows, out of TAMA
+        const pts = [[a.x - ux * 3, a.z - uz * 3], [a.x + ux * 6, a.z + uz * 6], [a.x + ux * 12 - 2, a.z + uz * 12 - 8], [-16, -14], [-16, -28], [-22, -44]];
+        const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
+        const N = Math.round(curve.getLength() / 1.5), P = curve.getSpacedPoints(N).map((v) => [v.x, v.z]);
+        const inside = P.map(([x, z]) => height(x, z) > 2.2);
+        chan = { P, W: 5, first: inside.indexOf(true), last: inside.lastIndexOf(true) };
+        chanD = (lx, lz) => { let b = 1e9; for (const [x, z] of P) b = Math.min(b, Math.hypot(lx - x, lz - z)); return b; };
+        inChan = (lx, lz) => chanD(lx, lz) < chan.W;
+      }
+      // Outside the tunnel the channel runs in an open cutting: the hill is dug away along it, up to each portal.
+      const carve = (lx, lz) => {
+        if (!chan) return 1;
+        let b = 1e9, bi = 0; chan.P.forEach(([x, z], i) => { const d = Math.hypot(lx - x, lz - z); if (d < b) { b = d; bi = i; } });
+        if (bi >= chan.first && bi <= chan.last && chan.first >= 0) return 1;
+        return Math.max(0, Math.min(1, (b - chan.W - 0.8) / 3.5));
+      };
+      const heightC = (lx, lz) => height(lx, lz) * carve(lx, lz);
+      p.noPier = (lx, lz) => chanD(lx, lz) < 8;   // the ring road steps over the channel
+      // Inside the tunnel (low down, within the channel) the ground is the water; anywhere else, the hill.
+      p.ground = (lx, lz, y) => (Math.abs(lx) < 9.2 && lz < -7.9 && lz > -10.6 ? RH + 0.03 : y !== undefined && y < 4 && inChan(lx, lz) && height(lx, lz) > 0.2 ? 0 : heightC(lx, lz));
+      const hg = new THREE.RingGeometry(0.01, HR, 120, 48);
       const hp = hg.attributes.position;
       for (let i = 0; i < hp.count; i++) {
         const x = hp.getX(i), y = hp.getY(i);
-        hp.setZ(i, height(x, -y) + (Math.hypot(x, y) > PL + 1 && Math.hypot(x, y) < HR - 1 ? (r() - 0.5) * 0.5 : 0) + 0.01);
+        const kc = carve(x, -y); hp.setZ(i, height(x, -y) * kc + (Math.hypot(x, y) > PL + 1 && Math.hypot(x, y) < HR - 1 ? (r() - 0.5) * 0.5 * kc : 0) + 0.01);
       }
       hg.computeVertexNormals();
       const hill = new THREE.Mesh(hg, E.mat('#728a4c', { flat: true }));
@@ -666,10 +692,49 @@
         const lx = Math.cos(a) * d, lz = Math.sin(a) * d;
         if (lz > -2 && Math.abs(lx) < 6) continue;
         const s = 0.8 + r() * 1.8;
+        if (chanD(lx, lz) < s + 8) continue;   // nothing over or in the tunnel
         const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), r() < 0.5 ? rockM : rockD);
         m.position.set(lx, height(lx, lz) + s * 0.3, lz); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true;
         if (lz + s > RZ - 4.5 && lz - s < (Math.abs(lx) < 9.2 + s ? -7.9 : RZ + 4.5) && height(lx, lz) + s * 1.3 > RH - 0.9) continue;   // it would poke up through the road or the lay-by
         g.add(m); p.addCircle(lx, lz, s * 0.8);
+      }
+      if (chan) {
+        const { P, W } = chan, n = P.length;
+        const tan = (i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+        // the water: one strip along the whole channel
+        { const pos = [], idx = [];
+          P.forEach(([x, z], i) => { const [tx, tz] = tan(i); pos.push(x - tz * W, 0.05, z + tx * W, x + tz * W, 0.05, z - tx * W); if (i < n - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } });
+          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+          const wm = E.gloss('#1d3a4c', { rough: 0.12, metal: 0.2, env: 1.1 }); wm.side = THREE.DoubleSide;
+          const w = new THREE.Mesh(geo, wm); w.receiveShadow = true; g.add(w); p.pick(w);
+          P.forEach(([x, z], i) => { if (i % 2 === 0) p.water(x, z, W - 0.6, W - 0.6); }); }
+        // the tunnel: where the hill stands over the channel, a vaulted bore with lamps; a stone portal at each end
+        const { first, last } = chan;
+        if (first >= 0) {
+          const R = W + 0.6, HV = 5.4, pos = [], idx = [], SEG = 12;
+          for (let i = first; i <= last; i++) {
+            const [x, z] = P[i], [tx, tz] = tan(i);
+            for (let k = 0; k <= SEG; k++) { const a = Math.PI * (k / SEG), sx = Math.cos(a) * R, y = k === 0 || k === SEG ? 0 : 1.6 + Math.sin(a) * (HV - 1.6); pos.push(x - tz * sx, y, z + tx * sx); }
+            if (i < last) for (let k = 0; k < SEG; k++) { const b = (i - first) * (SEG + 1) + k, c = b + SEG + 1; idx.push(b, c, b + 1, b + 1, c, c + 1); }
+          }
+          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+          const vm = E.mat('#55524c', { map: E.tex('concrete', 2, 6), rough: 0.95 }); const vault = new THREE.Mesh(geo, vm.clone()); vault.material.side = THREE.DoubleSide; g.add(vault);
+          const lampM = basic('#ffcf8a'), lamps = [];
+          for (let i = first + 2; i < last - 1; i += 5) for (const sd of [-1, 1]) { const [x, z] = P[i], [tx, tz] = tan(i), l = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 1.2), lampM); l.position.set(x - tz * sd * (R - 0.3), 3.6, z + tx * sd * (R - 0.3)); l.rotation.y = Math.atan2(tx, tz); g.add(l); lamps.push(l); }
+          const glowL = new THREE.PointLight(new THREE.Color('#ffb46a').convertSRGBToLinear(), 1.4, 30, 1.6); glowL.position.set(...(() => { const m = P[Math.round((first + last) / 2)]; return [m[0], 3.5, m[1]]; })()); g.add(glowL);
+          const stone = E.mat('#7a7468', { map: E.tex('concrete', 2, 2), rough: 0.9 });
+          for (const i of [first, last]) {   // portal: two piers, a deep lintel and wing walls holding the hill back
+            const [x, z] = P[i], [tx, tz] = tan(i), ry = Math.atan2(tx, tz), por = new THREE.Group(); por.position.set(x, 0, z); por.rotation.y = ry;
+            const bxp = (w, h, d, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), stone); m.position.set(px, py, pz); m.castShadow = m.receiveShadow = true; por.add(m); };
+            bxp(1.4, HV + 1.4, 1.2, -R - 0.7, (HV + 1.4) / 2, 0); bxp(1.4, HV + 1.4, 1.2, R + 0.7, (HV + 1.4) / 2, 0); bxp(2 * R + 2.8, 1.6, 1.4, 0, HV + 0.6, 0);
+            bxp(5, 3.2, 0.8, -R - 3.6, 1.6, 0.3); bxp(5, 3.2, 0.8, R + 3.6, 1.6, 0.3);
+            g.add(por);
+          }
+          // keep walkers and craft inside the bore: its walls are solid below the hill
+          for (let i = first; i <= last; i++) { const [x, z] = P[i], [tx, tz] = tan(i); for (const sd of [-1, 1]) p.addCircle(x - tz * sd * (R + 0.8), z + tx * sd * (R + 0.8), 1.1, -1e9, 4); }
+          tunnelLamps = { lampM, lamps };
+        }
+        chanMap = P.filter((_, i) => i % 2 === 0).map(([x, z]) => ({ t: 'circle', x, z, r: W, c: '#3f6f9e' }));
       }
       // Overlook: guardrail at the edge, a bench
       const railM = E.mat('#d8d6cf', { metal: 0.5, rough: 0.4 });
@@ -751,7 +816,7 @@
         g.add(c); cars.push(c);
       }
 
-      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#5d7342' }, { t: 'rect', x: 0, z: -230, w: 700, h: 400, c: '#244f73' }, { t: 'rect', x: 0, z: RZ, w: HALF * 2, h: 8, c: '#3a393c' }];
+      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#5d7342' }, { t: 'rect', x: 0, z: -230, w: 700, h: 400, c: '#244f73' }, { t: 'rect', x: 0, z: RZ, w: HALF * 2, h: 8, c: '#3a393c' }].concat(chanMap);
       p.grade = {
         top: '#4c86c8', bottom: '#ffd69c', fog: '#f1c99c', near: 70, far: 460,
         sun: '#ffd08a', sunInt: 2.9, hemi: 0.75, sunDir: [0.07, 0.06, -1],

@@ -1696,7 +1696,7 @@
       else { const sh = 0.62 * (1 - boost * 0.6); tx += Math.cos(camYaw) * sh; tz -= Math.sin(camYaw) * sh; }
       let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * cd, cy = ty + Math.sin(camPitch) * cd, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * cd;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
-      cx = clamp(cx, -160, 160); cz = clamp(cz, -160, 160); cy = Math.min(40, Math.max(groundAt(cx, cz) + 0.5, cy));
+      cx = clamp(cx, -160, 160); cz = clamp(cz, -160, 160); cy = Math.min(40, Math.max(groundAt(cx, cz, P.y) + 0.5, cy));   // P.y: the camera follows you into a tunnel or onto an upper floor
       tmpV.set(cx, cy, cz); tmpL.set(tx, ty - 0.1, tz); tmpU.set(0, 1, 0);
     }
     if (camBlend < 1) {

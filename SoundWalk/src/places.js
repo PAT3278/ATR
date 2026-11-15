@@ -435,7 +435,7 @@
       g.add(stripes);
 
       const city = new THREE.Group();
-      const neonCols = ['#ff3fb0', '#3ff0ff', '#ffe14f', '#9b6bff', '#ff6b3f'];
+      const neonCols = ['#4fff9a', '#3ff0ff', '#ffe14f', '#9b6bff', '#ff9a2a'];   // no pink
       const buildings = [];
       const spots = [];
       for (const x of [-25, -13, 13, 25]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
@@ -542,7 +542,7 @@
       const nearWalk = (lx, lz) => walks.some(([ax, az, bx2, bz]) => { const vx = bx2 - ax, vz = bz - az, t = Math.max(0, Math.min(1, ((lx - ax) * vx + (lz - az) * vz) / (vx * vx + vz * vz))); return Math.hypot(lx - ax - vx * t, lz - az - vz * t) < 2.2; });
 
       // Billboard at the end of the street
-      const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#ff3fb0', glow: '#ff3fb0', font: '700 150px "Hind", sans-serif' });
+      const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#3ff0ff', glow: '#3ff0ff', font: '700 150px "Hind", sans-serif' });
       const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map: bbTex, transparent: true }));
       bb.position.set(1, 20, -27);
       g.add(bb);
@@ -554,7 +554,7 @@
       upside.position.y = 66;
       g.add(upside);
 
-      const light = new THREE.PointLight('#ff3fb0', 2, 45, 1.6);
+      const light = new THREE.PointLight('#7a5cff', 2, 45, 1.6);
       light.position.set(0, 7, -8);
       g.add(light);
       const light2 = new THREE.PointLight('#3ff0ff', 1.5, 40, 1.6);

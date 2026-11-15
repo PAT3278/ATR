@@ -75,7 +75,7 @@ SW.SONGS = [
     scene: 'flip',
     sketch: 'flip',
     src: null,
-    color: '#ff4fb0',
+    color: '#a77bff',   // violet (was pink)
     price: 250,
     links: [
       { kind: 'buy', label: '配信ストアで買う', url: 'https://linkco.re/a9tT7Q6h' },
