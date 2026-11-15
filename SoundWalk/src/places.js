@@ -266,8 +266,9 @@
       const crowd = [], cr = E.rng(909);
       {
         const skins = ['#f0c9a4', '#d9a57c', '#b07a52', '#8a5a3c', '#5e3d2a'].map((c) => E.mat(c, { rough: 0.7 }));
-        const tops = ['#b3161d', '#d8d2c0', '#1f3a5a', '#2c2c30', '#6a4a2a', '#3d5a3a', '#c9a52e', '#5a2a5a'].map((c) => E.mat(c, { rough: 0.85 }));
-        const pantsM = ['#17181c', '#262b36', '#3a3026'].map((c) => E.mat(c, { rough: 0.9 })), hairs = ['#0f0c0a', '#2a1a10', '#6a4a2a', '#b8b2a4'].map((c) => E.mat(c, { rough: 0.6 }));
+        // techwear: dark technical shells with a sheen, a few pale ones, olive and slate; nothing loud
+        const tops = ['#1e2024', '#2c3036', '#3a4038', '#c9ccd1', '#14161a', '#4a4f58', '#2b2f3a', '#8a9098'].map((c) => E.gloss ? E.gloss(c, { rough: 0.5, metal: 0.12, env: 0.45 }) : E.mat(c, { rough: 0.6 }));
+        const pantsM = ['#141518', '#1e2126', '#2a2e26'].map((c) => E.mat(c, { rough: 0.85 })), hairs = ['#0f0c0a', '#2a1a10', '#6a4a2a', '#b8b2a4'].map((c) => E.mat(c, { rough: 0.6 }));
         const legG = new THREE.BoxGeometry(0.3, 0.86, 0.2).translate(0, 0.43, 0), torsoG = new THREE.CylinderGeometry(0.21, 0.18, 0.6, 9).translate(0, 0.3, 0), headG = new THREE.SphereGeometry(0.13, 12, 9);
         const hairG = new THREE.SphereGeometry(0.14, 12, 8, 0, 6.3, 0, 1.7), armG = new THREE.CylinderGeometry(0.055, 0.045, 0.58, 7).translate(0, -0.29, 0), handG = new THREE.SphereGeometry(0.055, 7, 6);
         const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff', side: THREE.DoubleSide });
@@ -275,7 +276,9 @@
         const legG1 = new THREE.CylinderGeometry(0.085, 0.07, 0.84, 7).translate(0, 0.42, 0), shoeG = new THREE.BoxGeometry(0.12, 0.08, 0.27).translate(0, 0.04, 0.04), neckG = new THREE.CylinderGeometry(0.055, 0.06, 0.12, 7);
         const hoodG = new THREE.SphereGeometry(0.14, 9, 6), collarG = new THREE.TorusGeometry(0.11, 0.035, 5, 10), capG = new THREE.SphereGeometry(0.142, 10, 6, 0, 6.3, 0, 1.4), brimG = new THREE.CylinderGeometry(0.1, 0.11, 0.012, 10);
         const beanieG = new THREE.SphereGeometry(0.145, 10, 7, 0, 6.3, 0, 1.55), bucketG = new THREE.CylinderGeometry(0.14, 0.2, 0.1, 12), strapG = new THREE.TorusGeometry(0.24, 0.012, 4, 16);
-        const shoeMs = ['#e8e4da', '#151517', '#8a2a24', '#d8d0b8'].map((c) => E.mat(c, { rough: 0.6 })), hatMs = ['#141416', '#2a3a5a', '#6a5a3a', '#7a2a24', '#c9c2b0'].map((c) => E.mat(c, { rough: 0.8 })), strapM = E.mat('#1c1a18', { rough: 0.7 });
+        const shoeMs = ['#eef0f2', '#121316', '#9aa0a8', '#d8dce0'].map((c) => E.mat(c, { rough: 0.45 })), hatMs = ['#121316', '#1e2228', '#3a4038', '#8a9098'].map((c) => E.mat(c, { rough: 0.7 })), strapM = E.mat('#0e0f12', { rough: 0.4, metal: 0.3 });
+        // one cool accent, in thin lines: piping down a sleeve or the side of the body, visors on some
+        const accM = E.basic ? E.basic('#7fe9ff') : lightM, accG = new THREE.BoxGeometry(0.012, 0.5, 0.012), visorG = new THREE.TorusGeometry(0.135, 0.02, 5, 16, Math.PI * 0.62), visorM = E.gloss ? E.gloss('#0a0c10', { rough: 0.08, metal: 0.6, env: 1.2 }) : strapM;
         for (let i = 0; i < 60 && crowd.length < 18; i++) {
           const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2;
           if (Math.abs(z) < 1.4 && x < 0.6) continue;                                          // keep the spot in front of the stage free
@@ -289,8 +292,10 @@
           { const nk = new THREE.Mesh(neckG, skin); nk.position.y = 0.64; up.add(nk);
             if (cr() < 0.5) { const hd = new THREE.Mesh(hoodG, top); hd.position.set(0, 0.58, -0.13); hd.scale.set(1.1, 0.75, 0.6); up.add(hd); }   // a hoodie
             else { const cl = new THREE.Mesh(collarG, top); cl.rotation.x = Math.PI / 2; cl.position.y = 0.6; cl.scale.set(1, 0.8, 1); up.add(cl); }      // a jacket
+            if (cr() < 0.55) { const ac = new THREE.Mesh(accG, accM); ac.position.set(cr() < 0.5 ? 0.2 : -0.2, 0.3, 0); up.add(ac); }   // piping
             if (cr() < 0.3) { const st = new THREE.Mesh(strapG, strapM); st.rotation.set(0, Math.PI / 2, 0.75); st.position.y = 0.32; st.scale.set(1, 1, 0.7); up.add(st); } }   // a bag across the body
           const hair = new THREE.Mesh(hairG, hairs[Math.floor(cr() * hairs.length)]); hair.position.y = 0.02; head.add(hair);   // on the head, so the nod shows
+          if (cr() < 0.35) { const v = new THREE.Mesh(visorG, visorM); v.rotation.y = Math.PI * 0.69; v.scale.set(1, 0.9, 1.04); head.add(v); }   // a visor
           { const k = cr(), hm = hatMs[Math.floor(cr() * hatMs.length)];
             if (k < 0.3) { const c = new THREE.Mesh(capG, hm); c.position.y = 0.025; head.add(c); const b = new THREE.Mesh(brimG, hm); b.position.set(0, 0.035, 0.12); b.rotation.x = 0.15; b.scale.z = 0.8; head.add(b); if (cr() < 0.3) c.rotation.y = Math.PI; }
             else if (k < 0.5) { const c = new THREE.Mesh(beanieG, hm); c.position.y = 0.03; head.add(c); }

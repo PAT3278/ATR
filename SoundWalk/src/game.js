@@ -711,7 +711,7 @@
   /* ================= avatar ================= */
   function makeAvatar() {
     const A = new THREE.Group(), body = new THREE.Group(); A.add(body);
-    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = mat('#5b4533', { rough: 0.6 }), pants = mat('#2b2d33'), shoeM = mat('#2a2320', { rough: 0.7 }), hair = mat('#22160f', { rough: 0.55 }), phone = mat('#1b1b20', { rough: 0.4, metal: 0.3 }), cup = mat('#8c1c1c', { rough: 0.4 });
+    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = gloss('#23262b', { rough: 0.5, metal: 0.15, env: 0.45 }), pants = mat('#1c1e22', { rough: 0.8 }), shoeM = gloss('#d9dde2', { rough: 0.35, env: 0.5 }), hair = mat('#22160f', { rough: 0.55 }), phone = mat('#1b1b20', { rough: 0.4, metal: 0.3 }), cup = mat('#8c1c1c', { rough: 0.4 });   // techwear: a technical shell with a sheen, matte trousers, sleek trainers
     const cyl = (rt, rb, h, m, seg = 12) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m);
     const hips = new THREE.Group(); hips.position.y = 0.95; body.add(hips);
     const legs = [-1, 1].map((sd) => {
@@ -741,10 +741,10 @@
     const hr = new THREE.Mesh(new THREE.SphereGeometry(0.12, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hr.scale.set(0.98, 1.08, 1.06); hr.position.set(0, 0.012, -0.006); hr.rotation.x = -0.25; head.add(hr);
     for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), mat('#111111')); e.position.set(sd * 0.04, 0.01, 0.1); head.add(e); }
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.128, 0.014, 6, 18, Math.PI), phone); band.position.y = 0.02; head.add(band);
-    for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 14), cup); c.rotation.z = Math.PI / 2; c.position.set(sd * 0.125, -0.005, 0); head.add(c); }
+    for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 14), phone); c.rotation.z = Math.PI / 2; c.position.set(sd * 0.125, -0.005, 0); head.add(c); }
     // Detail on the same skeleton (so every pose and ride still works): a proper hoodie (hood, pocket, drawstrings,
     // ribbed cuffs and hem), cargo trousers, chunky trainers, a face, fuller hair, padded headphones.
-    { const hoodD = mat('#4d3a2b', { rough: 0.7 }), rib = mat('#3f3024', { rough: 0.8 }), pantD = mat('#24262b', { rough: 0.9 }), white = mat('#e6e1d4', { rough: 0.6 }), lace = mat('#c9c2b2', { rough: 0.7 }), skinD = mat('#c99673', { rough: 0.7 }), brow = mat('#1a110b', { rough: 0.8 }), pad = mat('#1d1d22', { rough: 0.5 });
+    { const hoodD = mat('#1a1c20', { rough: 0.7 }), rib = mat('#14161a', { rough: 0.8 }), pantD = mat('#2a2d33', { rough: 0.9 }), white = mat('#f2f4f6', { rough: 0.5 }), lace = mat('#c9c2b2', { rough: 0.7 }), skinD = mat('#c99673', { rough: 0.7 }), brow = mat('#1a110b', { rough: 0.8 }), pad = mat('#1d1d22', { rough: 0.5 });
       const add = (par, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); par.add(o); return o; };
       const sph = (r, a = 12, b = 9) => new THREE.SphereGeometry(r, a, b), cg = (rt, rb, h, n = 10) => new THREE.CylinderGeometry(rt, rb, h, n);
       // hoodie
@@ -768,6 +768,18 @@
       // headphones: padded band and thicker cups with cushions
       add(head, new THREE.TorusGeometry(0.128, 0.022, 6, 18, Math.PI), pad, 0, 0.02, 0, 0, 0, 0, 1, 1, 0.9);
       for (const sd of [-1, 1]) add(head, cg(0.054, 0.054, 0.03, 14), pad, sd * 0.108, -0.005, 0, 0, 0, Math.PI / 2);
+      // the futuristic layer, kept sparing so it reads as expensive, not as a toy: one cool accent colour, used as thin
+      // light lines (piping, a sole strip, the rim of the visor and the cups), a chest harness with a buckle, a high collar
+      const glow = basic('#7fe9ff'), strap = gloss('#0e0f12', { rough: 0.3, metal: 0.4, env: 0.6 }), metalM = gloss('#b8bec6', { rough: 0.25, metal: 0.9, env: 0.9 }), visorM = gloss('#0a0c10', { rough: 0.08, metal: 0.6, env: 1.2 });
+      add(hips, new THREE.TorusGeometry(0.115, 0.04, 6, 16), hoodD, 0, 0.64, 0.0, Math.PI / 2, 0, 0, 1, 1, 0.85);   // high collar
+      for (const sd of [-1, 1]) { const st = add(hips, new THREE.BoxGeometry(0.035, 0.5, 0.012), strap, sd * 0.07, 0.36, 0.142, 0, 0, sd * 0.42); st.scale.z = 1; }   // harness straps across the chest
+      add(hips, new THREE.BoxGeometry(0.06, 0.045, 0.02), metalM, 0, 0.36, 0.15);                              // buckle
+      add(hips, new THREE.BoxGeometry(0.34, 0.03, 0.012), strap, 0, 0.12, 0.14);                              // waist strap
+      arms.forEach(({ pivot, elbow }, k) => { const sd = k ? 1 : -1; add(pivot, new THREE.BoxGeometry(0.008, 0.26, 0.01), glow, sd * 0.06, -0.15, 0); add(elbow, new THREE.BoxGeometry(0.008, 0.2, 0.01), glow, sd * 0.05, -0.12, 0); });   // piping down the outside of each sleeve
+      legs.forEach(({ pivot, knee }, k) => { const sd = k ? 1 : -1; add(pivot, new THREE.BoxGeometry(0.008, 0.36, 0.01), glow, sd * 0.088, -0.24, 0); add(knee, new THREE.BoxGeometry(0.13, 0.008, 0.29), glow, 0, -0.468, 0.045); });   // leg piping, sole light strip
+      add(head, new THREE.TorusGeometry(0.118, 0.016, 5, 20, Math.PI * 0.62), visorM, 0, 0.012, 0, 0, Math.PI * 0.69, 0, 1, 0.9, 1.04);   // a wrap-round visor
+      add(head, new THREE.TorusGeometry(0.119, 0.003, 4, 20, Math.PI * 0.62), glow, 0, -0.004, 0, 0, Math.PI * 0.69, 0, 1, 1, 1.05);
+      for (const sd of [-1, 1]) add(head, new THREE.TorusGeometry(0.04, 0.004, 4, 16), glow, sd * 0.125, -0.005, 0, 0, Math.PI / 2, 0);
     }
     A.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     { const tm = new THREE.MeshBasicMaterial({ color: lin('#2a2420') }); tm.userData.lin = true;
