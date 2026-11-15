@@ -440,11 +440,11 @@
       const spots = [];
       for (const x of [-25, -13, 13, 25]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
       spots.push([-4, -33], [6, -33]);
-      const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12;   // the middle of the block: the tallest towers stand here
+      const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12, coreFeet = [];   // the middle of the block: the tallest towers stand here
       spots.forEach(([x, z], i) => {
         const w = 8 + r() * 3, d = 8 + r() * 3, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
         const b = kit.mesh(w, h, d, kr, undefined, true), m = b.material[0];
-        b.position.set(x + (r() - 0.5) * 2, 0, z + (r() - 0.5) * 2);
+        b.position.set(x + (r() - 0.5) * 2, 0, z + (r() - 0.5) * 2); coreFeet.push({ x: b.position.x, z: b.position.z, w, d });
         b.castShadow = true;
         city.add(b);
         p.addBox(b.position.x, b.position.z, w / 2 + 0.3, d / 2 + 0.3);
@@ -459,6 +459,32 @@
         city.add(sign);
         buildings.push({ m, k: i % 24, nm, nc, seed: r() * 6 });
       });
+      // Pavements: a raised slab of paving under each side of the avenue (buildings stand on it), and later, out in the
+      // outskirts, an apron round every building and footpaths between them (see p.afterSpill).
+      const paveM = E.mat('#8f8b83', { map: E.tex('paving', 1, 1), rough: 0.9 }), slabs = [];
+      const slabMesh = (list) => {
+        const pos = [], uv = [], T = 2.5, v = (x, y, z, u, w) => { pos.push(x, y, z); uv.push(u / T, w / T); };
+        for (const s of list) {
+          const c = Math.cos(s.rot || 0), sn = Math.sin(s.rot || 0), P = (ax, az) => [s.cx + ax * c + az * sn, s.cz - ax * sn + az * c];
+          const q = [P(-s.hx, -s.hz), P(s.hx, -s.hz), P(s.hx, s.hz), P(-s.hx, s.hz)];
+          v(q[0][0], s.top, q[0][1], q[0][0], q[0][1]); v(q[3][0], s.top, q[3][1], q[3][0], q[3][1]); v(q[2][0], s.top, q[2][1], q[2][0], q[2][1]);
+          v(q[0][0], s.top, q[0][1], q[0][0], q[0][1]); v(q[2][0], s.top, q[2][1], q[2][0], q[2][1]); v(q[1][0], s.top, q[1][1], q[1][0], q[1][1]);
+          for (let k = 0; k < 4; k++) {   // the kerb
+            const a = q[k], b = q[(k + 1) % 4], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            v(a[0], 0, a[1], 0, 0); v(b[0], 0, b[1], L, 0); v(b[0], s.top, b[1], L, s.top); v(a[0], 0, a[1], 0, 0); v(b[0], s.top, b[1], L, s.top); v(a[0], s.top, a[1], 0, s.top);
+          }
+        }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.computeVertexNormals();
+        const m = new THREE.Mesh(geo, paveM); m.receiveShadow = true; p.pick(m); return m;
+      };
+      for (const side of [-1, 1]) {   // the two sides of the avenue, and the far end
+        const fs = coreFeet.filter((f) => (side < 0 ? f.x < -2 : f.x > 2) && f.z > -31), M = 2.8;
+        const x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
+        slabs.push({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, top: 0.15 });
+      }
+      { const fs = coreFeet.filter((f) => f.z <= -31), M = 2.8, x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
+        slabs.push({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, top: 0.149 }); }
+      city.add(slabMesh(slabs));
       g.add(city);
 
       // Outskirts: the city thins out into the woods. Buildings get lower and further apart the further out they are,
@@ -479,10 +505,36 @@
           if (others.some((q) => { const L = Math.hypot(q.x, q.z), t = Math.max(0, Math.min(1, (wp.x * q.x + wp.z * q.z) / (L * L))); return Math.hypot(wp.x - q.x * t, wp.z - q.z * t) < 8; })) continue;   // their paths from the plaza
           const b = kit.mesh(w, h, d, kr); b.position.set(x, 0, z); b.rotation.y = Math.round(or() * 4) * (Math.PI / 2) + (or() - 0.5) * 0.3; b.castShadow = true;
           const box = p.addBox(x, z, Math.max(w, d) / 2 + 0.3, Math.max(w, d) / 2 + 0.3);
-          outskirts.add(b); feet.push({ x, z, w, d, b, box });
+          outskirts.add(b); feet.push({ x, z, w, d, rot: b.rotation.y, b, box });
         } }
       g.add(outskirts);
       p.spill = feet;   // the game drops any of these that land on another place once every place is built
+      // ...then calls this: an apron round each remaining building and a footpath from each one to its neighbour nearer
+      // the middle (or to the edge of the block), so the pavements branch out into the woods like the buildings do.
+      const walks = [];
+      p.afterSpill = () => {
+        const out = [], inCore = (x, z) => slabs.some((s) => Math.abs(x - s.cx) < s.hx && Math.abs(z - s.cz) < s.hz);
+        const dc = (f) => Math.hypot(f.x - CX, f.z - CZ);
+        feet.forEach((f, i) => {
+          out.push({ cx: f.x, cz: f.z, hx: f.w / 2 + 1.6, hz: f.d / 2 + 1.6, rot: f.rot, top: 0.12 - (i % 7) * 0.003 });
+          let to = null, best = 1e9;
+          for (const o of feet) { if (o === f || dc(o) >= dc(f)) continue; const d = Math.hypot(o.x - f.x, o.z - f.z); if (d < best) { best = d; to = o; } }
+          let tx, tz;
+          if (to && best < 30) { tx = to.x; tz = to.z; }
+          else { // to the nearest edge of the block's pavement
+            let bd = 1e9; for (const s of slabs) { const cx = Math.max(s.cx - s.hx + 0.5, Math.min(s.cx + s.hx - 0.5, f.x)), cz = Math.max(s.cz - s.hz + 0.5, Math.min(s.cz + s.hz - 0.5, f.z)), d = Math.hypot(cx - f.x, cz - f.z); if (d < bd) { bd = d; tx = cx; tz = cz; } }
+          }
+          const L = Math.hypot(tx - f.x, tz - f.z); if (L < 1) return;
+          out.push({ cx: (f.x + tx) / 2, cz: (f.z + tz) / 2, hx: 1.1, hz: L / 2, rot: Math.atan2(tx - f.x, tz - f.z), top: 0.08 });
+          walks.push([f.x, f.z, tx, tz]);
+        });
+        if (out.length) outskirts.add(slabMesh(out));
+        allSlabs.push(...out);
+      };
+      const allSlabs = slabs.slice();
+      const inSlab = (lx, lz) => { let top = 0; for (const s of allSlabs) { const c = Math.cos(s.rot || 0), sn = Math.sin(s.rot || 0), dx = lx - s.cx, dz = lz - s.cz, ax = dx * c - dz * sn, az = dx * sn + dz * c; if (Math.abs(ax) <= s.hx && Math.abs(az) <= s.hz) top = Math.max(top, s.top); } return top; };
+      p.ground = (lx, lz) => (Math.abs(lx) < 80 && Math.abs(lz - CZ) < 80 ? inSlab(lx, lz) : 0);   // step up onto the pavement
+      const nearWalk = (lx, lz) => walks.some(([ax, az, bx2, bz]) => { const vx = bx2 - ax, vz = bz - az, t = Math.max(0, Math.min(1, ((lx - ax) * vx + (lz - az) * vz) / (vx * vx + vz * vz))); return Math.hypot(lx - ax - vx * t, lz - az - vz * t) < 2.2; });
 
       // Billboard at the end of the street
       const bbTex = E.textTex('FLIP DA HOODS', { w: 1024, h: 256, color: '#ff3fb0', glow: '#ff3fb0', font: '700 150px "Hind", sans-serif' });
@@ -513,7 +565,7 @@
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
-      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5);
+      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;
       p.update = (t, dt, f) => {

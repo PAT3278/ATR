@@ -183,7 +183,7 @@
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
       const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
-        const cr = E.rng(212), X = 6.6;
+        const cr = E.rng(212), X = 6.6; var neonM = null;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
         const fig = (jacket, cap) => {
@@ -301,12 +301,60 @@
             perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1, name: i === 1 ? 'stvn' : 'vas', off: i === 1 ? 0 : 9.4, amp: 0.3, up: 0 });   // red jacket = stvn, white jacket = vas
           }
         }
-        const walk = E.plane(4, 26, E.mat('#77736c', { map: E.tex('paving', 2, 13), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 26.3); g.add(walk); p.pick(walk);
+        const walk = E.plane(4, 33, E.mat('#77736c', { map: E.tex('paving', 2, 16), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 29.8); g.add(walk); p.pick(walk);
+
+        // A New York deli on the corner, at the end of the row: brick, a lit storefront full of shelves, a green awning,
+        // a backlit sign, a neon OPEN, flowers and fruit out front.
+        {
+          const zc = 42.0, H = 8.2, sign = (txt, o, w, h) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), (() => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, o), transparent: true }); m.userData.lin = true; return m; })());
+          const brick = E.mat('#6e4434', { map: E.tex('brick', 2, 3), rough: 0.9 }), awnM = E.mat('#1d5a34', { rough: 0.8 }), dark = E.mat('#141416', { rough: 0.6 });
+          const shopGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe6b0').convertSRGBToLinear().multiplyScalar(0.9) }); shopGlow.userData.lin = true;
+          const doorGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#d8f0ff').convertSRGBToLinear().multiplyScalar(0.8) }); doorGlow.userData.lin = true;
+          bx(8, H, 6.1, X + 4, H / 2, zc, brick);
+          bx(0.7, 0.45, 6.3, X - 0.15, H - 0.1, zc, trimM); bx(0.3, 0.2, 6.2, X - 0.05, 4.6, zc, trimM, false);
+          for (const z of [-1.6, 1.6]) { bx(0.06, 1.6, 1.0, X - 0.03, 6.2, zc + z, cr() < 0.5 ? winLit : winDark, false); bx(0.18, 0.1, 1.2, X - 0.08, 5.35, zc + z, trimM, false); }
+          // storefront: a lit window, shelves of tins and bottles silhouetted in it, a glass door
+          bx(0.05, 2.5, 3.9, X - 0.03, 1.55, zc - 0.75, shopGlow, false);
+          const tins = ['#c8202a', '#e8c020', '#2a62c8', '#f4f1e6', '#1f8a3a', '#d86a20', '#8a2ab8'].map((c) => E.mat(c, { rough: 0.5 }));
+          for (const y of [0.75, 1.35, 1.95, 2.5]) {
+            bx(0.1, 0.05, 3.8, X - 0.12, y, zc - 0.75, dark, false);
+            for (let k = 0; k < 11; k++) bx(0.08, 0.16 + cr() * 0.18, 0.2 + cr() * 0.12, X - 0.12, y + 0.12, zc - 2.5 + k * 0.33 + cr() * 0.05, tins[Math.floor(cr() * tins.length)], false);
+          }
+          bx(0.07, 2.45, 1.05, X - 0.03, 1.3, zc + 2.15, doorGlow, false); bx(0.12, 2.6, 0.08, X - 0.06, 1.3, zc + 1.6, dark, false); bx(0.12, 2.6, 0.08, X - 0.06, 1.3, zc + 2.7, dark, false);
+          bx(0.14, 0.35, 6.1, X - 0.07, 0.17, zc, dark, false);                                                                 // kick plate
+          // awning: a sloped green canopy with a printed valance
+          const awn = bx(1.7, 0.06, 6.3, X - 0.82, 3.25, zc, awnM, false); awn.rotation.z = 0.32;
+          bx(0.04, 0.42, 6.3, X - 1.62, 2.82, zc, awnM, false);
+          const val = sign('DELI & GROCERY  ·  OPEN 24 HRS', { w: 1024, h: 80, color: '#f4f1e6', font: '700 50px "Hind",sans-serif' }, 6.2, 0.48); val.position.set(X - 1.65, 2.82, zc); val.rotation.y = -Math.PI / 2; g.add(val);
+          // backlit sign board above the awning
+          bx(0.22, 1.0, 5.6, X - 0.11, 4.05, zc, E.mat('#e8e2d0', { emissive: '#fff4d8', emissiveIntensity: 0.55, rough: 0.5 }), false);
+          const board = sign('DELI\nSANDWICHES · COFFEE · BEER', { w: 1024, h: 200, color: '#c41e24', color2: '#1d4a2c', font: '700 104px "Hind",sans-serif', font2: '700 40px "Hind",sans-serif' }, 5.4, 1.0); board.position.set(X - 0.23, 4.05, zc); board.rotation.y = -Math.PI / 2; g.add(board);
+          // neon OPEN in the window
+          const neon = sign('OPEN', { w: 256, h: 96, color: '#ff4f6a', glow: '#ff2a50', font: '700 66px "Hind",sans-serif' }, 0.95, 0.36); neon.position.set(X - 0.09, 2.3, zc - 2.0); neon.rotation.y = -Math.PI / 2; g.add(neon);
+          // out front: buckets of flowers, crates of fruit, a blue newspaper box, a bin
+          const bucket = E.mat('#2a2a2e', { metal: 0.4, rough: 0.5 }), crate = E.mat('#7a5a38', { rough: 0.95 });
+          const bloom = ['#e83a5a', '#f2d23a', '#f4f1e6', '#c24ac8', '#ff8a3a'].map((c) => E.mat(c, { rough: 0.7 })), fruit = ['#f08a1c', '#d42a2a', '#e8d23a', '#7ac23a'].map((c) => E.mat(c, { rough: 0.5 }));
+          for (let k = 0; k < 4; k++) {
+            const z = zc - 2.6 + k * 0.62, b = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.42, 10), bucket); b.position.set(X - 0.6, 0.25, z); g.add(b);
+            for (let q = 0; q < 6; q++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), bloom[(k + q) % bloom.length]); f.position.set(X - 0.6 + (cr() - 0.5) * 0.28, 0.6 + cr() * 0.3, z + (cr() - 0.5) * 0.28); g.add(f); }
+          }
+          for (let k = 0; k < 2; k++) {
+            const z = zc + 0.1 + k * 0.75; bx(0.6, 0.35, 0.65, X - 0.75, 0.42, z, crate);
+            for (let q = 0; q < 9; q++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.075, 7, 5), fruit[(k * 2 + (q % 2)) % fruit.length]); f.position.set(X - 0.95 + (q % 3) * 0.2, 0.66, z - 0.2 + Math.floor(q / 3) * 0.2); g.add(f); }
+          }
+          bx(0.5, 1.05, 0.45, X - 2.9, 0.58, zc + 3.6, E.mat('#2a52b8', { rough: 0.5 }));                                     // newspaper box
+          bx(0.45, 0.9, 0.45, X - 2.9, 0.5, zc - 3.5, E.mat('#2c3a2e', { rough: 0.8 }));                                     // bin
+          // light from the shop spilling across the pavement
+          const pool = new THREE.Mesh(new THREE.PlaneGeometry(5, 7), new THREE.MeshBasicMaterial({ map: E.dot(), color: new THREE.Color('#ffd08a').convertSRGBToLinear(), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+          pool.material.userData.lin = true; pool.rotation.x = -Math.PI / 2; pool.position.set(X - 2.2, 0.06, zc); g.add(pool);
+          p.addBox(X + 4, zc, 4.05, 3.1); p.addBox(X - 0.75, zc, 0.4, 3.0); p.addBox(X - 2.9, zc + 3.6, 0.3, 0.3); p.addBox(X - 2.9, zc - 3.5, 0.3, 0.3);
+          neonM = neon.material;
+        }
         const box2 = bx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
         box2.rotation.y = 0.3;
         BB.flush();
       }
-      p.map = [{ t: 'rect', x: 10.6, z: 26.3, w: 8, h: 25, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
+      p.map = [{ t: 'rect', x: 10.6, z: 29.4, w: 8, h: 31, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
         top: '#05070f', bottom: '#1a2234', fog: '#0f141e', near: 24, far: 190,
         sun: '#9fb4ff', sunInt: 0.3, hemi: 0.28, sunDir: [0.2, 0.8, -0.4],
@@ -318,9 +366,10 @@
       p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
-      p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 44) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
+        if (neonM) neonM.opacity = Math.sin(t * 37) > 0.97 || (t % 7 > 6.85) ? 0.25 : 1;   // the deli's OPEN sign, buzzing
         // Shots on the kick, a burst on hard hits; a slow trickle so it never goes fully quiet.
         if (v > 0.05 && ((f.beat && t - lastShot > 0.1) || (f.level > 0.25 && t - lastShot > 1.6))) {
           lastShot = t;

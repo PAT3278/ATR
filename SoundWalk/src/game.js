@@ -595,6 +595,7 @@
       if (places.some((q) => q !== p && distToPath(w.x, w.z, q.path).d < r) || distToPath(w.x, w.z, loopPath).d < r) { f.b.parent.remove(f.b); boxes.splice(boxes.indexOf(f.box), 1); p.spill.splice(i, 1); }
     }
   });
+  places.forEach((p) => p.afterSpill && p.afterSpill());
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
