@@ -203,3 +203,13 @@ target_link_libraries(PhoneTestoEditorSnapshot
         juce::juce_dsp
 )
 
+# Renders the editor's states into images for the touchable web copy of the
+# panel (Tools/web-panel). Needs a display, like the snapshot tool.
+add_executable(PhoneTestoUiSprites Tests/UiSprites.cpp)
+target_link_libraries(PhoneTestoUiSprites
+    PRIVATE
+        PhoneTesto
+        juce::juce_audio_processors
+        juce::juce_dsp
+)
+

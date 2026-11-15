@@ -263,6 +263,13 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
   your phone).
+- **PhoneTestoUiSprites** — renders the editor's states (knob frames, keys,
+  meter, displays) into images for `Tools/web-panel/index.html`, a touchable
+  web copy of the panel for trying the controls on a phone:
+  `xvfb-run -a build/PhoneTestoUiSprites panel 1.5`, then copy
+  `Tools/web-panel/index.html` (and any `song.mp3`) into `panel/` and serve
+  that folder. Its sound is a Web Audio approximation of the emulation, not
+  the plugin's DSP.
 
 The VST3 build also passes Steinberg's VST3 validator (all 47 tests) and
 [pluginval](https://github.com/Tracktion/pluginval) at strictness 10.
