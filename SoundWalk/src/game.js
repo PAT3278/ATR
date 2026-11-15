@@ -619,31 +619,43 @@
       }
       return true;
     };
-    for (let i = 0; i < 4000 && spots.length < 720; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z)) spots.push([x, z, 0.8 + r() * 0.7]); }
+    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z)) spots.push([x, z, 0.8 + r() * 0.7]); }
     for (let i = 0; i < 240; i++) { const t = (i / 240) * 4, sd = Math.floor(t), f = (t % 1) * 304 - 152; const x = sd === 0 ? f : sd === 1 ? 152 : sd === 2 ? -f : -152, z = sd === 0 ? -152 : sd === 1 ? f : sd === 2 ? 152 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
-    const n = spots.length;
-    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.3, 2.6, 6).translate(0, 1.3, 0), mat('#2e261f'), n);
-    const tops = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), n * 3);
-    tops.material.userData.lin = true; tops.material.onBeforeCompile = rimPatch;
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), ps = new THREE.Vector3(), sc = new THREE.Vector3();
-    const greens = ['#2b3529', '#323b2c', '#262f26', '#3a3f2c', '#4a4034', '#51463a'].map(lin);
-    const TIER = [[2.0, 3.3, 1.5], [1.55, 3.0, 3.2], [1.05, 2.7, 4.9]];
-    spots.forEach(([x, z, s], i) => {
-      const hs = s * (0.9 + r() * 0.55);
-      ps.set(x, 0, z); sc.set(s, hs, s); q.identity();
-      trunks.setMatrixAt(i, m4.compose(ps, q, sc));
-      const ci = Math.floor(r() * greens.length), col = greens[ci], thin = ci >= 4 ? 0.5 : 1;
-      TIER.forEach(([rad, h, y], k) => {
-        e.set((r() - 0.5) * 0.1, r() * 6.28, (r() - 0.5) * 0.1); q.setFromEuler(e);
-        ps.set(x, y * hs, z); sc.set(rad * s * thin, h * hs, rad * s * thin);
-        tops.setMatrixAt(i * 3 + k, m4.compose(ps, q, sc));
-        tops.setColorAt(i * 3 + k, col);
+    // Each tree is two crossed cards cut from photographed young firs and pines (Poly Haven, CC0), baked into one
+    // atlas (tex/trees.png): 6 trees across, a front view on the top row and a side view below. One draw per tree.
+    const ASPECT = [[0.661, 0.634], [0.672, 0.862], [0.853, 0.859], [0.507, 0.698], [0.605, 0.557], [0.534, 0.604]], CELLS = ASPECT.length;
+    const atlas = texLoader.load('tex/trees.png'); atlas.encoding = THREE.sRGBEncoding; atlas.anisotropy = 4;
+    const treeM = new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95, metalness: 0 });
+    treeM.userData.lin = true; treeM.onBeforeCompile = rimPatch;
+    const depthM = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: atlas, alphaTest: 0.5, side: THREE.DoubleSide });
+    const cardGeo = (k) => {
+      const pos = [], uv = [], nor = [], idx = [];
+      [[0, 0], [1, Math.PI / 3], [0, (2 * Math.PI) / 3]].forEach(([v, a]) => {   // three cards at 60 degrees, so the crown looks full from every side
+        const w = 0.25, u0 = k / CELLS, u1 = (k + 1) / CELLS, vb = v ? 0 : 0.5, vt = vb + 0.5;   // the card is the whole 1:2 cell; the tree stands on its bottom edge
+        const cx = Math.cos(a) * w, cz = Math.sin(a) * w, b = pos.length / 3, P = [[-cx, 0, -cz], [cx, 0, cz], [cx, 1, cz], [-cx, 1, -cz]];
+        P.forEach((p) => pos.push(...p)); uv.push(u0, vb, u1, vb, u1, vt, u0, vt);
+        for (let i = 0; i < 4; i++) nor.push(0, 0.85, 0.53);   // lit like a crown, from above, whichever way you look
+        idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
       });
-      circles.push({ x, z, r: 0.45 * s });
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx);
+      return g;
+    };
+    const kinds = Array.from({ length: CELLS }, () => []);
+    spots.forEach((sp, i) => { const k = Math.floor(r() * CELLS); kinds[k].push(sp); });
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    const tints = ['#7f8a76', '#8a9177', '#6f7a68', '#8e8a70', '#9a9078', '#7a7f70'].map(lin);   // muted, in the survival-horror palette
+    kinds.forEach((list, k) => {
+      if (!list.length) return;
+      const im = new THREE.InstancedMesh(cardGeo(k), treeM, list.length);
+      list.forEach(([x, z, s], j) => {
+        const h = (9 + r() * 7) * s / Math.max(...ASPECT[k].map((a) => Math.min(1, 0.5 / a)));   // so the tree itself, not its card, is 8-14 m
+        q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, 0, z); sc.set(h, h, h);
+        im.setMatrixAt(j, m4.compose(ps, q, sc)); im.setColorAt(j, col.copy(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85 + r() * 0.3));
+        circles.push({ x, z, r: 0.3 * s });
+      });
+      im.castShadow = im.receiveShadow = true; im.customDepthMaterial = depthM;
+      scene.add(im);
     });
-    trunks.castShadow = tops.castShadow = true;
-    trunks.receiveShadow = tops.receiveShadow = true;
-    scene.add(trunks, tops);
   }
 
   /* ================= per-place beacons, labels, signposts ================= */
