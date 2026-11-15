@@ -131,7 +131,7 @@
     windows(g, S, r) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; const cols = ['#ffd27a', '#ffe9b8', '#9ff3ff', '#ff8ad8', '#ffd27a']; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { if (r() < 0.45) continue; g.fillStyle = cols[Math.floor(r() * cols.length)]; g.globalAlpha = 0.5 + r() * 0.5; g.fillRect(x * w + w * 0.2, y * w + w * 0.25, w * 0.6, w * 0.45); } g.globalAlpha = 1; },
   };
   const texBase = {}, texCache = {}, texLoader = new THREE.TextureLoader();
-  const PHOTO = { grass: 1.5, slate: 1, asphalt: 1, paving: 1, sand: 1, concrete: 1, brick: 1, bark: 1 };   // kind -> how many times finer than the old drawn tile
+  const PHOTO = { grass: 1.5, slate: 1, asphalt: 1, paving: 1, sand: 1, concrete: 1, brick: 1, bark: 1, rock: 1 };   // kind -> how many times finer than the old drawn tile
   function tex(kind, rx = 1, ry = 1) {
     const key = `${kind}:${rx}:${ry}`;
     if (texCache[key]) return texCache[key];
@@ -367,7 +367,23 @@
   }
   const basic = (hex, o = {}) => { const m = new THREE.MeshBasicMaterial({ color: lin(hex), ...o }); m.userData.lin = true; return m; };
   const ring = SW.Ring.make(SW.SONGS);   // the expressway that loops the town (centre line only; its meshes are built once the places exist)
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring };
+  // A lumpy boulder: a subdivided sphere pushed about by low-frequency noise and flattened a little, with box-projected UVs
+  // for the rock photo. A handful of shapes are made once and shared.
+  const rockGeos = [];
+  function rockGeo(seed) {
+    const k = seed % 6; if (rockGeos[k]) return rockGeos[k];
+    const g = new THREE.IcosahedronGeometry(1, 3), p = g.attributes.position, r = rng(300 + k), ph = [r() * 9, r() * 9, r() * 9], uv = [];
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const n = 1 + 0.22 * Math.sin(x * 2.3 + ph[0]) * Math.cos(z * 2.1 + ph[1]) + 0.12 * Math.sin(y * 3.7 + ph[2]) + 0.06 * Math.sin((x + z) * 6.1 + ph[0]);
+      p.setXYZ(i, x * n, y * n * (y < 0 ? 0.55 : 0.85), z * n * (0.85 + 0.2 * Math.sin(ph[1])));
+      const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+      uv.push(...(ay > ax && ay > az ? [x * 0.5 + 0.5, z * 0.5 + 0.5] : ax > az ? [z * 0.5 + 0.5, y * 0.5 + 0.5] : [x * 0.5 + 0.5, y * 0.5 + 0.5]));
+    }
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+    return (rockGeos[k] = g);
+  }
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);

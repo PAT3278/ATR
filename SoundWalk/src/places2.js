@@ -719,14 +719,14 @@
       const hill = new THREE.Mesh(hgeo, E.mat('#728a4c', { flat: true }));
       hill.rotation.x = -Math.PI / 2; hill.receiveShadow = true;
       g.add(hill); p.pick(hill);
-      const rockM = E.mat('#8a7f70', { flat: true }), rockD = E.mat('#6c6255', { flat: true });
+      const rockM = E.mat('#b0a696', { map: E.tex('rock', 1, 1), rough: 0.95 }), rockD = E.mat('#8a8070', { map: E.tex('rock', 1, 1), rough: 0.95 });   // photographed rock (Poly Haven, CC0)
       for (let i = 0; i < 18; i++) {
         const a = r() * Math.PI * 2, d = PL + 4 + r() * 20;
         const lx = Math.cos(a) * d, lz = Math.sin(a) * d;
         if (lz > -2 && Math.abs(lx) < 6) continue;
         const s = 0.8 + r() * 1.8;
         if (chanD(lx, lz) < s + 8) continue;   // nothing over or in the tunnel
-        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), r() < 0.5 ? rockM : rockD);
+        const m = new THREE.Mesh(E.rockGeo(i), r() < 0.5 ? rockM : rockD); m.scale.setScalar(s);
         m.position.set(lx, height(lx, lz) + s * 0.3, lz); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true;
         if (lz + s > RZ - 4.5 && lz - s < (Math.abs(lx) < 9.2 + s ? -7.9 : RZ + 4.5) && height(lx, lz) + s * 1.3 > RH - 0.9) continue;   // it would poke up through the road or the lay-by
         g.add(m); p.addCircle(lx, lz, s * 0.8);
@@ -800,8 +800,8 @@
       // Sea stacks and the far mountains
       for (let i = 0; i < 9; i++) {
         const s = 4 + r() * 9;
-        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockD);
-        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); m.scale.y = 1.6 + r(); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
+        const m = new THREE.Mesh(E.rockGeo(i + 2), rockD); m.scale.setScalar(s);
+        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); m.scale.y = s * (1.6 + r()); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
       }
       const mtnM = E.mat('#6f86a6', { flat: true });
       for (let i = 0; i < 9; i++) {
@@ -827,14 +827,14 @@
         for (const z of [RZ - 4.1, RZ + 4.1]) { const pp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.14), postM); pp.position.set(x, RH + 0.45, z); g.add(tm.add(pp)); }
       }
       // Gorge walls and pines that flank the road
-      const wallM = E.mat('#857664', { flat: true }), pineM = E.mat('#2e5a36', { flat: true });
+      const wallM = E.mat('#a49682', { map: E.tex('rock', 1, 1), rough: 0.95 }), pineM = E.mat('#2e5a36', { flat: true });
       const walls = [];
       for (let i = 0; i < 22; i++) {
         const x = -HALF - 20 + i * ((HALF * 2 + 40) / 22);
         const s = 6 + r() * 8;
-        const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), wallM);
+        const m = new THREE.Mesh(E.rockGeo(i + 4), wallM); m.scale.setScalar(s);
         m.position.set(x, RH - 3 + s * 0.5, RZ + 7 + s * 0.5);
-        m.scale.y = 1.3 + r() * 1.2; m.rotation.y = r() * 3; m.castShadow = true;
+        m.scale.y = s * (1.3 + r() * 1.2); m.rotation.y = r() * 3; m.castShadow = true;
         m.visible = false;
         g.add(tm.add(m)); walls.push(m);
         const pine = new THREE.Mesh(new THREE.ConeGeometry(1.4, 5, 6), pineM);
