@@ -149,6 +149,39 @@
         acc.forEach((vs, s) => vs.forEach((a, v) => { if (!a.F.p.length) return; const m = new THREE.Mesh(toGeo(a.F, a.T), mats[s][v]); m.frustumCulled = false; g.add(m); }));
         return g;
       },
+      // A building on any convex plot, e.g. the wedge where two streets meet at an angle (a Flatiron). pts: [[x, z], ...]
+      // counter-clockwise seen from above, in metres; nose: how far to blunt each corner sharper than 60 degrees.
+      plot(pts, h, r, style = 1, nose = 1.4) {
+        const v = Math.floor(r() * VARIANTS), P = [];
+        pts.forEach((p, i) => {   // blunt the sharp corners into a narrow front
+          const a = pts[(i + pts.length - 1) % pts.length], b = pts[(i + 1) % pts.length];
+          const ux = a[0] - p[0], uz = a[1] - p[1], wx = b[0] - p[0], wz = b[1] - p[1], la = Math.hypot(ux, uz), lb = Math.hypot(wx, wz);
+          const ang = Math.acos(Math.max(-1, Math.min(1, (ux * wx + uz * wz) / (la * lb))));
+          if (ang < Math.PI / 3 && nose > 0) { P.push([p[0] + (ux / la) * nose, p[1] + (uz / la) * nose], [p[0] + (wx / lb) * nose, p[1] + (wz / lb) * nose]); }
+          else P.push(p);
+        });
+        { let A = 0; P.forEach((a, i) => { const b = P[(i + 1) % P.length]; A += a[0] * b[1] - b[0] * a[1]; }); if (A > 0) P.reverse(); }   // the winding the box faces use, so walls face out
+        const F = { p: [], u: [] }, T = { p: [], u: [] };
+        const cx = P.reduce((s, p) => s + p[0], 0) / P.length, cz = P.reduce((s, p) => s + p[1], 0) / P.length;
+        const ring = (k, y0, y1, o) => {   // walls of the polygon grown by k metres, from y0 to y1, into o
+          const Q = P.map(([x, z]) => { const dx = x - cx, dz = z - cz, l = Math.hypot(dx, dz) || 1; return [x + (dx / l) * k, z + (dz / l) * k]; });
+          let along = 0;
+          Q.forEach((a, i) => {
+            const b = Q[(i + 1) % Q.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), u0 = along / (BAY * CELLS), u1 = (along + L) / (BAY * CELLS), v0 = y0 / (FLOOR * CELLS), v1 = y1 / (FLOOR * CELLS);
+            o.p.push(a[0], y0, a[1], b[0], y0, b[1], b[0], y1, b[1], a[0], y0, a[1], b[0], y1, b[1], a[0], y1, a[1]);
+            o.u.push(u0, v0, u1, v0, u1, v1, u0, v0, u1, v1, u0, v1);
+            along += L;
+          });
+          for (let i = 1; i < Q.length - 1; i++) { T.p.push(Q[0][0], y1, Q[0][1], Q[i][0], y1, Q[i][1], Q[i + 1][0], y1, Q[i + 1][1]); T.u.push(0, 0, 1, 0, 1, 1); }   // a lid
+          return Q;
+        };
+        ring(0, 0, h, F);                 // the facades
+        ring(0.45, h - 1.0, h - 0.35, T); // cornice
+        ring(0.12, h, h + 1.0, T);        // parapet
+        ring(0.25, 0, 0.9, T);            // a stone base
+        const m = new THREE.Mesh(toGeo(F, T), mats[style][v]); m.userData.style = style;
+        return m;
+      },
       glow(v) { for (const vs of mats) for (const [f] of vs) f.emissiveIntensity = v; },
     };
   }

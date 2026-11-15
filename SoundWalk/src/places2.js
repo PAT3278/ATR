@@ -183,7 +183,7 @@
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
       const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
-        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [];
+        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
         const fig = (jacket, cap) => {
@@ -393,6 +393,26 @@
           }
           p.spill = spill;
           p.afterSpill = () => { spill.forEach((f) => f.draw && f.draw()); NB.flush(); };
+
+          // The wedge of land where this street and FLIP's block meet at an angle: a Flatiron-style building fills it.
+          const flipSong = SW.SONGS.find((q) => q.scene === 'flip');
+          if (flipSong) {
+            const lf = SW.Ring.frame(flipSong), loc = (lx, lz) => { const w = lf.toWorld(lx, lz); return p.local(w.x, w.z); };
+            let a = loc(30, -33), b = loc(30, 17); if (a.z > b.z) [a, b] = [b, a];   // FLIP's kerb on this side
+            const dx = b.x - a.x, dz = b.z - a.z, dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl;
+            let nx = uz, nz = -ux; if ((-4 - a.x) * nx + (30 - a.z) * nz < 0) { nx = -nx; nz = -nz; }        // pointing this way
+            const ox = a.x + nx * 4.5, oz = a.z + nz * 4.5, X1 = -7.5, Z0 = 18;                                // a street's width off each kerb
+            const t1 = (X1 - ox) / ux, apex = [X1, oz + uz * t1], t0 = (Z0 - oz) / uz, foot = [ox + ux * t0, Z0];
+            if (Math.abs(ux) > 0.05 && apex[1] - Z0 > 9 && X1 - foot[0] > 6) {
+              const tri = [apex, [X1, Z0], foot], h = 22 + kr() * 4;
+              const w = kit.plot(tri, h, kr, kr() < 0.6 ? 1 : 2); w.castShadow = true; w.receiveShadow = true; g.add(w);
+              wedge = tri;
+              const inTri = (x, z) => { let s = 0; for (let i = 0; i < 3; i++) { const [x1, z1] = tri[i], [x2, z2] = tri[(i + 1) % 3], c = (x2 - x1) * (z - z1) - (z2 - z1) * (x - x1); if (c !== 0) { if (s === 0) s = Math.sign(c); else if (Math.sign(c) !== s) return false; } } return true; };
+              for (let x = foot[0]; x <= X1; x += 1.6) for (let z = Z0; z <= apex[1]; z += 1.6) if (inTri(x, z)) p.addCircle(x, z, 1.05);
+              wedgeIn = (lx, lz) => inTri(lx, lz) || tri.some(([x, z]) => Math.hypot(lx - x, lz - z) < 3);
+              nb(Math.abs(X1 - foot[0]) + 6, 0.08, 4, (X1 + foot[0]) / 2, 0.04, Z0 - 2, paveM, false);              // the pavement along its base
+            }
+          }
           neighbourhood = spill;
         }
       }
@@ -408,9 +428,9 @@
       p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
-      p.core = (lx, lz) => (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
+      p.core = (lx, lz) => wedgeIn(lx, lz) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
       p.spillRank = 1;   // its rowhouses win over FLIP's outskirts where they meet
-      p.blocks = (lx, lz) => neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => wedgeIn(lx, lz) || neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
         if (neonM) neonM.opacity = Math.sin(t * 37) > 0.97 || (t % 7 > 6.85) ? 0.25 : 1;   // the deli's OPEN sign, buzzing
