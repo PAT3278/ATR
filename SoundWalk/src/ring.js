@@ -124,7 +124,7 @@
       proj(x, z, hint, out) {
         let bi = 0, bd = 1e18;
         if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = (hint + k + N) % N, dx = X[i] - x, dz = Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
-        else bi = nearest(x, z);
+        if (hint < 0 || bd > 900) bi = nearest(x, z);   // no hint, or a stale one (the car was moved): search everywhere
         const dx = x - X[bi], dz = z - Z[bi], a = dx * TX[bi] + dz * TZ[bi], nb = (bi + (a >= 0 ? 1 : N - 1)) % N, k = Math.min(1, Math.abs(a) / ds);
         out.i = bi; out.s = bi * ds + a; out.d = dx * TZ[bi] - dz * TX[bi];
         out.y = Y[bi] + (Y[nb] - Y[bi]) * k; out.hw = HW[bi] + (HW[nb] - HW[bi]) * k;
@@ -162,7 +162,7 @@
       B.proj = (x, z, hint, out) => {
         let bi = 0, bd = 1e18;
         if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
-        else bi = nearB(x, z);
+        if (hint < 0 || bd > 900) bi = nearB(x, z);
         const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
         out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
         out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi];
