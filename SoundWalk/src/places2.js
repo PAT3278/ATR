@@ -677,13 +677,15 @@
       if (tama) {
         const tf = SW.Ring.frame(tama), a = p.local(...Object.values(tf.toWorld(50, -14))), a2 = p.local(...Object.values(tf.toWorld(38, -14)));   // the river's west end, the one by this hill
         const dx = a.x - a2.x, dz = a.z - a2.z, dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl;   // the way the river flows, out of TAMA
-        const pts = [[a.x - ux * 3, a.z - uz * 3], [a.x + ux * 6, a.z + uz * 6], [a.x + ux * 12 - 2, a.z + uz * 12 - 8], [-16, -14], [-16, -28], [-22, -44]];
+        const pts = [[a.x - ux * 3, a.z - uz * 3], [a.x + ux * 5, a.z + uz * 5], [-12, 4], [-11, -14], [-16, -30], [-22, -44]];   // deep under the hill, so the bore is buried right up to each portal
         const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
         const N = Math.round(curve.getLength() / 1.5), P = curve.getSpacedPoints(N).map((v) => [v.x, v.z]);
-        const inside = P.map(([x, z]) => height(x, z) > 2.2);
+        const inside = P.map(([x, z]) => height(x, z) > 6.6);   // the portals stand where the hill is higher than the vault
         chan = { P, W: 5, first: inside.indexOf(true), last: inside.lastIndexOf(true) };
         chanD = (lx, lz) => { let b = 1e9; for (const [x, z] of P) b = Math.min(b, Math.hypot(lx - x, lz - z)); return b; };
         inChan = (lx, lz) => chanD(lx, lz) < chan.W;
+        // under the hill the vault is the ceiling: the camera stays below it
+        p.ceil = (lx, lz) => { if (chan.first < 0) return null; let b = 1e9, bi = 0; P.forEach(([x, z], i) => { const d = Math.hypot(lx - x, lz - z); if (d < b) { b = d; bi = i; } }); return b < chan.W + 1.2 && bi >= chan.first && bi <= chan.last ? 4.6 : null; };
       }
       // Outside the tunnel the channel runs in an open cutting: the hill is dug away along it, up to each portal.
       const carve = (lx, lz) => {
@@ -702,8 +704,18 @@
         const x = hp.getX(i), y = hp.getY(i);
         const kc = carve(x, -y); hp.setZ(i, height(x, -y) * kc + (Math.hypot(x, y) > PL + 1 && Math.hypot(x, y) < HR - 1 ? (r() - 0.5) * 0.5 * kc : 0) + 0.01);
       }
-      hg.computeVertexNormals();
-      const hill = new THREE.Mesh(hg, E.mat('#728a4c', { flat: true }));
+      let hgeo = hg;
+      if (chan && chan.first >= 0) {   // drop the faces that would hang across the tunnel mouths (the slope between the cutting and the hill above the bore)
+        const ni = hg.toNonIndexed(), pa = ni.attributes.position.array, keep = [];
+        for (let i = 0; i < pa.length; i += 9) {
+          const x = (pa[i] + pa[i + 3] + pa[i + 6]) / 3, z = -(pa[i + 1] + pa[i + 4] + pa[i + 7]) / 3, y = (pa[i + 2] + pa[i + 5] + pa[i + 8]) / 3;
+          if (chanD(x, z) < chan.W + 1.4 && y < 7.2) continue;
+          for (let k = 0; k < 9; k++) keep.push(pa[i + k]);
+        }
+        hgeo = new THREE.BufferGeometry(); hgeo.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
+      }
+      hgeo.computeVertexNormals();
+      const hill = new THREE.Mesh(hgeo, E.mat('#728a4c', { flat: true }));
       hill.rotation.x = -Math.PI / 2; hill.receiveShadow = true;
       g.add(hill); p.pick(hill);
       const rockM = E.mat('#8a7f70', { flat: true }), rockD = E.mat('#6c6255', { flat: true });
