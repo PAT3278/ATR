@@ -146,47 +146,75 @@
     };
     R.id = 'ring'; R.closed = true;
 
-    // --- a C1-style branch: it leaves the inner side of the loop on the east, winds right through the middle of town
-    // high over the walks (just south of the plaza), and joins the loop again on the west. Each end is a T: the median
-    // opens there, so you can turn in from either direction. Two lanes, high concrete walls.
+    // --- C1: like the Shuto Expressway's inner loop, a one-way elevated route (two lanes, 50 km/h-class corners) that
+    // runs from the loop's east side, right through the middle of town over the walks, to its west side. No level
+    // crossings: you join and leave only by ramps, as on the Shuto Expressway -
+    //   in the east:  from the inner (clockwise) carriageway, a left-hand diverge;
+    //                 from the outer (anticlockwise) carriageway, a RIGHT-hand diverge out of the fast lane that climbs
+    //                 along the median and flies over the clockwise carriageway (the Shuto's notorious right-side ramps);
+    //   in the west:  a left-hand merge into the clockwise carriageway, and a flyover that comes down along the median
+    //                 and merges from the right into the fast lane of the anticlockwise one.
+    // Back from west to east you take the loop.
     {
-      const tee = (deg, y) => { const th = deg * DEG; let bi = 0, bd = 1e9; for (let i = 0; i < N; i++) { let a = Math.atan2(Z[i], X[i]) - th; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))); if (a < bd) { bd = a; bi = i; } }
-        const nx = -TZ[bi], nz = TX[bi]; let ix = -X[bi], iz = -Z[bi]; const s = Math.sign(nx * ix + nz * iz) || 1;   // the side towards the middle
-        return { i: bi, at: (k, yy = Y[bi]) => [X[bi] + nx * s * k, Z[bi] + nz * s * k, yy] }; };
-      const ta = tee(-30), tb = tee(176);
-      const pts = [ta.at(3), ta.at(10), ta.at(20, 9.6),
-        [78, -46, 10.6], [62, -36, 11.8], [44, -37, 12.8], [28, -24, 13.6], [10, -23, 14], [-8, -14, 14], [-24, -13, 13.8], [-40, -2, 13.4], [-58, -1, 12.8], [-76, 8, 12.2],
-        tb.at(24, 11.5), tb.at(12), tb.at(3)].map(([x, z, y]) => [x, y, z]);
-      // ease the wiggles a little (every inner point drawn a third of the way to the midpoint of its neighbours), so the
-      // tightest corners stay drivable at speed: about 18-40 m
-      for (let pass = 0; pass < 1; pass++) for (let i = 3; i < pts.length - 3; i++) { const a = pts[i - 1], b = pts[i + 1]; for (const k of [0, 2]) pts[i][k] += ((a[k] + b[k]) / 2 - pts[i][k]) * 0.33; }
-      const ctlB = pts.map(([x, y, z]) => new THREE.Vector3(x, y, z));
-      const cb = new THREE.CatmullRomCurve3(ctlB, false, 'centripetal'), NB = Math.round(cb.getLength() / 2), pb = cb.getSpacedPoints(NB - 1);
-      const B = { id: 'c1', closed: false, avoidRing: true, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(4.6), GAP: new Uint8Array(NB), urban: true, lift: 0.015 };
-      pb.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; });
-      let LB = 0;
-      for (let i = 0; i < NB; i++) { const a = Math.max(0, i - 1), b = Math.min(NB - 1, i + 1), dx = B.X[b] - B.X[a], dz = B.Z[b] - B.Z[a], l = Math.hypot(dx, dz) || 1; B.TX[i] = dx / l; B.TZ[i] = dz / l; if (i < NB - 1) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); }
-      B.L = LB; B.ds = LB / (NB - 1);
-      const nearB = (x, z) => { let bi = 0, bd = 1e18; for (let i = 0; i < NB; i++) { const dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } return bi; };
-      B.proj = (x, z, hint, out) => {
-        let bi = 0, bd = 1e18;
-        if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
-        if (hint < 0 || bd > 900) bi = nearB(x, z);
-        const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
-        out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
-        out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi];
-        out.tx = B.TX[bi]; out.tz = B.TZ[bi]; out.R = B;
-        out.off = (bi === 0 && a < 0) || (bi === NB - 1 && a > 0);   // past either end
-        return out;
+      // a junction's frame: u along the loop's +s, v towards the middle, heights relative to the loop's deck there
+      const frameAt = (deg) => { const th = deg * DEG; let bi = 0, bd = 1e9; for (let i = 0; i < N; i++) { let a = Math.atan2(Z[i], X[i]) - th; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))); if (a < bd) { bd = a; bi = i; } }
+        const tx = TX[bi], tz = TZ[bi]; let nx = -tz, nz = tx; if (nx * -X[bi] + nz * -Z[bi] < 0) { nx = -nx; nz = -nz; }
+        const tmp = {}, sv = Math.sign(-(tz * nx - tx * nz)) || 1;   // which sign of the loop's d points to the middle
+        return (u, v, dy) => { const o = R.at(bi * ds + u, -sv * v, tmp); return [o.x, o.y + dy, o.z]; }; };   // u runs along the loop's curve, v straight across it, heights follow its deck
+      const JA = frameAt(-30), JB = frameAt(120);   // east, between SHOT and FLIP; north-west, between NO JOBB and TAMA (clear of the narrow coast road)
+      const roadFrom = (id, pts, hw, o = {}) => {
+        const cb = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)), false, 'centripetal'), NB = Math.max(4, Math.round(cb.getLength() / 2)), pb = cb.getSpacedPoints(NB - 1);
+        const B = Object.assign({ id, closed: false, avoidRing: true, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(hw), GAP: new Uint8Array(NB), OGAP: new Uint8Array(NB), urban: true, lift: 0.015 }, o);
+        pb.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; });
+        let LB = 0;
+        for (let i = 0; i < NB; i++) { const a = Math.max(0, i - 1), b = Math.min(NB - 1, i + 1), dx = B.X[b] - B.X[a], dz = B.Z[b] - B.Z[a], l = Math.hypot(dx, dz) || 1; B.TX[i] = dx / l; B.TZ[i] = dz / l; if (i < NB - 1) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); }
+        B.L = LB; B.ds = LB / (NB - 1);
+        const nearB = (x, z) => { let bi = 0, bd = 1e18; for (let i = 0; i < NB; i++) { const dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } return bi; };
+        B.nearest = nearB;
+        B.proj = (x, z, hint, out) => {
+          let bi = 0, bd = 1e18;
+          if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
+          if (hint < 0 || bd > 900) bi = nearB(x, z);
+          const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
+          out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
+          out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi];
+          out.tx = B.TX[bi]; out.tz = B.TZ[bi]; out.R = B;
+          out.off = (bi === 0 && a < 0) || (bi === NB - 1 && a > 0);   // past either end
+          return out;
+        };
+        B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
+        return B;
       };
-      B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
-      // the junctions: the branch's own walls stop where it reaches the loop's deck; the loop's inner wall opens and its
-      // median drops away for a stretch either side, so traffic both ways can turn in
-      B.OGAP = new Uint8Array(NB); R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N);
-      for (let i = 0; i < NB; i++) { const j = nearest(B.X[i], B.Z[i]); if (Math.hypot(B.X[i] - X[j], B.Z[i] - Z[j]) < HW[j] + 0.6) { B.GAP[i] = 1; B.OGAP[i] = 1; } }
-      for (const t of [ta, tb]) for (let k = -9; k <= 9; k++) { const i = (t.i + k + N) % N; R.MGAP[i] = 1; if (Math.abs(k) <= 3) { R.JGAP[i] = 1; GAP[i] = 1; } }
-      R.branch = B; R.roads = [R, B];
-      const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), B.dist(x, z));
+      // the route itself, one-way east to west
+      const mid = [[44, -37, 13], [28, -24, 13.6], [10, -23, 14], [-8, -14, 14.2], [-24, -13, 14.2], [-40, -2, 14.3], [-52, 12, 14.4], [-55, 30, 14.6], [-50, 48, 14.8]].map(([x, z, y]) => [x, y, z]);
+      for (let i = 1; i < mid.length - 1; i++) { const a = mid[i - 1], b = mid[i + 1]; for (const k of [0, 2]) mid[i][k] += ((a[k] + b[k]) / 2 - mid[i][k]) * 0.33; }
+      const B = roadFrom('c1', [JA(0, 34, 3.5), JA(0, 42, 3.6), ...mid, JB(0, 42, 3.6), JB(0, 34, 3.5)], 4.6, { oneWay: true });
+      // the ramps, in the junction frames (u, v, height); see above
+      // r1 starts just inside the carriageway's left edge (you steer onto it; keeping to your lane takes you past);
+      // r2 starts hugging the median (keep right to take it)
+      const r1 = [[66, 7.5, 0], [50, 8, 0], [36, 9.8, 0.05], [24, 13.5, 0.6], [13, 20, 1.6], [5, 27.5, 2.6], [0, 35, 3.4], [0, 42, 3.6]];
+      const r2 = [[-128, -1.2, 0], [-110, -1.2, 0.6], [-92, -1.3, 2], [-75, -1.2, 3.6], [-59, -0.6, 5.2], [-46, 1.5, 6.4], [-35, 5, 6.9], [-25, 11, 6.7], [-15, 18, 5.6], [-7, 26, 4.4], [-2, 33, 3.7], [0, 38, 3.6], [0, 42, 3.6]];
+      const mirror = (pts) => pts.slice().reverse().map(([u, v, dy]) => [-u, v, dy]);   // the west end is the east end turned round
+      const ramps = [
+        roadFrom('inL', r1.map((p) => JA(...p)), 2.6, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
+        roadFrom('inR', r2.map((p) => JA(...p)), 2.6, { oneLane: true, opens: 'left' }),
+        roadFrom('outL', mirror([[66, 5.9, 0], ...r1.slice(1)]).map((p) => JB(...p)), 2.6, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane
+        roadFrom('outR', mirror([[-128, -2.4, 0], ...r2.slice(1)]).map((p) => JB(...p)), 2.6, { oneLane: true, opens: 'left' }),
+      ];
+      const all = [B, ...ramps];
+      // where a ramp lies on the loop's deck: no walls on the ramp; the loop's median drops where a ramp runs along it, and
+      // its inner wall opens where a ramp leaves or joins from the inside
+      R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N);
+      for (const Rd of ramps) for (let i = 0; i < Rd.N; i++) {
+        const j = nearest(Rd.X[i], Rd.Z[i]), dx = Rd.X[i] - X[j], dz = Rd.Z[i] - Z[j], d = dx * TZ[j] - dz * TX[j], dy = Rd.Y[i] - Y[j];
+        if (dy > 2.2 || Math.abs(d) > HW[j] + Rd.HW[i]) continue;
+        if (Rd.opens === 'left') Rd.OGAP[i] = 1; else Rd.GAP[i] = 1;   // the far side keeps its wall: for a median ramp that wall is the median
+        for (let k = -1; k <= 1; k++) { const q = (j + k + N) % N; if (Math.abs(d) < Rd.HW[i] + 0.6) R.MGAP[q] = 1; if (d < -(HW[j] - 2.2) && d > -(HW[j] + Rd.HW[i])) { GAP[q] = 1; R.JGAP[q] = 1; } }
+      }
+      // where two of the new roads meet (a ramp joining the route), no walls between them either
+      for (const A of all) for (const Bb of all) { if (A === Bb) continue; for (let i = 0; i < A.N; i++) { const j = Bb.nearest(A.X[i], A.Z[i]); if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(A.X[i] - Bb.X[j], A.Z[i] - Bb.Z[j]) < A.HW[i] + Bb.HW[j] + 0.3) A.GAP[i] = A.OGAP[i] = 1; } }
+      R.branch = B; R.ramps = ramps; R.roads = [R, ...all];
+      const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), ...all.map((q) => q.dist(x, z)));
     }
     const rProj = R.proj; R.proj = (x, z, hint, out) => { rProj(x, z, hint, out); out.R = R; out.off = false; return out; };
     return R;
@@ -261,7 +289,7 @@
       .add((i) => (hasMed(i) ? line(0.8, 0.06) : null)).add((i) => (hasMed(i) ? line(-0.8, 0.06) : null))
       .add((i) => (hasMed(i) ? line(HW[i] / 2 + 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
       .add((i) => (hasMed(i) ? line(-HW[i] / 2 - 0.25, 0.08) : null), { seg: (i) => i % 3 === 0 })
-      .add((i) => (hasMed(i) ? null : line(0, 0.08)), { seg: (i) => i % 3 === 0 })
+      .add((i) => (hasMed(i) || Rd.oneLane ? null : line(0, 0.08)), { seg: (i) => i % 3 === 0 })
       .mesh(paint, false);
 
     // Instanced bits

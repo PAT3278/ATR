@@ -1061,8 +1061,15 @@
       if (o.off || Math.abs(o.y - d.y) > 3) continue;
       const [lo2, hi2] = band(o); if (o.d < lo2 || o.d > hi2) continue;
       const al = Math.abs(Math.cos(d.yaw - Math.atan2(o.tx, o.tz)));   // how well the car points along this road
-      const k = Math.abs(o.d) / o.hw + 0.9 * (1 - al) - (Rd === R0 ? 0.25 : 0); if (k < bestK) { bestK = k; best = o; }
+      // how far the car is from the middle of this road's nearest lane: a ramp beside a lane wins once you steer onto it
+      const ld = o.hw < 3.5 ? [0] : o.hw > 7.45 ? [2.5, laneD(o.hw)] : [laneD(o.hw)], off = Math.min(...ld.map((c) => Math.abs(Math.abs(o.d) - c)));
+      const k = off / o.hw + 0.9 * (1 - al) - (Rd === R0 ? 0.08 : 0); if (k < bestK) { bestK = k; best = o; }
     }
+    // on a ramp or the route with a wall beside you, you stay on it (the wall holds you) unless you run off its end
+    { const c = rqs[R0.id], walled = R0 !== ring && !c.off && !(R0.GAP[c.i] && R0.OGAP[c.i]);
+      if (walled && best && best.R !== R0) { const [l2, h2] = band(c); const inside = c.d >= l2 && c.d <= h2;
+        const sideWall = c.d > 0 ? !R0.OGAP[c.i] : !R0.GAP[c.i];   // the wall on the side the car is pushing towards
+        if (inside || sideWall) best = inside ? c : null; } }
     Object.assign(rq, best || rqs[R0.id]);
     if (rq.R !== R0) tau0 = Math.atan2(rq.tx, rq.tz);   // just changed road: no jump in heading
     d.road = rq.R; d.hint = rq.i;
@@ -1131,7 +1138,7 @@
   // Light traffic in the slow lane each way; it keeps its distance from the car in front, and from you.
   const traffic = [];
   { const r = rng(606); for (let k = 0; k < 12; k++) { const car = makeCar(Math.floor(r() * NCAR)), v0 = 19 + r() * 6; trafficG.add(car); traffic.push({ car, dir: k % 2 ? 1 : -1, s: ((k + r() * 0.6) / 12) * ring.L, v: v0, v0 }); } }
-  const laneD = (hw) => 1.83 + 3.87 * clamp((hw - 4.5) / 3.5, 0, 1);
+  const laneD = (hw) => (hw < 3.5 ? 0 : 1.83 + 3.87 * clamp((hw - 4.5) / 3.5, 0, 1));   // a one-lane ramp: keep to its middle
   function updTraffic(dt) {
     const L = ring.L, pv = drv ? drv.v : 0;
     for (const c of traffic) {
@@ -1501,7 +1508,7 @@
     g.fillStyle = '#8a8376'; g.beginPath(); g.arc(...toMap(0, 0), PLAZA_R * MAP_S, 0, 7); g.fill();
     g.lineJoin = 'round'; g.strokeStyle = '#4a4e58'; g.lineWidth = 15 * MAP_S; g.beginPath();   // the ring road, with the parking areas where a car waits
     for (let i = 0; i < ring.N; i += 2) { const [x, y] = toMap(ring.X[i], ring.Z[i]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
-    g.closePath(); { const B = ring.branch; g.moveTo(...toMap(B.X[0], B.Z[0])); for (let i = 1; i < B.N; i++) g.lineTo(...toMap(B.X[i], B.Z[i])); } g.stroke(); g.strokeStyle = 'rgba(232,226,208,.7)'; g.lineWidth = 1.5; g.setLineDash([9, 9]); g.stroke(); g.setLineDash([]);
+    g.closePath(); for (const B of ring.roads.slice(1)) { g.moveTo(...toMap(B.X[0], B.Z[0])); for (let i = 1; i < B.N; i++) g.lineTo(...toMap(B.X[i], B.Z[i])); } g.stroke(); g.strokeStyle = 'rgba(232,226,208,.7)'; g.lineWidth = 1.5; g.setLineDash([9, 9]); g.stroke(); g.setLineDash([]);
     g.textAlign = 'center';
     places.forEach((p) => {
       const [x, y] = toMap(p.vx, p.vz);
@@ -1812,7 +1819,7 @@
     places.forEach((p) => { g.beginPath(); for (let i = 0; i < p.path.length; i += 3) { const [x, y] = tr(p.path[i].x, p.path[i].z); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.stroke(); });
     g.strokeStyle = 'rgba(96,104,118,.95)'; g.lineWidth = 6; g.beginPath();   // the ring road
     for (let i = 0; i <= ring.N; i += 2) { const [x, y] = tr(ring.X[i % ring.N], ring.Z[i % ring.N]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
-    { const B = ring.branch; g.moveTo(...tr(B.X[0], B.Z[0])); for (let i = 2; i < B.N; i += 2) g.lineTo(...tr(B.X[i], B.Z[i])); }
+    for (const B of ring.roads.slice(1)) { g.moveTo(...tr(B.X[0], B.Z[0])); for (let i = 2; i < B.N; i += 2) g.lineTo(...tr(B.X[i], B.Z[i])); }
     g.stroke(); g.strokeStyle = 'rgba(232,226,208,.55)'; g.lineWidth = 1; g.setLineDash([4, 5]); g.stroke(); g.setLineDash([]);
     ring.pas.forEach((pa) => { const [x, y] = tr(pa.slot.x, pa.slot.z); g.fillStyle = '#2f6fd0'; g.fillRect(x - 5, y - 5, 10, 10); g.strokeStyle = '#e8e2d0'; g.lineWidth = 1.5; g.strokeRect(x - 5, y - 5, 10, 10); });   // parking areas
     const [px, py] = tr(0, 0);
