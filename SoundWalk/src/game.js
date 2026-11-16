@@ -383,7 +383,13 @@
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
     return (rockGeos[k] = g);
   }
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo };
+  // ripples for every water surface: a tiling water normal map (three.js examples, MIT), sampled twice and scrolled
+  const waterN = texLoader.load('tex/water_n.jpg'); waterN.wrapS = waterN.wrapT = THREE.RepeatWrapping;
+  // a water shader's lighting, shared: two scrolling normal samples, a sun glint and a fresnel lift. Needs vW, t, nrm, sunD.
+  const WATER_GLSL = 'vec3 wn1=texture2D(nrm,vW.xz*.05+vec2(t*.012,t*.008)).rgb*2.-1.;vec3 wn2=texture2D(nrm,vW.xz*.11-vec2(t*.01,-t*.014)).rgb*2.-1.;' +
+    'vec3 wN=normalize(vec3((wn1.x+wn2.x)*.32,1.,(wn1.y+wn2.y)*.32));vec3 wV=normalize(cameraPosition-vW);' +
+    'float wSp=pow(max(dot(reflect(-wV,wN),sunD),0.),70.);float wFr=pow(1.-max(dot(wN,wV),0.),4.);';
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -1937,7 +1943,9 @@
     avatar.G.rotation.y = P.face;
     avatar.G.visible = !drv && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
     const vf = viewPlace ? viewPlace.f : null;
-    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, mode !== 'view' && gh < 0.1 && isWater(P.x, P.z));
+    const onW = mode !== 'view' && gh < 0.1 && isWater(P.x, P.z);
+    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, onW);
+    wakeTick(dt, onW && !drv, P.x, P.z, P.face, P.speed);
 
     const show = focus && mode === 'walk';
     marker.visible = !!show;
@@ -2143,6 +2151,43 @@
   resize();
 
   // How far along the line from the player (x0, z0) to the camera (x1, z1) the first building-sized collider starts (1 = clear).
+  // The wake: foam left on the water behind the craft. Each puff drifts out sideways from the stern (so together they open
+  // into a V), spreads and fades; a line of larger puffs marks the track itself.
+  const foamTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,.05)'); gr.addColorStop(0.75, 'rgba(255,255,255,.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 90; i++) { const a = Math.random() * 6.28, r = 16 + Math.random() * 14; x.fillStyle = `rgba(255,255,255,${0.2 + Math.random() * 0.4})`; x.fillRect(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 1.5, 1.5); }
+    return new THREE.CanvasTexture(c); })();   // a broken ring of foam
+  const WAKE_N = 360, wakeM = new THREE.MeshBasicMaterial({ map: foamTex, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true });
+  wakeM.userData.lin = true;
+  const wakeMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), wakeM, WAKE_N);
+  wakeMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(WAKE_N * 3), 3); wakeMesh.frustumCulled = false; wakeMesh.renderOrder = 2; scene.add(wakeMesh);
+  const wakeP = Array.from({ length: WAKE_N }, () => ({ life: 0, max: 1, x: 0, z: 0, vx: 0, vz: 0, s0: 1, s1: 1, a: 0 }));
+  let wakeI = 0, wakeAcc = 0; const wm4 = new THREE.Matrix4(), wq = new THREE.Quaternion(), wps = new THREE.Vector3(), wsc = new THREE.Vector3(), wcol = new THREE.Color();
+  function wakeTick(dt, on, x, z, face, speed) {
+    if (on && speed > 0.8) {
+      wakeAcc += dt * (4 + speed * 0.9);
+      const fx = Math.sin(face), fz = Math.cos(face), rx = fz, rz = -fx;
+      while (wakeAcc >= 1) {
+        wakeAcc -= 1;
+        for (const sd of [-1, 1, 0]) {
+          const q = wakeP[wakeI]; wakeI = (wakeI + 1) % WAKE_N;
+          const out = sd * (0.5 + speed * 0.09);
+          q.x = x - fx * 1.05 + rx * sd * 0.42 + (Math.random() - 0.5) * 0.2; q.z = z - fz * 1.05 + rz * sd * 0.42 + (Math.random() - 0.5) * 0.2;
+          q.vx = rx * out - fx * 0.3; q.vz = rz * out - fz * 0.3;
+          q.life = q.max = sd ? 2.6 + Math.random() * 0.8 : 1.6; q.s0 = sd ? 0.5 : 0.9; q.s1 = sd ? 1.8 + speed * 0.08 : 2.4; q.a = Math.min(0.2, 0.07 + speed * 0.008);
+        }
+      }
+    }
+    for (let i = 0; i < WAKE_N; i++) {
+      const q = wakeP[i];
+      if (q.life <= 0) { wsc.set(0, 0, 0); wm4.compose(wps.set(0, -50, 0), wq, wsc); wakeMesh.setMatrixAt(i, wm4); continue; }
+      q.life -= dt; q.x += q.vx * dt; q.z += q.vz * dt; q.vx *= 1 - dt * 0.6; q.vz *= 1 - dt * 0.6;
+      const k = 1 - Math.max(0, q.life) / q.max, s = q.s0 + (q.s1 - q.s0) * Math.sqrt(k);
+      wps.set(q.x, 0.1, q.z); wsc.set(s, 1, s * 1.4); wm4.compose(wps, wq, wsc); wakeMesh.setMatrixAt(i, wm4);
+      const a = q.a * (1 - k) * (1 - k); wakeMesh.setColorAt(i, wcol.setRGB(a, a, a));
+    }
+    wakeMesh.instanceMatrix.needsUpdate = true; wakeMesh.instanceColor.needsUpdate = true;
+  }
   function camBlock(x0, z0, x1, z1, y) {
     let best = 1; const L = Math.hypot(x1 - x0, z1 - z0) + 4;
     for (const b of boxes) {

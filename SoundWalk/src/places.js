@@ -150,14 +150,14 @@
       const RZ = -14, RW = 12;
 
       const water = new THREE.Mesh(new THREE.PlaneGeometry(100, RW, 1, 1), new THREE.ShaderMaterial({
-        uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ff9a5c') }, b: { value: new THREE.Color('#2d2456') } },
+        uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ff9a5c') }, b: { value: new THREE.Color('#2d2456') }, nrm: { value: E.waterN }, sunD: { value: new THREE.Vector3(14, 5, -185).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), p.rot) } },
         vertexShader: 'varying vec2 vUv;varying vec3 vW;void main(){vUv=uv;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
-        fragmentShader: 'uniform float t,level;uniform vec3 a,b;varying vec2 vUv;varying vec3 vW;' +
+        fragmentShader: 'uniform float t,level;uniform vec3 a,b,sunD;uniform sampler2D nrm;varying vec2 vUv;varying vec3 vW;' +
           'void main(){float y=vUv.y;vec3 c=mix(b,a,pow(1.-y,1.6));' +
           'float s=sin(vUv.x*420.+t*1.3+sin(vUv.y*40.+t)*2.)*sin(vUv.y*90.-t*2.);' +
           'float glint=smoothstep(.55,1.,s)*(.25+level*1.2);' +
           'float col=exp(-pow((vUv.x-.53)*28.,2.));c+=vec3(1.,.75,.45)*glint*(.35+col*1.6);' +
-          'c+=vec3(1.,.6,.35)*col*.25*(1.-y);gl_FragColor=vec4(pow(c,vec3(2.2)),1.);}',
+          'c+=vec3(1.,.6,.35)*col*.25*(1.-y);' + E.WATER_GLSL + 'c*=.86+(wn1.z+wn2.z)*.07;c+=vec3(1.,.78,.5)*wSp*(.9+level*1.4)+a*wFr*.25;gl_FragColor=vec4(pow(c,vec3(2.2)),1.);}',
       }));
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.05, RZ);

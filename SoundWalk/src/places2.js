@@ -803,7 +803,7 @@
   PLACES.ohh = {
     build(p, E) {
       const g = p.group, r = E.rng(151);
-      let tunnelLamps = null, chanMap = [];
+      let tunnelLamps = null, chanMap = [], chanWater = null;
       const HR = 36, HH = 12, PL = 9, RZ = -15, RH = 12, HALF = 60;   // the road is level with the top of the hill
       const height = (lx, lz) => {
         const d = Math.hypot(lx, lz);
@@ -876,9 +876,11 @@
         const tan = (i) => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
         // the water: one strip along the whole channel
         { const pos = [], idx = [];
-          P.forEach(([x, z], i) => { const [tx, tz] = tan(i); pos.push(x - tz * W, 0.05, z + tx * W, x + tz * W, 0.05, z - tx * W); if (i < n - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } });
-          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+          const uvs = [];
+          P.forEach(([x, z], i) => { const [tx, tz] = tan(i); pos.push(x - tz * W, 0.05, z + tx * W, x + tz * W, 0.05, z - tx * W); uvs.push((x - tz * W) / 14, (z + tx * W) / 14, (x + tz * W) / 14, (z - tx * W) / 14); if (i < n - 1) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); } });
+          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); geo.setIndex(idx); geo.computeVertexNormals();
           const wm = E.gloss('#1d3a4c', { rough: 0.12, metal: 0.2, env: 1.1 }); wm.side = THREE.DoubleSide;
+          wm.normalMap = E.waterN; wm.normalScale.set(0.55, 0.55); chanWater = wm;   // only the channel scrolls this texture's offset; the shaders do their own
           const w = new THREE.Mesh(geo, wm); w.receiveShadow = true; g.add(w); p.pick(w);
           P.forEach(([x, z], i) => { if (i % 2 === 0) p.water(x, z, W - 0.6, W - 0.6); }); }
         // the tunnel: where the hill stands over the channel, a vaulted bore with lamps; a stone portal at each end
@@ -925,12 +927,12 @@
 
       // Sea below and beyond
       const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 380), new THREE.ShaderMaterial({
-        uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ffd08a') }, b: { value: new THREE.Color('#1f5f86') }, c: { value: new THREE.Color('#0d3552') } },
-        vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-        fragmentShader: 'uniform float t,level;uniform vec3 a,b,c;varying vec2 vUv;void main(){float y=vUv.y;vec3 col=mix(c,b,y);' +
+        uniforms: { t: { value: 0 }, level: { value: 0 }, a: { value: new THREE.Color('#ffd08a') }, b: { value: new THREE.Color('#1f5f86') }, c: { value: new THREE.Color('#0d3552') }, nrm: { value: E.waterN }, sunD: { value: new THREE.Vector3(30, 22, -420).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), p.rot) } },
+        vertexShader: 'varying vec2 vUv;varying vec3 vW;void main(){vUv=uv;vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
+        fragmentShader: 'uniform float t,level;uniform vec3 a,b,c,sunD;uniform sampler2D nrm;varying vec2 vUv;varying vec3 vW;void main(){float y=vUv.y;vec3 col=mix(c,b,y);' +
           'float w=sin(vUv.x*900.+t*1.1+sin(vUv.y*300.+t*.7)*3.)*sin(vUv.y*520.-t*1.6);' +
           'float path=exp(-pow((vUv.x-.5)*9.,2.))*smoothstep(.2,1.,y);' +
-          'col+=a*smoothstep(.6,1.,w)*(.15+path*(1.4+level*2.));col=mix(col,a*.9,pow(y,8.)*.6);gl_FragColor=vec4(pow(col,vec3(2.2)),1.);}',
+          'col+=a*smoothstep(.6,1.,w)*(.15+path*(1.4+level*2.));col=mix(col,a*.9,pow(y,8.)*.6);' + E.WATER_GLSL + 'col*=.86+(wn1.z+wn2.z)*.07;col+=a*wSp*(.8+level*1.2)+b*wFr*.3;gl_FragColor=vec4(pow(col,vec3(2.2)),1.);}',
       }));
       sea.rotation.x = -Math.PI / 2; sea.position.set(0, 0.07, -230);
       g.add(sea); p.pick(sea);
@@ -1006,6 +1008,7 @@
       let speed = 0;
       p.update = (t, dt, f, v, viewing) => {
         sea.material.uniforms.t.value = t;
+        if (chanWater) chanWater.normalMap.offset.set(t * 0.012, t * 0.02);
         sea.material.uniforms.level.value += (f.level - sea.material.uniforms.level.value) * Math.min(1, dt * 6);
         const target = viewing ? 28 + f.level * 30 + f.pulse * 6 : 0;
         speed += (target - speed) * Math.min(1, dt * (viewing ? 1.2 : 4));
