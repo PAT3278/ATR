@@ -613,18 +613,18 @@
   const surfY = (x, z) => { const g0 = groundAt(x, z); if (g0 <= 0) return 0; dray.set(dfrom.set(x, g0 + 3, z), ddown); const hit = dray.intersectObjects(pick, false)[0]; return hit ? Math.max(hit.point.y, 0) : g0; };
   const pathMat = mat('#ffffff', { map: tex('trail', 1, 1), rough: 1 }, true);
   pathMat.transparent = true; pathMat.depthWrite = false; pathMat.polygonOffset = true; pathMat.polygonOffsetFactor = -2;
-  function layTrail(draw) {
+  function layTrail(draw, o = {}) {   // o: { w: half-width, mat, y: height over the ground, vs: metres per texture repeat }
     const pos = [], uv = [], idx = [], CN = 4;
     let acc = 0;
     draw.forEach((q, i) => {
       const n = draw[Math.min(i + 1, draw.length - 1)], pv = draw[Math.max(i - 1, 0)];
       let tx = n.x - pv.x, tz = n.z - pv.z; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
-      const w = 2.2;
+      const w = o.w || 2.2;
       if (i > 0) acc += Math.hypot(q.x - pv.x, q.z - pv.z);
       for (let c = 0; c <= CN; c++) {
         const sd = -1 + (2 * c) / CN, x = q.x - tz * w * sd, z = q.z + tx * w * sd;
-        pos.push(x, surfY(x, z) + 0.06, z);
-        uv.push(c / CN, acc / 4.4);
+        pos.push(x, surfY(x, z) + (o.y || 0.06), z);
+        uv.push(o.us ? (sd * w) / o.us : c / CN, acc / (o.vs || 4.4));
       }
       if (i < draw.length - 1) for (let c = 0; c < CN; c++) { const k = i * (CN + 1) + c, k2 = k + CN + 1; idx.push(k, k + 1, k2, k + 1, k2 + 1, k2); }   // counter-clockwise seen from above: the top face is the front
     });
@@ -632,7 +632,7 @@
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx); geo.computeVertexNormals();
-    const ribbon = new THREE.Mesh(geo, pathMat);
+    const ribbon = new THREE.Mesh(geo, o.mat || pathMat);
     ribbon.receiveShadow = true; ribbon.userData.ground = true;
     scene.add(ribbon); pick.push(ribbon);
   }
@@ -650,7 +650,14 @@
     const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
     for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
     p.path = pts;
-    layTrail(pts.slice(0, N + 1));
+    if (p.road) {   // a paved road instead of a trail: asphalt, a dashed centre line, and the trees kept further back
+      const tr = [{ x: ux * 4.6, z: uz * 4.6 }, { x: ux * 7.5, z: uz * 7.5 }, ...pts.slice(0, N + 1)];   // right up to the fountain's rim
+      layTrail(tr, { w: p.road.hw, mat: mat('#2a2830', { map: tex('asphalt', 1, 1), rough: 0.88 }), us: 8, vs: 8, y: 0.065 });
+      const dash = (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 64; const g2 = c.getContext('2d'); g2.clearRect(0, 0, 8, 64); g2.fillStyle = '#e8e2d4'; g2.fillRect(0, 0, 8, 34); const tt = new THREE.CanvasTexture(c); tt.wrapS = tt.wrapT = THREE.RepeatWrapping; return tt; })();
+      const dm = new THREE.MeshBasicMaterial({ map: dash, transparent: true, alphaTest: 0.5, color: lin('#cfc9bb') }), edgeM = new THREE.MeshBasicMaterial({ color: lin('#cfc9bb') }); dm.userData.lin = edgeM.userData.lin = true;
+      layTrail(tr, { w: 0.08, mat: dm, vs: 6, y: 0.075 });
+      for (const sd of [-1, 1]) layTrail(tr.map((q, i) => { const n = tr[Math.min(i + 1, tr.length - 1)], pv = tr[Math.max(i - 1, 0)]; let tx = n.x - pv.x, tz = n.z - pv.z; const l = Math.hypot(tx, tz) || 1; return { x: q.x - (tz / l) * sd * (p.road.hw - 0.5), z: q.z + (tx / l) * sd * (p.road.hw - 0.5) }; }), { w: 0.07, mat: edgeM, y: 0.075 });   // edge lines
+    } else layTrail(pts.slice(0, N + 1));
   });
   // A loop trail through the woods joins the spokes, so you can walk from one place to the next without going back to the plaza.
   const LOOP_R = 30, LOOP_AT = 1.8, LOOP_DIP = 12, loopPath = [];
@@ -684,7 +691,7 @@
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
-        if (distToPath(x, z, p.path).d < 4.5) return false;
+        if (distToPath(x, z, p.path).d < (p.road ? p.road.hw + 2.5 : 4.5)) return false;
       }
       return true;
     };

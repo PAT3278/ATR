@@ -538,7 +538,9 @@
       const neonCols = ['#4fff9a', '#3ff0ff', '#ffe14f', '#9b6bff', '#ff9a2a'];   // no pink
       const buildings = [];
       const spots = [];
-      for (const x of [-25, -13, 13, 25]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
+      // Narrow back alleys between the blocks (4-5 m); on the east side the cross street at the crossing is a real street.
+      for (const x of [-25, -13]) for (const z of [-30, -18, -6, 6]) spots.push([x, z]);
+      for (const x of [13, 25]) for (const z of [-31, -20.5, -3.5, 7]) spots.push([x, z]);
       spots.push([-4, -33], [6, -33]);
       const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12, coreFeet = [];
       // The side that faces FIELD's brownstones turns into their kind of street: brick walk-ups, lower, the nearer they stand.
@@ -546,10 +548,10 @@
       const fieldWard = (x, z) => (fieldAt ? 1 - Math.max(0, Math.min(1, (Math.hypot(x - fieldAt.x, z - fieldAt.z) - 22) / 34)) : 0);   // 1 next to the row, 0 far from it
       const nyStyle = (t, rr) => (t > 0.55 ? 2 : t > 0.2 ? (rr() < 0.5 ? 2 : 1) : undefined);   // the middle of the block: the tallest towers stand here
       spots.forEach(([x, z], i) => {
-        const w = 8 + r() * 3, d = 8 + r() * 3, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
+        const w = 6.5 + r() * 1.5, d = 6.5 + r() * 1.5, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
         const ft = fieldWard(x, z), hh = h + (12 + r() * 5 - h) * Math.min(1, ft * 1.3);
         const b = kit.mesh(w, hh, d, kr, nyStyle(ft, kr), true), m = b.material[0];
-        b.position.set(x + (r() - 0.5) * 2, 0, z + (r() - 0.5) * 2); coreFeet.push({ x: b.position.x, z: b.position.z, w, d });
+        b.position.set(x + (r() - 0.5) * 0.6, 0, z + (r() - 0.5) * 0.6); coreFeet.push({ x: b.position.x, z: b.position.z, w, d });
         b.castShadow = true;
         city.add(b);
         p.addBox(b.position.x, b.position.z, w / 2 + 0.3, d / 2 + 0.3);
@@ -582,8 +584,8 @@
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.computeVertexNormals();
         const m = new THREE.Mesh(geo, paveM); m.receiveShadow = true; p.pick(m); return m;
       };
-      for (const side of [-1, 1]) {   // the two sides of the avenue, and the far end
-        const fs = coreFeet.filter((f) => (side < 0 ? f.x < -2 : f.x > 2) && f.z > -31), M = 2.8;
+      for (const [side, half] of [[-1, 0], [1, -1], [1, 1]]) {   // the two sides of the avenue (the east one split by its cross street), and the far end
+        const fs = coreFeet.filter((f) => (side < 0 ? f.x < -2 : f.x > 2) && f.z > -32 && (!half || (half < 0 ? f.z < -12 : f.z > -12))), M = 2.8;
         const x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
         slabs.push({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, top: 0.15 });
       }
@@ -670,6 +672,7 @@
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
+      p.road = { hw: 5 };   // the avenue carries on to the fountain as a paved road (drawn by the game along the path)
       p.core = (lx, lz) => Math.abs(lx) < 34 && lz > -40 && lz < 20;   // the block itself; the outskirts are negotiable
       p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
