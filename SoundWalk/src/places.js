@@ -666,6 +666,91 @@
       bb.position.set(1, 20, -27);
       g.add(bb);
 
+      // ---- Midtown: big lit ad screens and a news ticker on the blocks round the crossing, yellow cabs (parked and
+      // running up and down the avenue), crowds on the sidewalks, a subway entrance with its green globes, a food cart,
+      // a newsstand, a theatre marquee, traffic lights and street signs at the crossing, steam out of the manholes.
+      const mid = { screens: [], cabs: [], peds: null, ped: [], lights: [], steam: null, steamP: [], ticker: null, phase: 0 };
+      {
+        const mr = E.rng(4242), MB = E.batch(g), mb = MB.box;
+        const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+        const ADS = [
+          ['ATR', 'NEW SINGLE OUT NOW', '#0b0b14', '#3ff0ff', '#ffe14f'], ['SOUND WALK', 'WALK · LISTEN · FIND', '#1a0a2a', '#9b6bff', '#f4f1e6'], ['FIELD', 'vas · stvn · p.pulpk · atr', '#2a0a0a', '#ff5a3a', '#f4f1e6'],
+          ['CLOSET QUEST', 'NOW PLAYING', '#06210f', '#4fff9a', '#f4f1e6'], ['24/7', 'THE CITY NEVER SLEEPS', '#0a1a2a', '#3fa7ff', '#ffe14f'], ['TAMA EXPRESSION', 'NEXT LIVE 12.26 TOKYO', '#1a1a1a', '#ffe14f', '#3ff0ff'], ['OHH', 'COASTAL GORGE', '#081a24', '#5fd0ff', '#ffd08a'], ['KEYAKI', 'GOLDEN HOUR', '#1a1608', '#b6e07a', '#f4f1e6']];
+        const adTex = (k) => { const [a, b, bg, c1, c2] = ADS[k % ADS.length]; return canvasTex(512, 640, (x, w, h) => { const gr = x.createLinearGradient(0, 0, w, h); gr.addColorStop(0, bg); gr.addColorStop(1, '#000'); x.fillStyle = gr; x.fillRect(0, 0, w, h);
+          x.strokeStyle = c1; x.lineWidth = 10; x.strokeRect(14, 14, w - 28, h - 28); for (let i = 0; i < 12; i++) { x.fillStyle = c1; x.globalAlpha = 0.15; x.fillRect(mr() * w, mr() * h, 60 + mr() * 140, 8); } x.globalAlpha = 1;
+          x.fillStyle = c1; x.font = '700 120px "Hind", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = c1; x.shadowBlur = 30; x.fillText(a, w / 2, h * 0.42, w - 60); x.shadowBlur = 0;
+          x.fillStyle = c2; x.font = '700 36px "Hind", sans-serif'; x.fillText(b, w / 2, h * 0.62, w - 60); }); };
+        // screens on the faces of the blocks that look onto the avenue and the crossing
+        let k = 0;
+        coreFeet.forEach((f) => {
+          if (Math.abs(f.x) < 2 || f.z < -34) return;
+          const sd = -Math.sign(f.x), fx = f.x + sd * (f.w / 2 + 0.06), near = Math.abs(f.z - CZ) < 14;
+          const H0 = near ? 5.5 : 7, Hs = near ? 9 : 6.5, W0 = Math.min(f.d - 0.8, near ? 7.5 : 6);
+          const m = new THREE.MeshBasicMaterial({ map: adTex(k), color: new THREE.Color(1, 1, 1) }); m.userData.lin = true;
+          const s = new THREE.Mesh(new THREE.PlaneGeometry(W0, Hs), m); s.position.set(fx, H0 + Hs / 2, f.z); s.rotation.y = sd > 0 ? Math.PI / 2 : -Math.PI / 2; city.add(s);
+          mb(0.3, Hs + 0.4, W0 + 0.4, fx - sd * 0.12, H0 + Hs / 2, f.z, E.mat('#141416', { metal: 0.4, rough: 0.5 }));
+          mid.screens.push({ m, k, seed: mr() * 6 }); k++;
+        });
+        // a news ticker running round the block on the north-east corner of the crossing
+        { const f = coreFeet.filter((q) => q.x > 0).sort((a, b) => Math.abs(a.z - CZ + 6) - Math.abs(b.z - CZ + 6))[0];
+          if (f) { const tt = canvasTex(2048, 64, (x, w, h) => { x.fillStyle = '#050505'; x.fillRect(0, 0, w, h); x.fillStyle = '#ffd23a'; x.font = '700 44px "Hind", sans-serif'; x.textBaseline = 'middle'; x.fillText('★ ATR — NEW SINGLE OUT NOW  ★  SOUND WALK: WALK THE CITY, FIND THE SONGS  ★  NEXT LIVE 12.26 TOKYO  ★  FLIP DA HOODS  ★  ATR RECORDS ON THE PLAZA  ★', 10, h / 2); });
+            tt.wrapS = THREE.RepeatWrapping; tt.repeat.set(0.35, 1);
+            const m = new THREE.MeshBasicMaterial({ map: tt }); m.userData.lin = true; const tk = new THREE.Mesh(new THREE.PlaneGeometry(f.d + 0.4, 0.9), m); tk.position.set(f.x - (f.w / 2 + 0.08), 4.4, f.z); tk.rotation.y = -Math.PI / 2; city.add(tk); mid.ticker = tt; } }
+        // a theatre marquee on the west side
+        { const f = coreFeet.filter((q) => q.x < 0 && q.z < CZ - 8).sort((a, b) => b.z - a.z)[0];
+          if (f) { const fx = f.x + f.w / 2; mb(1.8, 1.4, f.d - 1, fx + 0.9, 4.2, f.z, E.mat('#1a1a1c', { metal: 0.4, rough: 0.4 }));
+            const sm = new THREE.MeshBasicMaterial({ map: E.textTex('TONIGHT  FLIP DA HOODS', { w: 1024, h: 120, color: '#ffe9b0', glow: '#ffb03a', font: '700 70px "Hind",sans-serif', bg: '#120d08' }) }); sm.userData.lin = true;
+            const sg = new THREE.Mesh(new THREE.PlaneGeometry(f.d - 1.2, 0.9), sm); sg.position.set(fx + 1.82, 4.2, f.z); sg.rotation.y = Math.PI / 2; city.add(sg);
+            const bulbs = []; for (let i = 0; i < 40; i++) { const t = i / 39; bulbs.push(fx + 1.83, 4.85, f.z - (f.d - 1) / 2 + t * (f.d - 1), fx + 1.83, 3.55, f.z - (f.d - 1) / 2 + t * (f.d - 1)); }
+            const bg2 = new THREE.BufferGeometry(); bg2.setAttribute('position', new THREE.Float32BufferAttribute(bulbs, 3)); const pm = new THREE.PointsMaterial({ map: E.dot(), color: new THREE.Color('#ffd9a0'), size: 0.35, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); pm.userData.lin = true; city.add(new THREE.Points(bg2, pm)); } }
+        // yellow cabs: parked along both kerbs, and two running up and down the avenue
+        const cab = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : new THREE.Group(); c.traverse((o) => { if (o.isMesh && o.name === 'paint') { o.material = o.material.clone(); o.material.color.set('#f2c21a').convertSRGBToLinear(); } });
+          const sign = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 0.25), E.basic('#fff4d0')); sign.position.set(0, (c.userData.hgt || 1.4) + 0.12, -0.1); c.add(sign); return c; };
+        for (const [x, z0, z1] of [[-5.1, -34, 14], [5.1, -34, 14]]) for (let z = z0 + 3; z < z1; z += 7 + mr() * 6) { if (Math.abs(z - CZ) < 8 || mr() < 0.35) continue; const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, z); c.rotation.y = x < 0 ? 0 : Math.PI; g.add(c); p.addBox(x, z, 1.0, 2.4); }
+        for (const [x, dir] of [[-2.2, 1], [2.2, -1]]) { const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, dir > 0 ? -30 : 10); c.rotation.y = dir > 0 ? 0 : Math.PI; g.add(c); mid.cabs.push({ c, dir, x, v: 8 }); }
+        // crowds on the sidewalks
+        const NP = 72, bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), headG = new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0);
+        const pb = new THREE.InstancedMesh(bodyG, E.mat('#ffffff', { rough: 0.7 }), NP), ph = new THREE.InstancedMesh(headG, E.mat('#ffffff', { rough: 0.6 }), NP);
+        const coats = ['#1e2024', '#2c3036', '#7a2f2a', '#3a4038', '#c9ccd1', '#4a4f58', '#8a6a3a', '#2b2f3a', '#d8d2c0', '#2457c5'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
+        for (let i = 0; i < NP; i++) { const west = i % 2 === 0, x = (west ? -1 : 1) * (7.4 + mr() * 3.6); mid.ped.push({ x, z: -33 + mr() * 46, dir: mr() < 0.5 ? 1 : -1, v: 0.9 + mr() * 0.7, ph: mr() * 6 }); pb.setColorAt(i, E.lin(coats[Math.floor(mr() * coats.length)])); ph.setColorAt(i, E.lin(skins[Math.floor(mr() * skins.length)])); }
+        pb.castShadow = true; pb.frustumCulled = ph.frustumCulled = false; g.add(pb, ph); mid.peds = [pb, ph];
+        // the subway entrance: stairs going down behind railings, green globes, a sign
+        { const SX = -8.6, SZ = CZ + 9; mb(1.8, 0.02, 4.2, SX, 0.17, SZ, E.mat('#050505', { rough: 1 }), false);
+          for (let s2 = 0; s2 < 6; s2++) mb(1.7, 0.04, 0.5, SX, 0.12 - s2 * 0.02, SZ - 1.6 + s2 * 0.6, E.mat('#3a3a3c'), false);
+          const rail = E.mat('#1c2a20', { metal: 0.6, rough: 0.4 }); mb(0.08, 1.0, 4.2, SX - 0.95, 0.65, SZ, rail); mb(0.08, 1.0, 4.2, SX + 0.95, 0.65, SZ, rail); mb(1.9, 1.0, 0.08, SX, 0.65, SZ + 2.1, rail);
+          p.addBox(SX, SZ, 1.0, 2.15);
+          const globe = E.basic('#5fff8a'); for (const sd of [-1, 1]) { mb(0.1, 2.4, 0.1, SX + sd * 1.0, 1.35, SZ - 2.1, rail); const gl = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), globe); gl.position.set(SX + sd * 1.0, 2.7, SZ - 2.1); g.add(gl); }
+          const sm = new THREE.MeshBasicMaterial({ map: E.textTex('SUBWAY  ① ② ③', { w: 512, h: 96, color: '#f4f1e6', font: '700 60px "Hind",sans-serif', bg: '#101010' }) }); sm.userData.lin = true; const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.36), sm); sg.position.set(SX, 1.35, SZ - 2.16); sg.rotation.y = Math.PI; g.add(sg); }
+        // a food cart and a newsstand
+        { const FX = 8.7, FZ = CZ + 13; mb(1.0, 1.1, 2.0, FX, 0.7, FZ, E.mat('#c9ced4', { metal: 0.8, rough: 0.3 })); mb(0.04, 0.5, 1.6, FX - 0.52, 1.0, FZ, E.basic('#fff2d0'), false);
+          const um = new THREE.Mesh(new THREE.ConeGeometry(1.4, 0.5, 8), E.mat('#2457c5', { rough: 0.6 })); um.position.set(FX, 2.6, FZ); g.add(um); mb(0.05, 2.2, 0.05, FX, 1.5, FZ, E.mat('#9aa0a8'), false); p.addBox(FX, FZ, 0.6, 1.1);
+          const sm = new THREE.MeshBasicMaterial({ map: E.textTex('HALAL FOOD', { w: 512, h: 96, color: '#d23a2a', font: '700 64px "Hind",sans-serif', bg: '#ffe14f' }) }); sm.userData.lin = true; const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.3), sm); sg.position.set(FX - 0.53, 1.45, FZ); sg.rotation.y = -Math.PI / 2; g.add(sg); }
+        { const NX = -9.6, NZ = CZ - 12; mb(1.6, 2.4, 2.6, NX, 1.35, NZ, E.mat('#1f4a32', { rough: 0.6 })); mb(0.05, 1.0, 2.2, NX + 0.81, 1.3, NZ, E.mat('#e8e2d0', { rough: 0.8 }), false);
+          for (let i = 0; i < 10; i++) mb(0.03, 0.32, 0.22, NX + 0.84, 1.05 + Math.floor(i / 5) * 0.4, NZ - 0.9 + (i % 5) * 0.42, E.mat(['#d23a2a', '#2457c5', '#f2c21a', '#1f8a4a', '#eeece6'][i % 5]), false);
+          p.addBox(NX, NZ, 0.85, 1.35); }
+        // traffic lights and street signs at the four corners of the crossing
+        const red = E.basic('#ff3a2a'), amb = E.basic('#ffb02a'), grn = E.basic('#3aff8a'), off = E.mat('#1a1a1c', { rough: 0.5 }), poleM = E.mat('#2a2d32', { metal: 0.5, rough: 0.5 });
+        for (const [x, z, ax] of [[-6.8, CZ - 6.6, 0], [6.8, CZ + 6.6, 0], [-6.8, CZ + 6.6, 1], [6.8, CZ - 6.6, 1]]) {
+          mb(0.16, 5.6, 0.16, x, 3.0, z, poleM); p.addCircle(x, z, 0.2);
+          const toRoad = ax ? -Math.sign(z - CZ) : -Math.sign(x), arm = ax ? mb(0.12, 0.12, 3.6, x, 5.6, z + toRoad * 1.8, poleM) : mb(3.6, 0.12, 0.12, x + toRoad * 1.8, 5.6, z, poleM);
+          const hx = ax ? x : x + toRoad * 3.4, hz = ax ? z + toRoad * 3.4 : z;
+          mb(0.42, 1.2, 0.42, hx, 5.0, hz, E.mat('#2a2a2c', { rough: 0.5 }));
+          const lamps = [0.35, 0, -0.35].map((dy) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), off); l.position.set(hx, 5.0 + dy, hz); g.add(l); return l; });
+          mid.lights.push({ lamps, ax });
+          const sg = (txt, rotY, yy) => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, { w: 512, h: 96, color: '#f4f1e6', font: '700 60px "Hind",sans-serif', bg: '#1f6a3a' }), side: THREE.DoubleSide }); m.userData.lin = true; const s = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.34), m); s.position.set(x, yy, z); s.rotation.y = rotY; g.add(s); };
+          sg('BROADWAY', Math.PI / 2, 3.4); sg('W 46 ST', 0, 3.8);
+        }
+        mid.lampM = { red, amb, grn, off };
+        // steam out of the manholes
+        const holes = [[-2, CZ + 16], [2.6, CZ - 14], [-1, CZ - 6]], SN = 60, sp = new Float32Array(SN * 3);
+        holes.forEach(([x, z]) => { const mh = new THREE.Mesh(new THREE.CircleGeometry(0.42, 16), E.mat('#141416', { metal: 0.5, rough: 0.4 })); mh.rotation.x = -Math.PI / 2; mh.position.set(x, 0.045, z); g.add(mh); });
+        for (let i = 0; i < SN; i++) mid.steamP.push({ h: holes[i % holes.length], t: mr() * 3 });
+        const sgm = new THREE.BufferGeometry(); sgm.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+        const sm2 = new THREE.PointsMaterial({ map: E.dot(), color: new THREE.Color('#d8d4e0'), size: 1.6, transparent: true, opacity: 0.22, depthWrite: false }); sm2.userData.lin = true;
+        mid.steam = new THREE.Points(sgm, sm2); mid.steam.frustumCulled = false; g.add(mid.steam);
+        MB.flush();
+      }
+
       // The same city hanging upside down above the crossing
       const upside = new THREE.Group();
       upside.add(city.clone(), ground.clone(), stripes.clone(), bb.clone());
@@ -694,6 +779,7 @@
       p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;
+      const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), upV = new THREE.Vector3(0, 1, 0);
       p.update = (t, dt, f) => {
         kit.glow(0.35 + f.mid * 1.1);   // the outskirts
         buildings.forEach((b) => {
@@ -701,6 +787,14 @@
           const s = 0.55 + 0.45 * Math.sin(t * 2 + b.seed) * 0.3 + f.pulse * 0.7;
           b.nm.color.copy(b.nc).multiplyScalar(Math.min(1.6, s + 0.3));
         });
+        // Midtown: screens pulse with their bands, the ticker runs, cabs drive, people walk, the lights change, steam rises
+        mid.screens.forEach((s2) => { const v = 0.55 + band(f, s2.k * 3 % 24, 24) * 0.8 + Math.sin(t * 1.3 + s2.seed) * 0.08; s2.m.color.setRGB(v, v, v); });
+        if (mid.ticker) mid.ticker.offset.x = (t * 0.035) % 1;
+        mid.cabs.forEach((c) => { const z = c.c.position.z + c.dir * c.v * dt; c.c.position.z = c.dir > 0 ? (z > 18 ? -34 : z) : (z < -34 ? 18 : z); });
+        { const [pb, ph] = mid.peds; mid.ped.forEach((q, i) => { q.z += q.dir * q.v * dt; if (q.z > 14) q.z = -33; if (q.z < -33) q.z = 14; m4.compose(ps.set(q.x, 0.15 + Math.abs(Math.sin(t * 6 * q.v + q.ph)) * 0.04, q.z), qq.setFromAxisAngle(upV, q.dir > 0 ? 0 : Math.PI), sc.set(1, 1, 1)); pb.setMatrixAt(i, m4); ph.setMatrixAt(i, m4); }); pb.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true; }
+        { const ph2 = (t % 15) / 15, avenue = ph2 < 0.4 ? 'g' : ph2 < 0.5 ? 'a' : 'r', cross = ph2 < 0.5 ? 'r' : ph2 < 0.9 ? 'g' : 'a', L = mid.lampM;
+          mid.lights.forEach((lt) => { const st = lt.ax ? cross : avenue; lt.lamps[0].material = st === 'r' ? L.red : L.off; lt.lamps[1].material = st === 'a' ? L.amb : L.off; lt.lamps[2].material = st === 'g' ? L.grn : L.off; }); }
+        { const a = mid.steam.geometry.attributes.position; mid.steamP.forEach((q, i) => { q.t += dt * (0.6 + (i % 5) * 0.1); if (q.t > 3) q.t = 0; a.setXYZ(i, q.h[0] + Math.sin(q.t * 2 + i) * 0.25 * q.t, 0.2 + q.t * 1.3, q.h[1] + Math.cos(q.t * 1.7 + i) * 0.2 * q.t); }); a.needsUpdate = true; }
         light.intensity = 1.2 + f.bass * 5;
         light2.intensity = 0.8 + f.high * 4;
         if (f.beat && f.beats % 16 === 0 && t - lastFlip > 5) { rollTarget += Math.PI; lastFlip = t; }
