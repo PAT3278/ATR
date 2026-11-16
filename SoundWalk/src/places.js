@@ -764,7 +764,7 @@
       p.addCircle(DX, DZ, 2.5);
 
       // the roller coaster: a loop of track on the right, over a hill, with a four-car train
-      const pts = [[10, 2.7, -4], [17, 2.7, -3], [22, 3.6, -8], [22.5, 9, -16], [20, 10, -24], [14, 4, -31], [9.5, 2.9, -28], [10.5, 6, -20], [10, 4.6, -12]]   // high enough to walk under.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      const pts = [[10, 2.7, -4], [17, 2.7, -3], [22, 3.6, -8], [22.5, 9, -16], [20, 10, -24], [14, 4, -31], [9.5, 2.9, -28], [10.5, 6, -20], [10, 4.6, -12]].map(([x, y, z]) => new THREE.Vector3(x, y, z));   // high enough to walk under
       const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
       const track = new THREE.Mesh(new THREE.TubeGeometry(curve, 220, 0.2, 6, true), E.mat('#d24a3a', { metal: 0.4, rough: 0.4 })); track.castShadow = true; g.add(track);
       for (const off of [-0.5, 0.5]) { const pp = curve.getSpacedPoints(220).map((v, i, a) => { const t = curve.getTangentAt(i / 220), n = new THREE.Vector3(-t.z, 0, t.x).normalize(); return v.clone().addScaledVector(n, off).setY(v.y + 0.25); }); const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pp, true), 220, 0.05, 4, true), steel); g.add(rail); }
