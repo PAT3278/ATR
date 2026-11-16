@@ -423,9 +423,20 @@
           sign.position.set(x, Math.min(h - 0.5, 5.2), z + d / 2 + 0.07); g.add(sign);
           p.addBox(x, z, w / 2 + 0.1, d / 2 + 0.1);
         };
-        shed(-36, FZ - 14, 18, 9, 9, 1); shed(4, FZ - 14, 16, 9, 9, 2); shed(26, FZ - 14, 14, 8, 8, 3);
+        shed(-36, FZ - 14, 18, 9, 9, 1); shed(-14 + 33, FZ - 14, 10, 8, 8, 2); shed(33, FZ - 14, 10, 8, 8, 3);
+        // the middle is open: a square runs from the quay straight back through the town, so the street meets the water
+        { const SQX = 3, sqM = E.mat('#a69c8c', { map: E.tex('paving', 4, 8), rough: 0.9 });
+          const sq = E.plane(14, 54, sqM); sq.position.set(SQX, 0.05, FZ - 31); g.add(sq); p.pick(sq);
+          const clock = new THREE.Group(); clock.position.set(SQX, 0, FZ - 16); g.add(clock);
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 4.2, 8), iron); post.position.y = 2.1; clock.add(post);
+          const face = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.18, 20), white); face.rotation.x = Math.PI / 2; face.position.y = 4.3; clock.add(face);
+          for (const sd of [-1, 1]) { const hand = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.34, 0.02), iron); hand.position.set(0, 4.42, sd * 0.1); hand.rotation.z = sd * 0.9; clock.add(hand); }
+          p.addCircle(SQX, FZ - 16, 0.3);
+          for (const [x, z, ry] of [[SQX - 5, FZ - 22, Math.PI / 2], [SQX + 5, FZ - 22, -Math.PI / 2], [SQX - 5, FZ - 40, Math.PI / 2], [SQX + 5, FZ - 40, -Math.PI / 2]]) { E.bench(g, x, z, ry); p.addBox(x, z, 0.4, 1.2); }
+          for (const [x, z] of [[SQX - 6, FZ - 30], [SQX + 6, FZ - 30], [SQX - 6, FZ - 48], [SQX + 6, FZ - 48]]) { const tr = new THREE.Mesh(new THREE.SphereGeometry(1.3, 9, 7), E.mat('#5a7a44', { flat: true })); tr.position.set(x, 2.8, z); tr.scale.y = 1.2; tr.castShadow = true; g.add(tr); const tk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 2, 6), E.mat('#5a4030')); tk.position.set(x, 1, z); g.add(tk); p.addCircle(x, z, 0.3); }
+          port.square = { x0: SQX - 7, x1: SQX + 7 }; }
         // a dock crane and stacks of containers (where there is sky above)
-        const cranes = [[42, FZ - 6], [-8, FZ - 6]].filter(([x, z]) => roof(x, z, 6) > 30);
+        const cranes = [[42, FZ - 6], [-8, FZ - 6]].filter(([x, z]) => roof(x, z, 6) > 30 && Math.abs(x - 3) > 9);
         cranes.slice(0, 1).forEach(([x, z]) => {
           for (const [a, c] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) pb(0.45, 16, 0.45, x + a, 8, z + c, red);
           pb(5, 0.8, 5, x, 16.3, z, red); pb(1.2, 0.8, 26, x, 17, z + 4, red); pb(2.6, 2.2, 2.4, x, 15, z - 1.5, white);
@@ -434,7 +445,7 @@
           p.addCircle(x - 2.2, z - 2.2, 0.4); p.addCircle(x + 2.2, z - 2.2, 0.4); p.addCircle(x - 2.2, z + 2.2, 0.4); p.addCircle(x + 2.2, z + 2.2, 0.4);
         });
         const boxC = ['#2e5c7a', '#b8402e', '#d9a53a', '#3f7a52', '#7a3f6a', '#c8c4b8'].map((c) => E.mat(c, { rough: 0.7, metal: 0.2 }));
-        [[-20 + 26, FZ - 25], [38, FZ - 25]].forEach(([cx, cz]) => {
+        [[-24, FZ - 25], [38, FZ - 25]].forEach(([cx, cz]) => {
           const lim = roof(cx, cz, 7);
           for (let i = 0; i < 4; i++) for (let lv = 0; lv < 3; lv++) { if ((lv + 1) * 2.6 > lim || pr() < lv * 0.3) continue; pb(6, 2.55, 2.4, cx, 1.3 + lv * 2.6, cz - 3.6 + i * 2.45, boxC[Math.floor(pr() * boxC.length)]); }
           p.addBox(cx, cz + 0.1, 3.1, 5);
@@ -451,7 +462,7 @@
         const tiles = [E.mat('#4a3a34', { rough: 0.7 }), E.mat('#3a4048', { rough: 0.7 }), E.mat('#7a3a2a', { rough: 0.7 })];
         for (const [z0, flip] of [[FZ - 34, 1], [FZ - 47, -1]]) for (let x = -48; x < 48;) {
           const w = 4.2 + pr() * 2.6, d = 7, fl = 2 + Math.floor(pr() * 2), xc = x + w / 2; x += w + (pr() < 0.18 ? 3.5 : 0.25);
-          if (Math.abs(xc - BX) < 4.5 || Math.abs(xc) > 47) continue;
+          if (Math.abs(xc - BX) < 4.5 || Math.abs(xc) > 47 || (xc + w / 2 > port.square.x0 - 0.5 && xc - w / 2 < port.square.x1 + 0.5)) continue;   // the square stays open
           const lim = roof(xc, z0, d / 2), h = Math.min(fl * 3, lim - 2.2); if (h < 3) continue;
           const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), walls[Math.floor(pr() * walls.length)]); b.position.set(xc, h / 2, z0); b.castShadow = b.receiveShadow = true; g.add(b);
           const rf = new THREE.Mesh(prism(w + 0.5, 1.6, d + 0.5), tiles[Math.floor(pr() * tiles.length)]); rf.position.set(xc, h, z0); rf.castShadow = true; g.add(rf);

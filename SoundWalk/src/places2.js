@@ -803,7 +803,7 @@
   PLACES.ohh = {
     build(p, E) {
       const g = p.group, r = E.rng(151);
-      let tunnelLamps = null, chanMap = [], chanWater = null;
+      let tunnelLamps = null, chanMap = [], chanWater = null; const harbourLamps = [], harbourBoats = [];
       const HR = 36, HH = 12, PL = 9, RZ = -15, RH = 12, HALF = 60;   // the road is level with the top of the hill
       const height = (lx, lz) => {
         const d = Math.hypot(lx, lz);
@@ -960,11 +960,69 @@
       p.water(0, -230, 350, 190);
       const beach = E.plane(260, 8, E.mat('#e2cf9e', { map: E.tex('sand', 60, 2) }));
       beach.position.set(0, 0.06, -37); g.add(beach);
+      // A fishing harbour where the river comes out of the tunnel into the sea: two rubble breakwaters with a beacon at
+      // each head (red and white), a concrete wharf along the beach split by the river mouth with a footbridge over it,
+      // fishing boats moored along it, a fish market under an open roof, crates, nets drying on racks and buoys.
+      const HB = { x0: -56, x1: 14, z0: -41, mouth: [-36, -9] };
+      const inHarbour = (x, z) => x > HB.x0 - 8 && x < HB.x1 + 8 && z < -38 && z > -92;
+      {
+        const HBB = E.batch(g), hb = HBB.box, hr = E.rng(4646), concH = E.mat('#9a968e', { map: E.tex('concrete', 4, 1), rough: 0.9 }), ironH = E.mat('#22252a', { metal: 0.6, rough: 0.5 }), wood = E.mat('#6e5137', { rough: 0.85 });
+        // breakwaters: a line of big rocks with a concrete cap, out from the beach and hooking round to the mouth
+        const arms = [[[HB.x0, -40], [HB.x0 - 2, -62], [HB.x0 + 6, -80], [HB.mouth[0], -84]], [[HB.x1, -40], [HB.x1 + 2, -60], [HB.x1 - 4, -78], [HB.mouth[1], -83]]];
+        const rockG = E.rockGeo(5), rocks = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), eu = new THREE.Euler();
+        arms.forEach((A, k) => {
+          const cv = new THREE.CatmullRomCurve3(A.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), L = cv.getLength(), n = Math.round(L / 1.6);
+          cv.getSpacedPoints(n).forEach((v, i) => { for (const off of [-1.8, 0, 1.8]) { const t = cv.getTangentAt(i / n), s2 = 1.3 + hr() * 0.8; rocks.push([v.x - t.z * off + (hr() - 0.5), s2 * 0.35, v.z + t.x * off + (hr() - 0.5), s2]); } p.addCircle(v.x, v.z, 2.4); });
+          const capPts = cv.getSpacedPoints(Math.round(L / 3));
+          capPts.forEach((v, i) => { if (i === capPts.length - 1) return; const w2 = capPts[i + 1], len = Math.hypot(w2.x - v.x, w2.z - v.z), cap = hb(2.2, 0.5, len + 0.3, (v.x + w2.x) / 2, 1.15, (v.z + w2.z) / 2, concH); cap.rotation.y = Math.atan2(w2.x - v.x, w2.z - v.z); });
+          // a beacon at the head: red on one arm, white on the other
+          const hd = A[A.length - 1], col = k ? '#d24a3a' : '#eeece6';
+          const tw = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 6, 12), E.mat(col, { rough: 0.6 })); tw.position.set(hd[0], 4.2, hd[1]); tw.castShadow = true; g.add(tw);
+          hb(1.8, 0.2, 1.8, hd[0], 7.3, hd[1], ironH); const lm = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.7, 10), new THREE.MeshBasicMaterial({ color: k ? '#ff5a3a' : '#9fff9a' })); lm.position.set(hd[0], 7.8, hd[1]); g.add(lm); harbourLamps.push(lm);
+        });
+        const rockIM = new THREE.InstancedMesh(rockG, rockD, rocks.length);
+        rocks.forEach(([x, y, z, s2], i) => { eu.set(hr() * 3, hr() * 3, 0); q.setFromEuler(eu); rockIM.setMatrixAt(i, m4.compose(ps.set(x, y, z), q, sc.set(s2, s2 * 0.8, s2))); });
+        rockIM.castShadow = rockIM.receiveShadow = true; g.add(rockIM);
+        // the wharf along the beach, either side of the river mouth, and a footbridge across it
+        const CX = chan ? chan.P[chan.P.length - 1][0] : -22;
+        for (const [x0, x1] of [[HB.x0 + 1, CX - 6.5], [CX + 6.5, HB.x1 - 1]]) {
+          const L2 = x1 - x0; hb(L2, 0.9, 6, (x0 + x1) / 2, 0.25, -43.5, concH);
+          for (let x = x0 + 2; x < x1 - 1; x += 5) { hb(0.3, 0.45, 0.3, x, 0.92, -46.2, ironH); }
+          for (let x = x0 + 1; x < x1 - 1; x += 3.2) hb(0.3, 1.6, 0.3, x, -0.3, -46.6, wood, false);   // the timber fender piles
+        }
+        p.ground = ((g0) => (lx, lz, y) => (lz < -40.5 && lz > -46.5 && lx > HB.x0 && lx < HB.x1 && Math.abs(lx - CX) > 6.5 ? 0.7 : g0(lx, lz, y)))(p.ground);
+        { const br = hb(14, 0.3, 2.2, CX, 1.6, -42.5, wood); for (const sd of [-1, 1]) hb(14, 0.9, 0.08, CX, 2.2, -42.5 + sd * 1.05, ironH, false); for (const x of [CX - 6.6, CX + 6.6]) { hb(2.2, 1.6, 2.2, x, 0.8, -42.5, concH); } }
+        // fishing boats moored along the wharf
+        const boatC = ['#2e5c7a', '#b8402e', '#eeece6', '#3f7a52', '#d9a53a'];
+        [[-50, 0], [-43, 1], [-31, 2], [-12, 3], [-2, 4], [7, 0]].forEach(([x, k]) => {
+          const b = new THREE.Group(), hull = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.1, 2.3), E.mat(boatC[k % 5], { rough: 0.6 })); hull.position.y = 0.3; b.add(hull);
+          const bow = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.6, 4), hull.material); bow.rotation.z = -Math.PI / 2; bow.rotation.x = Math.PI / 4; bow.position.set(4, 0.3, 0); b.add(bow);
+          const wh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.5, 1.6), E.mat('#eeece6', { rough: 0.6 })); wh.position.set(-1.2, 1.6, 0); b.add(wh);
+          const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 4.5, 6), ironH); mast.position.set(1.2, 3, 0); b.add(mast);
+          const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3, 6), ironH); boom.rotation.z = 1.1; boom.position.set(2.2, 3.4, 0); b.add(boom);
+          for (let f = 0; f < 4; f++) { const fl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), E.mat(f % 2 ? '#ef7a1a' : '#eeece6')); fl.position.set(-2.4 + f * 1.4, 0.95, 1.2); b.add(fl); }
+          b.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+          b.position.set(x, 0, -49); b.rotation.y = Math.PI / 2 + (hr() - 0.5) * 0.1; b.rotation.y = 0; g.add(b); harbourBoats.push({ b, s: x });
+          p.addBox(x, -49, 3.6, 1.3);
+        });
+        // the fish market: an open roof on posts, tables of fish in ice, stacks of crates
+        { const MX = -44, MZ = -37.5; hb(12, 0.25, 6, MX, 4.2, MZ, E.mat('#3a5a6a', { metal: 0.3, rough: 0.5 }));
+          for (const x of [MX - 5.6, MX, MX + 5.6]) for (const z of [MZ - 2.8, MZ + 2.8]) { hb(0.22, 4.1, 0.22, x, 2.05, z, ironH); p.addCircle(x, z, 0.25); }
+          for (let k = 0; k < 3; k++) { hb(3, 0.85, 1.2, MX - 4 + k * 4, 0.43, MZ, E.mat('#d8dce0', { metal: 0.5, rough: 0.3 })); for (let f = 0; f < 6; f++) hb(0.42, 0.1, 0.16, MX - 5.2 + k * 4 + f * 0.48, 0.9, MZ + (hr() - 0.5) * 0.6, E.mat(['#8a9aa8', '#c0603a', '#d9c2a0'][f % 3], { metal: 0.3, rough: 0.35 }), false); p.addBox(MX - 4 + k * 4, MZ, 1.6, 0.7); }
+          const sgn = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.9), new THREE.MeshBasicMaterial({ map: E.textTex('魚市場', { w: 512, h: 96, color: '#f2ead8', font: '700 70px "Noto Serif JP",serif' }), transparent: true })); sgn.position.set(MX, 3.7, MZ - 3.05); sgn.rotation.y = Math.PI; g.add(sgn);
+          const crateM = [E.mat('#2e5c7a', { rough: 0.7 }), E.mat('#d9a53a', { rough: 0.7 }), E.mat('#3f7a52', { rough: 0.7 })];
+          for (let k = 0; k < 14; k++) { const x = MX + 7 + (k % 4) * 0.7, z = MZ - 2 + Math.floor(k / 4) * 0.55, y = 0.2 + (k % 2) * 0.4; hb(0.65, 0.38, 0.5, x, y, z, crateM[k % 3]); }
+          p.addBox(MX + 8, MZ - 1, 1.6, 1.4);
+          // nets drying on racks
+          for (let k = 0; k < 2; k++) { const x = MX + 14 + k * 4; for (const sx of [-1.5, 1.5]) hb(0.12, 2.2, 0.12, x + sx, 1.1, MZ, wood); hb(3.2, 0.08, 0.08, x, 2.2, MZ, wood); const net = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.8), new THREE.MeshStandardMaterial({ color: '#4a6a5a', transparent: true, opacity: 0.75, side: THREE.DoubleSide, roughness: 1 })); net.position.set(x, 1.3, MZ); g.add(net); p.addBox(x, MZ, 1.6, 0.2); }
+        }
+        HBB.flush();
+      }
       // Sea stacks and the far mountains
       for (let i = 0; i < 9; i++) {
         const s = 4 + r() * 9;
         const m = new THREE.Mesh(E.rockGeo(i + 2), rockD); m.scale.setScalar(s);
-        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); m.scale.y = s * (1.6 + r()); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
+        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); if (inHarbour(m.position.x, m.position.z)) { m.position.x += 90; } m.scale.y = s * (1.6 + r()); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
       }
       const mtnM = E.mat('#6f86a6', { flat: true });
       for (let i = 0; i < 9; i++) {
@@ -1030,6 +1088,8 @@
       p.update = (t, dt, f, v, viewing) => {
         sea.material.uniforms.t.value = t;
         if (chanWater) chanWater.normalMap.offset.set(t * 0.012, t * 0.02);
+        harbourBoats.forEach((o) => { o.b.position.y = Math.sin(t * 1.1 + o.s) * 0.07; o.b.rotation.z = Math.sin(t * 0.8 + o.s) * 0.03; });
+        harbourLamps.forEach((m, i) => { m.visible = Math.sin(t * 2.2 + i * 1.7) > -0.2 || f.pulse > 0.5; });
         sea.material.uniforms.level.value += (f.level - sea.material.uniforms.level.value) * Math.min(1, dt * 6);
         const target = viewing ? 28 + f.level * 30 + f.pulse * 6 : 0;
         speed += (target - speed) * Math.min(1, dt * (viewing ? 1.2 : 4));
