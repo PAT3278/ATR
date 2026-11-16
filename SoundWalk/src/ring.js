@@ -118,8 +118,10 @@
       pas.push(pa);
     };
     // rect = where the CAR'S CENTRE may be; it overlaps the road's own band so the two join up
-    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -2.6, hx: 3.25, hz: 6.1 }, { lx: 2.3, lz: -2.2, dx: -0.42, dz: -0.91 }, 4.7 + 7.8, { cx: 0, cz: -1.3, hx: 3.8, hz: 6.8 }, { x0: -4.2, x1: 4.2, z1: 5.9 }, { zr: -7, zt: -1, add: 9 });   // parked nosing towards the way out
-    if (ohh) addPA('ohh', ohh, H_OHH, { cx: 0, cz: -10.55, hx: 9, hz: 1.65 }, { lx: 3, lz: -9.3, dx: -1, dz: 0 }, 9.6, { cx: 0, cz: -9.25, hx: 8.6, hz: 1.0 }, { x0: -11.2, x1: 11.2, z1: -7.75 });
+    // both are lay-bys beside the carriageway in the style of the Shuto's Komagata PA: a long taper at each end and
+    // stalls at sixty degrees; your car waits in one of them, nosing towards the way out (see places2.js parkingArea)
+    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -4.7, hx: 24, hz: 4.1 }, { lx: 6, lz: -3.6, dx: 0.87, dz: -0.5 }, 38, { cx: 0, cz: 2.7, hx: 2.3, hz: 3 }, { x0: -24.5, x1: 24.5, z1: -0.7 }, { zr: -7.1, zt: -4.8, add: 12 });
+    if (ohh) addPA('ohh', ohh, H_OHH, { cx: 0, cz: -7.9, hx: 18, hz: 4.5 }, { lx: 4, lz: -7.2, dx: 0.87, dz: -0.5 }, 30, { cx: 0, cz: -2.5, hx: 7, hz: 1.4 }, { x0: -18.5, x1: 18.5, z1: -4.2 }, { zr: -10.6, zt: -8.3, add: 10 });
 
     const R = {
       N, L, ds, X, Y, Z, TX, TZ, HW, GAP, pas, frames: { shot, ohh, field, tama }, H_SHOT, H_OHH,

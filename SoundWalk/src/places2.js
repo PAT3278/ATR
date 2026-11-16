@@ -710,6 +710,58 @@
   /* ------------------------------------------------------------------ */
   /* SHOT — night run on an elevated expressway                          */
   /* ------------------------------------------------------------------ */
+  /* A small expressway parking area in the style of the Shuto's Komagata PA: a lay-by beside the carriageway with long
+     tapers in and out, stalls painted at an angle, a little building with toilets and glowing vending machines, a bench,
+     tall lamps and a few cars parked. In the place's frame; the road runs along x with its inner edge at z = zr.
+       o: { y, zr, depth, half, taper, name, kiosk: [x0, x1], walkway: [x0, x1, z1] | null, ground(lx, lz), skip(lx, lz), slotX } */
+  function parkingArea(p, E, g, o) {
+    const { y, zr, depth, half, taper } = o, zb = zr + depth, BB = E.batch(g), bx = BB.box, rr = E.rng(9191);
+    const asph = E.mat('#3a3a3e', { map: E.tex('asphalt', 1, 1), rough: 0.85 }), conc = E.mat('#8a8680', { map: E.tex('concrete', 1, 1), rough: 0.9 }), concD = E.mat('#5a5754'), rail = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 }), paint = E.basic('#e9e4d6');
+    // the deck: a trapezoid, wide at the road (the tapers) and the stalls' depth along the middle
+    { const sh = new THREE.Shape(), T = 2.2; sh.moveTo(-half - taper, -zr); sh.lineTo(half + taper, -zr); sh.lineTo(half, -(zr + T)); sh.lineTo(half, -zb); sh.lineTo(-half, -zb); sh.lineTo(-half, -(zr + T)); sh.lineTo(-half - taper, -zr);
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.6, bevelEnabled: false }); geo.rotateX(-Math.PI / 2); geo.translate(0, y - 0.6, 0);
+      const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 6, uv.getY(i) / 6);
+      const deck = new THREE.Mesh(geo, [asph, concD]); deck.receiveShadow = deck.castShadow = true; g.add(deck); p.pick(deck); }
+    if (o.kiosk) { const [k0, k1] = o.kiosk; bx(k1 - k0, 0.6, 4.4, (k0 + k1) / 2, y - 0.3, zb + 2.2, conc); }
+    if (o.walkway) { const [w0, w1, wz] = o.walkway; bx(w1 - w0, 0.6, wz - zb, (w0 + w1) / 2, y - 0.3, (zb + wz) / 2, conc); }
+    // paint: a dashed line along the road edge and stalls at sixty degrees, nosing towards the way out (+x)
+    for (let x = -half - taper + 2; x < half + taper - 2; x += 3) bx(1.6, 0.02, 0.12, x, y + 0.012, zr + 0.25, paint, false);
+    const stallZ = zb - 2.6, stalls = [];
+    for (let x = -half + 3; x <= half - 3; x += 2.9) { const l = bx(0.1, 0.02, 5.2, x, y + 0.012, stallZ, paint, false); l.rotation.y = -0.52; stalls.push(x + 1.45); }
+    bx(half * 2, 0.02, 0.12, 0, y + 0.012, zb - 0.25, paint, false);
+    // the back rail (open where you walk in), and a low barrier on the road side that only stops people on foot
+    const openings = [o.walkway ? [o.walkway[0], o.walkway[1]] : null, o.kiosk ? [o.kiosk[0] - 0.5, o.kiosk[1] + 0.5] : null, ...(o.open || [])].filter(Boolean);
+    let xs = -half; const cuts = openings.slice().sort((a, b) => a[0] - b[0]);
+    for (const [a, b] of cuts.concat([[half, half]])) { if (a > xs + 0.3) { bx(a - xs, 1.05, 0.12, (a + xs) / 2, y + 0.52, zb, rail); p.addBox((a + xs) / 2, zb, (a - xs) / 2, 0.2); } xs = Math.max(xs, b); }
+    for (const sd of [-1, 1]) { const len = Math.hypot(taper, depth - 2.2), r2 = bx(len, 1.05, 0.12, sd * (half + taper / 2), y + 0.52, zr + 2.2 + (depth - 2.2) / 2, rail); r2.rotation.y = sd * Math.atan2(depth - 2.2, taper); }
+    p.addBox(0, zr + 0.45, half + taper, 0.2);
+    // the building: toilets on one side, vending machines glowing under a deep roof, a bench
+    if (o.kiosk) {
+      const [k0, k1] = o.kiosk, kx = (k0 + k1) / 2, kz = zb + 2.4, W = k1 - k0 - 1;
+      bx(W, 3.0, 3.2, kx, y + 1.5, kz + 0.4, E.mat('#d8d4cc', { rough: 0.8 })); bx(W + 2, 0.25, 4.6, kx, y + 3.15, kz - 0.1, E.mat('#3a3d42', { rough: 0.5 }));
+      p.addBox(kx, kz + 0.4, W / 2 + 0.1, 1.7);
+      const sign = (txt, w, x, yy, z, col, bg) => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, { w: 512, h: 96, color: col, bg, font: '700 62px "Hind","Noto Sans JP",sans-serif' }), transparent: true }); m.userData.lin = true; const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.19), m); s.position.set(x, yy, z); s.rotation.y = Math.PI; g.add(s); };
+      sign(o.name, 4, kx, y + 3.55, kz - 2.42, '#f4f1e6', '#1f55b8');
+      sign('トイレ  WC', 2.2, kx - W / 4, y + 2.6, kz - 1.22, '#1a1a1c', '#f4f1e6');
+      bx(0.9, 2.2, 0.05, kx - W / 4, y + 1.1, kz - 1.21, E.mat('#5a6a7a', { rough: 0.6 }), false);
+      const vend = ['#f4f1e6', '#d23a2a', '#2457c5'].map((c) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(c).convertSRGBToLinear().multiplyScalar(0.9) }); m.userData.lin = true; return m; });
+      for (let k = 0; k < 3; k++) { const vx = kx + 0.4 + k * 1.05; bx(0.95, 1.85, 0.75, vx, y + 0.93, kz - 1.55, E.mat('#e4e2dc', { rough: 0.5 })); bx(0.75, 1.1, 0.02, vx, y + 1.15, kz - 1.93, vend[k], false); }
+      p.addBox(kx + 1.45, kz - 1.55, 1.6, 0.4);
+      E.bench(g, kx - W / 2 + 0.8, kz - 1.8, Math.PI, y);
+    }
+    // lamps along the back, and pillars under the deck where it stands out over lower ground
+    for (let x = -half + 2; x <= half - 2; x += 14) { bx(0.16, 7.5, 0.16, x, y + 3.75, zb - 0.3, concD); bx(0.2, 0.1, 2.2, x, y + 7.45, zb - 1.3, concD); bx(0.6, 0.12, 0.35, x, y + 7.35, zb - 2.3, E.basic('#ffd9a0'), false); p.addCircle(x, zb - 0.3, 0.15); }
+    for (let x = -half - taper + 4; x <= half + taper - 4; x += 8) for (const z of [zr + 1.2, zb - 1.2]) {
+      if (z > zr + 2.2 && Math.abs(x) > half - 0.5) continue;
+      const g0 = o.ground ? o.ground(x, z) : 0; if (y - g0 < 1.6 || (o.skip && o.skip(x, z))) continue;
+      bx(0.7, y - 0.6 - g0, 0.7, x, g0 + (y - 0.6 - g0) / 2, z, concD); p.addCircle(x, z, 0.45, -1e9, y - 1);
+    }
+    // a few cars already parked (not in the stall the game parks yours in)
+    if (SW.Cars) { let n = 0; for (const sx of stalls) { if (Math.abs(sx - o.slotX) < 4 || rr() < 0.55 || n >= 3) continue; const car = SW.Cars.make(E, Math.floor(rr() * 7)); car.position.set(sx, y, stallZ + 0.2); car.rotation.y = Math.PI / 2 - 0.52; g.add(car); n++; } }
+    BB.flush();
+    return { stallZ };
+  }
+
   PLACES.shot = {
     build(p, E) {
       const g = p.group, r = E.rng(131);
@@ -721,34 +773,16 @@
       const ramp = new THREE.Mesh(new THREE.BoxGeometry(5, 0.5, rampLen), conc);
       ramp.position.set(0, H / 2 - 0.25, 16); ramp.rotation.x = ang; ramp.castShadow = ramp.receiveShadow = true;
       g.add(ramp); p.pick(ramp);
-      const plat = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.5, 14.5), conc);
-      plat.position.set(0, H - 0.25, -1.2); plat.castShadow = plat.receiveShadow = true;
-      g.add(plat); p.pick(plat);
-      for (const [x, z] of [[-3.6, -7], [3.6, -7], [-3.6, 4], [3.6, 4]]) {
-        const pl = new THREE.Mesh(new THREE.BoxGeometry(0.8, H, 0.8), concD); pl.position.set(x, H / 2, z); g.add(pl);
-      }
-      const railM = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 });
-      const rail = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.05, d), railM); m.position.set(x, H + 0.5, z); g.add(m); };
-      rail(-4.3, 2.5, 0.12, 7.1); rail(4.3, 2.5, 0.12, 7.1);   // the far end is open: it is the parking area's way onto the ring road
-      // ...and it flares out towards the road on both sides, so a car can turn in (and out) at an angle
-      for (const sd of [-1, 1]) {
-        const tri = [[sd * 4.3, -1], [sd * 13.3, -7.2], [sd * 4.3, -7.2]], pos = [], top = H, bot = H - 0.5;
-        const V = (x, y, z) => pos.push(x, y, z), quad = (a, b, yA, yB) => { V(a[0], yA, a[1]); V(b[0], yA, b[1]); V(b[0], yB, b[1]); V(a[0], yA, a[1]); V(b[0], yB, b[1]); V(a[0], yB, a[1]); };
-        if (sd > 0) { V(...[tri[0][0], top, tri[0][1]]); V(...[tri[2][0], top, tri[2][1]]); V(...[tri[1][0], top, tri[1][1]]); } else { V(...[tri[0][0], top, tri[0][1]]); V(...[tri[1][0], top, tri[1][1]]); V(...[tri[2][0], top, tri[2][1]]); }
-        quad(tri[0], tri[1], top, bot); quad(tri[1], tri[0], bot, top);
-        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
-        const m = conc.clone(); m.side = THREE.DoubleSide; const w = new THREE.Mesh(geo, m); w.castShadow = w.receiveShadow = true; g.add(w); p.pick(w);
-        const len = Math.hypot(9, 6.2), dr = new THREE.Mesh(new THREE.BoxGeometry(len, 1.05, 0.12), railM); dr.position.set(sd * 8.8, H + 0.5, -4.1); dr.rotation.y = sd * Math.atan2(6.2, 9); g.add(dr);
-        const pl = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), concD); pl.position.set(sd * 7.5, H / 2, -5.6); g.add(pl);
-        p.addCircle(sd * 7.5, -5.6, 0.5, -1e9, H - 1);
-      }
+      // the parking area beside the expressway, reached on foot by the ramp
+      parkingArea(p, E, g, { y: H, zr: -7, depth: 6.4, half: 24, taper: 12, name: 'SHOT PA', kiosk: [9, 18], walkway: [-2.5, 2.5, 6], slotX: 6 });
       p.ground = (lx, lz) => {
         if (Math.abs(lx) < 2.6 && lz >= 6 && lz <= 26) return (H * (26 - lz)) / 20;
-        if (Math.abs(lx) < 4.4 && lz >= -8.6 && lz < 6) return H;
+        if (lz >= -7.2 && lz <= -0.6 && Math.abs(lx) < 24 + 12 * Math.max(0, Math.min(1, (-4.8 - lz) / 2.2))) return H;   // the lay-by and its tapers
+        if (Math.abs(lx) < 2.6 && lz > -0.6 && lz <= 6) return H;    // the walkway to the ramp
+        if (lx > 9 && lx < 18 && lz > -0.6 && lz < 3.8) return H;    // in front of the building
         return 0;
       };
-      p.addBox(0, -8.7, 4.6, 0.25); p.addBox(-3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(-4.55, -1.2, 0.25, 7.6); p.addBox(4.55, -1.2, 0.25, 7.6);   // on foot you stay off the road
-      { const hz = E.basic('#d8b020'); for (const x of [-3.6, -1.2, 1.2, 3.6]) { const st = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.02, 0.22), hz); st.position.set(x, H + 0.012, -7.9); st.rotation.y = 0.6; g.add(st); } }
+      p.addBox(-3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(-2.75, 2.7, 0.2, 3.2); p.addBox(2.75, 2.7, 0.2, 3.2);   // the walkway's sides
       p.addBox(-2.85, 16, 0.25, 10); p.addBox(2.85, 16, 0.25, 10);
 
       // The expressway. In the world it is a stretch of the ring road (drawn by the game); this straight copy is
@@ -894,7 +928,7 @@
       const heightC = (lx, lz) => height(lx, lz) * carve(lx, lz);
       p.noPier = (lx, lz) => chanD(lx, lz) < 8;   // the ring road steps over the channel
       // Inside the tunnel (low down, within the channel) the ground is the water; anywhere else, the hill.
-      p.ground = (lx, lz, y) => (Math.abs(lx) < 9.2 && lz < -7.9 && lz > -10.6 ? RH + 0.03 : y !== undefined && y < 4 && inChan(lx, lz) && height(lx, lz) > 0.2 ? 0 : heightC(lx, lz));
+      p.ground = (lx, lz, y) => (lz < -4.1 && lz > -10.7 && Math.abs(lx) < 18 + 10 * Math.max(0, Math.min(1, (-8.3 - lz) / 2.2)) ? RH + 0.03 : lx > 9 && lx < 17 && lz >= -4.1 && lz < 0.3 ? RH + 0.03 : y !== undefined && y < 4 && inChan(lx, lz) && height(lx, lz) > 0.2 ? 0 : heightC(lx, lz));
       const hg = new THREE.RingGeometry(0.01, HR, 120, 48);
       const hp = hg.attributes.position;
       for (let i = 0; i < hp.count; i++) {
@@ -924,7 +958,7 @@
         if (chanD(lx, lz) < s + 8) continue;   // nothing over or in the tunnel
         const m = new THREE.Mesh(E.rockGeo(i), r() < 0.5 ? rockM : rockD); m.scale.setScalar(s);
         m.position.set(lx, height(lx, lz) + s * 0.3, lz); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true;
-        if (lz + s > RZ - 4.5 && lz - s < (Math.abs(lx) < 9.2 + s ? -7.9 : RZ + 4.5) && height(lx, lz) + s * 1.3 > RH - 0.9) continue;   // it would poke up through the road or the lay-by
+        if (lz + s > RZ - 4.5 && lz - s < (Math.abs(lx) < 28 + s ? 0.5 : RZ + 4.5) && height(lx, lz) + s * 1.3 > RH - 0.9) continue;   // it would poke up through the road or the lay-by
         g.add(m); p.addCircle(lx, lz, s * 0.8);
       }
       if (chan) {
@@ -998,7 +1032,7 @@
       // the craft can run out of the tunnel to the sea.
       for (let x = -30; x < 30; x += 2) { if (chanD(x + 1, -10.85) > 7) p.addBox(x + 1, -10.85, 1, 0.2, -1e9, RH - 2.5); }
       for (let x = -14; x < 14; x += 2) for (let z = -19.9; z < -10.7; z += 2.3) { if (chanD(x + 1, z + 1.15) > 6.5) p.addBox(x + 1, z + 1.15, 1, 1.15); }   // on foot you stay off the road
-      { const lay = E.plane(18.4, 2.75, E.mat('#4a4a4e', { map: E.tex('asphalt', 6, 1), rough: 0.85 })); lay.position.set(0, RH + 0.03, -9.2); g.add(lay); p.pick(lay); }
+      parkingArea(p, E, g, { y: RH + 0.03, zr: -10.5, depth: 6.4, half: 18, taper: 10, name: 'OHH PA', kiosk: [9, 17], walkway: null, open: [[-9, 8.5]], slotX: 4, ground: (lx, lz) => heightC(lx, lz), skip: (lx, lz) => inChan(lx, lz) || chanD(lx, lz) < 7 });   // the hill top behind it is open to walk on
       E.bench(g, 3.2, -5.6, Math.PI, HH);
       p.addBox(3.2, -5.6, 1.2, 0.4);
 
