@@ -660,18 +660,28 @@
     spots.forEach((sp, i) => { const k = Math.floor(r() * CELLS); kinds[k].push(sp); });
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
     const tints = ['#7f8a76', '#8a9177', '#6f7a68', '#8e8a70', '#9a9078', '#7a7f70'].map(lin);   // muted, in the survival-horror palette
+    // The crowns are lifted off the ground on a bare trunk, so the lowest branches start above head height and
+    // you can see through the woods between the trunks.
+    const trunks = [], trunkGeo = new THREE.CylinderGeometry(0.55, 1, 1, 7, 1, true).translate(0, 0.5, 0);
     kinds.forEach((list, k) => {
       if (!list.length) return;
       const im = new THREE.InstancedMesh(cardGeo(k), treeM, list.length);
       list.forEach(([x, z, s], j) => {
-        const h = (9 + r() * 7) * s / Math.max(...ASPECT[k].map((a) => Math.min(1, 0.5 / a)));   // so the tree itself, not its card, is 8-14 m
-        q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, 0, z); sc.set(h, h, h);
+        const ht = (9 + r() * 7) * s, h = ht / Math.max(...ASPECT[k].map((a) => Math.min(1, 0.5 / a)));   // so the tree itself, not its card, is 8-14 m
+        const lift = Math.max(2.8, ht * 0.26) * (0.9 + r() * 0.25);   // bare trunk below the first branches
+        q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, lift, z); sc.set(h, h, h);
+        trunks.push([x, z, lift + ht * 0.45, (0.13 + r() * 0.06) * s]);
         im.setMatrixAt(j, m4.compose(ps, q, sc)); im.setColorAt(j, col.copy(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85 + r() * 0.3));
         circles.push({ x, z, r: 0.3 * s });
       });
       im.castShadow = im.receiveShadow = true; im.customDepthMaterial = depthM;
       scene.add(im);
     });
+    {
+      const tm = new THREE.InstancedMesh(trunkGeo, mat('#6b5f52', { map: tex('bark', 1, 3), rough: 0.95 }), trunks.length);
+      trunks.forEach(([x, z, th, rad], j) => { q.setFromAxisAngle(up, r() * 6.28); ps.set(x, 0, z); sc.set(rad, th, rad); tm.setMatrixAt(j, m4.compose(ps, q, sc)); });
+      tm.castShadow = tm.receiveShadow = true; scene.add(tm);
+    }
   }
 
   /* ================= per-place beacons, labels, signposts ================= */
