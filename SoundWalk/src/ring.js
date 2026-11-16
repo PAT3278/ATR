@@ -208,7 +208,7 @@
         roadFrom('inL', r1.map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
         roadFrom('inR', r2(JA.hw).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),
         roadFrom('outL', mirror([[84, 5.9, 0], [68, 6.6, 0], [52, 8.6, 0.05], [38, 12, 0.6], [24, 15.5, 1.4], [13, 21, 2.1], [6, 27.5, 2.8], [RW, 34, 3.5], [RW, 38, 3.55]]).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane; the west deck lies lower, so this one is longer
-        roadFrom('outR', mirror(r2W).map((p) => JB(...p)), RW, { oneLane: true, opens: 'left' }),
+        roadFrom('outR', mirror(r2W).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // mirrored, the side towards the loop stays the same
       ];
       const all = [B, ...ramps];
       // where a ramp lies on the loop's deck: no walls on the ramp; the loop's median drops where a ramp runs along it, and
@@ -216,12 +216,18 @@
       R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N); R.OGAP = new Uint8Array(N);
       for (const Rd of ramps) for (let i = 0; i < Rd.N; i++) {
         const j = nearest(Rd.X[i], Rd.Z[i]), dx = Rd.X[i] - X[j], dz = Rd.Z[i] - Z[j], d = dx * TZ[j] - dz * TX[j], dy = Rd.Y[i] - Y[j];
-        if (dy > 2.2 || Math.abs(d) > HW[j] + Rd.HW[i]) continue;
-        if (Rd.opens === 'left') Rd.OGAP[i] = 1; else Rd.GAP[i] = 1;   // the far side keeps its wall: for a median ramp that wall is the median
-        for (let k = -1; k <= 1; k++) { const q = (j + k + N) % N; if (Math.abs(d) < Rd.HW[i] + 0.6) R.MGAP[q] = 1; if (d < -(HW[j] - 2.2) && d > -(HW[j] + Rd.HW[i])) { GAP[q] = 1; R.JGAP[q] = 1; } if (d > HW[j] - 2.2 && d < HW[j] + Rd.HW[i]) R.OGAP[q] = 1; }
+        // walls open only where the two decks really join: level with each other, and the ramp reaching over the loop's
+        // edge. Where the ramp has climbed away or runs alongside with a gap, both keep their walls.
+        const ad = Math.abs(d), RW0 = Rd.HW[i];
+        if (Math.abs(dy) > 0.6 || ad - RW0 > HW[j] - 0.2) continue;
+        if (Rd.opens === 'left') Rd.OGAP[i] = 1; else Rd.GAP[i] = 1;   // the far side keeps its wall
+        const straddles = ad - RW0 < HW[j] - 0.5 && ad + RW0 > HW[j] + 1.2;   // a ramp just grazing the edge leaves the wall standing
+        for (let k = -1; k <= 1; k++) { const q = (j + k + N) % N; if (ad < RW0 + 0.6) R.MGAP[q] = 1; if (straddles && d < 0) { GAP[q] = 1; R.JGAP[q] = 1; } if (straddles && d > 0) R.OGAP[q] = 1; }
       }
       // where two of the new roads meet (a ramp joining the route), no walls between them either
       for (const A of all) for (const Bb of all) { if (A === Bb) continue; for (let i = 0; i < A.N; i++) { const j = Bb.nearest(A.X[i], A.Z[i]); const wx = Bb.X[j] - A.X[i], wz = Bb.Z[j] - A.Z[i], sd = wx * A.TZ[i] - wz * A.TX[i];
+        const along = -(wx * Bb.TX[j] + wz * Bb.TZ[j]);   // past the other road's end there is nothing to join
+        if ((j === Bb.N - 1 && along > 0.5) || (j === 0 && along < -0.5)) continue;
         if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(wx, wz) < A.HW[i] + Bb.HW[j] + 0.3) { if (sd > -1) A.OGAP[i] = 1; if (sd < 1) A.GAP[i] = 1; } } }   // only the side that faces the other road
       R.branch = B; R.ramps = ramps; R.roads = [R, ...all];
       const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), ...all.map((q) => q.dist(x, z)));
