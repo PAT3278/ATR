@@ -793,9 +793,8 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
     {
         case Skin::deck:
         {
-            // a small rectangular LED set into the key's top-left
-            // a bar LED behind a small lens, set into the key's top-left
-            const auto led = Rectangle<float> (13.0f, 3.5f).withPosition (cap.getX() + 8.0f, cap.getY() + 5.0f);
+            // a bar LED behind a small lens, set into the key's top-right, clear of the icon and legend
+            const auto led = Rectangle<float> (13.0f, 3.5f).withPosition (cap.getRight() - 21.0f, cap.getY() + 5.0f);
             g.setColour (Colours::black.withAlpha (0.7f));
             g.fillRoundedRectangle (led.expanded (1.0f), 1.5f);
             if (on)
@@ -809,7 +808,7 @@ void drawToggleButton (Graphics& g, ToggleButton& b, bool highlighted, bool down
             g.fillRoundedRectangle (led, 1.0f);
             g.setColour (Colours::white.withAlpha (on ? 0.7f : 0.18f));
             g.fillRect (led.reduced (1.5f, 0.0f).withHeight (0.8f).translated (0.0f, 0.5f));
-            textArea = textArea.withTrimmedTop (5.0f);
+            textArea = textArea.withTrimmedRight (14.0f);
             break;
         }
         case Skin::receiver:
