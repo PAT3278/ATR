@@ -749,9 +749,13 @@
         const a = (i / NG) * Math.PI * 2;
         for (const sd of [-0.75, 0.75]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.08, WR, 0.08), steel); sp.position.set((Math.cos(a) * WR) / 2, (Math.sin(a) * WR) / 2, sd); sp.rotation.z = a - Math.PI / 2; wheel.add(sp); }
         const gp = new THREE.Group(); gp.position.set(Math.cos(a) * WR, Math.sin(a) * WR, 0); wheel.add(gp);
-        const cab = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 1.2), C[i % C.length]); cab.position.y = -1.0; cab.castShadow = true; gp.add(cab);
-        const rf = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.5, 4), white); rf.position.y = -0.25; rf.rotation.y = Math.PI / 4; gp.add(rf);
-        const hang = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 5), dark); hang.position.y = -0.1; gp.add(hang);
+        // an open cabin big enough to stand in: a floor, half walls in the cabin's colour, four posts and a roof
+        const cm = C[i % C.length];
+        const fl = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 1.3), dark); fl.position.y = -2.15; gp.add(fl);
+        for (const [x, z, w, d] of [[0, 0.62, 1.8, 0.06], [0, -0.62, 1.8, 0.06], [0.87, 0, 0.06, 1.3], [-0.87, 0, 0.06, 1.3]]) { const wl = new THREE.Mesh(new THREE.BoxGeometry(w, 0.85, d), cm); wl.position.set(x, -1.68, z); wl.castShadow = true; gp.add(wl); }
+        for (const [x, z] of [[0.85, 0.6], [-0.85, 0.6], [0.85, -0.6], [-0.85, -0.6]]) { const po = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.85, 0.06), steel); po.position.set(x, -1.2, z); gp.add(po); }
+        const rf = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.14, 1.45), cm); rf.position.y = -0.25; rf.castShadow = true; gp.add(rf);
+        const hang = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 5), dark); hang.position.y = -0.05; gp.add(hang);
         gond.push(gp);
       }
       const rimL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 64); rimL.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(64 * 3), 3);
@@ -808,7 +812,13 @@
       p.pathEnd = 12;
       p.clearR = 12;
       p.blocks = (lx, lz) => Math.abs(lx) < 26 && lz > -36 && lz < 14;
-      SW.parkRide = { wheel, gond, grade: p.grade };
+      SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(0, WZ + 2.8) };
+      // ride the carousel: walk up to the platform, climb onto an outside horse
+      const hv = new THREE.Vector3(), hq = new THREE.Quaternion(), hf = new THREE.Vector3();
+      p.ride = {
+        board: () => p.toWorld(0, CZ + 6.2),
+        seat: (v) => { const h = horses[1].h; h.getWorldPosition(v); v.y -= 0.62; h.getWorldQuaternion(hq); hf.set(0, 0, 1).applyQuaternion(hq); return Math.atan2(hf.x, hf.z); },
+      };
 
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
       let drop = { y: 2, v: 0, st: 'up', wait: 0 };
@@ -851,6 +861,11 @@
       p.blocks = (lx, lz) => Math.hypot(lx, lz) < 3;   // the park around it is the carousel's place
       p.map = []; p.update = () => {};
       let ride = -1, lastT = -1e9;
+      p.ride = {   // board the cabin at the bottom and ride it round
+        board: () => (SW.parkRide ? SW.parkRide.board() : p.toWorld(0, 0)),
+        pick: () => { const R = SW.parkRide; let lo = 1e9; R.gond.forEach((gp, i) => { gp.getWorldPosition(v); if (v.y < lo) { lo = v.y; ride = i; } }); },
+        seat: (o) => { const R = SW.parkRide; R.gond[Math.max(0, ride)].getWorldPosition(o); o.y -= 2.1; const b = R.board(); return Math.atan2(o.x - b.x, o.z - b.z) + Math.PI; },
+      };
       p.shot = (t) => {
         const R = SW.parkRide; if (!R) return { pos: [0, 2, 0], look: [0, 2, -5], roll: 0 };
         if (t - lastT > 0.5) {   // just got on: board the cabin at the bottom, then ride it round

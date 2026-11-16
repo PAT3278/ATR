@@ -1642,6 +1642,7 @@
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
+    if (mode === 'ride') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); endRide(); } return; }
     if (mode !== 'walk') return;
     const k = KEYMAP[e.code];
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
@@ -1659,7 +1660,7 @@
   cv.addEventListener('pointerdown', (e) => {
     if (mode === 'dialog') { advance(); return; }
     if (mode === 'pool' && pool) { pool.drag = { id: e.pointerId, x: e.clientX }; try { cv.setPointerCapture(e.pointerId); } catch (_) { /* */ } return; }
-    if (mode !== 'walk') return;
+    if (mode !== 'walk' && mode !== 'ride') return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
     try { cv.setPointerCapture(e.pointerId); } catch (_) { /* */ }
   });
@@ -1718,7 +1719,8 @@
     else if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
     padPrev = pressed;
     padRun = !!(pressed[7] || pressed[5] || pressed[2]); padBrake = !!(pressed[6] || pressed[4]); padGas = !!pressed[7]; padFast = !!(pressed[5] || pressed[2]);
-    if (mode === 'walk') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
+    if (mode === 'ride' && down(1)) endRide();
+    if (mode === 'walk' || mode === 'ride') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
@@ -1727,7 +1729,7 @@
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
   function act(ia) {
     auto = null; keys.clear();
-    if (ia.kind === 'view') { enterView(ia.place); return; }
+    if (ia.kind === 'view') { if (ia.place.ride) startRide(ia.place); else enterView(ia.place); return; }
     if (ia.kind === 'board') { openMap(); return; }
     if (ia.kind === 'car') { startDrive(ia.pa); return; }
     if (ia.kind === 'exit') { endDrive(ia.pa); return; }
@@ -1764,6 +1766,43 @@
   const camLook = new THREE.Vector3();
   let camBlend = 1, camBlendDur = 1;
   function snapCam() { camFrom.pos.copy(camera.position); camFrom.look.copy(camLook); camFrom.up.copy(camera.up); camBlend = 0; }
+  // Riding: a place may offer a ride instead of a fixed view (p.ride: board() -> world spot, pick(), seat(v) -> yaw).
+  // You walk to the boarding spot, climb on, and ride it with the camera free to look round (drag / right stick);
+  // Esc, B or the back button gets you off. The song plays as it does in a view.
+  let ride = null;
+  const rv = new THREE.Vector3();
+  function startRide(p) {
+    const R = p.ride; if (!R || mode !== 'walk') return;
+    enterView(p); viewPlace = null; mode = 'ride';   // the song card, without the fixed camera
+    document.body.classList.remove('viewing'); document.body.classList.add('riding'); camBlend = 1;
+    R.pick && R.pick();
+    ride = { p, st: 'walk', t: 0, from: null, b: R.board() };
+  }
+  function endRide() {
+    if (!ride || ride.st === 'off') return;
+    ride.st = 'off'; ride.t = 0; ride.from = { x: P.x, y: P.y, z: P.z };
+  }
+  function rideTick(dt) {
+    const r = ride; if (!r) return;
+    if (r.st === 'walk') {
+      const dx = r.b.x - P.x, dz = r.b.z - P.z, d = Math.hypot(dx, dz);
+      if (d < 0.15) { r.st = 'climb'; r.t = 0; r.from = { x: P.x, y: P.y, z: P.z }; P.speed = 0; }
+      else { const s = Math.min(d, dt * 3.2); P.x += (dx / d) * s; P.z += (dz / d) * s; P.face = Math.atan2(dx, dz); P.speed = 3.2; }
+      return;
+    }
+    const yaw = r.p.ride.seat(rv);
+    if (r.st === 'climb') {
+      r.t = Math.min(1, r.t + dt / 0.9); const k = ease(r.t);
+      P.x = r.from.x + (rv.x - r.from.x) * k; P.z = r.from.z + (rv.z - r.from.z) * k; P.y = r.from.y + (rv.y - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.5;
+      P.face += wrapA(yaw - P.face) * Math.min(1, dt * 8);
+      if (r.t >= 1) { r.st = 'on'; toast('ドラッグで見回せます · Esc で降りる', 3200); }
+    } else if (r.st === 'on') { P.x = rv.x; P.y = rv.y; P.z = rv.z; P.face = yaw; P.speed = 0; }
+    else if (r.st === 'off') {
+      r.t = Math.min(1, r.t + dt / 0.8); const k = ease(r.t), g0 = groundAt(r.b.x, r.b.z);
+      P.x = r.from.x + (r.b.x - r.from.x) * k; P.z = r.from.z + (r.b.z - r.from.z) * k; P.y = r.from.y + (g0 - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.4;
+      if (r.t >= 1) { ride = null; mode = 'walk'; P.y = g0; $('#view').hidden = true; document.body.classList.remove('busy', 'viewing', 'riding'); collide(P); cv.focus({ preventScroll: true }); }
+    }
+  }
   function enterView(p) {
     snapCam(); camBlendDur = RM ? 0.01 : 1.6;
     mode = 'view'; viewPlace = p;
@@ -1805,7 +1844,7 @@
     $('#view').hidden = true;
     cv.focus({ preventScroll: true });
   }
-  $('#backBtn').addEventListener('click', exitView);
+  $('#backBtn').addEventListener('click', () => (mode === 'ride' ? endRide() : exitView()));
 
   async function checkout(s, btn) {
     btn.disabled = true;
@@ -1941,7 +1980,7 @@
     let loud = null;
     places.forEach((p) => {
       const dx = p.vx - P.x, dz = p.vz - P.z, d = Math.hypot(dx, dz);
-      const viewing = viewPlace === p;
+      const viewing = viewPlace === p || (ride && ride.p === p);
       // Behind the wheel the car radio picks up whichever song you are driving past: by direction, not distance.
       const radio = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
       const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), radio * 0.85);
@@ -2046,6 +2085,7 @@
     }
     const gh = groundAt(P.x, P.z, P.y);
     if (drv) { /* the car sets the height */ }
+    else if (ride) rideTick(dt);   // the ride sets it
     else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);

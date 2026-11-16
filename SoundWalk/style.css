@@ -251,3 +251,6 @@ body.viewing #bars i { height: 10vh; }
 .pool-how { margin: 0; font-family: var(--f-head); font-size: 12px; letter-spacing: .08em; color: var(--dim); text-align: center; }
 .pool-how .touch { display: none; } @media (hover: none) { .pool-how .pc { display: none; } .pool-how .touch { display: inline; } }
 #poolMsg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--red); padding: 16px 22px; font-family: var(--f-head); font-size: 20px; letter-spacing: .12em; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+
+/* riding: the song card shrinks to a corner so you can look round */
+body.riding #view .card { transform: scale(.62); transform-origin: left bottom; opacity: .92; }
