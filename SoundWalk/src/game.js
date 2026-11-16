@@ -2030,5 +2030,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
