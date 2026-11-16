@@ -905,10 +905,31 @@
             bxp(5, 3.2, 0.8, -R - 3.6, 1.6, 0.3); bxp(5, 3.2, 0.8, R + 3.6, 1.6, 0.3);
             g.add(por);
           }
+          // a headwall round each mouth: a stone face from the water to above the hill line, with the arch cut out of it,
+          // so the slope over the bore never shows a gap
+          p.mouths = [[first, -1], [last, 1]].map(([i, out]) => { const [x, z] = P[i], [tx, tz] = tan(i), w = p.toWorld(x + tx * out * 12, z + tz * out * 12), m = p.toWorld(x, z); return { from: [w.x, w.z], at: [m.x, m.z] }; });   // for tests
+          for (const [i, out] of [[first, -1], [last, 1]]) {
+            const [x, z] = P[i], [tx, tz] = tan(i), WW = R + 8, HH = 9.5, sh = new THREE.Shape();
+            sh.moveTo(-WW, 0); sh.lineTo(WW, 0); sh.lineTo(WW, HH); sh.lineTo(-WW, HH); sh.lineTo(-WW, 0);
+            const hole = new THREE.Path(); hole.moveTo(-R, 0); hole.lineTo(-R, 1.6); hole.absellipse(0, 1.6, R, HV - 1.6, Math.PI, 0, true); hole.lineTo(R, 0); hole.lineTo(-R, 0); sh.holes.push(hole);
+            const hw = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 1.6, bevelEnabled: false }), stone); hw.castShadow = hw.receiveShadow = true;
+            const fr = new THREE.Group(); fr.position.set(x + tx * out * 0.4, 0, z + tz * out * 0.4); fr.rotation.y = Math.atan2(tx, tz) + (out > 0 ? 0 : Math.PI); hw.position.z = -0.8; fr.add(hw); g.add(fr);
+          }
           // keep walkers and craft inside the bore: its walls are solid below the hill
           for (let i = first; i <= last; i++) { const [x, z] = P[i], [tx, tz] = tan(i); for (const sd of [-1, 1]) p.addCircle(x - tz * sd * (R + 0.8), z + tx * sd * (R + 0.8), 1.1, -1e9, 4); }
           tunnelLamps = { lampM, lamps };
         }
+        // rock banks along the open channel, from the water's edge up to where the hill's own surface takes over
+        { const pos = [], uv = [], bankM = E.mat('#8a8070', { map: E.tex('rock', 1, 1), rough: 0.95 });
+          for (const sd of [-1, 1]) for (let i = 0; i < n - 1; i++) {
+            if (first >= 0 && i >= first && i < last) continue;   // inside the bore its walls do this
+            const q = [i, i + 1].map((k) => { const [x, z] = P[k], [tx, tz] = tan(k), ix = x - tz * sd * (W - 0.2), iz = z + tx * sd * (W - 0.2), ox = x - tz * sd * (W + 2.6), oz = z + tx * sd * (W + 2.6); return [ix, 0.0, iz, ox, Math.max(0.4, heightC(ox, oz)) + 0.05, oz]; });
+            const [a0, b0] = [q[0], q[1]], tri = (A, B, C) => { pos.push(...A, ...B, ...C); uv.push(A[0] / 3, A[2] / 3, B[0] / 3, B[2] / 3, C[0] / 3, C[2] / 3); };
+            const ai = a0.slice(0, 3), ao = a0.slice(3), bi = b0.slice(0, 3), bo = b0.slice(3);
+            if (sd > 0) { tri(ai, bi, ao); tri(ao, bi, bo); } else { tri(ai, ao, bi); tri(ao, bo, bi); }
+          }
+          const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.computeVertexNormals();
+          const bank = new THREE.Mesh(geo, bankM); bank.material.side = THREE.DoubleSide; bank.receiveShadow = true; g.add(bank); }
         chanMap = P.filter((_, i) => i % 2 === 0).map(([x, z]) => ({ t: 'circle', x, z, r: W, c: '#3f6f9e' }));
       }
       // Overlook: guardrail at the edge, a bench
