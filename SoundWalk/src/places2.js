@@ -469,6 +469,8 @@
           const ng = new THREE.BufferGeometry(); ng.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); h.add(new THREE.LineSegments(ng, chainM));
           addC(CT.x, pz, 0.3);
         }
+        // where to stand for free throws, and where the rims are (in the world), for the game's free-throw challenge
+        p.freeThrow = [-1, 1].map((sd) => { const bz = CT.z + sd * CT.L / 2, rim = toL(CT.x, bz - sd * 1.58), spot = toL(CT.x, bz - sd * 5.8), rw = p.toWorld(rim[0], rim[1]), sw = p.toWorld(spot[0], spot[1]); return { rim: { x: rw.x, y: 3.05, z: rw.z }, spot: { x: sw.x, z: sw.z } }; });
         // a ball left by the free-throw line
         const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), E.mat('#c8602a', { rough: 0.7 })); ball.position.set(CT.x + 1.4, 0.17, CT.z - CT.L / 2 + 6.2); ball.castShadow = true; cg.add(ball);
         // chain-link: on the brownstone side, at the expressway end, and along the open end with a gate in it

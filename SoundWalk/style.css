@@ -229,3 +229,25 @@ body.viewing #bars i { height: 10vh; }
 #phone.counter .ph-h { font-size: 15px; }
 #phone.counter .st-row { padding: 10px 10px 10px 14px; font-size: 17px; }
 @media (max-width: 420px) { .st-row { flex-wrap: wrap; } .st-acts { width: 100%; justify-content: flex-end; } }
+
+/* ---------- mini-games ---------- */
+#mgame { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 22px); top: 50%; transform: translateY(-50%); z-index: 6; width: 150px; padding: 14px 14px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--red); box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, .6); font-family: var(--f-head); display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+#mgame .mi-h { display: flex; flex-direction: column; gap: 4px; }
+#mgame .mi-h b { font-weight: 400; letter-spacing: .25em; font-size: 13px; color: var(--red); }
+#miScore { font-size: 13px; letter-spacing: .08em; white-space: pre-line; line-height: 1.5; }
+.mi-meter { position: relative; height: 210px; width: 26px; align-self: center; background: #141412; border: 1px solid var(--line); }
+.mi-meter .zone { position: absolute; left: 0; right: 0; bottom: 80%; height: 10%; background: rgba(134, 181, 58, .55); }
+.mi-meter.hot .zone { background: rgba(160, 230, 70, .9); }
+#miMark { position: absolute; left: -6px; right: -6px; height: 4px; background: var(--bone); box-shadow: 0 0 6px rgba(255, 255, 255, .7); bottom: 0; }
+#miSay { margin: 0; min-height: 20px; text-align: center; font-size: 17px; letter-spacing: .14em; }
+.mi-acts { display: flex; flex-direction: column; gap: 6px; }
+.mi-acts .btn { justify-content: center; font-size: 14px; padding: 8px 10px 6px; }
+@media (hover: none) { .mi-acts kbd { display: none; } #mgame { left: 12px; width: 132px; } .mi-meter { height: 160px; } }
+#pool { position: absolute; inset: 0; z-index: 8; background: rgba(6, 6, 5, .92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; }
+.pool-top { display: flex; align-items: center; gap: 18px; font-family: var(--f-head); letter-spacing: .12em; width: 100%; max-width: 980px; }
+.pool-t { color: var(--red); letter-spacing: .3em; }
+.pool-top #poolX { margin-left: auto; }
+#poolCv { touch-action: none; cursor: crosshair; display: block; }
+.pool-how { margin: 0; font-family: var(--f-head); font-size: 12px; letter-spacing: .08em; color: var(--dim); text-align: center; }
+.pool-how .touch { display: none; } @media (hover: none) { .pool-how .pc { display: none; } .pool-how .touch { display: inline; } }
+#poolMsg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--red); padding: 16px 22px; font-family: var(--f-head); font-size: 20px; letter-spacing: .12em; display: flex; flex-direction: column; gap: 12px; align-items: center; }

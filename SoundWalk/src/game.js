@@ -542,6 +542,51 @@
     shopAt.deck = deck;
   }
 
+  // The pool hall, in the next widest gap round the plaza: a brick room with an open front, one table under a lamp.
+  const hallAt = (() => {
+    const dirs = places.map((p) => Math.atan2(p.x, p.z)).concat([Math.atan2(shopAt.ux, shopAt.uz)]); let bestA = 0, bestG = -1;
+    for (let k = 0; k < 360; k++) { const a = (k * Math.PI) / 180, gp = Math.min(...dirs.map((d) => Math.abs(Math.atan2(Math.sin(a - d), Math.cos(a - d))))); if (gp > bestG) { bestG = gp; bestA = a; } }
+    const R0 = PLAZA_R + 4.6, ux = Math.sin(bestA), uz = Math.cos(bestA);
+    return { x: ux * R0, z: uz * R0, yaw: Math.atan2(-ux, -uz), ux, uz };
+  })();
+  {
+    const S = new THREE.Group(); S.position.set(hallAt.x, 0, hallAt.z); S.rotation.y = hallAt.yaw;
+    const W = 7, D = 5.2, H = 3.6, brick = mat('#6e4a3e', { map: tex('brick', 1.8, 1) }), trim = mat('#16171a', { rough: 0.5, metal: 0.3 }), glass = gloss('#0c1013', { rough: 0.06, metal: 0.5, env: 1 });
+    const put = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; S.add(o); return o; };
+    put(new THREE.BoxGeometry(W, H, 0.3), brick, 0, H / 2, -D / 2 + 0.15);
+    for (const sd of [-1, 1]) put(new THREE.BoxGeometry(0.3, H, D), brick, sd * (W / 2 - 0.15), H / 2, 0);
+    put(new THREE.BoxGeometry(W + 0.3, 0.35, D + 0.5), trim, 0, H + 0.17, 0.1);
+    put(new THREE.BoxGeometry(W, 0.9, 0.12), trim, 0, H - 0.45, D / 2);
+    for (const x of [-W / 2 + 0.1, -0.9, 0.9, W / 2 - 0.1]) put(new THREE.BoxGeometry(0.12, H - 0.9, 0.14), trim, x, (H - 0.9) / 2, D / 2);
+    put(new THREE.BoxGeometry(W / 2 - 1.0, H - 1.5, 0.04), glass, -(W / 4 + 0.45), 0.6 + (H - 1.5) / 2, D / 2 - 0.02);
+    put(new THREE.BoxGeometry(W / 2 - 1.0, H - 1.5, 0.04), glass, W / 4 + 0.45, 0.6 + (H - 1.5) / 2, D / 2 - 0.02);
+    put(new THREE.BoxGeometry(W - 0.3, 0.06, D - 0.3), mat('#2a2420', { rough: 0.8 }), 0, 0.03, 0);
+    // the table: green cloth, wooden rails, turned legs, a rack of balls, two cues on the wall
+    const TX = 0, TZ = -0.5, felt = mat('#1d6a50', { rough: 0.95 }), wood = mat('#4a2a1a', { rough: 0.55 });
+    put(new THREE.BoxGeometry(2.5, 0.12, 1.3), felt, TX, 0.82, TZ);
+    for (const [x, z, w, d] of [[0, -0.72, 2.7, 0.14], [0, 0.72, 2.7, 0.14], [-1.32, 0, 0.14, 1.58], [1.32, 0, 0.14, 1.58]]) put(new THREE.BoxGeometry(w, 0.16, d), wood, TX + x, 0.9, TZ + z);
+    put(new THREE.BoxGeometry(2.3, 0.6, 1.1), wood, TX, 0.46, TZ);
+    for (const [x, z] of [[-1.15, -0.55], [1.15, -0.55], [-1.15, 0.55], [1.15, 0.55]]) put(new THREE.CylinderGeometry(0.08, 0.06, 0.5, 8), wood, TX + x, 0.25, TZ + z);
+    const cols = ['#f1c232', '#2457c5', '#d23a2a', '#5b2d8f', '#ef7a1a', '#1f8a4a', '#7a1f22', '#111111'];
+    let k = 0; for (let row = 0; row < 5; row++) for (let i = 0; i <= row; i++) put(new THREE.SphereGeometry(0.03, 10, 8), mat(cols[k++ % 8], { rough: 0.25 }), TX + 0.55 + row * 0.052, 0.91, TZ + (i - row / 2) * 0.061);
+    put(new THREE.SphereGeometry(0.03, 10, 8), mat('#f4f1e6', { rough: 0.25 }), TX - 0.6, 0.91, TZ);
+    for (const x of [-1.6, -1.45]) { const cueS = put(new THREE.CylinderGeometry(0.012, 0.02, 1.45, 6), mat('#c9a06a', { rough: 0.5 }), x, 1.4, -D / 2 + 0.36); cueS.rotation.z = 0.05; }
+    const lampM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe7b8').convertSRGBToLinear().multiplyScalar(1.4) }); lampM.userData.lin = true;
+    put(new THREE.BoxGeometry(1.6, 0.18, 0.5), mat('#1f5a40', { rough: 0.5 }), TX, 2.25, TZ); put(new THREE.BoxGeometry(1.5, 0.04, 0.42), lampM, TX, 2.15, TZ);
+    for (const sd of [-1, 1]) put(new THREE.CylinderGeometry(0.01, 0.01, H - 2.4, 4), trim, TX + sd * 0.6, 2.3 + (H - 2.4) / 2, TZ);
+    const tl = new THREE.PointLight(lin('#ffe2b0'), 1.3, 7, 1.8); tl.position.set(TX, 2.0, TZ); S.add(tl);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.8, 0.8), new THREE.MeshBasicMaterial({ map: textTex('POOL · BILLIARDS', { w: 1024, h: 140, font: '700 74px "Hind",sans-serif', color: '#c8ffe0', glow: '#4fff9a' }), transparent: true, depthWrite: false }));
+    sign.position.set(0, H - 0.45, D / 2 + 0.07); S.add(sign);
+    scene.add(S);
+    const c = Math.cos(hallAt.yaw), sn = Math.sin(hallAt.yaw), wpt = (lx, lz) => ({ x: hallAt.x + lx * c + lz * sn, z: hallAt.z - lx * sn + lz * c });
+    const addB = (lx, lz, hx, hz) => { const w = wpt(lx, lz); boxes.push({ x: w.x, z: w.z, hx, hz, c, s: sn }); };
+    addB(0, -D / 2 + 0.15, W / 2, 0.2); addB(-W / 2 + 0.15, 0, 0.2, D / 2); addB(W / 2 - 0.15, 0, 0.2, D / 2);
+    addB(-(W / 4 + 0.5), D / 2, W / 4 - 0.4, 0.15); addB(W / 4 + 0.5, D / 2, W / 4 - 0.4, 0.15);
+    addB(TX, TZ, 1.4, 0.8);
+    const at = wpt(0, D / 2 - 0.3);
+    interact.push({ kind: 'pool', x: at.x, z: at.z, sx: at.x, sz: at.z, r: 3, mark: 2.6 });
+  }
+
   const worldUpd = [(t) => { shopAt.deck.rotation.y = t * 3.5; }];   // the record on the shop's listening deck
   {
     const glowB = (c, o) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); m.userData.lin = true; return m; };
@@ -687,7 +732,7 @@
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if (Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
+      if (Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || Math.hypot(x - hallAt.x, z - hallAt.z) < 6.5 || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -1401,11 +1446,85 @@
     if (m > 1) { f /= m; s /= m; }
     return { f, s, m: Math.min(1, m) };
   }
+  /* ================= mini-games: free throws on FIELD's court, pool in the hall on the plaza ================= */
+  const MG_KEY = 'soundwalk-games';
+  const mgBest = (() => { try { return JSON.parse(localStorage.getItem(MG_KEY) || '{}') || {}; } catch (e) { return {}; } })();
+  const mgSave = () => { try { localStorage.setItem(MG_KEY, JSON.stringify(mgBest)); } catch (e) { /* storage blocked */ } };
+  const fieldPlace = places.find((q) => q.song.scene === 'field');
+  ((fieldPlace && fieldPlace.freeThrow) || []).forEach((h) => interact.push({ kind: 'hoop', hoop: h, x: h.spot.x, z: h.spot.z, sx: h.spot.x, sz: h.spot.z, r: 1.8, mark: 2.4 }));
+  // Free throws: a marker runs up and down the meter; stop it in the green band. On the beat of the music the band is
+  // a little more forgiving. Too low and the ball falls short off the front of the rim, too high and it comes off the board.
+  let hoop = null;
+  function hoopHud(say) {
+    $('#miScore').textContent = `${hoop.made} / ${hoop.shots}\nSTREAK ${hoop.streak}\nBEST ${mgBest.hoop || 0}`;
+    if (say !== undefined) $('#miSay').textContent = say;
+  }
+  function startHoop(h) {
+    mode = 'hoop'; keys.clear(); auto = null; document.body.classList.add('busy'); $('#prompt').hidden = true; lastFocus = undefined;
+    P.x = h.spot.x; P.z = h.spot.z; P.face = Math.atan2(h.rim.x - P.x, h.rim.z - P.z); P.speed = 0;
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), mat('#c8602a', { rough: 0.7 })); ball.castShadow = true; scene.add(ball);
+    hoop = { h, ball, st: 'aim', ph: Math.random() * 3, m: 0, wait: 0, segs: [], made: 0, shots: 0, streak: 0, dx: Math.sin(P.face), dz: Math.cos(P.face) };
+    $('#mgame').hidden = false; $('#miTitle').textContent = 'FREE THROW'; hoopHud('緑で止めてシュート');
+    camHold = (c) => { const H = hoop; if (!H) return; c.up.set(0, 1, 0); c.position.set(H.h.spot.x - H.dx * 3.6 + H.dz * 0.9, P.y + 2.4, H.h.spot.z - H.dz * 3.6 - H.dx * 0.9); c.lookAt(H.h.rim.x, 2.6, H.h.rim.z); };
+    if (!TOUCH) $('#miShoot').focus({ preventScroll: true });
+  }
+  function endHoop() {
+    if (!hoop) return;
+    scene.remove(hoop.ball); hoop = null; camHold = null;
+    mode = 'walk'; $('#mgame').hidden = true; document.body.classList.remove('busy');
+    snapCam(); camBlendDur = 0.6; cv.focus({ preventScroll: true });
+  }
+  function hoopShoot() {
+    const H = hoop; if (!H || H.st !== 'aim') return;
+    const pulse = (fieldPlace && fieldPlace.f && fieldPlace.f.pulse) || 0, tol = pulse > 0.5 ? 0.02 : 0, e = H.m - 0.85;
+    const R = H.h.rim, dx = H.dx, dz = H.dz, sx = -dz, sz = dx, side = (Math.random() - 0.5) * 1.6, at = (f, y, s = 0) => [R.x + dx * f + sx * s, y, R.z + dz * f + sz * s];
+    const hands = [P.x + dx * 0.35, 1.6, P.z + dz * 0.35];
+    let res, segs;
+    if (Math.abs(e) <= 0.05 + tol) { res = 'SWISH!'; segs = [[hands, at(0, R.y + 0.14), 0.95, 1.7], [null, at(0, 0.12), 0.45, 0], [null, at(-2.2, 0.12, side), 0.9, 0.5]]; }
+    else if (Math.abs(e) <= 0.1 + tol) { res = 'IN'; segs = [[hands, at(e < 0 ? -0.2 : 0.18, R.y + 0.1), 0.95, 1.7], [null, at(e < 0 ? 0.08 : -0.06, R.y + 0.42), 0.28, 0], [null, at(0, 0.12), 0.6, 0.15], [null, at(-2, 0.12, side), 0.9, 0.5]]; }
+    else if (e < 0) { res = 'SHORT'; segs = [[hands, at(-0.32, R.y + 0.04), 0.95, 1.6 + e], [null, at(-2.4, 0.12, side), 0.85, 0.7]]; }
+    else { res = 'LONG'; segs = [[hands, at(0.42, R.y + 0.55), 0.95, 1.5], [null, at(-0.5, R.y + 0.15, side * 0.4), 0.35, 0.2], [null, at(-1.8, 0.12, side), 0.6, 0.35]]; }
+    const made = res === 'SWISH!' || res === 'IN';
+    H.shots++; if (made) { H.made++; H.streak++; if (H.streak > (mgBest.hoop || 0)) { mgBest.hoop = H.streak; mgSave(); } } else H.streak = 0;
+    H.segs = segs.map(([a, b, dur, arc]) => ({ a, b, dur, arc, t: 0 })); H.st = 'fly'; H.res = res; H.said = false;
+    hoopHud('');
+  }
+  function hoopTick(dt) {
+    const H = hoop; if (!H) return;
+    const pulse = (fieldPlace && fieldPlace.f && fieldPlace.f.pulse) || 0;
+    $('.mi-meter').classList.toggle('hot', pulse > 0.5);
+    if (H.st === 'aim') {
+      H.ph += dt * 3.1; H.m = 0.5 - 0.5 * Math.cos(H.ph); $('#miMark').style.bottom = `${(H.m * 100).toFixed(1)}%`;
+      H.ball.position.set(P.x + H.dx * 0.35, 1.6 + Math.sin(H.ph * 2) * 0.03, P.z + H.dz * 0.35);
+    } else if (H.st === 'fly') {
+      const s = H.segs[0]; if (!s.a) s.a = H.ball.position.toArray();
+      s.t += dt; const k = Math.min(1, s.t / s.dur);
+      H.ball.position.set(s.a[0] + (s.b[0] - s.a[0]) * k, s.a[1] + (s.b[1] - s.a[1]) * k + s.arc * 4 * k * (1 - k), s.a[2] + (s.b[2] - s.a[2]) * k);
+      H.ball.rotation.x -= dt * 8;
+      if (k >= 1) {
+        H.segs.shift();
+        if (!H.said) { H.said = true; hoopHud(H.res); if (H.res === 'SWISH!' || H.res === 'IN') SW.Audio.chime && SW.Audio.chime(); }
+        if (!H.segs.length) { H.st = 'wait'; H.wait = 0.5; }
+        else if (!H.segs[0].a) H.segs[0].a = H.ball.position.toArray();
+      }
+    } else if (H.st === 'wait') { H.wait -= dt; if (H.wait <= 0) { H.st = 'aim'; hoopHud(''); } }
+  }
+  $('#miShoot').addEventListener('click', () => hoopShoot());
+  $('#miQuit').addEventListener('click', () => endHoop());
+  // Pool: the table opens over the screen (src/pool.js); the best is the fewest shots to clear it.
+  function startPool() {
+    if (!SW.Pool) return;
+    mode = 'pool'; keys.clear(); auto = null; document.body.classList.add('busy'); $('#prompt').hidden = true; lastFocus = undefined;
+    SW.Pool.open({ best: mgBest.pool || null, onBest(b) { mgBest.pool = b; mgSave(); }, onClose() { mode = 'walk'; document.body.classList.remove('busy'); cv.focus({ preventScroll: true }); } });
+  }
+
   addEventListener('keydown', (e) => {
     if (e.key === 'Shift') running = true;
     if (mode === 'title') { if (e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); start(); } return; }
     if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) closeMap(); } return; }
     if (mode === 'phone') { phoneKey(e); return; }
+    if (mode === 'hoop') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); endHoop(); } else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); hoopShoot(); } return; }
+    if (mode === 'pool') return;   // the table takes its own keys
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
@@ -1473,6 +1592,7 @@
     const dz = (v) => (Math.abs(v) < 0.18 ? 0 : v);
     const pressed = gp.buttons.map((b) => b.pressed);
     const down = (i) => pressed[i] && !padPrev[i];
+    if (mode === 'hoop') { if (down(0)) hoopShoot(); if (down(1)) endHoop(); }
     if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); else if (mode === 'phone') { const a = document.activeElement; if (a && $('#phone').contains(a)) a.click(); } }
     if (mode === 'phone') { if (down(12) || down(14)) phoneFocus(-1); else if (down(13) || down(15)) phoneFocus(1); }
     if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
@@ -1485,7 +1605,7 @@
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
-  function pressA() { if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else if (!drv) jump(); } }
+  function pressA() { if (mode === 'hoop') { hoopShoot(); return; } if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else if (!drv) jump(); } }
   $('#btnB').addEventListener('pointerdown', (e) => { e.preventDefault(); dashOn = !dashOn; $('#btnB').classList.toggle('on', dashOn); });
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
   function act(ia) {
@@ -1497,6 +1617,8 @@
     if (ia.kind === 'info') { say(ia.lines.slice()); return; }
     if (ia.kind === 'travel') { openConfirm(ia); return; }
     if (ia.kind === 'store') { openStore(); return; }
+    if (ia.kind === 'hoop') { startHoop(ia.hoop); return; }
+    if (ia.kind === 'pool') { startPool(); return; }
     if (ia.kind === 'sign') {
       const p = ia.place, s = p.song;
       say([`この道の先：${s.place}（${s.placeEn}）`, p.found ? `♪ ${s.title} が流れている場所。近づくほど音が大きくなる。` : 'どんな曲が流れているかは、行ってみないとわからない。']);
@@ -1824,7 +1946,7 @@
       $('#prompt').hidden = !fkey; $('#prompt').className = fkey ? 'k-' + fkey.kind : '';
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
-        $('#promptText').textContent = fkey.kind === 'store' ? 'RECORDS' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
+        $('#promptText').textContent = fkey.kind === 'store' ? 'RECORDS' : fkey.kind === 'hoop' ? 'FREE THROW' : fkey.kind === 'pool' ? 'POOL' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
@@ -2013,6 +2135,7 @@
     last = now; t += dt;
     if (mode === 'dialog') tickDlg(dt);
     update(dt);
+    if (hoop) hoopTick(dt);
     if (camHold) camHold(camera);   // debug: a test can fly the camera
     post.uniforms.time.value = t; skyU.time.value = t;
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
@@ -2038,5 +2161,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
