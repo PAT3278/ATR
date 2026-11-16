@@ -1046,7 +1046,7 @@
           for (let x = x0 + 2; x < x1 - 1; x += 5) { hb(0.3, 0.45, 0.3, x, 0.92, -46.2, ironH); }
           for (let x = x0 + 1; x < x1 - 1; x += 3.2) hb(0.3, 1.6, 0.3, x, -0.3, -46.6, wood, false);   // the timber fender piles
         }
-        p.ground = ((g0) => (lx, lz, y) => (lz < -40.5 && lz > -46.5 && lx > HB.x0 && lx < HB.x1 && Math.abs(lx - CX) > 6.5 ? 0.7 : g0(lx, lz, y)))(p.ground);
+        p.ground = ((g0) => (lx, lz, y) => (lz < -40.5 && lz > -46.5 && lx > HB.x0 && lx < HB.x1 && Math.abs(lx - CX) > 6.5 ? 0.7 : Math.abs(lx - CX) <= 7.7 && lz < -41.3 && lz > -43.7 && (y === undefined || y > 0.5) ? 1.75 : g0(lx, lz, y)))(p.ground);   // the wharf, and the footbridge over the river mouth
         { const br = hb(14, 0.3, 2.2, CX, 1.6, -42.5, wood); for (const sd of [-1, 1]) hb(14, 0.9, 0.08, CX, 2.2, -42.5 + sd * 1.05, ironH, false); for (const x of [CX - 6.6, CX + 6.6]) { hb(2.2, 1.6, 2.2, x, 0.8, -42.5, concH); } }
         // fishing boats moored along the wharf
         const boatC = ['#2e5c7a', '#b8402e', '#eeece6', '#3f7a52', '#d9a53a'];
@@ -1074,11 +1074,77 @@
         }
         HBB.flush();
       }
+      // Wide sandy beaches either side of the harbour, raised just clear of the water so you walk on them (only the
+      // sea itself turns you into a boat), with people: under parasols on loungers, a game of beach volleyball, someone
+      // doing pull-ups on a bar, a lifeguard tower.
+      const BE = { x0: 13, x1: 128, z1: -64 }, BW = { x0: -132, x1: -55.5, z1: -64 };   // they meet the wharf's ends: no water you can step into by mistake
+      const onBeach = (lx, lz) => (lz <= -32 && lz >= -41.5 && !(lx > HB.x0 && lx < HB.x1 && lz < -40.3)) || (lz <= -32 && lz >= BE.z1 && lx >= BE.x0 && lx <= BE.x1) || (lz <= -32 && lz >= BW.z1 && lx >= BW.x0 && lx <= BW.x1);
+      p.ground = ((g0) => (lx, lz, y) => Math.max(onBeach(lx, lz) ? 0.14 : 0, g0(lx, lz, y)))(p.ground);
+      const beachLife = { players: [], ball: null, puller: null };
+      {
+        const sandM = E.mat('#e2cf9e', { map: E.tex('sand', 30, 8) }), wetM = E.mat('#b9a477', { map: E.tex('sand', 30, 1), rough: 0.6 });
+        for (const B of [BE, BW]) { const w = B.x1 - B.x0, d = -32 - B.z1, s = E.plane(w, d, sandM); s.position.set((B.x0 + B.x1) / 2, 0.13, (-32 + B.z1) / 2); g.add(s); p.pick(s);
+          const wet = E.plane(w, 2.2, wetM); wet.position.set((B.x0 + B.x1) / 2, 0.1, B.z1 - 0.9); g.add(wet); }
+        const BB2 = E.batch(g), bb = BB2.box, br2 = E.rng(5757);
+        const skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'].map((c) => E.mat(c, { rough: 0.6 })), suits = ['#d23a2a', '#2457c5', '#1f8a4a', '#e8b23a', '#141416', '#9b7bd8', '#ef7a1a'].map((c) => E.mat(c, { rough: 0.6 }));
+        // a person: torso, head, arms and legs on pivots, so they can lie, stand or hang
+        const person = (k) => {
+          const f = new THREE.Group(), sk = skins[k % skins.length], su = suits[(k * 3) % suits.length], add = (geo, m, x, y, z, par = f) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; par.add(o); return o; };
+          add(new THREE.CylinderGeometry(0.19, 0.17, 0.62, 10), sk, 0, 1.2, 0).scale.z = 0.7;
+          add(new THREE.CylinderGeometry(0.2, 0.19, 0.22, 10), su, 0, 0.98, 0).scale.z = 0.72;
+          add(new THREE.SphereGeometry(0.12, 12, 9), sk, 0, 1.66, 0);
+          const limb = (x, y, len, m) => { const pv = new THREE.Group(); pv.position.set(x, y, 0); f.add(pv); add(new THREE.CylinderGeometry(0.055, 0.045, len, 8), m, 0, -len / 2, 0, pv); return pv; };
+          const arms = [limb(-0.25, 1.48, 0.6, sk), limb(0.25, 1.48, 0.6, sk)], legs = [limb(-0.1, 0.9, 0.86, sk), limb(0.1, 0.9, 0.86, sk)];
+          return { f, arms, legs };
+        };
+        // parasols with loungers and people lying in the sun
+        const stripes = ['#d23a2a', '#2457c5', '#1f8a4a', '#e8b23a', '#ef7a1a'];
+        const parasol = (x, z, k) => {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.5, 6), E.mat('#eeece6')); pole.position.set(x, 1.37, z); g.add(pole);
+          const c = document.createElement('canvas'); c.width = 256; c.height = 32; const x2 = c.getContext('2d'); for (let i = 0; i < 16; i++) { x2.fillStyle = i % 2 ? '#f4f1e6' : stripes[k % stripes.length]; x2.fillRect(i * 16, 0, 16, 32); }
+          const tx = new THREE.CanvasTexture(c); tx.encoding = THREE.sRGBEncoding;
+          const top = new THREE.Mesh(new THREE.ConeGeometry(1.6, 0.6, 16, 1, true), new THREE.MeshStandardMaterial({ map: tx, side: THREE.DoubleSide, roughness: 0.8 })); top.material.userData.lin = true; top.position.set(x, 2.55, z); top.castShadow = true; g.add(top);
+          p.addCircle(x, z, 0.15);
+          for (const sd of [-1, 1]) {
+            const lx = x + sd * 0.75, lz = z - 0.2;
+            bb(0.62, 0.08, 1.8, lx, 0.42, lz, E.mat('#f4f1e6', { rough: 0.6 })); const back = bb(0.62, 0.08, 0.7, lx, 0.7, lz - 1.05, E.mat('#f4f1e6', { rough: 0.6 })); back.rotation.x = -0.9;
+            for (const [ax, az] of [[-0.25, 0.8], [0.25, 0.8], [-0.25, -0.8], [0.25, -0.8]]) bb(0.04, 0.38, 0.04, lx + ax, 0.27, lz + az, E.mat('#b9bec4', { metal: 0.6 }), false);
+            p.addBox(lx, lz, 0.35, 1.0);
+            if (br2() < 0.75) {   // someone lying back on it
+              const m = person(k * 2 + sd + 3); m.f.rotation.x = -Math.PI / 2 + 0.35; m.f.position.set(lx, 0.52, lz + 0.55); m.legs.forEach((l) => (l.rotation.x = 0.05)); m.arms.forEach((a, i) => { a.rotation.z = (i ? -1 : 1) * 0.3; }); g.add(m.f);
+            }
+          }
+          if (br2() < 0.6) bb(0.45, 0.35, 0.3, x + 0.2, 0.3, z + 1.1, E.mat('#2457c5', { rough: 0.5 }));   // a cool box
+          bb(0.9, 0.02, 1.7, x + 0.1, 0.15, z + 1.6, E.mat(stripes[(k + 2) % stripes.length], { rough: 0.9 }), false);   // a towel
+        };
+        for (let i = 0; i < 6; i++) parasol(26 + i * 9.5, -44 - (i % 2) * 6, i);
+        for (let i = 0; i < 4; i++) parasol(-120 + i * 12, -46 - (i % 2) * 5, i + 6);
+        // beach volleyball: a net, a rope court and four players; the ball goes back and forth over the net
+        { const VX = 92, VZ = -50;
+          for (const sd of [-1, 1]) { bb(0.1, 2.6, 0.1, VX, 1.43, VZ + sd * 4.6, E.mat('#eeece6')); p.addCircle(VX, VZ + sd * 4.6, 0.15); }
+          const net = new THREE.Mesh(new THREE.PlaneGeometry(9, 0.9), new THREE.MeshStandardMaterial({ color: '#202428', transparent: true, opacity: 0.7, side: THREE.DoubleSide })); net.rotation.y = Math.PI / 2; net.position.set(VX, 2.15, VZ); g.add(net);
+          bb(0.04, 0.06, 9, VX, 2.62, VZ, E.mat('#f4f1e6'), false);
+          const rope = E.mat('#2457c5', { rough: 0.6 }); bb(16, 0.03, 0.06, VX, 0.16, VZ - 4, rope, false); bb(16, 0.03, 0.06, VX, 0.16, VZ + 4, rope, false); bb(0.06, 0.03, 8, VX - 8, 0.16, VZ, rope, false); bb(0.06, 0.03, 8, VX + 8, 0.16, VZ, rope, false);
+          for (const [dx, dz, k] of [[-4, -1.8, 1], [-5.5, 2, 2], [4.5, 1.5, 3], [5.5, -2.2, 4]]) { const m = person(k + 10); m.f.position.set(VX + dx, 0.14, VZ + dz); m.f.rotation.y = dx < 0 ? Math.PI / 2 : -Math.PI / 2; g.add(m.f); beachLife.players.push({ m, x: VX + dx, z: VZ + dz, side: Math.sign(dx) }); p.addCircle(VX + dx, VZ + dz, 0.35); }
+          const ball = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 9), E.mat('#f2e8a0', { rough: 0.5 })); ball.castShadow = true; g.add(ball); beachLife.ball = ball; }
+        // a pull-up bar and parallel bars, and someone doing pull-ups
+        { const PX = 112, PZ = -40, steelB = E.mat('#9aa0a8', { metal: 0.7, rough: 0.35 });
+          for (const sd of [-1, 1]) { bb(0.1, 2.5, 0.1, PX + sd * 0.9, 1.39, PZ, steelB); p.addCircle(PX + sd * 0.9, PZ, 0.15); }
+          bb(1.9, 0.05, 0.05, PX, 2.62, PZ, steelB);
+          for (const sd of [-1, 1]) for (const ex of [-1, 1]) bb(0.08, 1.2, 0.08, PX + 3 + ex * 1.1, 0.74, PZ + sd * 0.3, steelB);
+          for (const sd of [-1, 1]) bb(2.4, 0.05, 0.05, PX + 3, 1.33, PZ + sd * 0.3, steelB);
+          const m = person(20); m.f.position.set(PX, 0.6, PZ); m.arms.forEach((a, i) => { a.rotation.z = (i ? 1 : -1) * Math.PI * 0.94; }); m.legs[0].rotation.x = 0.3; m.legs[1].rotation.x = 0.4; g.add(m.f); beachLife.puller = m; }
+        // a lifeguard tower
+        { const LX = 60, LZ = -36; for (const [ax, az] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) { bb(0.12, 2.6, 0.12, LX + ax, 1.43, LZ + az, E.mat('#eeece6')); p.addCircle(LX + ax, LZ + az, 0.12); }
+          bb(2, 0.12, 2, LX, 2.8, LZ, E.mat('#d23a2a', { rough: 0.6 })); bb(2.1, 0.12, 2.1, LX, 4.4, LZ, E.mat('#eeece6')); for (const [ax, az] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) bb(0.08, 1.5, 0.08, LX + ax, 3.6, LZ + az, E.mat('#eeece6'), false);
+          const m = person(22); m.f.position.set(LX, 2.86, LZ); m.f.rotation.y = Math.PI; g.add(m.f); }
+        BB2.flush();
+      }
       // Sea stacks and the far mountains
       for (let i = 0; i < 9; i++) {
         const s = 4 + r() * 9;
         const m = new THREE.Mesh(E.rockGeo(i + 2), rockD); m.scale.setScalar(s);
-        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); if (inHarbour(m.position.x, m.position.z)) { m.position.x += 90; } m.scale.y = s * (1.6 + r()); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
+        m.position.set(-110 + i * 27 + r() * 10, s * 0.6, -55 - r() * 50); if (inHarbour(m.position.x, m.position.z)) { m.position.x += 90; } if (m.position.z > -78 + s) m.position.z = -78 - s;   // keep the stacks off the beaches m.scale.y = s * (1.6 + r()); m.castShadow = true; g.add(m); p.addCircle(m.position.x, m.position.z, s * 0.9);
       }
       const mtnM = E.mat('#6f86a6', { flat: true });
       for (let i = 0; i < 9; i++) {
@@ -1144,6 +1210,9 @@
       p.update = (t, dt, f, v, viewing) => {
         sea.material.uniforms.t.value = t;
         if (chanWater) chanWater.normalMap.offset.set(t * 0.012, t * 0.02);
+        { const BL = beachLife, ph = (t * 0.55) % 2, k = ph < 1 ? ph : 2 - ph, A = BL.players[0], Bp = BL.players[3];   // the volleyball goes back and forth
+          if (BL.ball && A && Bp) { BL.ball.position.set(A.x + (Bp.x - A.x) * k, 2.2 + Math.sin(Math.PI * k) * 3.2, A.z + (Bp.z - A.z) * k); BL.players.forEach((q, i) => { const near = (q.side < 0) === (ph > 1.75 || ph < 0.25); q.m.arms.forEach((a, j) => { a.rotation.z = near ? (j ? 1 : -1) * 2.6 : (j ? 1 : -1) * 0.3; }); q.m.f.position.y = 0.14 + (near ? Math.max(0, Math.sin(t * 8)) * 0.15 : 0); }); }
+          if (BL.puller) BL.puller.f.position.y = 0.55 + (0.5 - 0.5 * Math.cos(t * 2.4)) * 0.42; }
         harbourBoats.forEach((o) => { o.b.position.y = Math.sin(t * 1.1 + o.s) * 0.07; o.b.rotation.z = Math.sin(t * 0.8 + o.s) * 0.03; });
         harbourLamps.forEach((m, i) => { m.visible = Math.sin(t * 2.2 + i * 1.7) > -0.2 || f.pulse > 0.5; });
         sea.material.uniforms.level.value += (f.level - sea.material.uniforms.level.value) * Math.min(1, dt * 6);
