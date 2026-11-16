@@ -574,9 +574,19 @@
     for (const [x, z, w, d] of [[0, -0.72, 2.7, 0.14], [0, 0.72, 2.7, 0.14], [-1.32, 0, 0.14, 1.58], [1.32, 0, 0.14, 1.58]]) put(new THREE.BoxGeometry(w, 0.16, d), wood, TX + x, 0.9, TZ + z);
     put(new THREE.BoxGeometry(2.3, 0.6, 1.1), wood, TX, 0.46, TZ);
     for (const [x, z] of [[-1.15, -0.55], [1.15, -0.55], [-1.15, 0.55], [1.15, 0.55]]) put(new THREE.CylinderGeometry(0.08, 0.06, 0.5, 8), wood, TX + x, 0.25, TZ + z);
-    const cols = ['#f1c232', '#2457c5', '#d23a2a', '#5b2d8f', '#ef7a1a', '#1f8a4a', '#7a1f22', '#111111'];
-    let k = 0; for (let row = 0; row < 5; row++) for (let i = 0; i <= row; i++) put(new THREE.SphereGeometry(0.03, 10, 8), mat(cols[k++ % 8], { rough: 0.25 }), TX + 0.55 + row * 0.052, 0.91, TZ + (i - row / 2) * 0.061);
-    put(new THREE.SphereGeometry(0.03, 10, 8), mat('#f4f1e6', { rough: 0.25 }), TX - 0.6, 0.91, TZ);
+    // the balls are real: the table is played where it stands (see "pool" below). Numbered balls, painted on canvas.
+    const PS = SW.PoolSim, TOP = 0.88;
+    const ballTex = (n) => { const c = document.createElement('canvas'); c.width = 128; c.height = 64; const x = c.getContext('2d'), col = PS.colOf(n);
+      x.fillStyle = n > 8 ? '#f4f1e6' : col; x.fillRect(0, 0, 128, 64); if (n > 8) { x.fillStyle = col; x.fillRect(0, 18, 128, 28); }
+      if (n) for (const cx of [32, 96]) { x.fillStyle = '#f4f1e6'; x.beginPath(); x.ellipse(cx, 32, 9, 12, 0, 0, 7); x.fill(); x.fillStyle = '#111'; x.font = '700 15px Hind, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(n), cx, 33); }
+      const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; };
+    const ballGeo = new THREE.SphereGeometry(PS.R, 20, 14), state = PS.rack();
+    const meshes = state.balls.map((b) => { const m = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ map: ballTex(b.n), roughness: 0.18, metalness: 0 })); m.material.userData.lin = true; m.castShadow = true; S.add(m); return m; });
+    for (const [px, pz, pr] of PS.POCK) { const pk = new THREE.Mesh(new THREE.CircleGeometry(pr * 0.95, 18), mat('#070707', { rough: 1 })); pk.rotation.x = -Math.PI / 2; pk.position.set(TX + px, TOP + 0.002, TZ + pz); S.add(pk); }
+    const toS = (x, z) => [TX + x, TZ + z];
+    hallAt.table = { S, TX, TZ, TOP, state, meshes, toS, cos: Math.cos(hallAt.yaw), sin: Math.sin(hallAt.yaw) };
+    hallAt.syncBalls = () => { state.balls.forEach((b, i) => { const m = meshes[i]; if (b.in) { if (b.dropT === undefined) b.dropT = 0; m.visible = b.dropT < 0.6; m.position.set(TX + b.px, TOP + PS.R - b.dropT * 0.25, TZ + b.pz); return; } b.dropT = undefined; m.visible = true; m.position.set(TX + b.x, TOP + PS.R, TZ + b.z); }); };
+    hallAt.syncBalls();
     for (const x of [-1.6, -1.45]) { const cueS = put(new THREE.CylinderGeometry(0.012, 0.02, 1.45, 6), mat('#c9a06a', { rough: 0.5 }), x, 1.4, -D / 2 + 0.36); cueS.rotation.z = 0.05; }
     const lampM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe7b8').convertSRGBToLinear().multiplyScalar(1.4) }); lampM.userData.lin = true;
     put(new THREE.BoxGeometry(1.6, 0.18, 0.5), mat('#1f5a40', { rough: 0.5 }), TX, 2.25, TZ); put(new THREE.BoxGeometry(1.5, 0.04, 0.42), lampM, TX, 2.15, TZ);
@@ -1520,11 +1530,100 @@
   $('#miShoot').addEventListener('click', () => hoopShoot());
   $('#miQuit').addEventListener('click', () => endHoop());
   // Pool: the table opens over the screen (src/pool.js); the best is the fewest shots to clear it.
-  function startPool() {
-    if (!SW.Pool) return;
-    mode = 'pool'; keys.clear(); auto = null; document.body.classList.add('busy'); $('#prompt').hidden = true; lastFocus = undefined;
-    SW.Pool.open({ best: mgBest.pool || null, onBest(b) { mgBest.pool = b; mgSave(); }, onClose() { mode = 'walk'; document.body.classList.remove('busy'); cv.focus({ preventScroll: true }); } });
+  // Pool, played on the table where it stands: the camera comes down behind the cue ball. Drag (or ←→, or the stick)
+  // to aim, hold SHOT / Z / Space / the A button to build power and let go to strike. While the balls run, the camera
+  // stands back over the table. Clear the fifteen in as few shots as you can (a scratch costs a shot).
+  let pool = null;
+  const PSIM = SW.PoolSim;
+  function poolHud(say) {
+    const T = hallAt.table, left = T.state.balls.filter((b) => b.n && !b.in).length;
+    $('#miScore').textContent = `SHOTS ${pool.shots}\nLEFT ${left}\nBEST ${mgBest.pool || '-'}`;
+    if (say !== undefined) $('#miSay').textContent = say;
   }
+  function startPool() {
+    const T = hallAt.table; if (!T || !PSIM) return;
+    mode = 'pool'; keys.clear(); auto = null; document.body.classList.add('busy'); $('#prompt').hidden = true; lastFocus = undefined;
+    if (T.state.balls.every((b) => !b.n || b.in)) { T.state = PSIM.rack(); }
+    if (!T.aimG) {   // the aim line, a ghost ball where it meets, and the cue
+      const lm = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }); lm.userData.lin = true;
+      const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(12), 3));
+      T.aimLine = new THREE.LineSegments(lg, lm); T.S.add(T.aimLine);
+      T.ghost = new THREE.Mesh(new THREE.RingGeometry(PSIM.R * 0.85, PSIM.R, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); T.ghost.rotation.x = -Math.PI / 2; T.S.add(T.ghost);
+      T.aimG = new THREE.Group(); T.S.add(T.aimG);
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.014, 1.45, 10), mat('#b98a56', { rough: 0.45 })); stick.rotation.z = Math.PI / 2; stick.position.x = -0.725; stick.castShadow = true;
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0072, 0.0072, 0.02, 8), mat('#3a6ab0', { rough: 0.6 })); tip.rotation.z = Math.PI / 2; tip.position.x = -0.005;
+      const butt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.0145, 0.4, 10), mat('#2a1610', { rough: 0.4 })); butt.rotation.z = Math.PI / 2; butt.position.x = -1.25;
+      T.cuePivot = new THREE.Group(); T.cuePivot.add(stick, tip, butt); T.cuePivot.rotation.z = -0.07; T.aimG.add(T.cuePivot);
+    }
+    const c = T.state.balls[0];
+    pool = { aim: Math.atan2(-c.z, PSIM.FOOT - c.x), hold: false, holdT: 0, power: 0, moving: false, shots: T.state.shotsSoFar || 0, keyAim: 0, drag: null, camP: camera.position.clone(), camL: camLook.clone(), last: performance.now(), done: false };
+    avatar.G.visible = false;
+    $('#mgame').hidden = false; $('#miTitle').textContent = 'POOL'; $('#miShoot').firstChild.textContent = 'SHOT ';
+    poolHud('ドラッグ / ←→ で狙う・長押しで力をためて離す');
+    camHold = poolCam;
+  }
+  function endPool() {
+    if (!pool) return;
+    const T = hallAt.table; T.state.shotsSoFar = pool.shots; T.aimLine.visible = T.ghost.visible = T.aimG.visible = false;
+    pool = null; camHold = null; avatar.G.visible = true;
+    mode = 'walk'; $('#mgame').hidden = true; $('#miShoot').firstChild.textContent = 'SHOOT '; document.body.classList.remove('busy');
+    snapCam(); camBlendDur = 0.6; cv.focus({ preventScroll: true });
+  }
+  function poolHold(on) {
+    if (!pool) return;
+    if (on) { if (pool.done) { hallAt.table.state = PSIM.rack(); pool.done = false; pool.shots = 0; poolHud(''); return; } if (!pool.moving) { pool.hold = true; pool.holdT = 0; } return; }
+    if (!pool.hold) return;
+    const T = hallAt.table, c = T.state.balls[0], sp = 0.35 + pool.power * 3.9;
+    c.vx = Math.cos(pool.aim) * sp; c.vz = Math.sin(pool.aim) * sp; pool.shots++; pool.moving = true; pool.hold = false; pool.power = 0; poolHud('');
+  }
+  const pv = new THREE.Vector3(), pl = new THREE.Vector3(), pd = new THREE.Vector3(), paxis = new THREE.Vector3(), pq = new THREE.Quaternion();
+  function poolCam(cam) {
+    if (!pool) return;
+    const T = hallAt.table, now = performance.now(), dt = Math.min(0.1, (now - pool.last) / 1000); pool.last = now;
+    const c = T.state.balls[0];
+    if (pool.moving || c.in) {   // stand back over the table while the balls run
+      pv.set(T.TX, T.TOP + 1.95, T.TZ + 1.7); T.S.localToWorld(pv); pl.set(T.TX, T.TOP, T.TZ - 0.1); T.S.localToWorld(pl);
+    } else {                     // down behind the cue ball, looking along the shot
+      pd.set(Math.cos(pool.aim), 0, Math.sin(pool.aim));
+      pv.set(T.TX + c.x - pd.x * 1.05, T.TOP + 0.42, T.TZ + c.z - pd.z * 1.05); T.S.localToWorld(pv);
+      pl.set(T.TX + c.x + pd.x * 0.9, T.TOP - 0.02, T.TZ + c.z + pd.z * 0.9); T.S.localToWorld(pl);
+    }
+    const k = 1 - Math.exp(-dt * 6); pool.camP.lerp(pv, k); pool.camL.lerp(pl, k);
+    cam.up.set(0, 1, 0); cam.position.copy(pool.camP); cam.lookAt(pool.camL);
+  }
+  function poolTick(dt) {
+    if (!pool) return;
+    const T = hallAt.table, S = T.state, c = S.balls[0];
+    if (pool.keyAim && !pool.moving) pool.aim += pool.keyAim * dt * 0.9;
+    if (pool.hold) { pool.holdT += dt; pool.power = 0.5 - 0.5 * Math.cos(pool.holdT * 2.6); }
+    $('#miMark').style.bottom = `${(pool.power * 100).toFixed(1)}%`;
+    if (pool.moving) {
+      let any = false; for (let k = 0; k < 8; k++) any = PSIM.step(S, dt / 8) || any;
+      S.balls.forEach((b, i) => { const sp = Math.hypot(b.vx, b.vz); if (sp > 0 && !b.in) { paxis.set(b.vz, 0, -b.vx).normalize(); T.meshes[i].quaternion.premultiply(pq.setFromAxisAngle(paxis, (sp * dt) / PSIM.R)); } });
+      if (!any) {   // all still: score the shot
+        pool.moving = false;
+        if (c.in) { pool.shots++; PSIM.respot(S); poolHud('スクラッチ +1'); }
+        if (S.balls.every((b) => !b.n || b.in)) { const prev = mgBest.pool; if (!prev || pool.shots < prev) { mgBest.pool = pool.shots; mgSave(); } pool.done = true; poolHud(`CLEAR! ${pool.shots} SHOTS — SHOT でもう一度`); SW.Audio.chime && SW.Audio.chime(); }
+        else poolHud();
+      }
+    }
+    S.balls.forEach((b) => { if (b.in && b.dropT !== undefined && b.dropT < 0.6) b.dropT += dt; });
+    hallAt.syncBalls();
+    // the aim line, the ghost ball and the cue
+    const aimOn = !pool.moving && !pool.done && !c.in;
+    T.aimLine.visible = T.ghost.visible = T.aimG.visible = aimOn;
+    if (aimOn) {
+      const h = PSIM.aimHit(S, pool.aim), dx = Math.cos(pool.aim), dz = Math.sin(pool.aim), ex = c.x + dx * h.t, ez = c.z + dz * h.t, y = T.TOP + PSIM.R, a = T.aimLine.geometry.attributes.position;
+      a.setXYZ(0, T.TX + c.x, y, T.TZ + c.z); a.setXYZ(1, T.TX + ex, y, T.TZ + ez);
+      if (h.b) { const nx = h.b.x - ex, nz = h.b.z - ez, nl = Math.hypot(nx, nz) || 1; a.setXYZ(2, T.TX + h.b.x, y, T.TZ + h.b.z); a.setXYZ(3, T.TX + h.b.x + (nx / nl) * 0.3, y, T.TZ + h.b.z + (nz / nl) * 0.3); } else { a.setXYZ(2, 0, -9, 0); a.setXYZ(3, 0, -9, 0); }
+      a.needsUpdate = true; T.ghost.position.set(T.TX + ex, T.TOP + 0.003, T.TZ + ez);
+      T.aimG.position.set(T.TX + c.x, y, T.TZ + c.z); T.aimG.rotation.y = -pool.aim; T.cuePivot.position.x = -(PSIM.R + 0.02 + pool.power * 0.22);
+    }
+  }
+  $('#miShoot').addEventListener('pointerdown', (e) => { if (mode === 'pool') { e.preventDefault(); poolHold(true); } });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('#miShoot').addEventListener(ev, () => { if (mode === 'pool') poolHold(false); });
+  $('#miQuit').addEventListener('click', () => { if (mode === 'pool') endPool(); });
+
 
   addEventListener('keydown', (e) => {
     if (e.key === 'Shift') running = true;
@@ -1532,7 +1631,14 @@
     if (mode === 'modal') { if (e.key === 'Escape' || e.code === 'KeyM' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) closeMap(); } return; }
     if (mode === 'phone') { phoneKey(e); return; }
     if (mode === 'hoop') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); endHoop(); } else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); hoopShoot(); } return; }
-    if (mode === 'pool') return;   // the table takes its own keys
+    if (mode === 'pool') {
+      e.preventDefault();
+      if (e.key === 'Escape' || e.code === 'KeyX') endPool();
+      else if (e.key === 'ArrowLeft' || e.code === 'KeyA') pool.keyAim = -1;
+      else if (e.key === 'ArrowRight' || e.code === 'KeyD') pool.keyAim = 1;
+      else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) poolHold(true);
+      return;
+    }
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
@@ -1546,24 +1652,26 @@
     else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); if (!e.repeat) openMap(); }
     else if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) openPhone(); }
   });
-  addEventListener('keyup', (e) => { if (e.key === 'Shift') running = false; if (e.code === 'Space') keys.delete('brake'); const k = KEYMAP[e.code]; if (k) keys.delete(k); });
+  addEventListener('keyup', (e) => { if (mode === 'pool' && pool) { if (e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') poolHold(false); if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(e.code) || e.key === 'ArrowLeft' || e.key === 'ArrowRight') pool.keyAim = 0; return; } if (e.key === 'Shift') running = false; if (e.code === 'Space') keys.delete('brake'); const k = KEYMAP[e.code]; if (k) keys.delete(k); });
   addEventListener('blur', () => { keys.clear(); running = false; });
 
   let drag = null;
   cv.addEventListener('pointerdown', (e) => {
     if (mode === 'dialog') { advance(); return; }
+    if (mode === 'pool' && pool) { pool.drag = { id: e.pointerId, x: e.clientX }; try { cv.setPointerCapture(e.pointerId); } catch (_) { /* */ } return; }
     if (mode !== 'walk') return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, moved: false };
     try { cv.setPointerCapture(e.pointerId); } catch (_) { /* */ }
   });
   cv.addEventListener('pointermove', (e) => {
+    if (pool && pool.drag && pool.drag.id === e.pointerId) { if (!pool.moving) pool.aim -= (e.clientX - pool.drag.x) * 0.0035; pool.drag.x = e.clientX; return; }
     if (!drag || drag.id !== e.pointerId) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
     if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
     if (drag.moved) { camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, 0.04, 0.85); }
   });
-  cv.addEventListener('pointerup', (e) => { if (!drag || drag.id !== e.pointerId) return; const was = drag; drag = null; if (!was.moved && mode === 'walk') tap(e.clientX, e.clientY); });
+  cv.addEventListener('pointerup', (e) => { if (pool && pool.drag && pool.drag.id === e.pointerId) { pool.drag = null; return; } if (!drag || drag.id !== e.pointerId) return; const was = drag; drag = null; if (!was.moved && mode === 'walk') tap(e.clientX, e.clientY); });
   cv.addEventListener('pointercancel', () => (drag = null));
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function tap(cx, cy) {
@@ -1601,6 +1709,7 @@
     const pressed = gp.buttons.map((b) => b.pressed);
     const down = (i) => pressed[i] && !padPrev[i];
     if (mode === 'hoop') { if (down(0)) hoopShoot(); if (down(1)) endHoop(); }
+    if (mode === 'pool' && pool) { if (down(0)) poolHold(true); if (!pressed[0] && padPrev[0]) poolHold(false); if (down(1)) endPool(); if (!pool.moving && Math.abs(gp.axes[0] || 0) > 0.2) pool.aim += (gp.axes[0] || 0) * 0.02; }
     if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); else if (mode === 'phone') { const a = document.activeElement; if (a && $('#phone').contains(a)) a.click(); } }
     if (mode === 'phone') { if (down(12) || down(14)) phoneFocus(-1); else if (down(13) || down(15)) phoneFocus(1); }
     if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
@@ -1941,7 +2050,7 @@
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
-    avatar.G.visible = !drv && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
+    avatar.G.visible = !drv && !pool && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
     const vf = viewPlace ? viewPlace.f : null;
     const onW = mode !== 'view' && gh < 0.1 && isWater(P.x, P.z);
     avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, onW);
@@ -2213,6 +2322,7 @@
     if (mode === 'dialog') tickDlg(dt);
     update(dt);
     if (hoop) hoopTick(dt);
+    if (pool) poolTick(dt);
     if (camHold) camHold(camera);   // debug: a test can fly the camera
     post.uniforms.time.value = t; skyU.time.value = t;
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
