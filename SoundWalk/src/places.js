@@ -695,83 +695,146 @@
   /* ------------------------------------------------------------------ */
   PLACES.stereotype = {
     build(p, E) {
+      // An amusement park where everyone is the same: identical white visitors queue for every ride, and one of them,
+      // a different colour, keeps changing places. A Ferris wheel at the back, a carousel in the middle, a drop tower and
+      // a little roller coaster either side, a gate at the front. The rides keep time with the music.
       const g = p.group, r = E.rng(53);
-      const floor = E.plane(44, 44, E.mat('#8d8d8d', { map: E.tex('checker', 11, 11), rough: 0.6 }));
+      const floor = E.plane(50, 50, E.mat('#9a948a', { map: E.tex('paving', 12, 12), rough: 0.85 }));
       floor.position.set(0, 0.03, -10);
       g.add(floor); p.pick(floor);
+      const PB = E.batch(g), pb = PB.box;
+      const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+      const stripes = (a, b, n) => canvasTex(256, 64, (c, w, h) => { for (let i = 0; i < n; i++) { c.fillStyle = i % 2 ? b : a; c.fillRect((i * w) / n, 0, w / n + 1, h); } });
+      const white = E.mat('#eeece6', { rough: 0.5 }), steel = E.mat('#b9bec4', { metal: 0.7, rough: 0.35 }), dark = E.mat('#2a2c30', { metal: 0.4, rough: 0.5 });
+      const C = ['#e8b23a', '#3fa7d6', '#6cc070', '#9b7bd8', '#ef7a3a'].map((c) => E.mat(c, { rough: 0.5 }));
+      const glow = (hex) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).convertSRGBToLinear().multiplyScalar(1.4) }); m.userData.lin = true; return m; };
 
-      const COLS = 7, ROWS = 5, n = COLS * ROWS;
-      const figM = E.mat('#d8d8d8', { rough: 0.6 });
-      const bodyGeo = new THREE.CylinderGeometry(0.3, 0.42, 1.3, 10).translate(0, 0.65, 0);
-      const headGeo = new THREE.SphereGeometry(0.3, 14, 10).translate(0, 1.62, 0);
-      const bodies = new THREE.InstancedMesh(bodyGeo, figM, n);
-      const heads = new THREE.InstancedMesh(headGeo, figM, n);
-      bodies.castShadow = heads.castShadow = true;
-      const cells = [];
-      for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
-        const x = (col - (COLS - 1) / 2) * 3, z = -5 - row * 3.8;
-        cells.push({ x, z, col });
-        p.addCircle(x, z, 0.6);
-      }
-      g.add(bodies, heads);
-      const oddM = new THREE.MeshStandardMaterial({ color: '#ff3fa8', emissive: '#ff2f9a', emissiveIntensity: 1.6, roughness: 0.5 });
-      const odd = new THREE.Group();
-      odd.add(new THREE.Mesh(bodyGeo, oddM), new THREE.Mesh(headGeo, oddM));
-      odd.children.forEach((m) => { m.castShadow = true; });
-      g.add(odd);
+      // the gate
+      for (const sd of [-1, 1]) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 6, 14), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 8), rough: 0.5 })); col.position.set(sd * 5, 3, 10); col.castShadow = true; g.add(col); const ball = new THREE.Mesh(new THREE.SphereGeometry(0.75, 14, 10), C[0]); ball.position.set(sd * 5, 6.5, 10); g.add(ball); p.addCircle(sd * 5, 10, 0.7); }
+      pb(10.6, 1.3, 0.5, 0, 6.1, 10, dark);
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 1.1), new THREE.MeshBasicMaterial({ map: E.textTex('STEREOTYPE LAND', { w: 1024, h: 120, color: '#ffe9a8', glow: '#ffb03a', font: '700 84px "Hind",sans-serif' }), transparent: true }));
+      sign.position.set(0, 6.1, 10.27); g.add(sign); const sign2 = sign.clone(); sign2.rotation.y = Math.PI; sign2.position.z = 9.73; g.add(sign2);
 
-      // A wall of test-pattern bars at the back, heights from the spectrum
-      const bars = [];
-      for (let i = 0; i < 16; i++) {
-        const shade = Math.round(40 + (i % 8) * 28);
-        const m = E.mat(`rgb(${shade},${shade},${shade})`);
-        const b = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1, 1).translate(0, 0.5, 0), m);
-        b.position.set(-18.4 + i * 2.45, 0, -29);
-        b.castShadow = true;
-        g.add(b);
-        bars.push(b);
+      // the carousel
+      const CZ = -9, car = new THREE.Group(); car.position.set(0, 0, CZ); g.add(car);
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.6, 0.5, 32), white); base.position.y = 0.25; base.receiveShadow = true; g.add(base); base.position.z = CZ;
+      const plat = new THREE.Mesh(new THREE.CylinderGeometry(5.0, 5.0, 0.12, 32), E.mat('#b88a5a', { rough: 0.7 })); plat.position.y = 0.56; car.add(plat);
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 4, 16), E.mat('#ffffff', { map: stripes('#e8b23a', '#eeece6', 12) })); core.position.y = 2.5; car.add(core);
+      const canopy = new THREE.Mesh(new THREE.ConeGeometry(5.9, 2.2, 24, 1, true), E.mat('#ffffff', { map: stripes('#eeece6', '#d24a3a', 24), side: THREE.DoubleSide })); canopy.position.y = 5.6; canopy.material.side = THREE.DoubleSide; car.add(canopy);
+      const valance = new THREE.Mesh(new THREE.CylinderGeometry(5.9, 5.9, 0.6, 24, 1, true), E.mat('#ffffff', { map: stripes('#e8b23a', '#3fa7d6', 24) })); valance.position.y = 4.3; valance.material.side = THREE.DoubleSide; car.add(valance);
+      const fin = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 8), C[0]); fin.position.y = 6.9; car.add(fin);
+      const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 5), glow('#fff2c0'), 48);
+      { const m4 = new THREE.Matrix4(); for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; bulbs.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * 5.95, 4.0, Math.sin(a) * 5.95)); } car.add(bulbs); }
+      const horses = [], hm = E.mat('#f2f0ea', { rough: 0.45 }), oddH = E.mat('#3ff0ff', { rough: 0.4, emissive: '#3ff0ff', emissiveIntensity: 0.5 });
+      const horse = (m) => { const h = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 1.3), m); h.add(body); const neck = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.35), m); neck.position.set(0, 0.45, 0.55); neck.rotation.x = -0.4; h.add(neck); const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.55), m); head.position.set(0, 0.8, 0.8); h.add(head); for (const [x, z, a] of [[-0.15, 0.5, 0.5], [0.15, 0.5, 0.5], [-0.15, -0.5, -0.4], [0.15, -0.5, -0.4]]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), m); l.position.set(x, -0.45, z); l.rotation.x = a; h.add(l); } h.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return h; };
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2, rad = i % 2 ? 3.9 : 2.8, odd = i === 7, hh = horse(odd ? oddH : hm);
+        hh.position.set(Math.cos(a) * rad, 1.6, Math.sin(a) * rad); hh.rotation.y = -a; car.add(hh);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 4.0, 6), steel); pole.position.set(Math.cos(a) * rad, 2.6, Math.sin(a) * rad); car.add(pole);
+        horses.push({ h: hh, s: i });
       }
-      p.addBox(0, -29, 20, 0.8);
+      p.addCircle(0, CZ, 5.6);
+
+      // the Ferris wheel
+      const WZ = -28, WY = 13.2, WR = 11, wheel = new THREE.Group(); wheel.position.set(0, WY, WZ); g.add(wheel);
+      for (const sd of [-1, 1]) for (const lx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, WY / Math.cos(0.32) + 0.4, 0.5), steel); leg.position.set(lx * WY * Math.tan(0.32) / 2, WY / 2, WZ + sd * 1.4); leg.rotation.z = -lx * 0.32; leg.castShadow = true; g.add(leg); p.addCircle(lx * WY * Math.tan(0.32), WZ + sd * 1.4, 0.5); }
+      pb(0.5, 0.5, 3.4, 0, WY, WZ, dark);
+      for (const sd of [-0.75, 0.75]) { const rim = new THREE.Mesh(new THREE.TorusGeometry(WR, 0.13, 6, 64), steel); rim.position.z = sd; wheel.add(rim); const rim2 = new THREE.Mesh(new THREE.TorusGeometry(WR * 0.55, 0.08, 6, 48), steel); rim2.position.z = sd; wheel.add(rim2); }
+      const NG = 16, gond = [];
+      for (let i = 0; i < NG; i++) {
+        const a = (i / NG) * Math.PI * 2;
+        for (const sd of [-0.75, 0.75]) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.08, WR, 0.08), steel); sp.position.set((Math.cos(a) * WR) / 2, (Math.sin(a) * WR) / 2, sd); sp.rotation.z = a - Math.PI / 2; wheel.add(sp); }
+        const gp = new THREE.Group(); gp.position.set(Math.cos(a) * WR, Math.sin(a) * WR, 0); wheel.add(gp);
+        const cab = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 1.2), C[i % C.length]); cab.position.y = -1.0; cab.castShadow = true; gp.add(cab);
+        const rf = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.5, 4), white); rf.position.y = -0.25; rf.rotation.y = Math.PI / 4; gp.add(rf);
+        const hang = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 5), dark); hang.position.y = -0.1; gp.add(hang);
+        gond.push(gp);
+      }
+      const rimL = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 64); rimL.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(64 * 3), 3);
+      { const m4 = new THREE.Matrix4(); for (let i = 0; i < 64; i++) { const a = (i / 64) * Math.PI * 2; rimL.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * WR, Math.sin(a) * WR, 0.95)); } wheel.add(rimL); }
+
+      // the drop tower
+      const DX = -17, DZ = -20, DH = 24;
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(1.1, DH, 1.1), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 2), rough: 0.5 })); mast.position.set(DX, DH / 2, DZ); mast.castShadow = true; g.add(mast);
+      pb(2.4, 1.2, 2.4, DX, DH + 0.6, DZ, C[3]);
+      const ring = new THREE.Group(); ring.position.set(DX, 2, DZ); g.add(ring);
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.8, 16, 1, true), C[0]); seat.material.side = THREE.DoubleSide; ring.add(seat);
+      const seatF = new THREE.Mesh(new THREE.RingGeometry(0.7, 2.3, 16), dark); seatF.rotation.x = -Math.PI / 2; seatF.position.y = -0.4; ring.add(seatF);
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2, fig = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.9, 8), white); fig.position.set(Math.cos(a) * 1.9, 0.2, Math.sin(a) * 1.9); ring.add(fig); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), white); hd.position.set(Math.cos(a) * 1.9, 0.82, Math.sin(a) * 1.9); ring.add(hd); }
+      p.addCircle(DX, DZ, 2.5);
+
+      // the roller coaster: a loop of track on the right, over a hill, with a four-car train
+      const pts = [[10, 2.7, -4], [17, 2.7, -3], [22, 3.6, -8], [22.5, 9, -16], [20, 10, -24], [14, 4, -31], [9.5, 2.9, -28], [10.5, 6, -20], [10, 4.6, -12]]   // high enough to walk under.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+      const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+      const track = new THREE.Mesh(new THREE.TubeGeometry(curve, 220, 0.2, 6, true), E.mat('#d24a3a', { metal: 0.4, rough: 0.4 })); track.castShadow = true; g.add(track);
+      for (const off of [-0.5, 0.5]) { const pp = curve.getSpacedPoints(220).map((v, i, a) => { const t = curve.getTangentAt(i / 220), n = new THREE.Vector3(-t.z, 0, t.x).normalize(); return v.clone().addScaledVector(n, off).setY(v.y + 0.25); }); const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pp, true), 220, 0.05, 4, true), steel); g.add(rail); }
+      for (let i = 0; i < 40; i++) { const v = curve.getPointAt(i / 40); if (v.y > 1.6) { const s = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, v.y, 6), white); s.position.set(v.x, v.y / 2, v.z); g.add(s); if (i % 2 === 0) p.addCircle(v.x, v.z, 0.25); } }
+      const train = [0, 1, 2, 3].map((k) => { const c = new THREE.Group(); const b = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 1.6), C[(k + 1) % C.length]); b.position.y = 0.6; b.castShadow = true; c.add(b); for (const sx of [-0.3, 0.3]) { const hd = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 6), white); hd.position.set(sx, 1.15, 0); c.add(hd); } g.add(c); return c; });
+      let cu = 0;
+
+      // a balloon seller and a popcorn cart by the carousel
+      { const bx = -7, bz = 2; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 5), dark); pole.position.set(bx, 0.8, bz); g.add(pole);
+        for (let i = 0; i < 9; i++) { const a = r() * 6.3, rr = 0.2 + r() * 0.5, h = 2.6 + r() * 0.9, bl = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), C[i % C.length]); bl.scale.y = 1.2; bl.position.set(bx + Math.cos(a) * rr, h, bz + Math.sin(a) * rr); g.add(bl); }
+        pb(1.6, 1.0, 0.9, 7, 0.5, 1.5, E.mat('#ffffff', { map: stripes('#eeece6', '#d24a3a', 10) })); pb(1.3, 0.9, 0.7, 7, 1.5, 1.5, new THREE.MeshStandardMaterial({ color: '#fff4cc', transparent: true, opacity: 0.6 }));
+        const umb = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.6, 12), E.mat('#ffffff', { map: stripes('#eeece6', '#e8b23a', 12) })); umb.position.set(7, 2.9, 1.5); g.add(umb); p.addBox(7, 1.5, 0.85, 0.5); }
+      // string lights from the gate to the carousel
+      { const sl = []; for (const sd of [-1, 1]) for (let i = 0; i <= 20; i++) { const t = i / 20, x = sd * (5 - t * 1.5), z = 10 - t * 13.5, y = 5.6 - Math.sin(t * Math.PI) * 1.2 - t * 1.0; sl.push(x, y, z); }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(sl, 3)); const pm = new THREE.PointsMaterial({ map: E.dot(), color: E.lin('#ffe2a0'), size: 0.5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); pm.userData.lin = true; g.add(new THREE.Points(geo, pm)); }
+
+      // the visitors: all the same, queued for the rides; one is a different colour and keeps changing places
+      const figM = E.mat('#e2e2e0', { rough: 0.6 });
+      const bodyGeo = new THREE.CylinderGeometry(0.3, 0.42, 1.3, 10).translate(0, 0.65, 0), headGeo = new THREE.SphereGeometry(0.3, 14, 10).translate(0, 1.62, 0);
+      const cells = [], queue = (x0, z0, dx, dz, n, col0) => { for (let i = 0; i < n; i++) { const x = x0 + dx * i, z = z0 + dz * i; cells.push({ x, z, col: (col0 + i) % 7 }); p.addCircle(x, z, 0.5); } };
+      queue(-2.5, -1.5, -1.1, 1.0, 7, 0); queue(2.5, -1.5, 1.1, 1.0, 6, 2);          // two lines for the carousel
+      queue(-6, -19, 0, 1.15, 8, 1); queue(-12.5, -17, 0, 1.15, 6, 3);                  // the wheel and the tower
+      queue(12, 2, 0, 1.1, 5, 4); queue(4, -22, 0, 1.1, 3, 5);                          // the coaster
+      const n = cells.length, bodies = new THREE.InstancedMesh(bodyGeo, figM, n), heads = new THREE.InstancedMesh(headGeo, figM, n);
+      bodies.castShadow = heads.castShadow = true; g.add(bodies, heads);
+      const oddM = new THREE.MeshStandardMaterial({ color: '#3ff0ff', emissive: '#22d8ff', emissiveIntensity: 1.2, roughness: 0.5 });
+      const odd = new THREE.Group(); odd.add(new THREE.Mesh(bodyGeo, oddM), new THREE.Mesh(headGeo, oddM)); odd.children.forEach((m) => { m.castShadow = true; }); g.add(odd);
+      PB.flush();
 
       p.grade = {
-        top: '#7f8288', bottom: '#c9c9c9', fog: '#a9aaae', near: 30, far: 170,
-        sun: '#ffffff', sunInt: 2.2, hemi: 0.55, sunDir: [0.55, 0.45, 0.3],
-        tint: [0.98, 1, 1.02], expo: 0.86, sat: 0.36, stars: 0,
+        top: '#8aa6c8', bottom: '#e8d8c0', fog: '#c9c4bc', near: 30, far: 170,
+        sun: '#fff1d8', sunInt: 2.3, hemi: 0.6, sunDir: [0.55, 0.45, 0.3],
+        tint: [1.0, 1, 1.0], expo: 0.9, sat: 0.62, stars: 0,
       };
-      p.map = [{ t: 'rect', x: 0, z: -10, w: 44, h: 44, c: '#d8d8d8' }];
+      p.map = [{ t: 'rect', x: 0, z: -10, w: 50, h: 50, c: '#bdb6aa' }];
       p.face = Math.PI;
       p.pathEnd = 12;
       p.clearR = 12;
-      p.blocks = (lx, lz) => Math.abs(lx) < 25 && lz > -34 && lz < 14;
+      p.blocks = (lx, lz) => Math.abs(lx) < 26 && lz > -36 && lz < 14;
 
-      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3();
-      let oddIdx = 17, lastBeats = 0, timer = 0;
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+      let oddIdx = 3, lastBeats = 0, timer = 0, drop = { y: 2, v: 0, st: 'up', wait: 0 };
       p.update = (t, dt, f) => {
         timer += dt;
-        if ((f.beats !== lastBeats && f.beats % 8 === 0) || timer > 6) {
-          lastBeats = f.beats; timer = 0;
-          let nx = oddIdx;
-          while (nx === oddIdx) nx = Math.floor(r() * n);
-          oddIdx = nx;
-        }
+        if ((f.beats !== lastBeats && f.beats % 8 === 0) || timer > 6) { timer = 0; let nx = oddIdx; while (nx === oddIdx) nx = Math.floor(r() * n); oddIdx = nx; }
         lastBeats = f.beats;
         const bob = f.pulse * 0.16;
-        cells.forEach((c, i) => {
-          const s = i === oddIdx ? 0.0001 : 1 + band(f, c.col * 3 + 2, 24) * 0.35;
-          ps.set(c.x, bob, c.z); sc.set(1, s, 1);
-          m4.compose(ps, q, sc);
-          bodies.setMatrixAt(i, m4);
-          heads.setMatrixAt(i, m4);
-        });
+        cells.forEach((c, i) => { const s = i === oddIdx ? 0.0001 : 1 + band(f, c.col * 3 + 2, 24) * 0.3; ps.set(c.x, bob, c.z); sc.set(1, s, 1); m4.compose(ps, q, sc); bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
         bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
         const oc = cells[oddIdx];
-        odd.position.x += (oc.x - odd.position.x) * Math.min(1, dt * 6);
-        odd.position.z += (oc.z - odd.position.z) * Math.min(1, dt * 6);
-        odd.position.y = bob * 1.6;
-        odd.rotation.y = Math.sin(t * 2) * 0.6;
-        bars.forEach((b, i) => { b.scale.y += (0.4 + band(f, i + 4, 24) * 9 - b.scale.y) * Math.min(1, dt * 12); });
+        odd.position.x += (oc.x - odd.position.x) * Math.min(1, dt * 6); odd.position.z += (oc.z - odd.position.z) * Math.min(1, dt * 6); odd.position.y = bob * 1.6; odd.rotation.y = Math.sin(t * 2) * 0.6;
+        // carousel: turns faster with the level; the horses rise and fall in turn on the beat
+        car.rotation.y += dt * (0.35 + f.level * 0.5);
+        horses.forEach((o) => { o.h.position.y = 1.6 + Math.sin(t * 2.6 + o.s * 1.4) * 0.25 + (o.s % 2 ? f.pulse : f.bass) * 0.18; });
+        // wheel: slow turn, cabins hang level, rim lights run round with the spectrum
+        wheel.rotation.z -= dt * 0.12; gond.forEach((gp) => { gp.rotation.z = -wheel.rotation.z; });
+        for (let i = 0; i < 64; i++) { const v = band(f, i % 24, 24); col.setHSL(((i / 64 + t * 0.05) % 1), 0.8, 0.35 + v * 0.45); rimL.setColorAt(i, col); }
+        rimL.instanceColor.needsUpdate = true;
+        // drop tower: creeps up, waits at the top, and falls on a strong beat
+        if (drop.st === 'up') { drop.y += dt * 2.2; if (drop.y >= DH - 2.5) { drop.y = DH - 2.5; drop.st = 'top'; drop.wait = 1.5; } }
+        else if (drop.st === 'top') { drop.wait -= dt; if (drop.wait <= 0 && (f.pulse > 0.6 || drop.wait < -4)) { drop.st = 'fall'; drop.v = 0; } }
+        else if (drop.st === 'fall') { drop.v += dt * 26; drop.y -= drop.v * dt; if (drop.y <= 2.2) { drop.y = 2.2; drop.st = 'rest'; drop.wait = 2.5; } }
+        else { drop.wait -= dt; if (drop.wait <= 0) drop.st = 'up'; }
+        ring.position.y = drop.y;
+        // coaster: quicker downhill, slower at the crests
+        const here = curve.getPointAt(cu), ahead = curve.getPointAt((cu + 0.01) % 1);
+        cu = (cu + dt * (0.035 + Math.max(0, here.y - ahead.y) * 0.05 + f.level * 0.01)) % 1;
+        train.forEach((c, k) => { const u = (cu - k * 0.012 + 1) % 1, v = curve.getPointAt(u), tg = curve.getTangentAt(u); c.position.set(v.x, v.y + 0.2, v.z); c.lookAt(v.x + tg.x, v.y + 0.2 + tg.y, v.z + tg.z); });
       };
-      p.shot = (t) => ({ pos: [Math.sin(t * 0.07) * 4, 6.5, 5], look: [0, 0.6, -14], roll: 0 });
+      p.shot = (t) => ({ pos: [Math.sin(t * 0.07) * 6, 7.5, 8], look: [0, 6, -20], roll: 0 });
     },
   };
 
