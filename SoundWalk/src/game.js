@@ -489,7 +489,60 @@
     circles.push({ x: 0, z: 0, r: 4.0 });
   }
 
-  const worldUpd = [];
+  // The record shop on the edge of the plaza, in the widest gap between the walks out to the places: step up to its
+  // counter to buy the songs (the same store is an app on the phone).
+  const shopAt = (() => {
+    const dirs = places.map((p) => Math.atan2(p.x, p.z)); let bestA = 0, bestG = -1;
+    for (let k = 0; k < 360; k++) { const a = (k * Math.PI) / 180, g = Math.min(...dirs.map((d) => Math.abs(Math.atan2(Math.sin(a - d), Math.cos(a - d))))); if (g > bestG) { bestG = g; bestA = a; } }
+    const R0 = PLAZA_R + 4.2, ux = Math.sin(bestA), uz = Math.cos(bestA);
+    return { x: ux * R0, z: uz * R0, yaw: Math.atan2(-ux, -uz), ux, uz };
+  })();
+  {
+    const S = new THREE.Group(); S.position.set(shopAt.x, 0, shopAt.z); S.rotation.y = shopAt.yaw;
+    const W = 6, D = 4.4, H = 3.6, brick = mat('#8a5a46', { map: tex('brick', 1.5, 1) }), trim = mat('#1b1c1f', { rough: 0.5, metal: 0.3 }), glass = gloss('#0c1013', { rough: 0.06, metal: 0.5, env: 1 });
+    const put = (g, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = o.receiveShadow = true; S.add(o); return o; };
+    // the shell: back and sides of brick, a shopfront of black steel and glass facing the plaza (+z)
+    put(new THREE.BoxGeometry(W, H, 0.3), brick, 0, H / 2, -D / 2 + 0.15);
+    for (const sd of [-1, 1]) put(new THREE.BoxGeometry(0.3, H, D), brick, sd * (W / 2 - 0.15), H / 2, 0);
+    put(new THREE.BoxGeometry(W + 0.3, 0.35, D + 0.5), trim, 0, H + 0.17, 0.1);   // roof slab with a cornice
+    put(new THREE.BoxGeometry(W, 0.9, 0.12), trim, 0, H - 0.45, D / 2);            // fascia for the sign
+    put(new THREE.BoxGeometry(W, 0.5, 0.12), trim, 0, 0.25, D / 2);                 // stall riser
+    for (const x of [-W / 2 + 0.1, -0.8, 0.8, W / 2 - 0.1]) put(new THREE.BoxGeometry(0.12, H - 1.4, 0.14), trim, x, 0.5 + (H - 1.4) / 2, D / 2);
+    put(new THREE.BoxGeometry(W / 2 - 0.9, H - 1.4, 0.04), glass, -(W / 4 + 0.4), 0.5 + (H - 1.4) / 2, D / 2 - 0.02);   // shop windows either side of the open door
+    put(new THREE.BoxGeometry(W / 2 - 0.9, H - 1.4, 0.04), glass, W / 4 + 0.4, 0.5 + (H - 1.4) / 2, D / 2 - 0.02);
+    put(new THREE.BoxGeometry(W - 0.3, 0.06, D - 0.3), mat('#2a2622', { rough: 0.8 }), 0, 0.03, 0);   // floor inside
+    // inside: a warm light, racks of sleeves in the songs' colours, a counter with a listening deck
+    const warm = new THREE.PointLight(lin('#ffcf9a'), 1.4, 9, 1.8); warm.position.set(0, H - 0.6, 0.4); S.add(warm);
+    put(new THREE.BoxGeometry(W - 0.8, 0.08, 0.5), basic('#ffe2bf'), 0, H - 0.08, 0);
+    const sleeveG = new THREE.BoxGeometry(0.32, 0.32, 0.02);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 9; i++) { const p = places[(i + r * 3) % places.length], sl = put(sleeveG, mat(p.color, { rough: 0.55 }), -W / 2 + 0.7 + i * 0.52, 1.3 + r * 0.5, -D / 2 + 0.33); sl.rotation.x = -0.12; }
+    for (const sd of [-1, 1]) { put(new THREE.BoxGeometry(1.2, 0.8, 0.6), mat('#3a2c22', { rough: 0.7 }), sd * 1.8, 0.4, -0.2); for (let i = 0; i < 6; i++) { const sl = put(sleeveG, mat(places[(i + (sd > 0 ? 4 : 0)) % places.length].color, { rough: 0.55 }), sd * 1.8 - 0.45 + i * 0.18, 0.92, -0.2); sl.rotation.x = -0.9; sl.rotation.y = Math.PI / 2; } }
+    put(new THREE.BoxGeometry(2.2, 1.0, 0.7), trim, 0, 0.5, -1.2);
+    const deck = put(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 24), mat('#0b0b0c', { rough: 0.3 }), -0.5, 1.03, -1.2);
+    // the sign: lit letters over the door, and a projecting blade sign you can read from along the plaza
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.6, 0.8), new THREE.MeshBasicMaterial({ map: textTex('NS HACK RECORDS', { w: 1024, h: 140, font: '700 74px "Hind",sans-serif', color: '#ffe9c4', glow: '#ff9a3c' }), transparent: true, depthWrite: false }));
+    sign.position.set(0, H - 0.45, D / 2 + 0.07); S.add(sign);
+    const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.5), new THREE.MeshBasicMaterial({ map: textTex('RECORDS', { w: 512, h: 128, font: '700 70px "Hind",sans-serif', color: '#9ff3ff', glow: '#3ff0ff' }), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    blade.rotation.y = Math.PI / 2; blade.rotation.x = 0; blade.material.map.center.set(0.5, 0.5); blade.material.map.rotation = Math.PI / 2;
+    blade.position.set(W / 2 + 0.4, H - 0.9, D / 2 - 0.2); S.add(blade);
+    put(new THREE.BoxGeometry(0.06, 0.06, 0.6), trim, W / 2 + 0.2, H - 0.1, D / 2 - 0.2);
+    // outside: a crate of records and an A-board
+    const crate = put(new THREE.BoxGeometry(0.9, 0.5, 0.6), mat('#6e5137', { rough: 0.85 }), -W / 2 + 0.8, 0.25, D / 2 + 0.7);
+    for (let i = 0; i < 5; i++) { const sl = put(sleeveG, mat(places[(i + 2) % places.length].color, { rough: 0.55 }), -W / 2 + 0.5 + i * 0.15, 0.62, D / 2 + 0.7); sl.rotation.y = Math.PI / 2; sl.rotation.z = -0.25; }
+    scene.add(S);
+    // walls stop you; the open door lets you step in to the counter
+    const c = Math.cos(shopAt.yaw), sn = Math.sin(shopAt.yaw), wpt = (lx, lz) => ({ x: shopAt.x + lx * c + lz * sn, z: shopAt.z - lx * sn + lz * c });
+    const addB = (lx, lz, hx, hz) => { const w = wpt(lx, lz); boxes.push({ x: w.x, z: w.z, hx, hz, c, s: sn }); };
+    addB(0, -D / 2 + 0.15, W / 2, 0.2); addB(-W / 2 + 0.15, 0, 0.2, D / 2); addB(W / 2 - 0.15, 0, 0.2, D / 2);
+    addB(-(W / 4 + 0.45), D / 2, W / 4 - 0.45, 0.15); addB(W / 4 + 0.45, D / 2, W / 4 - 0.45, 0.15);   // shopfront, with the door between
+    addB(0, -1.2, 1.1, 0.4); addB(-1.8, -0.2, 0.65, 0.35); addB(1.8, -0.2, 0.65, 0.35);
+    const ci = wpt(-W / 2 + 0.8, D / 2 + 0.7); circles.push({ x: ci.x, z: ci.z, r: 0.5 });
+    const at = wpt(0, D / 2 - 0.4);   // the counter is served from the doorway: no need to squeeze the camera inside
+    interact.push({ kind: 'store', x: at.x, z: at.z, sx: at.x, sz: at.z, r: 3, mark: 2.6 });
+    shopAt.deck = deck;
+  }
+
+  const worldUpd = [(t) => { shopAt.deck.rotation.y = t * 3.5; }];   // the record on the shop's listening deck
   {
     const glowB = (c, o) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); m.userData.lin = true; return m; };
     // Brazier fire on the well: flickering flame, embers and a warm light.
@@ -617,7 +670,7 @@
 
   /* ================= ring road ================= */
   const ringView = SW.Ring.build(ring, E, {
-    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
+    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
     keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
   });
   scene.add(ringView.group);
@@ -627,7 +680,7 @@
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if (Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
+      if (Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -1212,7 +1265,23 @@
     music: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
     live: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M8 7v10M16 7v10M11 12h2"/></svg>',
     shop: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>',
+    store: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 019 9"/></svg>',
   };
+  // The record store: every song, with its price and where to buy it. The same list is the phone's STORE app and the
+  // counter of the record shop on the plaza. Songs you have not found yet are on sale too; the list just says so.
+  function storeHTML() {
+    const rows = places.map((p, i) => {
+      const s = p.song, buy = (s.links || []).find((l) => l.kind === 'buy'), listen = (s.links || []).find((l) => l.kind !== 'buy');
+      const pay = CFG.checkoutEndpoint && s.price
+        ? `<button class="btn primary" type="button" data-buy="${i}" aria-label="${esc(s.title)} を ${yen(s.price)} で買う">${IC.cart}<span>${yen(s.price)}</span></button>`
+        : buy ? `<a class="btn primary" href="${esc(buy.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(buy.label)}">${IC.cart}<span>BUY ↗</span></a>`
+          : '<button class="btn" type="button" disabled aria-label="準備中">SOON</button>';
+      const lis = listen ? `<a class="btn" href="${esc(listen.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(listen.label)}">${IC.play}</a>` : '';
+      const sub = [s.year, p.found ? s.place : '未発見', s.price && !CFG.checkoutEndpoint ? yen(s.price) : ''].filter(Boolean).join(' · ');
+      return `<div class="st-row"><span class="dot" style="background:${esc(p.found ? p.color : '#55524a')}"></span><span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span><span class="st-acts">${lis}${pay}</span></div>`;
+    }).join('');
+    return `<h3 class="ph-h">NS HACK RECORDS</h3><p class="ph-sub">${esc(CFG.artist)} · ${places.length} SONGS · DIGITAL</p>${rows}`;
+  }
   let phView = 'home', phSong = null;
   const phScreen = $('#phScreen');
   function phRender() {
@@ -1221,7 +1290,7 @@
     $('#phCount').textContent = `♪ ${places.filter((p) => p.found).length}/${places.length}`;
     let h = '';
     if (phView === 'home') {
-      const apps = [['map', 'MAP'], ['music', 'MUSIC']];
+      const apps = [['map', 'MAP'], ['music', 'MUSIC'], ['store', 'STORE']];
       if (CFG.live) apps.push(['live', 'LIVE']);
       if (CFG.shop && CFG.shop.url) apps.push(['shop', 'SHOP']);
       h = '<div class="ph-grid">' + apps.map(([k, n]) => `<button class="ph-app" type="button" data-go="${k}">${PHI[k]}<span>${n}</span></button>`).join('') + '</div>';
@@ -1232,6 +1301,8 @@
     } else if (phView === 'song' && phSong) {
       const s = phSong.song, links = (s.links || []).map((l) => `<a class="btn${l.kind === 'buy' ? ' primary' : ''}" href="${esc(l.url)}" target="_blank" rel="noopener" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>BUY ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
       h = `<h3 class="ph-h">MUSIC</h3><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc([(s.artist || CFG.artist), s.year].filter(Boolean).join(' · '))}</p><div class="ph-acts">${links}<button class="btn" type="button" data-warp="1">${PHI.map}<span>GO</span></button></div>`;
+    } else if (phView === 'store') {
+      h = storeHTML();
     } else if (phView === 'live') {
       h = `<h3 class="ph-h">NEXT LIVE</h3><p class="ph-big">${esc(CFG.live.date || '')}</p><p class="ph-sub">${esc(CFG.live.place || '')}</p>`;
     } else if (phView === 'shop') {
@@ -1242,18 +1313,20 @@
     const first = phScreen.querySelector('button:not([disabled]), a');
     (first || $('#phClose')).focus({ preventScroll: true });
   }
-  function openPhone() {
+  function openPhone(view, counter) {
     if (mode !== 'walk') return;
-    mode = 'phone'; keys.clear(); auto = null; phView = 'home';
-    document.body.classList.add('busy'); avatar.setPhone(true);
+    mode = 'phone'; keys.clear(); auto = null; phView = view || 'home';
+    document.body.classList.add('busy'); if (!counter) avatar.setPhone(true);
+    $('#phone').classList.toggle('counter', !!counter);   // at the shop's counter the store opens as a big catalogue, not on the phone
     $('#phone').hidden = false; phRender();
   }
+  const openStore = () => openPhone('store', true);
   function closePhone() {
     if (mode !== 'phone') return;
-    mode = 'walk'; $('#phone').hidden = true; document.body.classList.remove('busy'); avatar.setPhone(false);
+    mode = 'walk'; $('#phone').hidden = true; $('#phone').classList.remove('counter'); document.body.classList.remove('busy'); avatar.setPhone(false);
     cv.focus({ preventScroll: true });
   }
-  function phoneBack() { if (phView === 'home') closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
+  function phoneBack() { if (phView === 'home' || $('#phone').classList.contains('counter')) closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
   function phoneKey(e) {
     if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) closePhone(); return; }
     if (e.key === 'Escape' || e.key === 'Backspace' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) phoneBack(); return; }
@@ -1265,15 +1338,16 @@
     if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); }
   }
   phScreen.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-go], [data-song], [data-warp]');
+    const b = e.target.closest('[data-go], [data-song], [data-warp], [data-buy]');
     if (!b) return;
+    if (b.dataset.buy !== undefined) { checkout(places[+b.dataset.buy].song, b); return; }
     if (b.dataset.go === 'map') { closePhone(); openMap(); }
     else if (b.dataset.go) { phView = b.dataset.go; phRender(); }
     else if (b.dataset.song !== undefined) { phSong = places[+b.dataset.song]; phView = 'song'; phRender(); }
     else if (b.dataset.warp && phSong) { closePhone(); warpTo(phSong); }
   });
   $('#phBack').addEventListener('click', phoneBack);
-  $('#phHome').addEventListener('click', () => { phView = 'home'; phRender(); });
+  $('#phHome').addEventListener('click', () => { if ($('#phone').classList.contains('counter')) { closePhone(); return; } phView = 'home'; phRender(); });
   $('#phClose').addEventListener('click', closePhone);
   $('#phoneBtn').addEventListener('click', () => (mode === 'phone' ? closePhone() : openPhone()));
 
@@ -1414,6 +1488,7 @@
     if (ia.kind === 'exit') { endDrive(ia.pa); return; }
     if (ia.kind === 'info') { say(ia.lines.slice()); return; }
     if (ia.kind === 'travel') { openConfirm(ia); return; }
+    if (ia.kind === 'store') { openStore(); return; }
     if (ia.kind === 'sign') {
       const p = ia.place, s = p.song;
       say([`この道の先：${s.place}（${s.placeEn}）`, p.found ? `♪ ${s.title} が流れている場所。近づくほど音が大きくなる。` : 'どんな曲が流れているかは、行ってみないとわからない。']);
@@ -1741,7 +1816,7 @@
       $('#prompt').hidden = !fkey; $('#prompt').className = fkey ? 'k-' + fkey.kind : '';
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
-        $('#promptText').textContent = !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
+        $('#promptText').textContent = fkey.kind === 'store' ? 'RECORDS' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }

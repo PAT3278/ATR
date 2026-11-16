@@ -69,8 +69,8 @@ kbd { font-family: var(--f-head); font-size: 13px; min-width: 24px; height: 24px
 
 #prompt { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 30px); display: flex; align-items: center; gap: 10px; padding: 8px 16px 7px 10px; z-index: 3; white-space: nowrap; max-width: calc(100% - 32px); }
 #prompt kbd { background: var(--red-deep); border-color: var(--red); }
-#prompt .i-car, #prompt .i-out, #prompt.k-car .i-eye, #prompt.k-exit .i-eye, #btnA .i-car, #btnA .i-out, #btnA.k-car .i-eye, #btnA.k-exit .i-eye { display: none; }
-#prompt.k-car .i-car, #prompt.k-exit .i-out, #btnA.k-car .i-car, #btnA.k-exit .i-out { display: block; }
+#prompt .i-car, #prompt .i-out, #prompt .i-rec, #prompt.k-store .i-eye, #prompt.k-car .i-eye, #prompt.k-exit .i-eye, #btnA .i-car, #btnA .i-out, #btnA.k-car .i-eye, #btnA.k-exit .i-eye { display: none; }
+#prompt.k-store .i-rec, #prompt.k-car .i-car, #prompt.k-exit .i-out, #btnA.k-car .i-car, #btnA.k-exit .i-out { display: block; }
 
 /* ---------- driving ---------- */
 #speedo { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); display: none; align-items: baseline; gap: 6px; z-index: 2; font-family: var(--f-head); color: var(--bone); text-shadow: 0 2px 0 #000, 0 0 12px #000; pointer-events: none; }
@@ -214,3 +214,18 @@ body.viewing #bars i { height: 10vh; }
   #banner, #fade, #bars i { transition: none; }
   .card { animation: none; }
 }
+
+/* ---------- record store (phone app, and the shop counter) ---------- */
+.st-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; background: #1b1a18; border: 1px solid var(--line); border-radius: 3px; font-family: var(--f-head); font-size: 15px; letter-spacing: .04em; }
+.st-row .dot { width: 10px; height: 10px; flex: none; transform: rotate(45deg); }
+.st-row .nm { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.st-row .nm small { color: var(--dim); font-size: 11px; letter-spacing: .06em; }
+.st-acts { display: flex; gap: 6px; flex: none; }
+.st-acts .btn { font-size: 13px; padding: 7px 10px 5px; letter-spacing: .08em; }
+.st-acts .btn .ic { width: 16px; height: 16px; }
+#phone.counter { border-radius: 6px; right: 50%; bottom: auto; top: 50%; transform: translate(50%, -50%); width: min(560px, calc(100% - 32px)); height: min(600px, calc(100% - 48px)); animation: none; border-left: 3px solid var(--red); }
+#phone.counter .ph-top { visibility: hidden; height: 6px; padding: 0; }
+#phone.counter .ph-screen { padding: 18px; gap: 10px; }
+#phone.counter .ph-h { font-size: 15px; }
+#phone.counter .st-row { padding: 10px 10px 10px 14px; font-size: 17px; }
+@media (max-width: 420px) { .st-row { flex-wrap: wrap; } .st-acts { width: 100%; justify-content: flex-end; } }
