@@ -323,7 +323,7 @@
   scene.add(sun, sun.target);
 
   const pick = [];
-  const circles = [], boxes = [], waters = [];
+  const circles = [], boxes = [], waters = [], rooms = [];   // rooms: small buildings you can walk into (the camera stays under their roof)
   function isWater(x, z) { for (const b of waters) { const dx = x - b.x, dz = z - b.z, ux = dx * b.c - dz * b.s, uz = dx * b.s + dz * b.c; if (Math.abs(ux) < b.hx && Math.abs(uz) < b.hz) return true; } return false; }
   const interact = [];
 
@@ -540,6 +540,7 @@
     const at = wpt(0, D / 2 - 0.4);   // the counter is served from the doorway: no need to squeeze the camera inside
     interact.push({ kind: 'store', x: at.x, z: at.z, sx: at.x, sz: at.z, r: 3, mark: 2.6 });
     shopAt.deck = deck;
+    rooms.push({ x: shopAt.x, z: shopAt.z, c, s: sn, hx: W / 2, hz: D / 2, y: H });
   }
 
   // The pool hall, in the next widest gap round the plaza: a brick room with an open front, one table under a lamp.
@@ -585,6 +586,7 @@
     addB(TX, TZ, 1.4, 0.8);
     const at = wpt(0, D / 2 - 0.3);
     interact.push({ kind: 'pool', x: at.x, z: at.z, sx: at.x, sz: at.z, r: 3, mark: 2.6 });
+    rooms.push({ x: hallAt.x, z: hallAt.z, c, s: sn, hx: W / 2, hz: D / 2, y: H });
   }
 
   const worldUpd = [(t) => { shopAt.deck.rotation.y = t * 3.5; }];   // the record on the shop's listening deck
@@ -2003,6 +2005,17 @@
       else { const sh = 0.62 * (1 - boost * 0.6); tx += Math.cos(camYaw) * sh; tz -= Math.sin(camYaw) * sh; }
       let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * cd, cy = ty + Math.sin(camPitch) * cd, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * cd;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
+      else if (!drv) {   // on foot: a wall between you and the camera pulls the camera in front of it (inside a shop it stays inside)
+        let k = camBlock(tx, tz, cx, cz, ty);
+        for (const r of rooms) {   // inside a shop the camera stays inside it, even when the line runs out through the door
+          const L = (x, z) => { const dx = x - r.x, dz = z - r.z; return [dx * r.c - dz * r.s, dx * r.s + dz * r.c]; }, [u0, v0] = L(tx, tz), [u1, v1] = L(cx, cz), hx = r.hx - 0.35, hz = r.hz - 0.35;
+          if (Math.abs(u0) > r.hx || Math.abs(v0) > r.hz) continue;
+          let te = 1; for (const [p0, d, h] of [[u0, u1 - u0, hx], [v0, v1 - v0, hz]]) if (Math.abs(d) > 1e-9) te = Math.min(te, Math.max(0, ((d > 0 ? h : -h) - p0) / d));
+          k = Math.min(k, te + 0.35 / Math.max(1, cd));
+        }
+        if (k < 1) { const c2 = Math.max(0.6, cd * k - 0.35); cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * c2; cy = ty + Math.sin(camPitch) * c2; cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * c2; }
+        for (const r of rooms) { const dx = tx - r.x, dz = tz - r.z, u = dx * r.c - dz * r.s, v = dx * r.s + dz * r.c; if (Math.abs(u) < r.hx && Math.abs(v) < r.hz) cy = Math.min(cy, r.y - 0.35); }   // and under its roof
+      }
       cx = clamp(cx, -345, 345); cz = clamp(cz, -345, 345); cy = Math.min(40, Math.max(groundAt(cx, cz, P.y) + 0.5, cy));
       for (const q of places) if (q.ceil && P.y < 3) { const l = q.local(cx, cz), lp = q.local(P.x, P.z), c = q.ceil(l.x, l.z) ?? q.ceil(lp.x, lp.z); if (c != null) cy = Math.min(cy, c); }   // under a roof (a tunnel): keep below it   // P.y: the camera follows you into a tunnel or onto an upper floor
       tmpV.set(cx, cy, cz); tmpL.set(tx, ty - 0.1, tz); tmpU.set(0, 1, 0);
@@ -2129,6 +2142,25 @@
   document.title = CFG.title;
   resize();
 
+  // How far along the line from the player (x0, z0) to the camera (x1, z1) the first building-sized collider starts (1 = clear).
+  function camBlock(x0, z0, x1, z1, y) {
+    let best = 1; const L = Math.hypot(x1 - x0, z1 - z0) + 4;
+    for (const b of boxes) {
+      if (Math.max(b.hx, b.hz) < 1.8 || (b.y1 !== undefined && b.y1 < y) || (b.y0 !== undefined && b.y0 > y)) continue;
+      const ex = Math.abs(b.x - x0), ez = Math.abs(b.z - z0); if (ex > L + b.hx + b.hz || ez > L + b.hx + b.hz) continue;
+      const c = b.c ?? 1, s = b.s ?? 0, loc = (x, z) => { const dx = x - b.x, dz = z - b.z; return [dx * c - dz * s, dx * s + dz * c]; };
+      const [u0, v0] = loc(x0, z0), [u1, v1] = loc(x1, z1), hx = b.hx + 0.15, hz = b.hz + 0.15;
+      if (Math.abs(u0) < hx && Math.abs(v0) < hz) continue;   // hugging it: leave the camera be
+      let t0 = 0, t1 = 1, ok = true;
+      for (const [p, d, h] of [[u0, u1 - u0, hx], [v0, v1 - v0, hz]]) {
+        if (Math.abs(d) < 1e-9) { if (Math.abs(p) > h) { ok = false; break; } continue; }
+        let ta = (-h - p) / d, tb = (h - p) / d; if (ta > tb) [ta, tb] = [tb, ta];
+        t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) { ok = false; break; }
+      }
+      if (ok && t0 < best) best = t0;
+    }
+    return best;
+  }
   let last = performance.now(), camHold = null;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -2161,5 +2193,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, camera, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
