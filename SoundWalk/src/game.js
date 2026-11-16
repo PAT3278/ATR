@@ -1623,9 +1623,9 @@
       T.aimG.position.set(T.TX + c.x, y, T.TZ + c.z); T.aimG.rotation.y = -pool.aim; T.cuePivot.position.x = -(PSIM.R + 0.02 + pool.power * 0.22);
     }
   }
-  $('#miShoot').addEventListener('pointerdown', (e) => { if (mode === 'pool') { e.preventDefault(); poolHold(true); } });
+  $('#miShoot').addEventListener('pointerdown', (e) => { if (mode === 'pool') { e.preventDefault(); poolHold(true); } else if (mode === 'ride') { e.preventDefault(); teaPress(); } });
   for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('#miShoot').addEventListener(ev, () => { if (mode === 'pool') poolHold(false); });
-  $('#miQuit').addEventListener('click', () => { if (mode === 'pool') endPool(); });
+  $('#miQuit').addEventListener('click', () => { if (mode === 'pool') endPool(); else if (mode === 'ride') endRide(); });
 
 
   addEventListener('keydown', (e) => {
@@ -1645,7 +1645,7 @@
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
     if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
-    if (mode === 'ride') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); endRide(); } return; }
+    if (mode === 'ride') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); endRide(); } else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); teaPress(); } return; }
     if (mode !== 'walk') return;
     const k = KEYMAP[e.code];
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
@@ -1673,7 +1673,7 @@
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
     if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
-    if (drag.moved) { camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, 0.04, 0.85); }
+    if (drag.moved) { if (ride && ride.st !== 'walk') { ride.lookYaw -= dx * 0.006; ride.lookPitch = clamp(ride.lookPitch + dy * 0.004, -0.9, 1.1); } else { camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, 0.04, 0.85); } }
   });
   cv.addEventListener('pointerup', (e) => { if (pool && pool.drag && pool.drag.id === e.pointerId) { pool.drag = null; return; } if (!drag || drag.id !== e.pointerId) return; const was = drag; drag = null; if (!was.moved && mode === 'walk') tap(e.clientX, e.clientY); });
   cv.addEventListener('pointercancel', () => (drag = null));
@@ -1723,7 +1723,8 @@
     padPrev = pressed;
     padRun = !!(pressed[7] || pressed[5] || pressed[2]); padBrake = !!(pressed[6] || pressed[4]); padGas = !!pressed[7]; padFast = !!(pressed[5] || pressed[2]);
     if (mode === 'ride' && down(1)) endRide();
-    if (mode === 'walk' || mode === 'ride') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
+    if (mode === 'ride' && ride && ride.st !== 'walk') { ride.lookYaw -= dz(gp.axes[2] || 0) * 0.04; ride.lookPitch = clamp(ride.lookPitch + dz(gp.axes[3] || 0) * 0.02, -0.9, 1.1); if (down(0)) teaPress(); }
+    else if (mode === 'walk' || mode === 'ride') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
@@ -1733,6 +1734,7 @@
   function act(ia) {
     auto = null; keys.clear();
     if (ia.kind === 'view') { if (ia.place.ride) startRide(ia.place); else enterView(ia.place); return; }
+    if (ia.kind === 'ride') { startRide(ia.place, ia.ride); return; }
     if (ia.kind === 'board') { openMap(); return; }
     if (ia.kind === 'car') { startDrive(ia.pa); return; }
     if (ia.kind === 'exit') { endDrive(ia.pa); return; }
@@ -1774,36 +1776,71 @@
   // Esc, B or the back button gets you off. The song plays as it does in a view.
   let ride = null;
   const rv = new THREE.Vector3();
-  function startRide(p) {
-    const R = p.ride; if (!R || mode !== 'walk') return;
-    enterView(p); viewPlace = null; mode = 'ride';   // the song card, without the fixed camera
-    document.body.classList.remove('viewing'); document.body.classList.add('riding'); camBlend = 1;
-    R.pick && R.pick();
-    ride = { p, st: 'walk', t: 0, from: null, b: R.board() };
+  // A ride (p.ride, or one handed in): board() -> world spot, hold(on) to stop it for boarding / start it again,
+  // stopped(), pick() (choose your seat once it has stopped), seat(v) -> yaw, and optionally game (the teacups).
+  // You walk up, wait for it to stop, climb on, it starts; on board you see through your own eyes and can look round
+  // (drag / right stick). Esc / B / back: it stops again and you get off.
+  function startRide(p, R = p.ride) {
+    if (!R || mode !== 'walk') return;
+    if (R.game) { mode = 'ride'; document.body.classList.add('busy', 'riding'); $('#prompt').hidden = true; lastFocus = undefined; keys.clear(); auto = null; }
+    else { enterView(p); viewPlace = null; mode = 'ride'; document.body.classList.remove('viewing'); document.body.classList.add('riding'); }   // the song card, without the fixed camera
+    camBlend = 1;
+    R.hold && R.hold(true);
+    ride = { p, R, st: 'walk', t: 0, from: null, b: R.board(), lookYaw: 0, lookPitch: 0.08 };
+    if (R.game) { R.boost = 0; $('#mgame').hidden = false; $('#miTitle').textContent = 'TEACUPS'; $('#miShoot').firstChild.textContent = 'SPIN '; ride.ph = 0; teaHud('乗ったら、緑で SPIN'); }
   }
   function endRide() {
-    if (!ride || ride.st === 'off') return;
-    ride.st = 'off'; ride.t = 0; ride.from = { x: P.x, y: P.y, z: P.z };
+    if (!ride || ride.st === 'off' || ride.st === 'stopping') return;
+    if (ride.st === 'walk') { ride.R.hold && ride.R.hold(false); finishRide(); return; }
+    ride.R.hold && ride.R.hold(true, true); ride.st = 'stopping';
+    if (ride.R.game) teaHud('止まるまで待ってね');
+  }
+  function finishRide() {
+    const r = ride; ride = null; mode = 'walk'; P.y = groundAt(P.x, P.z);
+    $('#view').hidden = true; if (r && r.R.game) { $('#mgame').hidden = true; $('#miShoot').firstChild.textContent = 'SHOOT '; }
+    document.body.classList.remove('busy', 'viewing', 'riding'); collide(P); snapCam(); camBlendDur = 0.6; cv.focus({ preventScroll: true });
+  }
+  function teaHud(say) {
+    const R = ride && ride.R; if (!R) return;
+    const rpm = Math.round(((R.spin ? R.spin() : 0) * 60) / (Math.PI * 2));
+    $('#miScore').textContent = `SPIN ${rpm} rpm\nBEST ${mgBest.cups || 0} rpm`;
+    if (say !== undefined) $('#miSay').textContent = say;
+  }
+  function teaPress() {   // the teacups: press while the marker is in the green band to spin faster
+    const r = ride; if (!r || !r.R.game || r.st !== 'on') return;
+    const m = r.mark || 0;
+    if (m > 0.8 && m < 0.9) { r.R.boost = Math.min(9, r.R.boost + 1.4); teaHud('PERFECT!'); }
+    else if (m > 0.72 && m < 0.97) { r.R.boost = Math.min(9, r.R.boost + 0.7); teaHud('GOOD'); }
+    else { r.R.boost = Math.max(0, r.R.boost - 0.6); teaHud('MISS'); }
   }
   function rideTick(dt) {
     const r = ride; if (!r) return;
+    const R = r.R;
     if (r.st === 'walk') {
       const dx = r.b.x - P.x, dz = r.b.z - P.z, d = Math.hypot(dx, dz);
-      if (d < 0.15) { r.st = 'climb'; r.t = 0; r.from = { x: P.x, y: P.y, z: P.z }; P.speed = 0; }
+      if (d < 0.15) { P.speed = 0; if (!R.stopped || R.stopped()) { R.pick && R.pick(); r.st = 'climb'; r.t = 0; r.from = { x: P.x, y: P.y, z: P.z }; } }   // wait at the gate until it has stopped
       else { const s = Math.min(d, dt * 3.2); P.x += (dx / d) * s; P.z += (dz / d) * s; P.face = Math.atan2(dx, dz); P.speed = 3.2; }
       return;
     }
-    const yaw = r.p.ride.seat(rv);
+    const yaw = R.seat(rv);
     if (r.st === 'climb') {
       r.t = Math.min(1, r.t + dt / 0.9); const k = ease(r.t);
       P.x = r.from.x + (rv.x - r.from.x) * k; P.z = r.from.z + (rv.z - r.from.z) * k; P.y = r.from.y + (rv.y - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.5;
       P.face += wrapA(yaw - P.face) * Math.min(1, dt * 8);
-      if (r.t >= 1) { r.st = 'on'; toast('ドラッグで見回せます · Esc で降りる', 3200); }
-    } else if (r.st === 'on') { P.x = rv.x; P.y = rv.y; P.z = rv.z; P.face = yaw; P.speed = 0; }
-    else if (r.st === 'off') {
+      if (r.t >= 1) { r.st = 'on'; r.lookYaw = 0; r.lookPitch = 0.08; R.hold && R.hold(false); toast('ドラッグで見回せます · Esc で降りる', 3200); }
+    } else if (r.st === 'on' || r.st === 'stopping') {
+      P.x = rv.x; P.y = rv.y; P.z = rv.z; P.face = yaw; P.speed = 0;
+      if (r.st === 'stopping' && (!R.stopped || R.stopped())) { r.st = 'off'; r.t = 0; r.from = { x: P.x, y: P.y, z: P.z }; }
+      if (R.game) {
+        r.ph = (r.ph + dt / 0.8) % 1; r.mark = r.ph; $('#miMark').style.bottom = `${(r.ph * 100).toFixed(1)}%`;
+        R.boost = Math.max(0, R.boost - dt * 0.35);
+        const rpm = Math.round(((R.spin ? R.spin() : 0) * 60) / (Math.PI * 2)); if (rpm > (mgBest.cups || 0)) { mgBest.cups = rpm; mgSave(); }
+        if (Math.random() < dt * 6) teaHud();
+      }
+    } else if (r.st === 'off') {
       r.t = Math.min(1, r.t + dt / 0.8); const k = ease(r.t), g0 = groundAt(r.b.x, r.b.z);
       P.x = r.from.x + (r.b.x - r.from.x) * k; P.z = r.from.z + (r.b.z - r.from.z) * k; P.y = r.from.y + (g0 - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.4;
-      if (r.t >= 1) { ride = null; mode = 'walk'; P.y = g0; $('#view').hidden = true; document.body.classList.remove('busy', 'viewing', 'riding'); collide(P); cv.focus({ preventScroll: true }); }
+      if (r.t >= 1) { R.hold && R.hold(false); finishRide(); }
     }
   }
   function enterView(p) {
@@ -2093,7 +2130,7 @@
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
-    avatar.G.visible = !drv && !pool && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
+    avatar.G.visible = !drv && !pool && !(ride && (ride.st === 'on' || ride.st === 'stopping')) && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
     const vf = viewPlace ? viewPlace.f : null;
     const onW = mode !== 'view' && gh < 0.1 && isWater(P.x, P.z);
     avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, onW);
@@ -2108,7 +2145,7 @@
       $('#prompt').hidden = !fkey; $('#prompt').className = fkey ? 'k-' + fkey.kind : '';
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
-        $('#promptText').textContent = fkey.kind === 'store' ? 'RECORDS' : fkey.kind === 'hoop' ? 'FREE THROW' : fkey.kind === 'pool' ? 'POOL' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
+        $('#promptText').textContent = fkey.kind === 'ride' ? fkey.label : fkey.kind === 'store' ? 'RECORDS' : fkey.kind === 'hoop' ? 'FREE THROW' : fkey.kind === 'pool' ? 'POOL' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
@@ -2155,6 +2192,9 @@
       tmpL.set(...s.look); viewPlace.group.localToWorld(tmpL);
       fwd.copy(tmpL).sub(tmpV).normalize();
       tmpU.set(0, 1, 0).applyAxisAngle(fwd, s.roll || 0);
+    } else if (ride && (ride.st === 'on' || ride.st === 'stopping')) {   // on a ride: through your own eyes, free to look round
+      const yaw = P.face + ride.lookYaw, pt = ride.lookPitch;
+      tmpV.set(P.x, P.y + 1.55, P.z); tmpL.set(P.x + Math.sin(yaw) * Math.cos(pt), P.y + 1.55 - Math.sin(pt), P.z + Math.cos(yaw) * Math.cos(pt)); tmpU.set(0, 1, 0);
     } else {
       let cd = camDist + boost * 1.8;
       if (mode === 'title') { camYaw += dt * 0.06; }

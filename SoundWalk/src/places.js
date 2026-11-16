@@ -916,26 +916,41 @@
       p.pathEnd = 12;
       p.clearR = 12;
       p.blocks = (lx, lz) => lx > -47 && lx < 29 && lz > -53 && lz < 15;
-      SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(0, WZ + 2.8) };
+      SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(0, WZ + 2.8), wheelHold: { on: false, i: 0, stopped: false } };
       // ride the carousel: walk up to the platform, climb onto an outside horse
       const hv = new THREE.Vector3(), hq = new THREE.Quaternion(), hf = new THREE.Vector3();
+      let horseI = 1;
       p.ride = {
         board: () => p.toWorld(0, CZ + 6.2),
-        seat: (v) => { const h = horses[1].h; h.getWorldPosition(v); v.y -= 0.62; h.getWorldQuaternion(hq); hf.set(0, 0, 1).applyQuaternion(hq); return Math.atan2(hf.x, hf.z); },
+        hold: (on) => { carHold = on; }, stopped: () => carSpin === 0,
+        pick: () => { const b = p.toWorld(0, CZ + 6.2); let best = 1e9; horses.forEach((o, i) => { if (!(i % 2)) return; o.h.getWorldPosition(hv); const d = Math.hypot(hv.x - b.x, hv.z - b.z); if (d < best) { best = d; horseI = i; } }); },   // the outside horse nearest the gate
+        seat: (v) => { const h = horses[horseI].h; h.getWorldPosition(v); v.y -= 0.62; h.getWorldQuaternion(hq); hf.set(0, 0, 1).applyQuaternion(hq); return Math.atan2(hf.x, hf.z); },
       };
 
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
-      let drop = { y: 2, v: 0, st: 'up', wait: 0 };
+      let drop = { y: 2, v: 0, st: 'up', wait: 0 }, carSpin = 0.35, carHold = false, teaSpin = 1;
+      // the teacups as a ride: climb into the first cup; press in time (the game) to spin it faster
+      const tq = new THREE.Quaternion(), tf = new THREE.Vector3();
+      const tea = { boost: 0, held: false, game: true,
+        board: () => p.toWorld(TCX - 5.6, TCZ), hold: (on) => { tea.held = on; }, stopped: () => teaSpin === 0,
+        seat: (v) => { cupL[0].getWorldPosition(v); v.y += 0.05; cupL[0].getWorldQuaternion(tq); tf.set(0, 0, 1).applyQuaternion(tq); return Math.atan2(tf.x, tf.z); },
+        spin: () => (0.5 + 1.2 + tea.boost * 2.4) * teaSpin };
+      p.interact({ kind: 'ride', place: p, ride: tea, label: 'TEACUPS', lx: TCX - 5.6, lz: TCZ, r: 2.0, mark: 1.8 });
       const cm4 = new THREE.Matrix4();
       p.update = (t, dt, f) => {
         const bob = f.pulse * 0.12;
         cells.forEach((c, i) => { ps.set(c.x, bob * ((i % 3) / 2), c.z); sc.set(1, c.h * (1 + band(f, c.col * 3 + 2, 24) * 0.08), 1); q.setFromAxisAngle(up, Math.sin(t * 0.5 + i) * 0.4); m4.compose(ps, q, sc); bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
         bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
         // carousel: turns faster with the level; the horses rise and fall in turn on the beat
-        car.rotation.y += dt * (0.35 + f.level * 0.5);
+        { const tgt = carHold ? 0 : 0.35 + (f.level || 0) * 0.5; carSpin += (tgt - carSpin) * Math.min(1, dt * (carHold ? 1.6 : 0.8)); if (carHold && carSpin < 0.02) carSpin = 0; car.rotation.y -= dt * carSpin; }   // clockwise seen from above, the way the horses face
         horses.forEach((o) => { o.h.position.y = 1.6 + Math.sin(t * 2.6 + o.s * 1.4) * 0.25 + (o.s % 2 ? f.pulse : f.bass) * 0.18; });
         // wheel: slow turn, cabins hang level, rim lights run round with the spectrum
-        wheel.rotation.z -= dt * 0.12; gond.forEach((gp) => { gp.rotation.z = -wheel.rotation.z; });
+        { const H = SW.parkRide && SW.parkRide.wheelHold;
+          if (H && H.on) {   // bring the cabin round to the bottom and stop there
+            const m = ((((H.i / NG) * Math.PI * 2 + wheel.rotation.z + Math.PI / 2) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            if (m < 0.004 || m > Math.PI * 2 - 0.004) H.stopped = true; else { H.stopped = false; wheel.rotation.z -= Math.min(m, dt * Math.min(0.45, 0.05 + m * 0.6)); }
+          } else wheel.rotation.z -= dt * 0.12;
+          gond.forEach((gp) => { gp.rotation.z = -wheel.rotation.z; }); }
         for (let i = 0; i < 64; i++) { const v = band(f, i % 24, 24); col.setHSL(((i / 64 + t * 0.05) % 1), 0.8, 0.35 + v * 0.45); rimL.setColorAt(i, col); }
         rimL.instanceColor.needsUpdate = true;
         // drop tower: creeps up, waits at the top, and falls on a strong beat
@@ -952,7 +967,8 @@
         swingV += ((0.9 + (f.level || 0) * 1.6) - swingV) * Math.min(1, dt * 0.4); swing.rotation.y += swingV * dt;
         chairs.forEach((c) => { c.rotation.z = Math.min(0.95, swingV * swingV * 0.38); });
         // the teacups turn, and each cup spins its own way
-        cups.rotation.y += dt * 0.5; cupL.forEach((c, i) => { c.rotation.y += dt * (1.2 + (f.bass || 0) * 3) * (i % 2 ? 1 : -1); });
+        { const tgt = tea.held ? 0 : 1; teaSpin += (tgt - teaSpin) * Math.min(1, dt * (tea.held ? 1.5 : 0.8)); if (tea.held && teaSpin < 0.02) teaSpin = 0;
+          cups.rotation.y += dt * 0.5 * teaSpin; cupL.forEach((c, i) => { c.rotation.y += dt * (i === 0 ? 1.2 + tea.boost * 2.4 : 1.2 + (f.bass || 0) * 3) * teaSpin * (i % 2 ? 1 : -1); }); }
         // the bumper cars wander and bounce off the edges
         bump.forEach((b) => { b.turn += (Math.random() - 0.5) * dt * 3; b.turn *= 0.98; b.a += b.turn * dt; const nx = b.g.position.x + Math.sin(b.a) * b.v * dt, nz = b.g.position.z + Math.cos(b.a) * b.v * dt;
           if (Math.abs(nx - BCX) > 5.2 || Math.abs(nz - BCZ) > 3.2) b.a += Math.PI * (0.6 + Math.random() * 0.6); else { b.g.position.x = nx; b.g.position.z = nz; } b.g.rotation.y = b.a; });
@@ -976,7 +992,11 @@
       let ride = -1, lastT = -1e9;
       p.ride = {   // board the cabin at the bottom and ride it round
         board: () => (SW.parkRide ? SW.parkRide.board() : p.toWorld(0, 0)),
-        pick: () => { const R = SW.parkRide; let lo = 1e9; R.gond.forEach((gp, i) => { gp.getWorldPosition(v); if (v.y < lo) { lo = v.y; ride = i; } }); },
+        hold: (on, leaving) => { const R = SW.parkRide, H = R.wheelHold; if (!on) { H.on = false; return; }
+          let pick = ride; if (!leaving) { let lo = 1e9; const n = R.gond.length; for (let i = 0; i < n; i++) { const m = ((((i / n) * Math.PI * 2 + R.wheel.rotation.z + Math.PI / 2) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); if (m < lo) { lo = m; pick = i; } } }   // the next cabin coming down to the bottom
+          Object.assign(H, { on: true, i: pick, stopped: false }); ride = pick; },
+        stopped: () => SW.parkRide.wheelHold.stopped,
+        pick: () => { ride = SW.parkRide.wheelHold.i; },
         seat: (o) => { const R = SW.parkRide; R.gond[Math.max(0, ride)].getWorldPosition(o); o.y -= 2.1; const b = R.board(); return Math.atan2(o.x - b.x, o.z - b.z) + Math.PI; },
       };
       p.shot = (t) => {
