@@ -118,7 +118,7 @@
       pas.push(pa);
     };
     // rect = where the CAR'S CENTRE may be; it overlaps the road's own band so the two join up
-    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -2.6, hx: 3.25, hz: 6.1 }, { lx: 2.3, lz: -2.2, dx: -0.42, dz: -0.91 }, 4.7 + 9, { cx: 0, cz: -1.3, hx: 3.8, hz: 6.8 }, { x0: -4.2, x1: 4.2, z1: 5.9 }, { zr: -7, zt: -1, add: 9 });   // parked nosing towards the way out
+    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -2.6, hx: 3.25, hz: 6.1 }, { lx: 2.3, lz: -2.2, dx: -0.42, dz: -0.91 }, 4.7 + 7.8, { cx: 0, cz: -1.3, hx: 3.8, hz: 6.8 }, { x0: -4.2, x1: 4.2, z1: 5.9 }, { zr: -7, zt: -1, add: 9 });   // parked nosing towards the way out
     if (ohh) addPA('ohh', ohh, H_OHH, { cx: 0, cz: -10.55, hx: 9, hz: 1.65 }, { lx: 3, lz: -9.3, dx: -1, dz: 0 }, 9.6, { cx: 0, cz: -9.25, hx: 8.6, hz: 1.0 }, { x0: -11.2, x1: 11.2, z1: -7.75 });
 
     const R = {
@@ -214,7 +214,29 @@
         roadFrom('outL', mirror([[84, 5.9, 0], [68, 6.6, 0], [52, 8.6, 0.05], [38, 12, 0.6], [24, 15.5, 1.4], [13, 21, 2.1], [6, 27.5, 2.8], [RW, 34, 3.5], [RW, 38, 3.55]]).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane; the west deck lies lower, so this one is longer
         roadFrom('outR', mirror(r2W).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // mirrored, the side towards the loop stays the same
       ];
-      const all = [B, ...ramps];
+      // The other way, west to east: C1 for the opposite direction, a second deck stacked 7 m above the first along the
+      // whole route (a double-deck viaduct, as on parts of the Shuto). Its ramps take the free sides of the same two
+      // junctions: in the north-west you join it from either carriageway, in the east you leave to either. They are
+      // longer than the lower deck's, to climb the extra height at a sensible grade.
+      const UP = 7, midB = mid.slice().reverse().map(([x, y, z]) => [x, y + UP, z]);
+      const B2 = roadFrom('c1b', [JB(0, 34, 3.5 + UP), JB(0, 42, 3.6 + UP), ...midB, JA(0, 42, 3.6 + UP), JA(0, 34, 3.5 + UP)], 4.6, { oneWay: true, lift: 0.03, stack: B });
+      for (let i = 0; i < B2.N; i++) B2.HW[i] = 4.6 + 0.6 * Math.max(0, 1 - i / 8, 1 - (B2.N - 1 - i) / 8);
+      const H2 = 3.5 + UP;
+      // the same plan shapes as the lower ramps, lengthened at the loop end; heights rise smoothly with distance travelled
+      const climb = (pts, h0, h1, flat) => { let L = 0; const d = [0]; for (let k = 1; k < pts.length; k++) { L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); d.push(L); }
+        return pts.map(([u, v], k) => { const t = Math.max(0, Math.min(1, (d[k] - flat) / (L - flat - 4))), e = t * t * (3 - 2 * t); return [u, v, h0 + (h1 - h0) * e]; }); };
+      const r1x = (h) => climb([[130, h(130) - 0.5], [112, h(112) - 0.5], [96, h(96) - 0.4], [80, h(80) - 0.1], [66, h(66) + 0.2], [50, h(50) + 1], [36, h(36) + 2.8], [24, 14], [13, 20], [6, 27], [RW, 34], [RW, 38]], 0, H2, 22);   // the start follows the loop's edge (it narrows towards the coast)
+      const r2x = (h) => climb([[-140, -(h(-140) - 0.5)], [-122, -(h(-122) - 0.3)], [-106, -(h(-106) + 0.6)], [-92, -(h(-92) + 2.4)], [-78, -(h(-78) + 4.4)], [-62, -(h(-62) + 5.6)], [-46, -(h(-46) + 5.4)],
+        [-30, -(h(-30) + 3)], [-17, -3], [-10, 5], [-RW, 15], [-RW, 24], [-RW, 34], [-RW, 38]], 0, H2, 30);
+      const r2xW = r2x((u) => JA.hw(-u)); r2xW[0] = [-140, -(JA.hw(140) - 2.1), 0];
+      const ramps2 = [
+        roadFrom('inLb', r1x(JB.hw).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),
+        roadFrom('inRb', r2x(JB.hw).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),
+        roadFrom('outLb', mirror([[130, JA.hw(-130) - 2.1, 0], ...r1x((u) => JA.hw(-u)).slice(1)]).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),
+        roadFrom('outRb', mirror(r2xW).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),
+      ];
+      ramps.push(...ramps2);
+      const all = [B, B2, ...ramps];
       // where a ramp lies on the loop's deck: no walls on the ramp; the loop's median drops where a ramp runs along it, and
       // its inner wall opens where a ramp leaves or joins from the inside
       R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N); R.OGAP = new Uint8Array(N);
@@ -233,7 +255,7 @@
         const along = -(wx * Bb.TX[j] + wz * Bb.TZ[j]);   // past the other road's end there is nothing to join
         if ((j === Bb.N - 1 && along > 0.5) || (j === 0 && along < -0.5)) continue;
         if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(wx, wz) < A.HW[i] + Bb.HW[j] + 0.3) { if (sd > -1) A.OGAP[i] = 1; if (sd < 1) A.GAP[i] = 1; } } }   // only the side that faces the other road
-      R.branch = B; R.ramps = ramps; R.roads = [R, ...all];
+      R.branch = B; R.branch2 = B2; R.ramps = ramps; R.roads = [R, ...all];
       const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), ...all.map((q) => q.dist(x, z)));
     }
     const rProj = R.proj; R.proj = (x, z, hint, out) => { rProj(x, z, hint, out); out.R = R; out.off = false; return out; };
@@ -328,6 +350,15 @@
     for (let i = 3; i < N; i += 8) {
       if (o.blocked && o.blocked(X[i], Z[i])) continue;
       if (Rd.avoidRing && R.dist && (() => { let b = 1e9; for (let k = 0; k < R.N; k += 2) b = Math.min(b, Math.hypot(R.X[k] - X[i], R.Z[k] - Z[i])); return b < R.HW[0] + 3; })()) continue;   // not through the loop's deck
+      if (Rd.stack) {   // over the lower deck: two legs either side of it and a beam across
+        const L0 = Rd.stack; let b = 1e9, j = 0; for (let k = 0; k < L0.N; k++) { const e = Math.hypot(L0.X[k] - X[i], L0.Z[k] - Z[i]); if (e < b) { b = e; j = k; } }
+        if (b < L0.HW[j] + 2) {
+          const dd = L0.HW[j] + 1.1, h2 = Y[i] - 2.3;
+          for (const sd of [-1, 1]) { at(i, sd * dd, 0); pierL.push({ x: v.x, y: (h2 - lift) / 2 - (Y[i] - h2) * 0 , z: v.z, sy: h2, sx: 0.7, sz: 0.7 }); piers.push({ x: v.x, z: v.z, r: 0.9, y1: Y[i] - 2 }); }
+          capL.push({ x: X[i], y: Y[i] - 1.8, z: Z[i], yaw: yawOf(i), sx: dd * 2 + 1 });
+          continue;
+        }
+      }
       const h = Y[i] - 2.3;
       pierL.push({ x: X[i], y: h / 2, z: Z[i], sy: h });
       capL.push({ x: X[i], y: Y[i] - 1.8, z: Z[i], yaw: yawOf(i), sx: HW[i] * 2 - 3 });

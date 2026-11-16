@@ -1198,7 +1198,8 @@
     // more squarely on (the current one unless the other is clearly better), else stay on the one it was on.
     const m = 1.4, band = (o) => {
       const med = o.hw > 7.45 && !(o.R.MGAP && o.R.MGAP[o.i]), xo = o.R.XO ? o.R.XO[o.i] : 0, side = med ? (o.d >= 0 ? 1 : -1) : 0;
-      return [med && side > 0 ? 1.3 : -(o.hw - m), (med && side < 0 ? -1.3 : o.hw - m) + (o.d > 0 ? xo : 0)];
+      const R0 = o.R, jIn = R0 === ring && R0.JGAP && R0.JGAP[o.i] ? 3 : 0, jOut = R0 === ring && R0.OGAP && R0.OGAP[o.i] ? 3 : 0;   // where a ramp leaves or joins, the loop's wall is open: you may cross onto the ramp
+      return [(med && side > 0 ? 1.3 : -(o.hw - m)) - jIn, (med && side < 0 ? -1.3 : o.hw - m) + (o.d > 0 ? xo : 0) + jOut];
     };
     let best = null, bestK = 1e9;
     for (const Rd of ring.roads) {
@@ -1216,7 +1217,9 @@
       if (walled && best && best.R !== R0) { const [l2, h2] = band(c); const inside = c.d >= l2 && c.d <= h2;
         const sideWall = c.d > 0 ? !R0.OGAP[c.i] : !R0.GAP[c.i];   // the wall on the side the car is pushing towards
         if (inside || sideWall) best = inside ? c : null; } }
-    Object.assign(rq, best || rqs[R0.id]);
+    // run off the end of a ramp a little wide of the loop's lanes: you are on the loop, and its wall eases you back in
+    const runOff = !best && R0 !== ring && rqs[R0.id].off && Math.abs(rqs[ring.id].y - d.y) < 3 ? rqs[ring.id] : null;
+    Object.assign(rq, best || runOff || rqs[R0.id]);
     if (rq.R !== R0) tau0 = Math.atan2(rq.tx, rq.tz);   // just changed road: no jump in heading
     d.road = rq.R; d.hint = rq.i;
     const tau = Math.atan2(rq.tx, rq.tz), med = rq.hw > 7.45 && !(rq.R.MGAP && rq.R.MGAP[rq.i]);
