@@ -184,7 +184,7 @@
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
       const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
-        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false;
+        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false, streetLife = null;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
         const fig = (jacket, cap) => {
@@ -302,7 +302,6 @@
             perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1, name: i === 1 ? 'stvn' : 'vas', off: i === 1 ? 0 : 9.4, amp: 0.3, up: 0 });   // red jacket = stvn, white jacket = vas
           }
         }
-        const walk = E.plane(4, 33, E.mat('#77736c', { map: E.tex('paving', 2, 16), rough: 0.9 })); walk.position.set(X - 4.6, 0.045, 29.8); g.add(walk); p.pick(walk);
 
         // A New York deli on the corner, at the end of the row: brick, a lit storefront full of shelves, a green awning,
         // a backlit sign, a neon OPEN, flowers and fruit out front.
@@ -381,17 +380,6 @@
             };
           };
           const place = (x, z, w, d, b, draw) => { b = b || new THREE.Object3D(); if (!b.parent) holder.add(b); spill.push({ x, z, w, d, b, draw, box: p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05) }); };
-          for (let k = 0; k < 8; k++) {
-            const zc = 13 + k * 6.2;
-            const ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, hb = 11 + nr() * 1.6;
-            place(-15.5, zc, 8, 6.1, null, rowhouse(-19.5, -11.5, 1, zc, ha));    // across the street, facing this row
-            place(-23.5, zc, 8, 6.1, null, rowhouse(-27.5, -19.5, -1, zc, hb));   // back to back with it, facing the next street
-          }
-          for (let k = 0; k < 6; k++) {                                            // the next street over: brick blocks, taller towards FLIP
-            const zc = 14 + k * 9.5, w = 9, d = 8.5, h = 13 + k * 1.6 + kr() * 4;
-            const b = kit.mesh(w, h, d, kr, kr() < 0.7 ? 2 : 1); b.position.set(-40, 0, zc); b.castShadow = true;
-            place(-40, zc, w, d, b, () => nb(4, 0.08, d, -40 + w / 2 + 2, 0.04, zc, paveM, false));
-          }
           p.spill = spill;
           p.afterSpill = () => { spill.forEach((f) => f.draw && f.draw()); NB.flush(); };
 
@@ -402,7 +390,7 @@
             let a = loc(30, -33), b = loc(30, 17); if (a.z > b.z) [a, b] = [b, a];   // FLIP's kerb on this side
             const dx = b.x - a.x, dz = b.z - a.z, dl = Math.hypot(dx, dz), ux = dx / dl, uz = dz / dl;
             let nx = uz, nz = -ux; if ((-4 - a.x) * nx + (30 - a.z) * nz < 0) { nx = -nx; nz = -nz; }        // pointing this way
-            const ox = a.x + nx * 4.5, oz = a.z + nz * 4.5, X1 = -7.5, Z0 = 18;                                // a street's width off each kerb
+            const ox = a.x + nx * 4.5, oz = a.z + nz * 4.5, X1 = -26, Z0 = 18;   // behind the row across the street                                // a street's width off each kerb
             const t1 = (X1 - ox) / ux, apex = [X1, oz + uz * t1], t0 = (Z0 - oz) / uz, foot = [ox + ux * t0, Z0];
             if (Math.abs(ux) > 0.05 && apex[1] - Z0 > 9 && X1 - foot[0] > 6) {
               const tri = [apex, [X1, Z0], foot], h = 22 + kr() * 4;
@@ -415,6 +403,69 @@
             }
           }
           neighbourhood = spill;
+          // ---- The street itself, Harlem style: a one-way side street between two rows of brownstones. Sidewalks with
+          // kerbs, street trees in pits, cars parked along both kerbs, hydrants, trash cans, cobra-head street lamps, a
+          // mailbox; a barbershop and a laundromat in the ground floors across the way; neighbours on their stoops, kids
+          // with a ball, someone walking a dog. The houses across the street face this row, stoop to stoop.
+          const ZA = 8.8, ZB = 60, CURB_E = 1.6, CURB_W = -7.4, FRONT_W = -14;
+          for (let k = 0; k < 8; k++) {   // the row across the street (part of this place now, not negotiable spill)
+            const zc = 13 + k * 6.2, ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, draw = rowhouse(-22, FRONT_W, 1, zc, ha); draw();
+            p.addBox(-18, zc, 4.05, 3.1);
+          }
+          { const road = E.plane(CURB_E - CURB_W, ZB - ZA, E.mat('#2c2a30', { map: E.tex('asphalt', 3, 16), rough: 0.88 })); road.position.set((CURB_E + CURB_W) / 2, 0.04, (ZA + ZB) / 2); g.add(road); p.pick(road);
+            for (const [x0, x1] of [[CURB_E, X], [FRONT_W, CURB_W]]) { const sw = E.plane(x1 - x0, ZB - ZA, E.mat('#8a857c', { map: E.tex('paving', 2, 20), rough: 0.9 })); sw.position.set((x0 + x1) / 2, 0.16, (ZA + ZB) / 2); g.add(sw); p.pick(sw); }
+            for (const x of [CURB_E, CURB_W]) nb(0.22, 0.18, ZB - ZA, x, 0.09, (ZA + ZB) / 2, E.mat('#b4b0a8', { rough: 0.8 }));
+            nb(0.12, 0.02, ZB - ZA, CURB_W + 2.4, 0.045, (ZA + ZB) / 2, E.basic('#cfc9bb'), false); nb(0.12, 0.02, ZB - ZA, CURB_E - 2.4, 0.045, (ZA + ZB) / 2, E.basic('#cfc9bb'), false);   // parking-lane lines
+          }
+          const onWalk = (lx, lz) => lz > ZA && lz < ZB && ((lx > CURB_E && lx < X) || (lx > FRONT_W && lx < CURB_W));
+          // street trees in pits along both kerbs
+          const leafM = [E.mat('#4f6f3a', { rough: 0.9, flat: true }), E.mat('#5d7a40', { rough: 0.9, flat: true })], barkM = E.mat('#4a3a2c', { rough: 0.9 });
+          for (const [x, z0] of [[CURB_E + 1.0, 12], [CURB_W - 1.0, 15]]) for (let z = z0; z < ZB - 2; z += 9.5) {
+            if (x > 0 && z > 20 && z < 34) continue;   // keep the view of the two stoops clear
+            nb(1.3, 0.04, 1.3, x, 0.17, z, E.mat('#3a3026', { rough: 1 }), false);
+            const tk = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 4.2, 7), barkM); tk.position.set(x, 2.1, z); tk.castShadow = true; g.add(tk);
+            for (let c = 0; c < 4; c++) { const lf = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3 + nr() * 0.6, 0), leafM[c % 2]); lf.position.set(x + (nr() - 0.5) * 1.6, 4.6 + nr() * 1.4, z + (nr() - 0.5) * 1.6); lf.castShadow = true; g.add(lf); }
+            p.addCircle(x, z, 0.25);
+          }
+          // cars parked nose to tail along both kerbs (the street runs one way: they all point the same way)
+          if (SW.Cars) for (const [x, side] of [[CURB_E - 1.2, 1], [CURB_W + 1.2, -1]]) for (let z = ZA + 3.5, k = 0; z < ZB - 3; k++) {
+            const car = SW.Cars.make(E, Math.floor(nr() * 7)), len = car.userData.len || 4.5;
+            if (side > 0 && z + len / 2 > 19 && z - len / 2 < 35) { z = 35 + len / 2; continue; }
+            car.position.set(x, 0.04, z + len / 2); car.rotation.y = Math.PI; g.add(car);
+            p.addBox(x, z + len / 2, (car.userData.wid || 1.8) / 2 + 0.1, len / 2 + 0.1);
+            z += len + 1.2 + nr() * 2.5;
+          }
+          // hydrants, trash cans, a mailbox, street lamps
+          const red = E.mat('#b8312a', { rough: 0.6 }), canM = E.mat('#2f4a3a', { rough: 0.7 }), lampPole = E.mat('#3a3d42', { metal: 0.5, rough: 0.5 }), lampHead = E.basic('#ffd9a0');
+          for (const [x, z] of [[CURB_E + 0.5, 18], [CURB_W - 0.5, 40], [CURB_E + 0.5, 50]]) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.75, 10), red); h.position.set(x, 0.55, z); g.add(h); const cap = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 6, 0, 6.3, 0, 1.6), red); cap.position.set(x, 0.93, z); g.add(cap); p.addCircle(x, z, 0.25); }
+          for (const [x, z] of [[CURB_E + 0.6, 37], [CURB_W - 0.6, 21], [CURB_W - 0.6, 53]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.95, 12), canM); c.position.set(x, 0.63, z); g.add(c); p.addCircle(x, z, 0.35); }
+          { const mb = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.1, 0.5), E.mat('#2a4a8a', { rough: 0.5 })); mb.position.set(CURB_W - 0.6, 0.71, 31); g.add(mb); p.addCircle(CURB_W - 0.6, 31, 0.35); }
+          for (const [x, z, sd] of [[CURB_E + 0.4, 14, -1], [CURB_W - 0.4, 27, 1], [CURB_E + 0.4, 38, -1], [CURB_W - 0.4, 52, 1]]) {
+            nb(0.16, 7.2, 0.16, x, 3.6, z, lampPole); nb(1.8, 0.1, 0.1, x + sd * 0.9, 7.15, z, lampPole); nb(0.6, 0.12, 0.3, x + sd * 1.8, 7.05, z, lampHead, false); p.addCircle(x, z, 0.2);
+          }
+          // a barbershop and a laundromat in the ground floors across the way
+          const shopFront = (zc, label, glow, pole) => {
+            const sh = (txt, o) => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, o), transparent: true }); m.userData.lin = true; return m; };
+            const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.7), sh(label, { w: 1024, h: 140, color: '#fff2d8', glow, font: '700 92px "Hind",sans-serif', bg: '#1a1a1c' })); sg.position.set(FRONT_W + 0.08, 2.9, zc + 0.4); sg.rotation.y = Math.PI / 2; g.add(sg);
+            const lit = new THREE.MeshBasicMaterial({ color: new THREE.Color(glow).convertSRGBToLinear().multiplyScalar(0.7) }); lit.userData.lin = true;
+            nb(0.05, 1.8, 3.2, FRONT_W + 0.04, 1.2, zc + 0.4, lit, false);
+            if (pole) { const bp = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.1, 12), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = 32; c.height = 64; const x = c.getContext('2d'); for (let i = -4; i < 8; i++) { x.fillStyle = ['#d23a2a', '#f4f1e6', '#2457c5', '#f4f1e6'][((i % 4) + 4) % 4]; x.save(); x.translate(0, i * 10); x.transform(1, 0.5, 0, 1, 0, 0); x.fillRect(0, 0, 32, 10); x.restore(); } const t = new THREE.CanvasTexture(c); t.wrapT = THREE.RepeatWrapping; return t; })() })); bp.position.set(FRONT_W + 0.35, 2.0, zc - 1.6); g.add(bp); barberPole = bp; }
+          };
+          let barberPole = null;
+          shopFront(13 + 1 * 6.2, 'BARBER SHOP', '#9ff3ff', true); shopFront(13 + 6 * 6.2, 'LAUNDROMAT  24H', '#cfe6ff', false);
+          // the neighbours: on their stoops, chatting on the sidewalk, kids with a ball, someone with a dog
+          const folk = [['#2a2c30', '#141416'], ['#7a2f2a', '#2a4a8a'], ['#3a5a40', '#141416'], ['#c9c2b0', '#6a3a2a'], ['#4a6a8a', '#d9b24a'], ['#8a6a3a', '#141416'], ['#2f4a5a', '#c9c2b0']];
+          const person = (x, z, ry, k, sit, s = 1) => { const m = fig(folk[k % folk.length][0], folk[k % folk.length][1]); m.f.position.set(x, sit ? sit : 0.16, z); m.f.rotation.y = ry; m.f.scale.setScalar(s); if (sit) { m.f.scale.y = s * 0.78; } g.add(m.f); neighbours.push({ m, k, base: m.f.position.y }); p.addCircle(x, z, 0.35 * s); return m; };
+          const neighbours = [];
+          person(FRONT_W + 2.0, 13 + 3 * 6.2 - 1.6, Math.PI / 2, 0, 0.9); person(FRONT_W + 1.6, 13 + 3 * 6.2 - 1.2, Math.PI / 2, 1, 0.68);    // two on a stoop across the way
+          person(X - 2.6, 13 + 0 * 6.2 - 1.6, -Math.PI / 2, 2, 0.6);                                                                       // one on a stoop at the end of this row
+          person(CURB_W - 1.6, 46, 0.4, 3); person(CURB_W - 2.4, 46.9, -2.5, 4);                                                          // chatting on the sidewalk
+          person(CURB_E + 1.8, 45, Math.PI, 5);                                                                                            // walking the dog
+          { const dog = new THREE.Group(), dm = E.mat('#6a4a30', { rough: 0.8 }); const b = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.7), dm); b.position.y = 0.42; dog.add(b); const hd = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.26), dm); hd.position.set(0, 0.6, -0.42); dog.add(hd); for (const [lx, lz] of [[-0.1, -0.25], [0.1, -0.25], [-0.1, 0.25], [0.1, 0.25]]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.07), dm); l.position.set(lx, 0.15, lz); dog.add(l); } dog.position.set(CURB_E + 1.9, 0.16, 43.6); g.add(dog); }
+          for (const [x, z, k] of [[-3.5, 55, 6], [-1.4, 57, 2], [-4.6, 57.6, 4]]) person(x, z, nr() * 6, k, 0, 0.72);                // kids in the street
+          { const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), E.mat('#c8602a', { rough: 0.7 })); ball.position.set(-2.6, 0.16, 56); g.add(ball); neighbours.ball = ball; }
+          streetLife = { neighbours, barberPole };
+          p.ground = ((g0) => (lx, lz, y) => Math.max(onWalk(lx, lz) ? 0.16 : 0, g0 ? g0(lx, lz, y) : 0))(p.ground);
         }
       }
       // The courts behind the row: a basketball court boxed in by brick, New York projects style. It runs along under the
@@ -538,13 +589,14 @@
         }
         CB.flush(); FB.flush();
       }
-      p.ground = (lx, lz) => {
+      const courtGround = (lx, lz) => {
         const u = lz - CO.z, v = CO.x - lx; lx = u; lz = v;   // into the court's frame
         if (lz < TER.z0 || lz > TER.z1) return 0;
         if (lx >= TER.x0 && lx <= TER.x1) return TER.y;
         if (lx > STEP0 && lx < TER.x0) return (Math.ceil(((lx - STEP0) / (TER.x0 - STEP0)) * 6) * TER.y) / 6;   // one riser at a time
         return 0;
       };
+      p.ground = ((g0) => (lx, lz, y) => Math.max(courtGround(lx, lz), g0 ? g0(lx, lz, y) : 0))(p.ground);   // with the sidewalks' kerb height
       p.map = [{ t: 'rect', x: 36.6, z: 16, w: 31.8, h: 18.4, c: '#2f5a45' }, { t: 'rect', x: 35, z: 41, w: 30, h: 12, c: '#5a3a30' }, { t: 'rect', x: 10.6, z: 29.4, w: 8, h: 31, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
         top: '#05070f', bottom: '#1a2234', fog: '#0f141e', near: 24, far: 190,
@@ -557,11 +609,15 @@
       p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
-      p.core = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
+      p.core = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
       p.spillRank = 1;   // its rowhouses win over FLIP's outskirts where they meet
-      p.blocks = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
+        if (streetLife) {   // the barber's pole turns; the neighbours nod along when the music is up
+          if (streetLife.barberPole) streetLife.barberPole.material.map.offset.y = (t * 0.6) % 1;
+          streetLife.neighbours.forEach((n, i) => { n.m.f.position.y = n.base + Math.max(0, Math.sin(t * 6 + i)) * 0.03 * (f.level || 0) * 3; if (n.m.head) n.m.head.rotation.x = Math.sin(t * 4 + i * 1.3) * 0.12 * (f.pulse || 0); });
+        }
         if (neonM) neonM.opacity = Math.sin(t * 37) > 0.97 || (t % 7 > 6.85) ? 0.25 : 1;   // the deli's OPEN sign, buzzing
         // Shots on the kick, a burst on hard hits; a slow trickle so it never goes fully quiet.
         if (v > 0.05 && ((f.beat && t - lastShot > 0.1) || (f.level > 0.25 && t - lastShot > 1.6))) {

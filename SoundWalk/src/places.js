@@ -556,9 +556,13 @@
       const kit = SW.Buildings.kit(E, 4), kr = E.rng(7404), CX = 0, CZ = -12, coreFeet = [];
       // The side that faces FIELD's brownstones turns into their kind of street: brick walk-ups, lower, the nearer they stand.
       const fieldSong = SW.SONGS.find((q) => q.scene === 'field'), fieldAt = fieldSong ? (() => { const f = SW.Ring.frame(fieldSong), a = f.toWorld(2, 13), b = f.toWorld(2, 45); return p.local((a.x + b.x) / 2, (a.z + b.z) / 2); })() : null;
+      // FIELD's street and the row across it are FIELD's: no block of this one stands on them
+      const fieldF = fieldSong ? SW.Ring.frame(fieldSong) : null;
+      const inFieldStreet = (x, z, rad = 0) => { if (!fieldF) return false; for (const [ox, oz] of [[0, 0], [rad, rad], [-rad, rad], [rad, -rad], [-rad, -rad]]) { const w = p.toWorld(x + ox, z + oz), l = fieldF.local(w.x, w.z); if (l.x > -28 && l.x < 18 && l.z > 6 && l.z < 63) return true; } return false; };
       const fieldWard = (x, z) => (fieldAt ? 1 - Math.max(0, Math.min(1, (Math.hypot(x - fieldAt.x, z - fieldAt.z) - 22) / 34)) : 0);   // 1 next to the row, 0 far from it
       const nyStyle = (t, rr) => (t > 0.55 ? 2 : t > 0.2 ? (rr() < 0.5 ? 2 : 1) : undefined);   // the middle of the block: the tallest towers stand here
       spots.forEach(([x, z], i) => {
+        if (inFieldStreet(x, z, 5)) return;
         const w = 6.5 + r() * 1.5, d = 6.5 + r() * 1.5, dc = Math.hypot(x - CX, z - CZ), h = 16 + 44 * Math.pow(Math.max(0, 1 - dc / 36), 1.3) + r() * 8;   // tall in the middle, lower towards the edges
         const ft = fieldWard(x, z), hh = h + (12 + r() * 5 - h) * Math.min(1, ft * 1.3);
         const b = kit.mesh(w, hh, d, kr, nyStyle(ft, kr), true), m = b.material[0];
@@ -597,10 +601,11 @@
       };
       for (const [side, half] of [[-1, 0], [1, -1], [1, 1]]) {   // the two sides of the avenue (the east one split by its cross street), and the far end
         const fs = coreFeet.filter((f) => (side < 0 ? f.x < -2 : f.x > 2) && f.z > -32 && (!half || (half < 0 ? f.z < -12 : f.z > -12))), M = 2.8;
+        if (!fs.length) continue;
         const x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
         slabs.push({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, top: 0.15 });
       }
-      { const fs = coreFeet.filter((f) => f.z <= -31), M = 2.8, x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
+      if (coreFeet.some((f) => f.z <= -31)) { const fs = coreFeet.filter((f) => f.z <= -31), M = 2.8, x0 = Math.min(...fs.map((f) => f.x - f.w / 2)) - M, x1 = Math.max(...fs.map((f) => f.x + f.w / 2)) + M, z0 = Math.min(...fs.map((f) => f.z - f.d / 2)) - M, z1 = Math.max(...fs.map((f) => f.z + f.d / 2)) + M;
         slabs.push({ cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, top: 0.149 }); }
       city.add(slabMesh(slabs));
       g.add(city);
@@ -614,6 +619,7 @@
           const fade = (dist - 31) / 44;                                         // 0 at the edge of the block, 1 deep in the woods
           if (or() < fade * 0.7) continue;                                      // fewer and fewer
           if (Math.abs(x) < 9 && z > 6) continue;                                // keep the path in from the plaza clear
+          if (inFieldStreet(x, z, 6)) continue;
           const w = 6 + or() * 6 * (1 - fade * 0.5), d = 6 + or() * 6 * (1 - fade * 0.5), h = Math.max(4, (22 - fade * 18) * (0.7 + or() * 0.6));
           if (feet.some((f) => Math.abs(f.x - x) < (f.w + w) / 2 + 2 + fade * 3 && Math.abs(f.z - z) < (f.d + d) / 2 + 2 + fade * 3)) continue;   // wider gaps further out, for the trees
           const wp = p.toWorld(x, z), R = Math.hypot(wp.x, wp.z);
