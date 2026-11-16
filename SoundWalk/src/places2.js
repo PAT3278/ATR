@@ -673,7 +673,19 @@
       }
       const railM = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 });
       const rail = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.05, d), railM); m.position.set(x, H + 0.5, z); g.add(m); };
-      rail(-4.3, -1.2, 0.12, 14.5); rail(4.3, -1.2, 0.12, 14.5);   // the far end is open: it is the parking area's way onto the ring road
+      rail(-4.3, 2.5, 0.12, 7.1); rail(4.3, 2.5, 0.12, 7.1);   // the far end is open: it is the parking area's way onto the ring road
+      // ...and it flares out towards the road on both sides, so a car can turn in (and out) at an angle
+      for (const sd of [-1, 1]) {
+        const tri = [[sd * 4.3, -1], [sd * 13.3, -7.2], [sd * 4.3, -7.2]], pos = [], top = H, bot = H - 0.5;
+        const V = (x, y, z) => pos.push(x, y, z), quad = (a, b, yA, yB) => { V(a[0], yA, a[1]); V(b[0], yA, b[1]); V(b[0], yB, b[1]); V(a[0], yA, a[1]); V(b[0], yB, b[1]); V(a[0], yB, a[1]); };
+        if (sd > 0) { V(...[tri[0][0], top, tri[0][1]]); V(...[tri[2][0], top, tri[2][1]]); V(...[tri[1][0], top, tri[1][1]]); } else { V(...[tri[0][0], top, tri[0][1]]); V(...[tri[1][0], top, tri[1][1]]); V(...[tri[2][0], top, tri[2][1]]); }
+        quad(tri[0], tri[1], top, bot); quad(tri[1], tri[0], bot, top);
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+        const m = conc.clone(); m.side = THREE.DoubleSide; const w = new THREE.Mesh(geo, m); w.castShadow = w.receiveShadow = true; g.add(w); p.pick(w);
+        const len = Math.hypot(9, 6.2), dr = new THREE.Mesh(new THREE.BoxGeometry(len, 1.05, 0.12), railM); dr.position.set(sd * 8.8, H + 0.5, -4.1); dr.rotation.y = sd * Math.atan2(6.2, 9); g.add(dr);
+        const pl = new THREE.Mesh(new THREE.BoxGeometry(0.7, H, 0.7), concD); pl.position.set(sd * 7.5, H / 2, -5.6); g.add(pl);
+        p.addCircle(sd * 7.5, -5.6, 0.5, -1e9, H - 1);
+      }
       p.ground = (lx, lz) => {
         if (Math.abs(lx) < 2.6 && lz >= 6 && lz <= 26) return (H * (26 - lz)) / 20;
         if (Math.abs(lx) < 4.4 && lz >= -8.6 && lz < 6) return H;

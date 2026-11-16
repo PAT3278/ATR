@@ -89,32 +89,36 @@
 
     // Parking areas: where you get in and out of a car. Each is a rectangle (in its place's frame) that opens onto the inner side.
     const pas = [];
-    const addPA = (id, f, y, rect, slot, gap, walk, walls) => {
+    // flare (optional): the mouth widens towards the road by `add` metres a side, from local z `zt` down to `zr`, so you
+    // can turn in at an angle instead of square
+    const addPA = (id, f, y, rect, slot, gap, walk, walls, flare) => {
+      const widen = (lz) => (flare && lz !== undefined ? flare.add * Math.max(0, Math.min(1, (flare.zt - lz) / (flare.zt - flare.zr))) : 0);
       const sw = f.toWorld(slot.lx, slot.lz), dw = { x: slot.dx * f.c + slot.dz * f.s, z: -slot.dx * f.s + slot.dz * f.c };
       const pa = {
-        id, f, y, rect, gap,
+        id, f, y, rect, gap, flare,
         slot: { x: sw.x, z: sw.z, yaw: Math.atan2(dw.x, dw.z) },
         // Where the car's centre may be. Given the car ({ yaw, len, wid }) the limits pull in by however far its body
         // reaches towards each solid edge (walls = { x0, x1, z1 }; the road side is open), so a nose cannot poke through a rail.
-        lim(car) {
-          let x0 = rect.cx - rect.hx, x1 = rect.cx + rect.hx, z1 = rect.cz + rect.hz; const z0 = rect.cz - rect.hz;
+        lim(car, lz) {
+          const wd = widen(lz);
+          let x0 = rect.cx - rect.hx - wd, x1 = rect.cx + rect.hx + wd, z1 = rect.cz + rect.hz; const z0 = rect.cz - rect.hz;
           if (car) {
             const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), ax = Math.abs(fx * f.c - fz * f.s), az = Math.abs(fx * f.s + fz * f.c);
             const ex = (ax * car.len + az * car.wid) / 2, ez = (az * car.len + ax * car.wid) / 2;
-            x0 = Math.max(x0, walls.x0 + ex); x1 = Math.min(x1, walls.x1 - ex); if (x0 > x1) x0 = x1 = (walls.x0 + walls.x1) / 2;
+            x0 = Math.max(x0, walls.x0 - wd + ex); x1 = Math.min(x1, walls.x1 + wd - ex); if (x0 > x1) x0 = x1 = (walls.x0 + walls.x1) / 2;
             z1 = Math.max(z0, Math.min(z1, walls.z1 - ez));
           }
           return [x0, x1, z0, z1];
         },
-        inside(x, z, car) { const l = f.local(x, z), [x0, x1, z0, z1] = pa.lim(car); return l.x >= x0 && l.x <= x1 && l.z >= z0 && l.z <= z1; },
+        inside(x, z, car) { const l = f.local(x, z), [x0, x1, z0, z1] = pa.lim(car, l.z); return l.x >= x0 && l.x <= x1 && l.z >= z0 && l.z <= z1; },
         canStand(x, z) { const l = f.local(x, z); return Math.abs(l.x - walk.cx) <= walk.hx && Math.abs(l.z - walk.cz) <= walk.hz; },   // where a person on foot fits
-        clamp(x, z, car) { const l = f.local(x, z), [x0, x1, z0, z1] = pa.lim(car); return f.toWorld(Math.max(x0, Math.min(x1, l.x)), Math.max(z0, Math.min(z1, l.z))); },
+        clamp(x, z, car) { const l = f.local(x, z), [x0, x1, z0, z1] = pa.lim(car, l.z); return f.toWorld(Math.max(x0, Math.min(x1, l.x)), Math.max(z0, Math.min(z1, l.z))); },
       };
       for (let i = 0; i < N; i++) { const l = f.local(X[i], Z[i]); if (Math.abs(l.x) < gap && Math.abs(l.z - ROAD_Z) < 5) GAP[i] = 1; }
       pas.push(pa);
     };
     // rect = where the CAR'S CENTRE may be; it overlaps the road's own band so the two join up
-    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -2.6, hx: 3.25, hz: 6.1 }, { lx: 2.3, lz: -2.2, dx: -0.42, dz: -0.91 }, 4.7, { cx: 0, cz: -1.3, hx: 3.8, hz: 6.8 }, { x0: -4.2, x1: 4.2, z1: 5.9 });   // parked nosing towards the way out
+    if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -2.6, hx: 3.25, hz: 6.1 }, { lx: 2.3, lz: -2.2, dx: -0.42, dz: -0.91 }, 4.7 + 9, { cx: 0, cz: -1.3, hx: 3.8, hz: 6.8 }, { x0: -4.2, x1: 4.2, z1: 5.9 }, { zr: -7, zt: -1, add: 9 });   // parked nosing towards the way out
     if (ohh) addPA('ohh', ohh, H_OHH, { cx: 0, cz: -10.55, hx: 9, hz: 1.65 }, { lx: 3, lz: -9.3, dx: -1, dz: 0 }, 9.6, { cx: 0, cz: -9.25, hx: 8.6, hz: 1.0 }, { x0: -11.2, x1: 11.2, z1: -7.75 });
 
     const R = {
