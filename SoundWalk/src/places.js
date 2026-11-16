@@ -696,11 +696,12 @@
   /* ------------------------------------------------------------------ */
   /* STEREOTYPE — monochrome grid of identical figures, one in colour    */
   /* ------------------------------------------------------------------ */
-  PLACES.stereotype = {
+  PLACES.park = {
     build(p, E) {
-      // An amusement park where everyone is the same: identical white visitors queue for every ride, and one of them,
-      // a different colour, keeps changing places. A Ferris wheel at the back, a carousel in the middle, a drop tower and
-      // a little roller coaster either side, a gate at the front. The rides keep time with the music.
+      // The amusement park: a Ferris wheel at the back, a carousel in the middle, a drop tower and a little roller
+      // coaster either side, a gate at the front, people queuing. Two songs live here, each heard riding something:
+      // this place is the carousel's (its view rides a horse); the wheel's is PLACES.parkwheel, which borrows the wheel
+      // built here (SW.parkRide). The rides keep time with the music.
       const g = p.group, r = E.rng(53);
       const floor = E.plane(50, 50, E.mat('#9a948a', { map: E.tex('paving', 12, 12), rough: 0.85 }));
       floor.position.set(0, 0.03, -10);
@@ -715,7 +716,7 @@
       // the gate
       for (const sd of [-1, 1]) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 6, 14), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 8), rough: 0.5 })); col.position.set(sd * 5, 3, 10); col.castShadow = true; g.add(col); const ball = new THREE.Mesh(new THREE.SphereGeometry(0.75, 14, 10), C[0]); ball.position.set(sd * 5, 6.5, 10); g.add(ball); p.addCircle(sd * 5, 10, 0.7); }
       pb(10.6, 1.3, 0.5, 0, 6.1, 10, dark);
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 1.1), new THREE.MeshBasicMaterial({ map: E.textTex('STEREOTYPE LAND', { w: 1024, h: 120, color: '#ffe9a8', glow: '#ffb03a', font: '700 84px "Hind",sans-serif' }), transparent: true }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 1.1), new THREE.MeshBasicMaterial({ map: E.textTex('FUNFAIR', { w: 1024, h: 120, color: '#ffe9a8', glow: '#ffb03a', font: '700 84px "Hind",sans-serif' }), transparent: true }));
       sign.position.set(0, 6.1, 10.27); g.add(sign); const sign2 = sign.clone(); sign2.rotation.y = Math.PI; sign2.position.z = 9.73; g.add(sign2);
 
       // the carousel
@@ -728,13 +729,13 @@
       const fin = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 8), C[0]); fin.position.y = 6.9; car.add(fin);
       const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 5), glow('#fff2c0'), 48);
       { const m4 = new THREE.Matrix4(); for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2; bulbs.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * 5.95, 4.0, Math.sin(a) * 5.95)); } car.add(bulbs); }
-      const horses = [], hm = E.mat('#f2f0ea', { rough: 0.45 }), oddH = E.mat('#3ff0ff', { rough: 0.4, emissive: '#3ff0ff', emissiveIntensity: 0.5 });
+      const horses = [], horseMs = ['#f2f0ea', '#e8d8b0', '#8a5a3a', '#2a2826', '#b9b6ae', '#d9b24a'].map((c) => E.mat(c, { rough: 0.45 }));
       const horse = (m) => { const h = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 1.3), m); h.add(body); const neck = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.7, 0.35), m); neck.position.set(0, 0.45, 0.55); neck.rotation.x = -0.4; h.add(neck); const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.55), m); head.position.set(0, 0.8, 0.8); h.add(head); for (const [x, z, a] of [[-0.15, 0.5, 0.5], [0.15, 0.5, 0.5], [-0.15, -0.5, -0.4], [0.15, -0.5, -0.4]]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.1), m); l.position.set(x, -0.45, z); l.rotation.x = a; h.add(l); } h.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return h; };
       for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2, rad = i % 2 ? 3.9 : 2.8, odd = i === 7, hh = horse(odd ? oddH : hm);
+        const a = (i / 12) * Math.PI * 2, rad = i % 2 ? 3.9 : 2.8, hh = horse(horseMs[(i * 5) % horseMs.length]);
         hh.position.set(Math.cos(a) * rad, 1.6, Math.sin(a) * rad); hh.rotation.y = -a; car.add(hh);
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 4.0, 6), steel); pole.position.set(Math.cos(a) * rad, 2.6, Math.sin(a) * rad); car.add(pole);
-        horses.push({ h: hh, s: i });
+        horses.push({ h: hh, s: i, a, rad });
       }
       p.addCircle(0, CZ, 5.6);
 
@@ -784,17 +785,16 @@
       { const sl = []; for (const sd of [-1, 1]) for (let i = 0; i <= 20; i++) { const t = i / 20, x = sd * (5 - t * 1.5), z = 10 - t * 13.5, y = 5.6 - Math.sin(t * Math.PI) * 1.2 - t * 1.0; sl.push(x, y, z); }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(sl, 3)); const pm = new THREE.PointsMaterial({ map: E.dot(), color: E.lin('#ffe2a0'), size: 0.5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); pm.userData.lin = true; g.add(new THREE.Points(geo, pm)); }
 
-      // the visitors: all the same, queued for the rides; one is a different colour and keeps changing places
-      const figM = E.mat('#e2e2e0', { rough: 0.6 });
-      const bodyGeo = new THREE.CylinderGeometry(0.3, 0.42, 1.3, 10).translate(0, 0.65, 0), headGeo = new THREE.SphereGeometry(0.3, 14, 10).translate(0, 1.62, 0);
-      const cells = [], queue = (x0, z0, dx, dz, n, col0) => { for (let i = 0; i < n; i++) { const x = x0 + dx * i, z = z0 + dz * i; cells.push({ x, z, col: (col0 + i) % 7 }); p.addCircle(x, z, 0.5); } };
-      queue(-2.5, -1.5, -1.1, 1.0, 7, 0); queue(2.5, -1.5, 1.1, 1.0, 6, 2);          // two lines for the carousel
-      queue(-6, -19, 0, 1.15, 8, 1); queue(-12.5, -17, 0, 1.15, 6, 3);                  // the wheel and the tower
-      queue(12, 2, 0, 1.1, 5, 4); queue(4, -22, 0, 1.1, 3, 5);                          // the coaster
-      const n = cells.length, bodies = new THREE.InstancedMesh(bodyGeo, figM, n), heads = new THREE.InstancedMesh(headGeo, figM, n);
+      // the visitors: ordinary people in all sorts of clothes, queuing for the rides
+      const bodyGeo = new THREE.CylinderGeometry(0.3, 0.42, 1.3, 10).translate(0, 0.65, 0), headGeo = new THREE.SphereGeometry(0.27, 14, 10).translate(0, 1.6, 0);
+      const cells = [], queue = (x0, z0, dx, dz, n, col0) => { for (let i = 0; i < n; i++) { const x = x0 + dx * i + (r() - 0.5) * 0.3, z = z0 + dz * i + (r() - 0.5) * 0.3; cells.push({ x, z, col: (col0 + i) % 7 }); p.addCircle(x, z, 0.5); } };
+      queue(-2.5, -1.5, -1.1, 1.0, 5, 0); queue(2.8, -1.5, 1.1, 1.0, 4, 2);
+      queue(-6, -19, 0, 1.15, 6, 1); queue(-12.5, -17, 0, 1.15, 5, 3);
+      queue(12, 2, 0, 1.1, 4, 4); queue(4, -22, 0, 1.1, 3, 5);
+      const n = cells.length, bodies = new THREE.InstancedMesh(bodyGeo, E.mat('#ffffff', { rough: 0.7 }), n), heads = new THREE.InstancedMesh(headGeo, E.mat('#ffffff', { rough: 0.6 }), n);
+      const clothes = ['#2b2f3a', '#7a2f2a', '#3a5a40', '#c9c2b0', '#1e1f22', '#4a6a8a', '#8a6a3a', '#5a3a5a', '#d8d2c0', '#2f4a5a'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
+      cells.forEach((c, i) => { bodies.setColorAt(i, E.lin(clothes[Math.floor(r() * clothes.length)])); heads.setColorAt(i, E.lin(skins[Math.floor(r() * skins.length)])); c.h = 0.9 + r() * 0.2; });
       bodies.castShadow = heads.castShadow = true; g.add(bodies, heads);
-      const oddM = new THREE.MeshStandardMaterial({ color: '#3ff0ff', emissive: '#22d8ff', emissiveIntensity: 1.2, roughness: 0.5 });
-      const odd = new THREE.Group(); odd.add(new THREE.Mesh(bodyGeo, oddM), new THREE.Mesh(headGeo, oddM)); odd.children.forEach((m) => { m.castShadow = true; }); g.add(odd);
       PB.flush();
 
       p.grade = {
@@ -804,21 +804,18 @@
       };
       p.map = [{ t: 'rect', x: 0, z: -10, w: 50, h: 50, c: '#bdb6aa' }];
       p.face = Math.PI;
+      p.vp = [0, -2.5];   // in front of the carousel
       p.pathEnd = 12;
       p.clearR = 12;
       p.blocks = (lx, lz) => Math.abs(lx) < 26 && lz > -36 && lz < 14;
+      SW.parkRide = { wheel, gond, grade: p.grade };
 
-      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
-      let oddIdx = 3, lastBeats = 0, timer = 0, drop = { y: 2, v: 0, st: 'up', wait: 0 };
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0);
+      let drop = { y: 2, v: 0, st: 'up', wait: 0 };
       p.update = (t, dt, f) => {
-        timer += dt;
-        if ((f.beats !== lastBeats && f.beats % 8 === 0) || timer > 6) { timer = 0; let nx = oddIdx; while (nx === oddIdx) nx = Math.floor(r() * n); oddIdx = nx; }
-        lastBeats = f.beats;
-        const bob = f.pulse * 0.16;
-        cells.forEach((c, i) => { const s = i === oddIdx ? 0.0001 : 1 + band(f, c.col * 3 + 2, 24) * 0.3; ps.set(c.x, bob, c.z); sc.set(1, s, 1); m4.compose(ps, q, sc); bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
+        const bob = f.pulse * 0.12;
+        cells.forEach((c, i) => { ps.set(c.x, bob * ((i % 3) / 2), c.z); sc.set(1, c.h * (1 + band(f, c.col * 3 + 2, 24) * 0.08), 1); q.setFromAxisAngle(up, Math.sin(t * 0.5 + i) * 0.4); m4.compose(ps, q, sc); bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
         bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
-        const oc = cells[oddIdx];
-        odd.position.x += (oc.x - odd.position.x) * Math.min(1, dt * 6); odd.position.z += (oc.z - odd.position.z) * Math.min(1, dt * 6); odd.position.y = bob * 1.6; odd.rotation.y = Math.sin(t * 2) * 0.6;
         // carousel: turns faster with the level; the horses rise and fall in turn on the beat
         car.rotation.y += dt * (0.35 + f.level * 0.5);
         horses.forEach((o) => { o.h.position.y = 1.6 + Math.sin(t * 2.6 + o.s * 1.4) * 0.25 + (o.s % 2 ? f.pulse : f.bass) * 0.18; });
@@ -834,10 +831,37 @@
         ring.position.y = drop.y;
         // coaster: quicker downhill, slower at the crests
         const here = curve.getPointAt(cu), ahead = curve.getPointAt((cu + 0.01) % 1);
-        cu = (cu + dt * (0.035 + Math.max(0, here.y - ahead.y) * 0.05 + f.level * 0.01)) % 1;
+        cu = (cu + dt * (0.035 + Math.max(0, here.y - ahead.y) * 0.05 + (f.level || 0) * 0.01)) % 1; if (!(cu >= 0)) cu = 0;
         train.forEach((c, k) => { const u = (cu - k * 0.012 + 1) % 1, v = curve.getPointAt(u), tg = curve.getTangentAt(u); c.position.set(v.x, v.y + 0.2, v.z); c.lookAt(v.x + tg.x, v.y + 0.2 + tg.y, v.z + tg.z); });
       };
-      p.shot = (t) => ({ pos: [Math.sin(t * 0.07) * 6, 7.5, 8], look: [0, 6, -20], roll: 0 });
+      // the view rides an outside horse, looking ahead and out at the park going round
+      p.shot = () => {
+        const o = horses[1], th = car.rotation.y, at = (a, rad, y) => { const x = Math.cos(a) * rad, z = Math.sin(a) * rad; return [x * Math.cos(th) + z * Math.sin(th), y, CZ - x * Math.sin(th) + z * Math.cos(th)]; };
+        return { pos: at(o.a, o.rad, o.h.position.y + 1.3), look: at(o.a - 0.55, o.rad + 3.2, 1.9), roll: 0 };
+      };
+    },
+  };
+
+  /* The Ferris wheel's song: no buildings of its own (the park builds the wheel); its view rides a cabin round. */
+  PLACES.parkwheel = {
+    build(p) {
+      const v = new THREE.Vector3(), w = new THREE.Vector3();
+      p.grade = Object.assign({}, (SW.parkRide && SW.parkRide.grade) || {});
+      p.face = Math.PI; p.pathEnd = 2; p.clearR = 4;
+      p.blocks = (lx, lz) => Math.hypot(lx, lz) < 3;   // the park around it is the carousel's place
+      p.map = []; p.update = () => {};
+      let ride = -1, lastT = -1e9;
+      p.shot = (t) => {
+        const R = SW.parkRide; if (!R) return { pos: [0, 2, 0], look: [0, 2, -5], roll: 0 };
+        if (t - lastT > 0.5) {   // just got on: board the cabin at the bottom, then ride it round
+          let lo = 1e9; R.gond.forEach((gp, i) => { gp.getWorldPosition(v); if (v.y < lo) { lo = v.y; ride = i; } });
+        }
+        lastT = t;
+        R.gond[ride].getWorldPosition(v); v.y -= 0.85;
+        w.set(-v.x, 0, -v.z).normalize();                                  // out towards the middle of town
+        const a = p.group.worldToLocal(v.clone()), b = p.group.worldToLocal(v.clone().addScaledVector(w, 10).setY(v.y - 1.5));
+        return { pos: a.toArray(), look: b.toArray(), roll: 0 };
+      };
     },
   };
 

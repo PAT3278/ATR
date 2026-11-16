@@ -4,7 +4,7 @@
  * This is the only file you need to edit to change what is on the map:
  *   - x / z      where the place's viewpoint is, in metres (the start plaza is at 0, 0; keep within ±70)
  *   - scene      which landscape is built around it and which scenery plays when you look at the view
- *                ('keyaki' | 'tama' | 'flip' | 'stereotype' | 'flash'; anything else gets a generic stage)
+ *                ('keyaki' | 'tama' | 'flip' | 'park' | 'parkwheel' | 'flash' | 'field' | 'shot' | 'ohh'; anything else gets a generic stage)
  *   - src        the real audio file. Leave null to play the built-in generative sketch instead.
  *                Put files in ../audio/ and serve the folder over http (see README) — e.g. 'audio/keyaki.mp3'.
  *   - sketch     which generative sketch plays while src is null (same names as scene)
@@ -83,23 +83,37 @@ SW.SONGS = [
       { kind: 'buy', label: '配信ストアで買う', url: 'https://linkco.re/a9tT7Q6h' },
     ],
   },
+  // The amusement park: two new songs, each heard riding something. Titles are placeholders until the songs have names.
+  // Put the files in audio/ and set src (e.g. 'audio/carousel.mp3'); until then a generated sketch plays.
   {
-    id: 'stereotype',
-    title: 'STEREOTYPE',
+    id: 'carousel',
+    title: 'MERRY-GO-ROUND',
     year: '',
-    place: '量産型の遊園地',
-    placeEn: 'CARBON-COPY PARK',
-    caption: '同じ顔の客が、同じ列に並ぶ遊園地。ひとりだけ、色が違う。',
+    artist: 'atr',
+    place: 'メリーゴーラウンド',
+    placeEn: 'CAROUSEL',
+    caption: '木馬に乗って、遊園地がゆっくり回る。',
     x: 26, z: -50,
-    scene: 'stereotype',
+    scene: 'park',
     sketch: 'stereotype',
     src: null,
-    color: '#DCA3C2',
-    store: false,   // sold on the NS HACK site, not in atr's store
-    price: 200,
-    links: [
-      { kind: 'listen', label: 'SoundCloudで聴く', url: 'https://soundcloud.com/user-602465602/stereotype' },
-    ],
+    color: '#e8b23a',
+    links: [],
+  },
+  {
+    id: 'wheel',
+    title: 'FERRIS WHEEL',
+    year: '',
+    artist: 'atr',
+    place: '観覧車',
+    placeEn: 'FERRIS WHEEL',
+    caption: 'ゴンドラが上がるにつれて、街の灯りが見えてくる。',
+    x: 35.7, z: -68.6,   // the boarding spot in front of the wheel, inside the park
+    scene: 'parkwheel',
+    sketch: 'flash',
+    src: null,
+    color: '#6cc0e8',
+    links: [],
   },
   {
     id: 'nojobb',
