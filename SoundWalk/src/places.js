@@ -372,17 +372,97 @@
       const halo = new THREE.Mesh(new THREE.CircleGeometry(26, 40), new THREE.MeshBasicMaterial({ color: '#ff8a4a', transparent: true, opacity: 0.25, fog: false, depthWrite: false, blending: THREE.AdditiveBlending }));
       halo.position.set(14, 5, -186);
       g.add(halo);
-      const cityM = E.mat('#2a2140', { emissiveMap: E.tex('windows', 1, 3), emissive: '#ffcf8a', emissiveIntensity: 0.6 });
-      const city = [];
-      for (let i = 0; i < 38; i++) {
-        const bgeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-        const b = new THREE.Mesh(bgeo, cityM);
-        let base = 4 + r() * 12;
-        b.position.set(-80 + i * 4.3 + r() * 2, 0, -62 - r() * 16);
-        { const w = p.toWorld(b.position.x, b.position.z); if (E.ring && E.ring.dist(w.x, w.z) < 12) base = Math.min(base, 6); }   // under the ring road: stay below the deck
-        b.scale.set(3 + r() * 2, base, 3 + r() * 2);
-        g.add(b);
-        city.push({ b, base, k: i % 24 });
+      // The far bank is a small port town: a stone quay with bollards and moored boats, red-brick warehouses, a crane
+      // and stacked containers, a white lighthouse where the river runs on towards the sea, and a row of narrow houses
+      // with lit windows behind. Everything is solid. The ring road and its junction fly over this bank, so nothing
+      // under a deck grows taller than the clearance it leaves. The windows brighten with the mids, the crane and the
+      // lighthouse blink on the beat, and the boats ride the swell.
+      const city = [], port = { boats: [], blinks: [] };
+      const cityM = E.mat('#3a2c2a', { emissiveMap: E.tex('windows', 1, 2), emissive: '#ffcf8a', emissiveIntensity: 0.6, rough: 0.85 });
+      {
+        const PB = E.batch(g), pb = PB.box, pr = E.rng(2323);
+        const roads = (E.ring && E.ring.roads) || [];
+        const roof = (lx, lz, r0) => {   // how tall a thing here may stand: under a deck, a little below it
+          const w = p.toWorld(lx, lz); let lim = 1e9;
+          for (const Q of roads) for (let k = 0; k < Q.N; k += 1) { const d = Math.hypot(Q.X[k] - w.x, Q.Z[k] - w.z); if (d < Q.HW[k] + r0 + 1.5) lim = Math.min(lim, Q.Y[k] - 2.6); }
+          return lim;
+        };
+        const prism = (w, rise, d) => { const s = new THREE.Shape(); s.moveTo(-w / 2, 0); s.lineTo(w / 2, 0); s.lineTo(0, rise); s.lineTo(-w / 2, 0); const geo = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: false }); geo.translate(0, 0, -d / 2); return geo; };
+        const brick = E.mat('#8a4a36', { map: E.tex('brick', 3, 2), rough: 0.9 }), stone = E.mat('#8f8a80', { map: E.tex('concrete', 6, 1), rough: 0.95 }), slateR = E.mat('#3a3d42', { rough: 0.7, metal: 0.2 });
+        const iron = E.mat('#22252a', { metal: 0.6, rough: 0.5 }), white = E.mat('#e8e4da', { rough: 0.6 }), red = E.mat('#b8402e', { rough: 0.6 });
+        const lit = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffd49a').convertSRGBToLinear() }); lit.userData.lin = true;
+        const FZ = RZ - RW / 2;   // the far bank's edge
+        // quay: a stone apron with a granite edge, bollards and lamps (a gap where the railway bridge lands)
+        for (const [x0, x1] of [[-50, BX - 3.2], [BX + 3.2, 50]]) {
+          const L = x1 - x0, xm = (x0 + x1) / 2;
+          pb(L, 0.24, 7, xm, 0, FZ - 3.6, stone); pb(L, 0.3, 0.5, xm, 0.15, FZ - 0.3, white);   // low enough to walk over
+          for (let x = x0 + 2; x < x1 - 1; x += 6) { pb(0.32, 0.55, 0.32, x, 0.39, FZ - 0.8, iron); pb(0.42, 0.08, 0.42, x, 0.68, FZ - 0.8, iron); p.addCircle(x, FZ - 0.8, 0.25); }
+          for (let x = x0 + 5; x < x1 - 2; x += 14) { pb(0.12, 4.2, 0.12, x, 2.55, FZ - 6.4, iron); pb(0.5, 0.3, 0.35, x, 4.7, FZ - 6.1, lit, false); }
+        }
+        // boats at their moorings: hulls, a wheelhouse, a mast with a lamp
+        [[-40, 0], [-6, 1], [12, 0], [33, 2]].forEach(([x, k]) => {
+          const b = new THREE.Group(), hullC = ['#2e5c7a', '#b8402e', '#e8e4da'][k % 3];
+          const hull = new THREE.Mesh(new THREE.BoxGeometry(7, 1.2, 2.4), E.mat(hullC, { rough: 0.6 })); hull.position.y = 0.3; b.add(hull);
+          const bow = new THREE.Mesh(prism(2.4, 1.6, 1.2), E.mat(hullC, { rough: 0.6 })); bow.rotation.set(0, Math.PI / 2, -Math.PI / 2); bow.position.set(3.5, 0.9, 0); b.add(bow);
+          const deck = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.08, 2.2), E.mat('#7a6a52', { rough: 0.9 })); deck.position.y = 0.92; b.add(deck);
+          const wh = new THREE.Mesh(new THREE.BoxGeometry(2, 1.6, 1.8), white); wh.position.set(-1.2, 1.75, 0); b.add(wh);
+          const wg = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.5, 1.4), lit); wg.position.set(-1.2, 2.1, 0); b.add(wg);
+          const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 4, 6), iron); mast.position.set(1, 3, 0); b.add(mast);
+          const ml = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), lit); ml.position.set(1, 5, 0); b.add(ml);
+          b.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+          b.position.set(x, 0, FZ + 1.9); g.add(b); port.boats.push({ b, s: x * 0.37 });
+          p.addBox(x + 0.4, FZ + 1.9, 4, 1.3);
+        });
+        // red-brick warehouses with gabled slate roofs, big doors to the quay, a number painted on each
+        const shed = (x, z, w, d, h0, n) => {
+          const h = Math.min(h0, roof(x, z, Math.max(w, d) / 2) - 1.8); if (h < 4) return;
+          pb(w, h, d, x, h / 2, z, brick); pb(w + 0.3, 0.35, d + 0.3, x, h, z, stone);
+          const rf = new THREE.Mesh(prism(d + 0.6, 1.8, w + 0.4), slateR); rf.rotation.y = Math.PI / 2; rf.position.set(x, h + 0.15, z); rf.castShadow = true; g.add(rf);
+          for (let k = 0; k < Math.floor(w / 5); k++) { const dx = x - w / 2 + 2.5 + k * 5; pb(3, Math.min(4, h - 1.2), 0.1, dx, Math.min(4, h - 1.2) / 2, z + d / 2 + 0.02, iron, false); for (const y of [h - 1.4]) pb(1.2, 1.0, 0.08, dx, y, z + d / 2 + 0.02, pr() < 0.6 ? lit : iron, false); }
+          const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), new THREE.MeshBasicMaterial({ map: E.textTex(`${n}号倉庫`, { w: 512, h: 128, color: '#f2ead8', font: '700 76px "Noto Serif JP",serif' }), transparent: true }));
+          sign.position.set(x, Math.min(h - 0.5, 5.2), z + d / 2 + 0.07); g.add(sign);
+          p.addBox(x, z, w / 2 + 0.1, d / 2 + 0.1);
+        };
+        shed(-36, FZ - 14, 18, 9, 9, 1); shed(4, FZ - 14, 16, 9, 9, 2); shed(26, FZ - 14, 14, 8, 8, 3);
+        // a dock crane and stacks of containers (where there is sky above)
+        const cranes = [[42, FZ - 6], [-8, FZ - 6]].filter(([x, z]) => roof(x, z, 6) > 30);
+        cranes.slice(0, 1).forEach(([x, z]) => {
+          for (const [a, c] of [[-2.2, -2.2], [2.2, -2.2], [-2.2, 2.2], [2.2, 2.2]]) pb(0.45, 16, 0.45, x + a, 8, z + c, red);
+          pb(5, 0.8, 5, x, 16.3, z, red); pb(1.2, 0.8, 26, x, 17, z + 4, red); pb(2.6, 2.2, 2.4, x, 15, z - 1.5, white);
+          pb(0.06, 9, 0.06, x, 12.5, z + 11, iron, false); pb(2.4, 0.3, 1.2, x, 8, z + 11, iron);
+          const bl = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff3a2a' })); bl.position.set(x, 17.7, z + 16.5); g.add(bl); port.blinks.push(bl);
+          p.addCircle(x - 2.2, z - 2.2, 0.4); p.addCircle(x + 2.2, z - 2.2, 0.4); p.addCircle(x - 2.2, z + 2.2, 0.4); p.addCircle(x + 2.2, z + 2.2, 0.4);
+        });
+        const boxC = ['#2e5c7a', '#b8402e', '#d9a53a', '#3f7a52', '#7a3f6a', '#c8c4b8'].map((c) => E.mat(c, { rough: 0.7, metal: 0.2 }));
+        [[-20 + 26, FZ - 25], [38, FZ - 25]].forEach(([cx, cz]) => {
+          const lim = roof(cx, cz, 7);
+          for (let i = 0; i < 4; i++) for (let lv = 0; lv < 3; lv++) { if ((lv + 1) * 2.6 > lim || pr() < lv * 0.3) continue; pb(6, 2.55, 2.4, cx, 1.3 + lv * 2.6, cz - 3.6 + i * 2.45, boxC[Math.floor(pr() * boxC.length)]); }
+          p.addBox(cx, cz + 0.1, 3.1, 5);
+        });
+        // the lighthouse at the end of the quay, where the river heads for the sea
+        { const x = 47, z = FZ - 2.2, H = Math.min(14, roof(x, z, 2) - 1);
+          if (H > 6) { const tw = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.5, H, 16), white); tw.position.set(x, H / 2, z); tw.castShadow = true; g.add(tw);
+            for (const y of [H * 0.3, H * 0.62]) pb(3.05 - y / H, 0.9, 3.05 - y / H, x, y, z, red, false);
+            pb(2.6, 0.2, 2.6, x, H + 0.1, z, iron); const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.1, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff2c8').convertSRGBToLinear().multiplyScalar(1.5) })); lamp.position.set(x, H + 0.8, z); g.add(lamp);
+            const cap = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.0, 12), red); cap.position.set(x, H + 1.85, z); g.add(cap); port.blinks.push(lamp);
+            p.addCircle(x, z, 1.6); } }
+        // the town behind: narrow houses in pastel render with tiled roofs, two or three floors, lit windows
+        const walls = ['#d9c7a8', '#b9cbbf', '#e0b9a0', '#a9bccb', '#d8d0bc', '#c9a98f'].map((c) => E.mat(c, { rough: 0.9 }));
+        const tiles = [E.mat('#4a3a34', { rough: 0.7 }), E.mat('#3a4048', { rough: 0.7 }), E.mat('#7a3a2a', { rough: 0.7 })];
+        for (const [z0, flip] of [[FZ - 34, 1], [FZ - 47, -1]]) for (let x = -48; x < 48;) {
+          const w = 4.2 + pr() * 2.6, d = 7, fl = 2 + Math.floor(pr() * 2), xc = x + w / 2; x += w + (pr() < 0.18 ? 3.5 : 0.25);
+          if (Math.abs(xc - BX) < 4.5 || Math.abs(xc) > 47) continue;
+          const lim = roof(xc, z0, d / 2), h = Math.min(fl * 3, lim - 2.2); if (h < 3) continue;
+          const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), walls[Math.floor(pr() * walls.length)]); b.position.set(xc, h / 2, z0); b.castShadow = b.receiveShadow = true; g.add(b);
+          const rf = new THREE.Mesh(prism(w + 0.5, 1.6, d + 0.5), tiles[Math.floor(pr() * tiles.length)]); rf.position.set(xc, h, z0); rf.castShadow = true; g.add(rf);
+          for (let f = 0; f < Math.round(h / 3); f++) for (const dx of w > 5.2 ? [-w / 4, w / 4] : [0]) {
+            const wm = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.3, 0.06), cityM); wm.position.set(xc + dx, 1.7 + f * 3, z0 + flip * (d / 2 + 0.02)); g.add(wm);
+          }
+          pb(1.0, 2.1, 0.08, xc + (w > 5.2 ? 0 : w / 4), 1.05, z0 + flip * (d / 2 + 0.03), iron, false);
+          p.addBox(xc, z0, w / 2 + 0.05, d / 2 + 0.05);
+          city.push({ b, k: city.length % 24 });
+        }
+        PB.flush();
       }
 
       E.bench(g, 2.6, -2, Math.PI);
@@ -393,11 +473,11 @@
         sun: '#ff9a5a', sunInt: 2.2, hemi: 0.55, sunDir: [0.1, 0.12, -1],
         tint: [1.1, 0.95, 0.88], expo: 1.0, sat: 1.1, stars: 0.1,
       };
-      p.map = [{ t: 'rect', x: 0, z: RZ, w: 100, h: RW, c: '#3f6f9e' }, { t: 'rect', x: BX, z: RZ - 40, w: 4, h: 150, c: '#56604a' }];
+      p.map = [{ t: 'rect', x: 0, z: RZ, w: 100, h: RW, c: '#3f6f9e' }, { t: 'rect', x: 0, z: RZ - RW / 2 - 25, w: 96, h: 46, c: '#4a4038' }, { t: 'rect', x: BX, z: RZ - 40, w: 4, h: 150, c: '#56604a' }];
       p.face = Math.PI;
       p.pathEnd = 4;
       p.clearR = 9;
-      p.blocks = (lx, lz) => (lz < -4 && lz > -60 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 10 && lz > -150 && lz < 56) || Math.hypot(lx, lz) < 8;
+      p.blocks = (lx, lz) => (lz < -4 && lz > -76 && Math.abs(lx) < 52) || (Math.abs(lx - BX) < 10 && lz > -150 && lz < 56) || Math.hypot(lx, lz) < 8;
       p.noPier = (lx) => Math.abs(lx - BX) < 5.5;   // the ring road crosses the railway: no pier on the tracks
 
       let trainT = 6, trainS = 'wait';
@@ -411,8 +491,9 @@
         const sS = 1 + f.bass * 0.07;
         sun.scale.set(sS, sS, 1);
         halo.material.opacity = 0.18 + f.bass * 0.25;
-        city.forEach((c) => { c.b.scale.y += (c.base * (0.65 + band(f, c.k, 24) * 0.9) - c.b.scale.y) * Math.min(1, dt * 10); });
         cityM.emissiveIntensity = 0.4 + f.mid * 1.2;
+        port.boats.forEach((o) => { o.b.position.y = Math.sin(t * 1.1 + o.s) * 0.08 + f.bass * 0.06; o.b.rotation.z = Math.sin(t * 0.8 + o.s) * 0.03; o.b.rotation.x = Math.sin(t * 0.9 + o.s * 2) * 0.02; });
+        port.blinks.forEach((m, i) => { m.visible = f.pulse > 0.35 || Math.sin(t * 2.4 + i * 2) > 0.2; });
         // The train comes out of the haze across the river and disappears into the tunnel.
         // The train comes over the bridge, stops at the platform above the live house with its doors open, then goes back.
         trainT -= dt;
