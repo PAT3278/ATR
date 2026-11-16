@@ -25,6 +25,8 @@ SW.CONFIG = {
   // Where the train at the station above the live house takes you: another site, opened after a "go there?" prompt.
   // Set url to null to leave the train as scenery.
   shop: { name: 'CLOSET QUEST', url: 'https://claude.ai/artifact/Nb3fetixjJJ4mQEfbmMq58' },
+  // The record shop on the plaza and the phone's STORE app sell atr's releases. A song with store: false is left out.
+  store: { name: 'ATR RECORDS' },
   checkoutEndpoint: null,
   stripePublishableKey: null, // only needed if the endpoint answers { sessionId } instead of { url }
 };
@@ -93,6 +95,7 @@ SW.SONGS = [
     sketch: 'stereotype',
     src: null,
     color: '#DCA3C2',
+    store: false,   // sold on the NS HACK site, not in atr's store
     price: 200,
     links: [
       { kind: 'listen', label: 'SoundCloudで聴く', url: 'https://soundcloud.com/user-602465602/stereotype' },

@@ -520,7 +520,7 @@
     put(new THREE.BoxGeometry(2.2, 1.0, 0.7), trim, 0, 0.5, -1.2);
     const deck = put(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 24), mat('#0b0b0c', { rough: 0.3 }), -0.5, 1.03, -1.2);
     // the sign: lit letters over the door, and a projecting blade sign you can read from along the plaza
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.6, 0.8), new THREE.MeshBasicMaterial({ map: textTex('NS HACK RECORDS', { w: 1024, h: 140, font: '700 74px "Hind",sans-serif', color: '#ffe9c4', glow: '#ff9a3c' }), transparent: true, depthWrite: false }));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.6, 0.8), new THREE.MeshBasicMaterial({ map: textTex((CFG.store && CFG.store.name) || 'RECORDS', { w: 1024, h: 140, font: '700 74px "Hind",sans-serif', color: '#ffe9c4', glow: '#ff9a3c' }), transparent: true, depthWrite: false }));
     sign.position.set(0, H - 0.45, D / 2 + 0.07); S.add(sign);
     const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.5), new THREE.MeshBasicMaterial({ map: textTex('RECORDS', { w: 512, h: 128, font: '700 70px "Hind",sans-serif', color: '#9ff3ff', glow: '#3ff0ff' }), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     blade.rotation.y = Math.PI / 2; blade.rotation.x = 0; blade.material.map.center.set(0.5, 0.5); blade.material.map.rotation = Math.PI / 2;
@@ -1277,7 +1277,8 @@
   // The record store: every song, with its price and where to buy it. The same list is the phone's STORE app and the
   // counter of the record shop on the plaza. Songs you have not found yet are on sale too; the list just says so.
   function storeHTML() {
-    const rows = places.map((p, i) => {
+    const STORE = CFG.store || { name: 'RECORDS' }, rows = places.map((p, i) => {
+      if (p.song.store === false) return '';
       const s = p.song, buy = (s.links || []).find((l) => l.kind === 'buy'), listen = (s.links || []).find((l) => l.kind !== 'buy');
       const pay = CFG.checkoutEndpoint && s.price
         ? `<button class="btn primary" type="button" data-buy="${i}" aria-label="${esc(s.title)} を ${yen(s.price)} で買う">${IC.cart}<span>${yen(s.price)}</span></button>`
@@ -1287,7 +1288,7 @@
       const sub = [s.year, p.found ? s.place : '未発見', s.price && !CFG.checkoutEndpoint ? yen(s.price) : ''].filter(Boolean).join(' · ');
       return `<div class="st-row"><span class="dot" style="background:${esc(p.found ? p.color : '#55524a')}"></span><span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span><span class="st-acts">${lis}${pay}</span></div>`;
     }).join('');
-    return `<h3 class="ph-h">NS HACK RECORDS</h3><p class="ph-sub">${esc(CFG.artist)} · ${places.length} SONGS · DIGITAL</p>${rows}`;
+    return `<h3 class="ph-h">${esc(STORE.name)}</h3><p class="ph-sub">${places.filter((p) => p.song.store !== false).length} SONGS · DIGITAL</p>${rows}`;
   }
   let phView = 'home', phSong = null;
   const phScreen = $('#phScreen');

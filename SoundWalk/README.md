@@ -108,7 +108,7 @@ Vercel / GitHub Pages などにそのまま置けます。three.js r128 は cdnj
 
 ## 購入
 
-- **買える場所は2つ**: 広場の縁（噴水の外側、場所への道がいちばん離れているすきま）にあるレコード店「NS HACK RECORDS」の入口で Z（スマホは A）を押すと、全曲のカタログが大きく開きます。ゲーム内スマホの **STORE** アプリにも同じ一覧があります。まだ見つけていない曲も買えます（一覧に「未発見」と出るだけ）。各曲の行に、購入ボタン（`buy` リンク、または直接販売の価格ボタン）と試聴ボタンが並びます。購入先がない曲は SOON です。
+- **買える場所は2つ**: 広場の縁（噴水の外側、場所への道がいちばん離れているすきま）にあるレコード店「ATR RECORDS」（atr の作品を売る店。名前は `SW.CONFIG.store.name`）の入口で Z（スマホは A）を押すと、全曲のカタログが大きく開きます。ゲーム内スマホの **STORE** アプリにも同じ一覧があります。まだ見つけていない曲も買えます（一覧に「未発見」と出るだけ）。NS HACK のサイトで売る STEREOTYPE は並べていません（曲に `store: false` を付けると店から外れます）。各曲の行に、購入ボタン（`buy` リンク、または直接販売の価格ボタン）と試聴ボタンが並びます。購入先がない曲は SOON です。
 - **ストアリンク（いまの設定）**: 各曲の `links` に `kind: 'buy'` のURLを入れるとメインボタンになります。KEYAKI / TAMA EXPRESSION / FLIP DA HOODS は LinkCore、STEREOTYPE / NO JOBB は購入先が見つからなかったので SoundCloud の視聴リンクにしています。
 - **直接販売（Stripe Checkout）**: `SW.CONFIG.checkoutEndpoint` にエンドポイントを設定し、各曲の `price`（円）を入れると「この曲を買う ¥250」ボタンが出ます。エンドポイントは `{ items: [{ name, price, quantity }] }` を受け取り、`{ url }`（Checkout の URL）を返してください。`{ sessionId }` を返す場合は `stripePublishableKey` も設定します。NS HACK サイトの `/api/stripe/checkout` にそのまま渡せる形式です（同じドメインで配信する場合）。
 
