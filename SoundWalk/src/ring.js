@@ -160,7 +160,9 @@
       const frameAt = (deg) => { const th = deg * DEG; let bi = 0, bd = 1e9; for (let i = 0; i < N; i++) { let a = Math.atan2(Z[i], X[i]) - th; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))); if (a < bd) { bd = a; bi = i; } }
         const tx = TX[bi], tz = TZ[bi]; let nx = -tz, nz = tx; if (nx * -X[bi] + nz * -Z[bi] < 0) { nx = -nx; nz = -nz; }
         const tmp = {}, sv = Math.sign(-(tz * nx - tx * nz)) || 1;   // which sign of the loop's d points to the middle
-        return (u, v, dy) => { const o = R.at(bi * ds + u, -sv * v, tmp); return [o.x, o.y + dy, o.z]; }; };   // u runs along the loop's curve, v straight across it, heights follow its deck
+        const f = (u, v, dy) => { const o = R.at(bi * ds + u, -sv * v, tmp); return [o.x, o.y + dy, o.z]; };
+        f.hw = (u) => HW[(((bi + Math.round(u / ds)) % N) + N) % N];   // the loop's half-width there
+        return f; };   // u runs along the loop's curve, v straight across it, heights follow its deck
       const JA = frameAt(-30), JB = frameAt(120);   // east, between SHOT and FLIP; north-west, between NO JOBB and TAMA (clear of the narrow coast road)
       const roadFrom = (id, pts, hw, o = {}) => {
         const cb = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)), false, 'centripetal'), NB = Math.max(4, Math.round(cb.getLength() / 2)), pb = cb.getSpacedPoints(NB - 1);
@@ -188,31 +190,39 @@
       // the route itself, one-way east to west
       const mid = [[44, -37, 13], [28, -24, 13.6], [10, -23, 14], [-8, -14, 14.2], [-24, -13, 14.2], [-40, -2, 14.3], [-52, 12, 14.4], [-55, 30, 14.6], [-50, 48, 14.8]].map(([x, z, y]) => [x, y, z]);
       for (let i = 1; i < mid.length - 1; i++) { const a = mid[i - 1], b = mid[i + 1]; for (const k of [0, 2]) mid[i][k] += ((a[k] + b[k]) / 2 - mid[i][k]) * 0.33; }
-      const B = roadFrom('c1', [JA(0, 34, 3.5), JA(0, 42, 3.6), ...mid, JB(0, 42, 3.6), JB(0, 34, 3.5)], 4.6, { oneWay: true });
+      // the route begins and ends a little inside the junctions, where its two ramps run side by side into it (or out of it)
+      const B = roadFrom('c1', [JA(0, 34, 3.5), JA(0, 42, 3.6), ...mid, JB(0, 42, 3.6), JB(0, 34, 3.5)], 4.6, { oneWay: true, lift: 0.03 });
+      for (let i = 0; i < B.N; i++) B.HW[i] = 4.6 + 0.6 * Math.max(0, 1 - i / 8, 1 - (B.N - 1 - i) / 8);   // widens to take both ramps
+      const RW = 2.6;   // ramp half-width; the two ramps meet the route at u = +-RW, edge to edge
       // the ramps, in the junction frames (u, v, height); see above
-      // r1 starts just inside the carriageway's left edge (you steer onto it; keeping to your lane takes you past);
-      // r2 starts hugging the median (keep right to take it)
-      const r1 = [[66, 7.5, 0], [50, 8, 0], [36, 9.8, 0.05], [24, 13.5, 0.6], [13, 20, 1.6], [5, 27.5, 2.6], [0, 35, 3.4], [0, 42, 3.6]];
-      const r2 = [[-128, -1.2, 0], [-110, -1.2, 0.6], [-92, -1.3, 2], [-75, -1.2, 3.6], [-59, -0.6, 5.2], [-46, 1.5, 6.4], [-35, 5, 6.9], [-25, 11, 6.7], [-15, 18, 5.6], [-7, 26, 4.4], [-2, 33, 3.7], [0, 38, 3.6], [0, 42, 3.6]];
+      // Both ramps leave (and join) each carriageway on its own outside edge, the usual left-hand way: you steer onto the
+      // ramp from just inside the edge (keeping to your lane takes you past), and the ramp peels off, climbs beside the
+      // road and turns in to the route. r1 serves the inner carriageway and climbs inwards; r2 serves the outer one, so
+      // it climbs outside the loop first and then crosses over both carriageways.
+      const r1 = [[66, 7.5, 0], [50, 8, 0], [36, 9.8, 0.05], [24, 13.5, 0.6], [13, 20, 1.6], [6, 27, 2.7], [RW, 34, 3.5], [RW, 38, 3.55]];
+      const r2 = (h) => [[-100, -(h(-100) - 0.5), 0], [-84, -(h(-84) - 0.3), 0], [-70, -(h(-70) + 0.6), 0], [-58, -(h(-58) + 2.4), 0.3], [-46, -(h(-46) + 4.4), 1.3],
+        [-34, -(h(-34) + 5.6), 2.5], [-23, -(h(-23) + 5.4), 3.6], [-14, -(h(-14) + 3), 4.5], [-8, -3, 5], [-4.5, 5, 5.1], [-RW, 15, 4.8], [-RW, 24, 4.2], [-RW, 34, 3.5], [-RW, 38, 3.55]];
       const mirror = (pts) => pts.slice().reverse().map(([u, v, dy]) => [-u, v, dy]);   // the west end is the east end turned round
+      const r2W = r2((u) => JB.hw(-u)); r2W[0] = [-100, -(JB.hw(100) - 2.1), 0];   // the merge finishes inside the slow lane
       const ramps = [
-        roadFrom('inL', r1.map((p) => JA(...p)), 2.6, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
-        roadFrom('inR', r2.map((p) => JA(...p)), 2.6, { oneLane: true, opens: 'left' }),
-        roadFrom('outL', mirror([[66, 5.9, 0], ...r1.slice(1)]).map((p) => JB(...p)), 2.6, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane
-        roadFrom('outR', mirror([[-128, -2.4, 0], ...r2.slice(1)]).map((p) => JB(...p)), 2.6, { oneLane: true, opens: 'left' }),
+        roadFrom('inL', r1.map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
+        roadFrom('inR', r2(JA.hw).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),
+        roadFrom('outL', mirror([[84, 5.9, 0], [68, 6.6, 0], [52, 8.6, 0.05], [38, 12, 0.6], [24, 15.5, 1.4], [13, 21, 2.1], [6, 27.5, 2.8], [RW, 34, 3.5], [RW, 38, 3.55]]).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane; the west deck lies lower, so this one is longer
+        roadFrom('outR', mirror(r2W).map((p) => JB(...p)), RW, { oneLane: true, opens: 'left' }),
       ];
       const all = [B, ...ramps];
       // where a ramp lies on the loop's deck: no walls on the ramp; the loop's median drops where a ramp runs along it, and
       // its inner wall opens where a ramp leaves or joins from the inside
-      R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N);
+      R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N); R.OGAP = new Uint8Array(N);
       for (const Rd of ramps) for (let i = 0; i < Rd.N; i++) {
         const j = nearest(Rd.X[i], Rd.Z[i]), dx = Rd.X[i] - X[j], dz = Rd.Z[i] - Z[j], d = dx * TZ[j] - dz * TX[j], dy = Rd.Y[i] - Y[j];
         if (dy > 2.2 || Math.abs(d) > HW[j] + Rd.HW[i]) continue;
         if (Rd.opens === 'left') Rd.OGAP[i] = 1; else Rd.GAP[i] = 1;   // the far side keeps its wall: for a median ramp that wall is the median
-        for (let k = -1; k <= 1; k++) { const q = (j + k + N) % N; if (Math.abs(d) < Rd.HW[i] + 0.6) R.MGAP[q] = 1; if (d < -(HW[j] - 2.2) && d > -(HW[j] + Rd.HW[i])) { GAP[q] = 1; R.JGAP[q] = 1; } }
+        for (let k = -1; k <= 1; k++) { const q = (j + k + N) % N; if (Math.abs(d) < Rd.HW[i] + 0.6) R.MGAP[q] = 1; if (d < -(HW[j] - 2.2) && d > -(HW[j] + Rd.HW[i])) { GAP[q] = 1; R.JGAP[q] = 1; } if (d > HW[j] - 2.2 && d < HW[j] + Rd.HW[i]) R.OGAP[q] = 1; }
       }
       // where two of the new roads meet (a ramp joining the route), no walls between them either
-      for (const A of all) for (const Bb of all) { if (A === Bb) continue; for (let i = 0; i < A.N; i++) { const j = Bb.nearest(A.X[i], A.Z[i]); if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(A.X[i] - Bb.X[j], A.Z[i] - Bb.Z[j]) < A.HW[i] + Bb.HW[j] + 0.3) A.GAP[i] = A.OGAP[i] = 1; } }
+      for (const A of all) for (const Bb of all) { if (A === Bb) continue; for (let i = 0; i < A.N; i++) { const j = Bb.nearest(A.X[i], A.Z[i]); const wx = Bb.X[j] - A.X[i], wz = Bb.Z[j] - A.Z[i], sd = wx * A.TZ[i] - wz * A.TX[i];
+        if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(wx, wz) < A.HW[i] + Bb.HW[j] + 0.3) { if (sd > -1) A.OGAP[i] = 1; if (sd < 1) A.GAP[i] = 1; } } }   // only the side that faces the other road
       R.branch = B; R.ramps = ramps; R.roads = [R, ...all];
       const rDist = R.dist; R.dist = (x, z) => Math.min(rDist(x, z), ...all.map((q) => q.dist(x, z)));
     }
@@ -318,18 +328,24 @@
 
     // sodium lamps on the median: a pole, a cross arm and two heads
     const poleM = E.mat('#3a3a40', { metal: 0.5 }), headM = E.basic('#ffb04a'), poleL = [], armL = [], headL = [], glowP = [], poolL = [];
+    // a lamp never stands on, through or under another road's deck
+    const others = (R.roads || []).filter((q) => q !== Rd);
+    const clear = (x, y, z) => { for (const Q of others) { let j = 0, bd = 1e18; for (let k = 0; k < Q.N; k++) { const e = (Q.X[k] - x) ** 2 + (Q.Z[k] - z) ** 2; if (e < bd) { bd = e; j = k; } } const dy = Q.Y[j] - y; if (Math.sqrt(bd) < Q.HW[j] + 1 && dy > -1.6 && dy < 8.5) return false; } return true; };
     for (let i = 5; i < N; i += 9) {
       if (!hasMed(i) || medH(i) < 0.7) continue;
+      if (!clear(X[i], Y[i], Z[i]) || ![-2.8, 2.8].every((d) => (at(i, d, 0), clear(v.x, Y[wr(i)], v.z)))) continue;
       const yw = yawOf(i);
       poleL.push({ x: X[i], y: Y[i] + 3.9, z: Z[i], sy: 6.6 });
+      (R.lampAt || (R.lampAt = [])).push({ id: Rd.id, i, x: X[i], y: Y[i], z: Z[i], kind: 'median' });
       armL.push({ x: X[i], y: Y[i] + 7.2, z: Z[i], yaw: yw });
       for (const d of [-2.8, 2.8]) { at(i, d, 7.08); headL.push({ x: v.x, y: v.y, z: v.z, yaw: yw }); glowP.push(v.x, v.y - 0.1, v.z); }
       poolL.push({ x: X[i], y: Y[i] + 0.05, z: Z[i], yaw: yw });
     }
     if (Rd.urban) for (let i = 4, k = 0; i < N - 2; i += 7, k++) {   // no median: lamps on alternate walls, the arm reaching over the lanes
-      if (GAP[i]) continue;
-      const sd = k % 2 ? 1 : -1, yw = yawOf(i); at(i, sd * (HW[i] - 0.25), 0); const bx = v.x, by = v.y, bz = v.z;
-      poleL.push({ x: bx, y: by + 3.6, z: bz, sy: 6 }); at(i, sd * (HW[i] - 1.6), 6.6); armL.push({ x: v.x, y: v.y, z: v.z, yaw: yw, sx: 0.47 });
+      const sd = k % 2 ? 1 : -1, yw = yawOf(i);
+      if ((sd < 0 && GAP[i]) || (sd > 0 && OG[i])) continue;   // not on an open side
+      if (!clear(...(at(i, sd * (HW[i] - 0.25), 0), [v.x, Y[i], v.z])) || !clear(...(at(i, sd * (HW[i] - 2.9), 0), [v.x, Y[i], v.z]))) continue; at(i, sd * (HW[i] - 0.25), 0); const bx = v.x, by = v.y, bz = v.z;
+      poleL.push({ x: bx, y: by + 3.6, z: bz, sy: 6 }); (R.lampAt || (R.lampAt = [])).push({ id: Rd.id, i, sd, x: bx, y: by, z: bz, kind: 'side' }); at(i, sd * (HW[i] - 1.6), 6.6); armL.push({ x: v.x, y: v.y, z: v.z, yaw: yw, sx: 0.47 });
       at(i, sd * (HW[i] - 2.9), 6.48); headL.push({ x: v.x, y: v.y, z: v.z, yaw: yw }); glowP.push(v.x, v.y - 0.1, v.z); at(i, sd * (HW[i] - 3), 0.05); poolL.push({ x: v.x, y: v.y, z: v.z, yaw: yw });
     }
     inst(new THREE.CylinderGeometry(0.1, 0.13, 1, 6), poleM, poleL, false);

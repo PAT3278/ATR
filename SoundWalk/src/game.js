@@ -1081,6 +1081,7 @@
     for (const Rd of ring.roads) {
       const o = rqs[Rd.id] || (rqs[Rd.id] = {}); Rd.proj(d.x, d.z, d.hints[Rd.id] ?? -1, o); d.hints[Rd.id] = o.i;
       if (o.off || Math.abs(o.y - d.y) > 3) continue;
+      if (Rd !== R0 && (Rd.oneWay || Rd.oneLane) && Math.cos(d.yaw + (d.v < 0 ? Math.PI : 0) - Math.atan2(o.tx, o.tz)) < -0.2) continue;   // never onto a one-way ramp against its traffic
       const [lo2, hi2] = band(o); if (o.d < lo2 || o.d > hi2) continue;
       const al = Math.abs(Math.cos(d.yaw - Math.atan2(o.tx, o.tz)));   // how well the car points along this road
       // how far the car is from the middle of this road's nearest lane: a ramp beside a lane wins once you steer onto it
@@ -1923,12 +1924,13 @@
   document.title = CFG.title;
   resize();
 
-  let last = performance.now();
+  let last = performance.now(), camHold = null;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now; t += dt;
     if (mode === 'dialog') tickDlg(dt);
     update(dt);
+    if (camHold) camHold(camera);   // debug: a test can fly the camera
     post.uniforms.time.value = t; skyU.time.value = t;
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
@@ -1953,5 +1955,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
