@@ -1,0 +1,681 @@
+<title>PhoneTesto Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  /* Layout: a lit room fills the top of the screen; a thin control strip sits under it.
+     One look on purpose: a dark room at night, lit by a single desk lamp. */
+  :root {
+    --room: #0d0c0b;
+    --strip: #151311;
+    --ink: #eee7dc;
+    --dim: #8f877b;
+    --lamp: #ffb45e;
+    --line: rgba(238, 231, 220, 0.12);
+    --chip: rgba(238, 231, 220, 0.06);
+    --sans: "Barlow", "Helvetica Neue", Arial, sans-serif;
+    --cond: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--room); color: var(--ink); font-family: var(--sans); overflow: hidden; }
+  .app { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+  .stage { position: relative; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .stage:active { cursor: grabbing; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 46%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
+  .hud { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+         top: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; pointer-events: none; }
+  .name { font: 600 clamp(22px, 4.2vw, 34px)/1 var(--cond); letter-spacing: 0.02em; text-wrap: balance; }
+  .spec { font: 500 12px/1.4 var(--sans); color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; font-variant-numeric: tabular-nums; text-align: right; }
+  .hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 500 12px var(--sans);
+          color: var(--dim); letter-spacing: 0.04em; pointer-events: none; transition: opacity 0.6s; }
+  .hint.gone { opacity: 0; }
+
+  .strip { background: var(--strip); border-top: 1px solid var(--line); display: grid; gap: 12px;
+           padding-block: 12px calc(12px + env(safe-area-inset-bottom, 0px));
+           padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; appearance: none; border: 0; border-radius: 999px; padding: 8px 13px; background: var(--chip); color: var(--dim);
+          font: 600 13px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background 0.3s, color 0.3s; }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--room); }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .play { appearance: none; border: 0; width: 44px; height: 44px; border-radius: 50%; background: var(--lamp); color: #1b1208; cursor: pointer;
+          display: grid; place-items: center; flex: none; }
+  .play svg { width: 16px; height: 16px; fill: currentColor; }
+  .song { display: grid; gap: 2px; min-width: 0; flex: 1 1 140px; }
+  .song b { font: 600 13px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song label { font: 500 12px var(--sans); color: var(--dim); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; width: max-content; }
+  .song input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .ctl { display: grid; gap: 4px; flex: 1 1 150px; min-width: 0; }
+  .ctl span { display: flex; justify-content: space-between; font: 600 11px var(--cond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  .ctl output { color: var(--ink); font-variant-numeric: tabular-nums; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: var(--line); }
+  input[type="range"]::-moz-range-track { height: 2px; background: var(--line); }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); margin-top: -8px; }
+  input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--ink); }
+  .tog { appearance: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; background: transparent; color: var(--dim);
+         font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; flex: none; }
+  .tog[aria-pressed="true"] { border-color: var(--lamp); color: var(--lamp); }
+  button:focus-visible, input:focus-visible + label, input[type="range"]:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+</style>
+
+<div class="app">
+  <div class="stage" id="stage" aria-label="Speaker room. Swipe sideways to change speakers, drag up or down to pull focus.">
+    <canvas id="back"></canvas>
+    <canvas id="dev"></canvas>
+    <canvas id="fx"></canvas>
+    <div class="vignette"></div>
+    <div class="hud"><div class="name" id="name">Phone 15/16 Pro</div><div class="spec" id="spec"></div></div>
+    <div class="hint" id="hint">Swipe to change speakers · Drag up or down to pull focus</div>
+  </div>
+  <div class="strip">
+    <div class="chips" id="chips" role="group" aria-label="Speaker model"></div>
+    <div class="row">
+      <button class="play" id="play" type="button" aria-label="Play"><svg viewBox="0 0 16 16" id="playIcon"><path d="M3 1.5v13l11-6.5z"/></svg></button>
+      <div class="song"><b id="songName">1st Session NY — vas stvn</b><input id="file" type="file" accept="audio/*"><label for="file" id="pick">Choose a song</label></div>
+      <label class="ctl" for="mix"><span>Focus <output id="mixOut">Phone 100%</output></span><input id="mix" type="range" min="0" max="100" value="100"></label>
+      <label class="ctl" for="vol"><span>Output <output id="volOut">0.0 dB</output></span><input id="vol" type="range" min="-24" max="6" step="0.5" value="0"></label>
+      <button class="tog" id="mono" type="button" aria-pressed="false">MONO</button>
+      <button class="tog" id="bypass" type="button" aria-pressed="false">BYPASS</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const ja = /^ja/i.test(navigator.language || "");
+  if (ja) {
+    document.getElementById("hint").textContent = "横にスワイプで機種を切り替え・上下にドラッグでピント";
+    document.getElementById("pick").textContent = "曲を選ぶ";
+  }
+
+  // ---- the room, in real 3D ----
+  // Two layers share one camera: the studio behind (wall, far desk, monitors) and the
+  // desk with the devices in front. Each layer is blurred on its own, so the focus pull
+  // that sets MIX is a real change of what is sharp.
+  const stage = document.getElementById("stage");
+  const backC = document.getElementById("back"), devC = document.getElementById("dev"), fxC = document.getElementById("fx");
+  const fx = fxC.getContext("2d");
+  let W = 1, H = 1, DPR = 1;
+  const T3 = window.THREE;
+
+  function mkRenderer(canvas, alpha) {
+    const r = new T3.WebGLRenderer({ canvas, antialias: true, alpha, powerPreference: "high-performance" });
+    r.outputEncoding = T3.sRGBEncoding; r.toneMapping = T3.ACESFilmicToneMapping; r.toneMappingExposure = 0.82;
+    r.shadowMap.enabled = true; r.shadowMap.type = T3.PCFSoftShadowMap;
+    if (alpha) r.setClearColor(0x000000, 0);
+    return r;
+  }
+  const rBack = mkRenderer(backC, false), rDev = mkRenderer(devC, true);
+  const camera = new T3.PerspectiveCamera(26, 1, 0.01, 40);
+  const back = new T3.Scene(), front = new T3.Scene();
+  back.background = new T3.Color(0x0c0b0a);
+
+  // reflections: a dark studio with one warm softbox overhead and a cool strip to the side
+  function envFor(renderer) {
+    const s = new T3.Scene();
+    s.add(new T3.Mesh(new T3.BoxGeometry(10, 10, 10), new T3.MeshBasicMaterial({ color: 0x0b0a09, side: T3.BackSide })));
+    const panel = (w, h, c, x, y, z, ry, rx) => { const m = new T3.Mesh(new T3.PlaneGeometry(w, h), new T3.MeshBasicMaterial({ color: c, side: T3.DoubleSide }));
+      m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0); s.add(m); };
+    panel(3.2, 1.6, 0xffd9b0, 0.4, 3.6, 1.5, 0, Math.PI / 2);
+    panel(0.5, 4, 0x8fa6c8, -4.8, 1.2, 0, Math.PI / 2);
+    panel(4, 0.4, 0xffc89a, 0, 1.4, 4.9, Math.PI);
+    panel(2, 0.25, 0x6c7a90, 2.5, 0.6, -4.9, 0);
+    const pm = new T3.PMREMGenerator(renderer), tex = pm.fromScene(s, 0.035).texture; pm.dispose(); return tex;
+  }
+  back.environment = envFor(rBack); front.environment = envFor(rDev);
+
+  // walnut desk
+  function walnut() {
+    const c = document.createElement("canvas"); c.width = 1024; c.height = 512; const g = c.getContext("2d");
+    const base = g.createLinearGradient(0, 0, 0, 512); base.addColorStop(0, "#3a2619"); base.addColorStop(0.5, "#45301f"); base.addColorStop(1, "#33231a");
+    g.fillStyle = base; g.fillRect(0, 0, 1024, 512);
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 260; i++) {
+      const y = rnd() * 512, a = 0.04 + rnd() * 0.12, amp = 2 + rnd() * 9, fq = 0.004 + rnd() * 0.01, ph = rnd() * 6;
+      g.strokeStyle = rnd() < 0.7 ? `rgba(20,10,4,${a})` : `rgba(120,80,50,${a * 0.6})`; g.lineWidth = 0.6 + rnd() * 2.2;
+      g.beginPath(); for (let x = 0; x <= 1024; x += 16) { const yy = y + Math.sin(x * fq + ph) * amp + Math.sin(x * fq * 3.1 + ph) * amp * 0.3; x ? g.lineTo(x, yy) : g.moveTo(x, yy); } g.stroke();
+    }
+    const t = new T3.CanvasTexture(c); t.encoding = T3.sRGBEncoding; t.wrapS = t.wrapT = T3.RepeatWrapping; t.anisotropy = 8; return t;
+  }
+  const deskMap = walnut(); deskMap.repeat.set(4, 2);
+  const deskMat = new T3.MeshStandardMaterial({ map: deskMap, roughness: 0.55, metalness: 0, envMapIntensity: 0.12 });
+  const deskBack = new T3.Mesh(new T3.PlaneGeometry(40, 20), deskMat); deskBack.rotation.x = -Math.PI / 2; deskBack.receiveShadow = true; back.add(deskBack);
+  const wall = new T3.Mesh(new T3.PlaneGeometry(40, 10), new T3.MeshStandardMaterial({ color: 0x1a1714, roughness: 0.95 }));
+  back.add(wall);
+  // the front desk fades out toward the back, where the studio layer takes over
+  const fade = (() => { const c = document.createElement("canvas"); c.width = 4; c.height = 256; const g = c.getContext("2d");
+    const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, "#000"); gr.addColorStop(0.45, "#fff"); gr.addColorStop(1, "#fff");
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256); return new T3.CanvasTexture(c); })();
+  const deskFrontMat = deskMat.clone(); deskFrontMat.alphaMap = fade; deskFrontMat.transparent = true; deskFrontMat.depthWrite = true;
+  const deskFront = new T3.Mesh(new T3.PlaneGeometry(1, 1), deskFrontMat); deskFront.rotation.x = -Math.PI / 2; deskFront.receiveShadow = true; front.add(deskFront);
+
+  // lights: the desk lamp follows the view; a cool rim from behind gives the edges a line of light
+  const lamp = new T3.SpotLight(0xffcf98, 3, 0, 0.36, 0.75, 1.2);
+  lamp.castShadow = true; lamp.shadow.mapSize.set(2048, 2048); lamp.shadow.bias = -0.0004; lamp.shadow.radius = 3; lamp.shadow.camera.near = 0.05; lamp.shadow.camera.far = 6;
+  front.add(lamp); front.add(lamp.target);
+  const rim = new T3.DirectionalLight(0x9db4d8, 0.9); front.add(rim); front.add(rim.target);
+  front.add(new T3.HemisphereLight(0xffe4c8, 0x1a120c, 0.05));
+  const studioKey = new T3.SpotLight(0xdfe6f2, 4, 0, 0.7, 0.9, 1.0); studioKey.castShadow = true; studioKey.shadow.mapSize.set(1024, 1024);
+  back.add(studioKey); back.add(studioKey.target);
+  back.add(new T3.HemisphereLight(0xffe4c8, 0x140e0a, 0.04));
+  const backLamp = new T3.SpotLight(0xffc890, 3, 0, 0.6, 0.9, 1.2); back.add(backLamp); back.add(backLamp.target);
+
+  // ---- geometry helpers ----
+  function rrShape(w, h, r) {
+    const s = new T3.Shape(), x = -w / 2, y = -h / 2;
+    s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
+  }
+  // a rounded slab w×h, d thick, centred, with softened edges
+  function slab(w, h, d, r, edge) {
+    const e = Math.min(edge, d * 0.45);
+    const g = new T3.ExtrudeGeometry(rrShape(w - 2 * e, h - 2 * e, Math.max(0.0002, r - e)), { depth: d - 2 * e, bevelEnabled: true, bevelThickness: e, bevelSize: e, bevelSegments: 5, curveSegments: 14 });
+    g.translate(0, 0, -(d - 2 * e) / 2); g.computeVertexNormals(); return g;
+  }
+  // a flat rounded plane with 0..1 UVs across its box
+  function plate(w, h, r) {
+    const g = new T3.ShapeGeometry(rrShape(w, h, r), 16), pos = g.attributes.position, uv = g.attributes.uv;
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / w + 0.5, pos.getY(i) / h + 0.5);
+    return g;
+  }
+  const mat = {
+    titanium: c => new T3.MeshStandardMaterial({ color: c, metalness: 0.9, roughness: 0.32, envMapIntensity: 1.1 }),
+    alu: c => new T3.MeshStandardMaterial({ color: c, metalness: 0.85, roughness: 0.28, envMapIntensity: 1.0 }),
+    plastic: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.4 }),
+    gloss: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 }),
+    dark: new T3.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }),
+    hole: new T3.MeshBasicMaterial({ color: 0x020202 })
+  };
+  const shadowed = o => { o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; };
+
+  // a display: glass with the picture as its glow, so the lamp still reflects off it
+  function display(w, h, r, pxW) {
+    const c = document.createElement("canvas"); c.width = pxW; c.height = Math.round(pxW * h / w);
+    const tex = new T3.CanvasTexture(c); tex.encoding = T3.sRGBEncoding; tex.anisotropy = 8;
+    const m = new T3.MeshPhysicalMaterial({ color: 0x030304, roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, emissive: 0xffffff, emissiveMap: tex, envMapIntensity: 0.7 });
+    const mesh = new T3.Mesh(plate(w, h, r), m);
+    return { mesh, canvas: c, g: c.getContext("2d"), tex, mat: m };
+  }
+
+  // ---- the speakers ----
+  const P = [
+    { name: "Phone SE",        hp: 700, pk: 3500, q: 1.8, g: 4.5, lp: 9000,  drive: 11.7, mk: 2.25, kind: "phone", w: 0.1384, h: 0.0673, d: 0.0073, r: 0.0095, edge: 0.0022, body: "alu",      frame: 0xd9d7d2, style: "se" },
+    { name: "Phone 11",        hp: 500, pk: 3000, q: 1.6, g: 3.5, lp: 11000, drive: 8.1,  mk: 1.71, kind: "phone", w: 0.1509, h: 0.0757, d: 0.0083, r: 0.0118, edge: 0.0012, body: "alu",      frame: 0xb7aec9, style: "notch" },
+    { name: "Phone 13/14",     hp: 400, pk: 2800, q: 1.5, g: 2.5, lp: 12000, drive: 5.4,  mk: 1.64, kind: "phone", w: 0.1467, h: 0.0715, d: 0.0078, r: 0.0108, edge: 0.0008, body: "alu",      frame: 0x2c3240, style: "notch" },
+    { name: "Phone 15/16 Pro", hp: 300, pk: 2500, q: 1.4, g: 2.0, lp: 13000, drive: 3.6,  mk: 1.45, kind: "phone", w: 0.1476, h: 0.0716, d: 0.0083, r: 0.0118, edge: 0.0010, body: "titanium", frame: 0xb8ad9c, style: "island" },
+    { name: "Android Budget",  hp: 850, pk: 3800, q: 2.0, g: 5.5, lp: 8000,  drive: 14.4, mk: 2.69, kind: "phone", w: 0.1645, h: 0.0763, d: 0.0091, r: 0.0085, edge: 0.0030, body: "plastic",  frame: 0x3a3b3d, style: "chin" },
+    { name: "Android",         hp: 450, pk: 3300, q: 1.6, g: 3.2, lp: 11500, drive: 6.84, mk: 1.6,  kind: "phone", w: 0.1620, h: 0.0748, d: 0.0082, r: 0.0100, edge: 0.0016, body: "alu",      frame: 0x3d4a42, style: "punch" },
+    { name: "Laptop Speakers", hp: 200, pk: 2000, q: 1.2, g: 1.5, lp: 14000, drive: 2.7,  mk: 1.24, kind: "laptop", w: 0.304, frame: 0x7e8187 },
+    { name: "Wired Earbuds",   hp: 150, pk: 4500, q: 1.3, g: 3.0, lp: 16500, drive: 1.8,  mk: 0.31, kind: "buds", w: 0.085, frame: 0xf3f3ef }
+  ];
+  const short = ["SE", "11", "13/14", "15/16 Pro", "Android Lo", "Android", "Laptop", "Earbuds"];
+  const fmtHz = v => v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + " kHz" : v + " Hz";
+  const xs = []; P.forEach((p, i) => xs.push(i ? xs[i - 1] + (P[i - 1].w + p.w) / 2 + 0.2 : 0));
+  const aimOf = i => P[i].kind === "laptop" ? 0.085 : P[i].kind === "buds" ? 0.004 : 0.038;
+  const pitchOf = i => P[i].kind === "buds" ? 0.5 : P[i].kind === "laptop" ? 0.2 : 0.13;
+
+  function buildPhone(p) {
+    const root = new T3.Group(), lean = new T3.Group(); root.add(lean);
+    const tilt = 0.2, y0 = p.h / 2 * Math.cos(tilt) + 0.003;
+    lean.position.set(0, y0, 0.006); lean.rotation.x = -tilt;
+    const body = new T3.Mesh(slab(p.w, p.h, p.d, p.r, p.edge), (mat[p.body])(p.frame)); lean.add(body);
+    // back glass, a shade off the frame colour
+    const backGlass = new T3.Mesh(plate(p.w - p.edge * 1.6, p.h - p.edge * 1.6, p.r - p.edge * 0.8), mat.gloss(new T3.Color(p.frame).multiplyScalar(0.75)));
+    backGlass.position.z = -p.d / 2 - 0.00005; backGlass.rotation.y = Math.PI; lean.add(backGlass);
+    // front: glass carrying the picture
+    const scr = display(p.w - p.edge * 1.2, p.h - p.edge * 1.2, p.r - p.edge * 0.6, 1024);
+    scr.mesh.position.z = p.d / 2 + 0.00006; lean.add(scr.mesh);
+    // buttons on the top edge (volume) and the bottom edge (power), toward the camera end
+    const btn = (len, x, top) => { const b = new T3.Mesh(slab(len, 0.0022, 0.0025, 0.0009, 0.0008), (mat[p.body])(p.frame));
+      b.rotation.x = Math.PI / 2; b.position.set(x, top ? p.h / 2 + 0.0004 : -p.h / 2 - 0.0004, 0); lean.add(b); };
+    btn(0.0105, p.w / 2 - 0.042, true); btn(0.0105, p.w / 2 - 0.056, true); if (p.style === "island") btn(0.006, p.w / 2 - 0.028, true);
+    btn(0.016, p.w / 2 - 0.05, false);
+    // the bottom speaker's holes and the charging port on the left end
+    const holeG = new T3.CylinderGeometry(0.0006, 0.0006, 0.002, 10); holeG.rotateZ(Math.PI / 2);
+    for (const sy of [-1, 1]) for (let k = 0; k < (p.style === "se" ? 6 : 5); k++) {
+      const h = new T3.Mesh(holeG, mat.hole); h.position.set(-p.w / 2 + 0.0004, sy * (0.0085 + k * 0.0019), 0); lean.add(h); }
+    const port = new T3.Mesh(slab(0.002, 0.0085, 0.0028, 0.0012, 0.0006), mat.hole); port.rotation.y = Math.PI / 2; port.position.set(-p.w / 2 + 0.0004, 0, 0); lean.add(port);
+    // an acrylic stand behind
+    const acrylic = new T3.MeshPhysicalMaterial({ color: 0xdfe8f0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.16, clearcoat: 1, envMapIntensity: 1.6, depthWrite: false });
+    const st = new T3.Mesh(slab(0.07, 0.055, 0.004, 0.004, 0.0015), acrylic); st.position.set(0, 0.026, -0.02); st.rotation.x = -tilt - 0.12; root.add(st);
+    const lip = new T3.Mesh(slab(0.07, 0.006, 0.012, 0.002, 0.001), acrylic); lip.rotation.x = Math.PI / 2; lip.position.set(0, 0.003, 0.012); root.add(lip);
+    shadowed(root); st.castShadow = false; lip.castShadow = false;
+    const local = (x, y, z) => () => { const v = new T3.Vector3(x, y, z); return lean.localToWorld(v); };
+    return { root, screen: scr, emit: [local(-p.w / 2, 0, 0), local(p.w / 2 - 0.004, 0, p.d / 2)] };
+  }
+
+  function buildLaptop(p) {
+    const root = new T3.Group(), alu = mat.alu(p.frame);
+    const w = 0.304, dd = 0.215, t = 0.0155;
+    const base = new T3.Mesh(slab(w, dd, t, 0.012, 0.0035), alu); base.rotation.x = -Math.PI / 2; base.position.y = t / 2; root.add(base);
+    // keyboard: real keys in a slightly darker well
+    const well = new T3.Mesh(plate(0.272, 0.112, 0.006), new T3.MeshStandardMaterial({ color: 0x3a3c40, metalness: 0.6, roughness: 0.5 }));
+    well.rotation.x = -Math.PI / 2; well.position.set(0, t + 0.00005, -dd / 2 + 0.071); root.add(well);
+    const keyG = slab(0.0155, 0.0155, 0.0012, 0.002, 0.0005); keyG.rotateX(-Math.PI / 2);
+    const keyM = new T3.MeshStandardMaterial({ color: 0x0d0d0f, roughness: 0.55, metalness: 0.1 });
+    const keys = []; const pitch = 0.0188;
+    for (let row = 0; row < 6; row++) {
+      const z = -dd / 2 + 0.024 + row * pitch * (row === 0 ? 0.6 : 1) + (row ? -pitch * 0.4 : 0);
+      if (row === 5) { for (const [x, wd] of [[-0.118, 1], [-0.099, 1], [-0.08, 1], [-0.058, 1.2], [0, 4.6], [0.058, 1.2], [0.08, 1], [0.104, 1], [0.123, 1]]) keys.push([x, z, wd, row]); continue; }
+      const n = 14; for (let k = 0; k < n; k++) keys.push([-0.122 + k * pitch, z, 1, row]);
+    }
+    const inst = new T3.InstancedMesh(keyG, keyM, keys.length); const m4 = new T3.Matrix4();
+    keys.forEach(([x, z, wd, row], i) => { m4.makeScale(wd, 1, row === 0 ? 0.6 : 1); m4.setPosition(x, t + 0.0006, z); inst.setMatrixAt(i, m4); });
+    root.add(inst);
+    const pad = new T3.Mesh(plate(0.13, 0.08, 0.006), new T3.MeshPhysicalMaterial({ color: 0x5d6066, roughness: 0.3, metalness: 0.5, clearcoat: 0.5 }));
+    pad.rotation.x = -Math.PI / 2; pad.position.set(0, t + 0.00008, dd / 2 - 0.05); root.add(pad);
+    // speaker grilles either side of the keyboard
+    const dotG = new T3.CylinderGeometry(0.00055, 0.00055, 0.0004, 8);
+    const dots = []; for (const sx of [-1, 1]) for (let r = 0; r < 22; r++) for (let c = 0; c < 4; c++) dots.push([sx * (0.1395 + c * 0.0024 * sx * 0 + c * 0.0024 - 0.0036), -dd / 2 + 0.018 + r * 0.0048]);
+    const grill = new T3.InstancedMesh(dotG, mat.hole, dots.length);
+    dots.forEach(([x, z], i) => { m4.makeTranslation(x, t + 0.00005, z); grill.setMatrixAt(i, m4); }); root.add(grill);
+    // lid on its hinge, opened past upright
+    const hinge = new T3.Group(); hinge.position.set(0, t, -dd / 2 + 0.004); hinge.rotation.x = -0.3; root.add(hinge);
+    const lidH = 0.205, lid = new T3.Mesh(slab(w, lidH, 0.0055, 0.012, 0.0022), alu); lid.position.set(0, lidH / 2, -0.0028); hinge.add(lid);
+    const scr = display(w - 0.006, lidH - 0.006, 0.01, 1400); scr.mesh.position.set(0, lidH / 2, 0.00008); hinge.add(scr.mesh);
+    const barrel = new T3.Mesh(new T3.CylinderGeometry(0.004, 0.004, w * 0.82, 20), new T3.MeshStandardMaterial({ color: 0x2a2b2e, metalness: 0.7, roughness: 0.4 }));
+    barrel.rotation.z = Math.PI / 2; barrel.position.set(0, t + 0.001, -dd / 2 + 0.003); root.add(barrel);
+    shadowed(root); grill.castShadow = false;
+    const at = (x, z) => () => root.localToWorld(new T3.Vector3(x, t, z));
+    return { root, screen: scr, emit: [at(-0.142, -dd / 2 + 0.07), at(0.142, -dd / 2 + 0.07)], laptop: true };
+  }
+
+  function buildBuds(p) {
+    const root = new T3.Group();
+    const white = new T3.MeshPhysicalMaterial({ color: 0xf2f2ee, roughness: 0.26, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 });
+    const cableM = new T3.MeshPhysicalMaterial({ color: 0xeeeeea, roughness: 0.38, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+    const steel = new T3.MeshStandardMaterial({ color: 0xc9ccd1, metalness: 1, roughness: 0.18 });
+    const black = new T3.MeshStandardMaterial({ color: 0x111113, roughness: 0.5 });
+    // the grille: fine perforated mesh behind the opening
+    const grilleTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d");
+      g.fillStyle = "#74777c"; g.fillRect(0, 0, 256, 256); g.fillStyle = "#26272a";
+      for (let y = 10; y < 256; y += 20) for (let x = (y / 20) % 2 ? 20 : 10; x < 256; x += 20) { g.beginPath(); g.arc(x, y, 5.5, 0, Math.PI * 2); g.fill(); }
+      const t = new T3.CanvasTexture(c); t.encoding = T3.sRGBEncoding; t.anisotropy = 8; return t; })();
+    const grilleM = new T3.MeshStandardMaterial({ map: grilleTex, metalness: 0.55, roughness: 0.45 });
+    // a soft contact shadow, so each part sits on the wood instead of floating over it
+    const blobTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+      const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(0,0,0,0.75)"); r.addColorStop(0.5, "rgba(0,0,0,0.3)"); r.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new T3.CanvasTexture(c); })();
+    const blob = (x, z, sx, sz, rot) => { const m = new T3.Mesh(new T3.PlaneGeometry(1, 1), new T3.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
+      m.rotation.set(-Math.PI / 2, 0, rot || 0); m.scale.set(sx, sz, 1); m.position.set(x, 0.0003, z); m.renderOrder = 1; root.add(m); };
+
+    // the shell, turned from an egg-shaped profile; the speaker faces local +Y
+    const prof = [[0, -0.0086], [0.0032, -0.0082], [0.0058, -0.0068], [0.0078, -0.0044], [0.0089, -0.0014], [0.0091, 0.0012],
+                  [0.0086, 0.0038], [0.0076, 0.0058], [0.0064, 0.0071], [0.0059, 0.0074], [0.0056, 0.0071], [0.0001, 0.0071]].map(([r, y]) => new T3.Vector2(r, y));
+    const shellG = new T3.LatheGeometry(prof, 64); shellG.scale(1, 1, 0.9); shellG.computeVertexNormals();
+    const grilleG = new T3.CircleGeometry(0.0056, 48); grilleG.rotateX(-Math.PI / 2); grilleG.scale(1, 1, 0.9);
+    const ventG = new T3.SphereGeometry(0.0011, 16, 8); ventG.scale(1, 0.5, 2.2);
+
+    // each bud: where it lies, which way its speaker faces, which way its stem points
+    const lay = [
+      { at: [-0.016, 0.006], face: [0.15, 0.85, 0.45], stem: [-0.75, -0.05, 0.55] },
+      { at: [0.02, -0.004], face: [0.15, 0.5, 0.85], stem: [0.85, -0.05, -0.35] }
+    ];
+    const emit = [], ends = [];
+    for (const L of lay) {
+      const bud = new T3.Group(); root.add(bud);
+      const head = new T3.Mesh(shellG, white); bud.add(head);
+      const grille = new T3.Mesh(grilleG, grilleM); grille.position.y = 0.0071; bud.add(grille);
+      const vent = new T3.Mesh(ventG, black); vent.position.set(0, -0.0035, 0.0076); bud.add(vent);
+      // the stem leaves the lower side of the shell and tapers to a rounded end
+      const dir = new T3.Vector3(0, -0.32, -1).normalize(), start = new T3.Vector3(0, -0.0022, -0.0062), len = 0.021;
+      const stemG = new T3.CylinderGeometry(0.0023, 0.0029, len, 32, 1, true); stemG.translate(0, len / 2, 0);
+      const stem = new T3.Mesh(stemG, white); stem.position.copy(start); stem.quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), dir); bud.add(stem);
+      const end = start.clone().addScaledVector(dir, len);
+      const cap = new T3.Mesh(new T3.SphereGeometry(0.0023, 24, 12), white); cap.position.copy(end); bud.add(cap);
+      const reliefG = new T3.CylinderGeometry(0.0010, 0.0016, 0.006, 20); reliefG.translate(0, 0.003, 0);
+      const relief = new T3.Mesh(reliefG, white); relief.position.copy(end); relief.quaternion.copy(stem.quaternion); bud.add(relief);
+      const tipLocal = end.clone().addScaledVector(dir, 0.006);
+      // orient: local +Y to the speaker's facing, local stem direction to the stem's direction on the desk
+      const y = new T3.Vector3(...L.face).normalize(), s = new T3.Vector3(...L.stem).normalize();
+      const sLocal = dir.clone(); // stem direction in bud space
+      const basisFrom = new T3.Matrix4().makeBasis(new T3.Vector3().crossVectors(new T3.Vector3(0, 1, 0), sLocal).normalize(), new T3.Vector3(0, 1, 0), sLocal.clone().projectOnPlane(new T3.Vector3(0, 1, 0)).normalize());
+      const sPerp = s.clone().projectOnPlane(y).normalize();
+      const basisTo = new T3.Matrix4().makeBasis(new T3.Vector3().crossVectors(y, sPerp).normalize(), y, sPerp);
+      bud.quaternion.setFromRotationMatrix(basisTo.multiply(basisFrom.transpose()));
+      bud.position.set(L.at[0], 0, L.at[1]);
+      bud.updateMatrixWorld(true);
+      // rest it on the desk: lift until its lowest point touches the wood
+      const box = new T3.Box3().setFromObject(bud); bud.position.y -= box.min.y - 0.0001; bud.updateMatrixWorld(true);
+      emit.push(() => bud.localToWorld(new T3.Vector3(0, 0.0075, 0)));
+      ends.push({ tip: bud.localToWorld(tipLocal.clone()), dir: dir.clone().transformDirection(bud.matrixWorld) });
+      const c = bud.localToWorld(new T3.Vector3(0, 0, 0)), e = bud.localToWorld(end.clone());
+      blob(c.x, c.z, 0.026, 0.022); blob((c.x + e.x) / 2, (c.z + e.z) / 2, 0.012, 0.03, Math.atan2(e.x - c.x, e.z - c.z));
+    }
+
+    // the cable: from each stem down onto the desk, through the splitter and slider, away to the jack
+    const R = 0.00085, onDesk = R + 0.0002, split = new T3.Vector3(0.004, onDesk + 0.0012, -0.05);
+    const tube = (ptsArr) => { const curve = new T3.CatmullRomCurve3(ptsArr, false, "centripetal"); root.add(new T3.Mesh(new T3.TubeGeometry(curve, 160, R, 10, false), cableM)); };
+    ends.forEach((e, k) => {
+      const a = e.tip, b = a.clone().addScaledVector(e.dir, 0.006); b.y = Math.max(onDesk, b.y * 0.4);
+      const side = k ? 1 : -1;
+      const c = a.clone().addScaledVector(e.dir, 0.018); c.y = onDesk;
+      tube([a, b, c, new T3.Vector3(c.x + side * 0.008, onDesk, (c.z + split.z) / 2), new T3.Vector3(split.x + side * 0.004, onDesk, split.z + 0.014), new T3.Vector3(split.x + side * 0.0012, split.y, split.z + 0.006)]);
+    });
+    const tailPts = [new T3.Vector3(split.x, split.y, split.z - 0.006), new T3.Vector3(0.0, onDesk, -0.07), new T3.Vector3(-0.03, onDesk, -0.085), new T3.Vector3(-0.022, onDesk, -0.11),
+                     new T3.Vector3(0.02, onDesk, -0.115), new T3.Vector3(0.05, onDesk, -0.1), new T3.Vector3(0.068, onDesk + 0.0015, -0.112)];
+    tube(tailPts);
+    // splitter: a short pill
+    const pill = new T3.Group(); pill.position.copy(split); root.add(pill);
+    const pb = new T3.Mesh(new T3.CylinderGeometry(0.0021, 0.0021, 0.011, 24), white); pb.rotation.x = Math.PI / 2; pill.add(pb);
+    for (const z of [-0.0055, 0.0055]) { const sp = new T3.Mesh(new T3.SphereGeometry(0.0021, 20, 10), white); sp.position.z = z; pill.add(sp); }
+    blob(split.x, split.z, 0.008, 0.02);
+    // jack: white housing with a chamfer, steel plug with two insulating rings and a pointed tip
+    const jack = new T3.Group(); jack.position.set(0.068, 0.0034, -0.112); jack.rotation.y = -1.2; root.add(jack);
+    const jb = new T3.Mesh(new T3.CylinderGeometry(0.0031, 0.0034, 0.017, 32), white); jb.rotation.x = Math.PI / 2; jb.position.z = -0.0085; jack.add(jb);
+    const jr = new T3.Mesh(new T3.CylinderGeometry(0.0012, 0.0031, 0.004, 24), white); jr.rotation.x = Math.PI / 2; jr.position.z = 0.002; jack.add(jr);
+    const segs = [[0.0058, steel], [0.0007, black], [0.003, steel], [0.0007, black], [0.0028, steel]]; let z = -0.017;
+    for (const [l, m] of segs) { const c = new T3.Mesh(new T3.CylinderGeometry(0.00175, 0.00175, l, 24), m); c.rotation.x = Math.PI / 2; c.position.z = z - l / 2; jack.add(c); z -= l; }
+    const tipC = new T3.Mesh(new T3.ConeGeometry(0.00175, 0.0022, 24), steel); tipC.rotation.x = -Math.PI / 2; tipC.position.z = z - 0.0011; jack.add(tipC);
+    const jw = jack.localToWorld(new T3.Vector3(0, 0, -0.01)); blob(jw.x, jw.z, 0.012, 0.03, -1.2);
+    shadowed(root);
+    root.traverse(m => { if (m.isMesh && m.material.map === blobTex) { m.castShadow = false; m.receiveShadow = false; } });
+    return { root, screen: null, emit };
+  }
+
+  const dimEnv = o => o.traverse(m => { if (m.isMesh && m.material && m.material.envMapIntensity !== undefined && m.material !== deskMat) m.material.envMapIntensity *= 0.6; });
+  const devices = P.map((p, i) => {
+    const d = p.kind === "phone" ? buildPhone(p) : p.kind === "laptop" ? buildLaptop(p) : buildBuds(p);
+    d.root.position.x = xs[i]; dimEnv(d.root); front.add(d.root); d.lastDraw = -1; return d;
+  });
+
+  // ---- studio monitors (back layer) ----
+  const studio = new T3.Group(); back.add(studio);
+  const cones = [];
+  {
+    const cab = new T3.MeshStandardMaterial({ color: 0x1d1b19, roughness: 0.62, metalness: 0.05, envMapIntensity: 0.6 });
+    const rubber = new T3.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 0.9 });
+    const paper = new T3.MeshStandardMaterial({ color: 0x3a3836, roughness: 0.95, side: T3.DoubleSide });
+    const silk = new T3.MeshStandardMaterial({ color: 0x8a847a, roughness: 0.8 });
+    const metalRing = new T3.MeshStandardMaterial({ color: 0x55524d, metalness: 0.8, roughness: 0.35 });
+    for (const side of [-1, 1]) {
+      const m = new T3.Group(); m.position.set(side * 0.42, 0, 0); m.rotation.y = -side * 0.22; studio.add(m);
+      const W0 = 0.19, H0 = 0.31, D0 = 0.25;
+      const box = new T3.Mesh(slab(W0, H0, D0, 0.014, 0.008), cab); box.position.set(0, H0 / 2 + 0.012, -D0 / 2); m.add(box);
+      for (const px of [-1, 1]) { const pad = new T3.Mesh(new T3.CylinderGeometry(0.012, 0.012, 0.012, 20), rubber); pad.position.set(px * 0.06, 0.006, -D0 / 2); m.add(pad); }
+      // woofer: surround, cone, dust cap
+      const wy = 0.012 + H0 * 0.34, wr = 0.066;
+      const ring = new T3.Mesh(new T3.TorusGeometry(wr + 0.008, 0.004, 12, 48), metalRing); ring.position.set(0, wy, 0.0005); m.add(ring);
+      const sur = new T3.Mesh(new T3.TorusGeometry(wr, 0.0055, 12, 48), rubber); sur.position.set(0, wy, -0.002); m.add(sur);
+      const coneG = new T3.LatheGeometry([new T3.Vector2(0.018, -0.022), new T3.Vector2(0.04, -0.012), new T3.Vector2(wr - 0.002, -0.003)], 48); coneG.rotateX(Math.PI / 2);
+      const cone = new T3.Group(); cone.position.set(0, wy, 0); m.add(cone);
+      cone.add(new T3.Mesh(coneG, paper));
+      const cap = new T3.Mesh(new T3.SphereGeometry(0.02, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), paper); cap.rotation.x = Math.PI / 2; cap.position.z = -0.022; cap.scale.set(1, 0.6, 1); cone.add(cap);
+      cones.push(cone);
+      // tweeter in a shallow waveguide
+      const ty = 0.012 + H0 * 0.78;
+      const guide = new T3.LatheGeometry([new T3.Vector2(0.012, -0.006), new T3.Vector2(0.026, -0.003), new T3.Vector2(0.04, 0)], 48); guide.rotateX(Math.PI / 2);
+      const g1 = new T3.Mesh(guide, new T3.MeshStandardMaterial({ color: 0x141312, roughness: 0.4, metalness: 0.3, side: T3.DoubleSide })); g1.position.set(0, ty, 0); m.add(g1);
+      const dome = new T3.Mesh(new T3.SphereGeometry(0.0125, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), silk); dome.rotation.x = Math.PI / 2; dome.position.set(0, ty, -0.006); m.add(dome);
+      const lampDot = new T3.Mesh(new T3.CircleGeometry(0.002, 16), new T3.MeshBasicMaterial({ color: 0x8fd7ff })); lampDot.position.set(0, 0.012 + H0 * 0.08, 0.0005); m.add(lampDot);
+    }
+    shadowed(studio);
+  }
+
+  // ---- screens: each speaker shows the band it can play ----
+  function drawScreen(d, p, spec, on) {
+    const { g, canvas: c } = d.screen, w = c.width, h = c.height;
+    g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
+    // the lit area inside the bezel
+    const bz = p.style === "se" ? [0.13, 0.05] : p.style === "chin" ? [0.06, 0.05] : p.kind === "laptop" ? [0.03, 0.05] : [0.022, 0.045];
+    const sx = w * bz[0], sy = h * bz[1], sw = w - sx * (p.style === "chin" ? 1.6 : 2), sh = h - sy * 2;
+    const bg = g.createLinearGradient(sx, sy, sx + sw, sy + sh); bg.addColorStop(0, "#1c1511"); bg.addColorStop(1, "#060507");
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(sx, sy, sw, sh, p.style === "se" || p.kind === "laptop" ? 4 : h * 0.13) : g.rect(sx, sy, sw, sh); g.clip();
+    g.fillStyle = bg; g.fillRect(sx, sy, sw, sh);
+    const n = 30, lo = Math.log(60), hi = Math.log(18000), bw = sw * 0.78 / n;
+    for (let k = 0; k < n; k++) {
+      const fhz = Math.exp(lo + (hi - lo) * (k + 0.5) / n), inBand = fhz >= p.hp * 0.8 && fhz <= p.lp * 1.1;
+      let v = 0; if (spec && ctx) { const bin = Math.min(spec.length - 1, Math.round(fhz / (ctx.sampleRate / 2) * spec.length)); v = spec[bin] / 255; }
+      const bh = Math.max(sh * 0.02, v * sh * 0.5);
+      g.fillStyle = inBand ? `rgba(255,178,92,${0.35 + 0.65 * v})` : "rgba(238,231,220,0.09)";
+      g.fillRect(sx + sw * 0.11 + k * bw, sy + sh * 0.8 - bh, bw * 0.62, bh);
+    }
+    g.fillStyle = "rgba(238,231,220,0.9)"; g.font = `600 ${Math.round(sh * 0.12)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    g.fillText(p.name.toUpperCase(), sx + sw * 0.11, sy + sh * 0.22);
+    g.fillStyle = "rgba(238,231,220,0.45)"; g.font = `500 ${Math.round(sh * 0.075)}px Barlow, sans-serif`;
+    g.fillText(`${fmtHz(p.hp)} – ${fmtHz(p.lp)}`, sx + sw * 0.11, sy + sh * 0.33);
+    g.restore();
+    // cut-outs and the earpiece, all at the right-hand (top) end
+    g.fillStyle = "#000"; const cxp = w - sx - (p.style === "chin" ? sx * 0.6 : 0);
+    if (p.style === "island") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.06, h / 2 - h * 0.17, w * 0.04, h * 0.34, w * 0.02) : 0; g.fill(); }
+    if (p.style === "notch") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.055, h / 2 - h * 0.26, w * 0.06, h * 0.52, w * 0.02) : 0; g.fill(); }
+    if (p.style === "punch" || p.style === "chin") { g.beginPath(); g.arc(cxp - w * 0.035, h / 2, h * 0.035, 0, Math.PI * 2); g.fill(); }
+    if (p.kind === "phone") { g.fillStyle = "#151515"; g.beginPath(); g.roundRect ? g.roundRect(w - w * 0.012, h / 2 - h * 0.13, w * 0.004, h * 0.26, 3) : 0; g.fill(); }
+    if (p.style === "se") { g.strokeStyle = "#3a3a3a"; g.lineWidth = w * 0.004; g.beginPath(); g.arc(w * 0.065, h / 2, h * 0.11, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = "#1b1b1b"; g.beginPath(); g.arc(w - w * 0.065, h / 2 - h * 0.25, h * 0.03, 0, Math.PI * 2); g.fill(); }
+    if (p.kind === "laptop") { g.fillStyle = "#000"; g.beginPath(); g.roundRect ? g.roundRect(w / 2 - w * 0.04, 0, w * 0.08, h * 0.035, 8) : 0; g.fill(); }
+    d.screen.tex.needsUpdate = true;
+  }
+  // ---- state: everything the eye sees and the ear hears comes from these numbers ----
+  const S = { p: 3, pTarget: 3, pVel: 0, mix: 1, mixT: 1, mono: 0, monoT: 0, out: 1, bypass: false, dragging: false };
+
+  // ---- audio: two copies of the emulation, crossfaded by where the camera is ----
+  const audio = new Audio(); audio.loop = true; audio.preload = "auto"; audio.src = "song.mp3";
+  let ctx = null, A = null;
+  function shaperCurve(db) { const g = Math.pow(10, db / 20), c = new Float32Array(2048);
+    for (let i = 0; i < c.length; i++) { const x = i / 2047 * 2 - 1; c[i] = Math.tanh(g * x) / g; } return c; }
+  function buildAudio() {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaElementSource(audio);
+    const n = { chains: [] };
+    n.stereo = ctx.createGain(); n.monoSum = ctx.createGain();
+    n.monoSum.channelCount = 1; n.monoSum.channelCountMode = "explicit"; n.monoSum.channelInterpretation = "speakers";
+    n.monoTap = ctx.createGain(); n.pre = ctx.createGain();
+    src.connect(n.stereo); src.connect(n.monoSum); n.monoSum.connect(n.monoTap);
+    n.stereo.connect(n.pre); n.monoTap.connect(n.pre);
+    n.wet = ctx.createGain(); n.dry = ctx.createGain(); n.out = ctx.createGain();
+    for (let k = 0; k < 2; k++) {
+      const c = { model: -1 };
+      c.hp1 = ctx.createBiquadFilter(); c.hp1.type = "highpass"; c.hp1.Q.value = 0.7071;
+      c.hp2 = ctx.createBiquadFilter(); c.hp2.type = "highpass"; c.hp2.Q.value = 0.7071;
+      c.pk = ctx.createBiquadFilter(); c.pk.type = "peaking";
+      c.lp = ctx.createBiquadFilter(); c.lp.type = "lowpass"; c.lp.Q.value = 0.7071;
+      c.sh = ctx.createWaveShaper(); c.sh.oversample = "2x";
+      c.mk = ctx.createGain(); c.gain = ctx.createGain(); c.gain.gain.value = 0;
+      n.pre.connect(c.hp1); c.hp1.connect(c.hp2); c.hp2.connect(c.pk); c.pk.connect(c.lp); c.lp.connect(c.sh); c.sh.connect(c.mk); c.mk.connect(c.gain); c.gain.connect(n.wet);
+      n.chains.push(c);
+    }
+    src.connect(n.dry);
+    n.wet.connect(n.out); n.dry.connect(n.out); n.out.connect(ctx.destination);
+    n.anWet = ctx.createAnalyser(); n.anWet.fftSize = 512; n.anWet.smoothingTimeConstant = 0.6; n.wet.connect(n.anWet);
+    n.anDry = ctx.createAnalyser(); n.anDry.fftSize = 512; n.dry.connect(n.anDry);
+    n.spec = new Uint8Array(n.anWet.frequencyBinCount); n.td = new Float32Array(512);
+    A = n;
+  }
+  function program(c, i) {
+    if (c.model === i) return;
+    const p = P[i], t = ctx.currentTime;
+    c.hp1.frequency.setValueAtTime(p.hp, t); c.hp2.frequency.setValueAtTime(p.hp, t);
+    c.pk.frequency.setValueAtTime(p.pk, t); c.pk.Q.setValueAtTime(p.q, t); c.pk.gain.setValueAtTime(p.g, t);
+    c.lp.frequency.setValueAtTime(Math.min(p.lp, ctx.sampleRate * 0.45), t);
+    c.sh.curve = shaperCurve(p.drive); c.mk.gain.setValueAtTime(Math.pow(10, p.mk / 20), t);
+    c.model = i;
+  }
+  function audioFrame() {
+    if (!A) return;
+    const t = ctx.currentTime, k = 0.012;
+    const lo = Math.max(0, Math.min(P.length - 1, Math.floor(S.p))), hi = Math.min(P.length - 1, lo + 1), f = Math.max(0, Math.min(1, S.p - lo));
+    // chain parity follows the model index, so the chain being re-tuned is always the silent one
+    program(A.chains[lo % 2], lo); if (hi !== lo) program(A.chains[hi % 2], hi);
+    const gLo = Math.cos(f * Math.PI / 2), gHi = hi === lo ? 0 : Math.sin(f * Math.PI / 2);
+    A.chains[lo % 2].gain.gain.setTargetAtTime(gLo, t, k);
+    if (hi !== lo) A.chains[hi % 2].gain.gain.setTargetAtTime(gHi, t, k);
+    A.stereo.gain.setTargetAtTime(1 - S.mono, t, k); A.monoTap.gain.setTargetAtTime(S.mono, t, k);
+    A.wet.gain.setTargetAtTime(S.mix, t, k); A.dry.gain.setTargetAtTime(1 - S.mix, t, k);
+    A.out.gain.setTargetAtTime(S.out, t, k);
+  }
+  function levelOf(an) { an.getFloatTimeDomainData(A.td); let s = 0; for (let i = 0; i < A.td.length; i++) s += A.td[i] * A.td[i]; return Math.sqrt(s / A.td.length); }
+
+  // ---- camera and layout ----
+  const PITCH = 0.13;
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1); W = stage.clientWidth; H = stage.clientHeight;
+    for (const r of [rBack, rDev]) { r.setPixelRatio(DPR); r.setSize(W, H, false); }
+    fxC.width = Math.round(W * DPR); fxC.height = Math.round(H * DPR);
+    camera.aspect = W / H; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+  const cam = { x: 0, dist: 1, aim: 0.04 };
+  function distFor(i) {
+    // how far back the camera stands so the speaker fills about half the frame's width (more on a narrow screen)
+    const frac = camera.aspect < 0.9 ? 0.78 : 0.48;
+    const span = 2 * Math.tan(T3.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+    return P[i].w / (frac * span) * (P[i].kind === "laptop" ? 0.92 : 1);
+  }
+  function setCamera() {
+    const lo = Math.max(0, Math.min(P.length - 1, Math.floor(S.p))), hi = Math.min(P.length - 1, lo + 1), f = Math.max(-0.3, Math.min(1.3, S.p - lo));
+    const L = (a, b) => a + (b - a) * f;
+    cam.x = L(xs[lo], xs[hi]); cam.dist = L(distFor(lo), distFor(hi)); cam.aim = L(aimOf(lo), aimOf(hi)); const pitch = L(pitchOf(lo), pitchOf(hi));
+    camera.position.set(cam.x, cam.aim + cam.dist * Math.sin(pitch), cam.dist * Math.cos(pitch));
+    camera.lookAt(cam.x, cam.aim, 0);
+    // the lamp hangs above and in front of whatever the camera looks at
+    const s = cam.dist / 0.5;
+    lamp.position.set(cam.x + 0.25 * s, 0.75 * s, 0.45 * s); lamp.target.position.set(cam.x, 0, -0.01);
+    lamp.intensity = (0.9 + 2.6 * S.mix) * (0.75 + 0.25 * S.out);
+    lamp.distance = 0; lamp.shadow.camera.far = 4 * s;
+    rim.position.set(cam.x - 0.6 * s, 0.35 * s, -0.8 * s); rim.target.position.set(cam.x, 0.03, 0); rim.intensity = 0.15 + 0.5 * S.mix;
+    // the front desk: the part near the devices; it fades into the far desk behind
+    deskFront.scale.set(40, cam.dist * 2.2, 1); deskFront.position.set(cam.x, 0, cam.dist * 0.75 - cam.dist * 1.1 + cam.dist * 0.35);
+    // the studio sits at the far end of the desk, sized to stay in frame
+    const ss = cam.dist / 0.85;
+    studio.scale.setScalar(ss); studio.position.set(cam.x * 0.97 + (xs[3] * 0.03), 0, -cam.dist * 1.3);
+    wall.position.set(cam.x, 2, -cam.dist * 1.3 - 0.45 * ss);
+    studioKey.position.set(cam.x, 1.4 * ss, -cam.dist * 0.4); studioKey.target.position.set(cam.x, 0.1 * ss, -cam.dist * 1.3);
+    studioKey.intensity = 0.25 + 2.4 * (1 - S.mix);
+    backLamp.position.copy(lamp.position); backLamp.target.position.set(cam.x, 0, -cam.dist * 0.4); backLamp.intensity = 0.5 * S.mix;
+  }
+
+  // ---- focus: the camera's focus pull IS the mix ----
+  let lastBlur = "";
+  function applyFocus() {
+    const near = (1 - S.mix) * 7, far = 0.6 + S.mix * 5;
+    const key = near.toFixed(1) + "/" + far.toFixed(1);
+    if (key === lastBlur) return; lastBlur = key;
+    const nf = near > 0.15 ? `blur(${near.toFixed(1)}px)` : "none";
+    devC.style.filter = nf; fxC.style.filter = nf; backC.style.filter = `blur(${far.toFixed(1)}px)`;
+  }
+
+  // ---- sound you can see: rings from the speakers in the light ----
+  const rings = []; let env = 0, lastRing = 0;
+  const toScreen = v => { const q = v.clone().project(camera); const dpt = camera.position.distanceTo(v);
+    return { x: (q.x * 0.5 + 0.5) * W, y: (-q.y * 0.5 + 0.5) * H, s: H / (2 * Math.tan(T3.MathUtils.degToRad(camera.fov / 2))) / dpt }; };
+  function emit(pts, level, t) {
+    env = Math.max(level, env * 0.94);
+    if (!(level > 0.02 && level > env * 0.9 && t - lastRing > 120)) return;
+    lastRing = t;
+    const cx = pts.reduce((a, q) => a + q.x, 0) / pts.length, cy = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+    for (const q of pts) rings.push({ x: q.x + (cx - q.x) * S.mono, y: q.y + (cy - q.y) * S.mono, s: q.s, r0: t, a: Math.min(1, level * 5) });
+    while (rings.length > 40) rings.shift();
+  }
+  function drawRings(t) {
+    fx.setTransform(DPR, 0, 0, DPR, 0, 0); fx.clearRect(0, 0, W, H);
+    for (let k = rings.length - 1; k >= 0; k--) {
+      const r = rings[k], age = (t - r.r0) / 1400;
+      if (age >= 1) { rings.splice(k, 1); continue; }
+      const rad = (0.006 + age * 0.07) * r.s * (0.6 + 0.4 * S.out);
+      fx.strokeStyle = `rgba(255,190,110,${r.a * (1 - age) * (1 - age) * 0.5 * S.mix})`;
+      fx.lineWidth = 1.2; fx.beginPath(); fx.ellipse(r.x, r.y, rad, rad * 0.86, 0, 0, Math.PI * 2); fx.stroke();
+    }
+  }
+  // ---- UI ----
+  const chips = document.getElementById("chips");
+  P.forEach((p, i) => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = short[i];
+    b.setAttribute("aria-pressed", i === 3 ? "true" : "false"); b.addEventListener("click", () => { S.pTarget = i; hint(); }); chips.appendChild(b); });
+  const nameEl = document.getElementById("name"), specEl = document.getElementById("spec");
+  const mixIn = document.getElementById("mix"), volIn = document.getElementById("vol");
+  const mixOut = document.getElementById("mixOut"), volOut = document.getElementById("volOut");
+  mixIn.addEventListener("input", () => { S.mixUser = +mixIn.value / 100; hint(); });
+  S.mixUser = 1;
+  volIn.addEventListener("input", () => { S.outT = Math.pow(10, +volIn.value / 20); volOut.textContent = (+volIn.value > 0 ? "+" : "") + (+volIn.value).toFixed(1) + " dB"; });
+  S.outT = 1;
+  const monoB = document.getElementById("mono"), bypB = document.getElementById("bypass");
+  monoB.addEventListener("click", () => { S.monoT = S.monoT ? 0 : 1; monoB.setAttribute("aria-pressed", S.monoT ? "true" : "false"); });
+  bypB.addEventListener("click", () => { S.bypass = !S.bypass; bypB.setAttribute("aria-pressed", S.bypass ? "true" : "false"); });
+  let hinted = false; function hint() { if (!hinted) { hinted = true; document.getElementById("hint").classList.add("gone"); } }
+
+  // swipe sideways: slide along the desk (the sound crossfades under your finger); drag up or down: pull focus
+  let drag = null;
+  stage.addEventListener("pointerdown", e => { stage.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, p: S.p, m: S.mixUser, axis: null }; S.dragging = true; hint(); });
+  stage.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
+    if (!drag.axis && Math.hypot(ddx, ddy) > 8) drag.axis = Math.abs(ddx) > Math.abs(ddy) ? "x" : "y";
+    if (drag.axis === "x") { S.p = Math.max(-0.25, Math.min(P.length - 0.75, drag.p - ddx / (W * 0.45))); S.pTarget = S.p; }
+    if (drag.axis === "y") { S.mixUser = Math.max(0, Math.min(1, drag.m - ddy / (H * 0.6))); mixIn.value = Math.round(S.mixUser * 100); }
+  });
+  const endDrag = () => { if (!drag) return; if (drag.axis === "x") S.pTarget = Math.max(0, Math.min(P.length - 1, Math.round(S.p - S.pVel * 6))); drag = null; S.dragging = false; };
+  stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+  window.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "ArrowRight") S.pTarget = Math.min(P.length - 1, Math.round(S.pTarget) + 1);
+    if (e.key === "ArrowLeft") S.pTarget = Math.max(0, Math.round(S.pTarget) - 1);
+  });
+
+  // play / pause and song choice
+  const playB = document.getElementById("play"), icon = document.getElementById("playIcon");
+  playB.addEventListener("click", async () => {
+    if (!ctx) buildAudio();
+    if (ctx.state === "suspended") await ctx.resume();
+    if (audio.paused) { try { await audio.play(); } catch (e) {} } else audio.pause();
+  });
+  const setIcon = () => { icon.innerHTML = audio.paused ? '<path d="M3 1.5v13l11-6.5z"/>' : '<path d="M3 2h3.5v12H3zM9.5 2H13v12H9.5z"/>'; playB.setAttribute("aria-label", audio.paused ? "Play" : "Pause"); };
+  audio.addEventListener("play", setIcon); audio.addEventListener("pause", setIcon);
+  document.getElementById("file").addEventListener("change", e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    audio.src = URL.createObjectURL(f); document.getElementById("songName").textContent = f.name.replace(/\.[^.]+$/, "");
+    if (ctx) audio.play().catch(() => {});
+  });
+
+  // ---- one clock for picture and sound ----
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let prev = performance.now(), shown = -1, frameNo = 0;
+  function tick(now) {
+    const dt = Math.min(0.05, (now - prev) / 1000); prev = now; frameNo++;
+    if (!S.dragging) {
+      const k = reduce ? 60 : 26, damp = reduce ? 16 : 9.5;
+      const a = (S.pTarget - S.p) * k - S.pVel * damp; S.pVel += a * dt; S.p += S.pVel * dt;
+      if (Math.abs(S.pTarget - S.p) < 0.0005 && Math.abs(S.pVel) < 0.001) { S.p = S.pTarget; S.pVel = 0; }
+    } else S.pVel = 0;
+    const ease = (v, t, r) => v + (t - v) * Math.min(1, dt * r);
+    S.mix = ease(S.mix, S.bypass ? 0 : S.mixUser, 7);
+    S.mono = ease(S.mono, S.monoT, 7);
+    S.out = ease(S.out, S.outT, 12);
+    setCamera(); audioFrame(); applyFocus();
+    let spec = null, level = 0, dry = 0;
+    if (A && !audio.paused) { A.anWet.getByteFrequencyData(A.spec); spec = A.spec; level = levelOf(A.anWet) * S.out; dry = levelOf(A.anDry) * S.out; }
+    // devices turn a little toward the middle of the frame; the one in view gets its screen redrawn
+    let best = 1e9, focus = 0;
+    devices.forEach((d, i) => {
+      const off = (xs[i] - cam.x) / cam.dist;
+      d.root.visible = Math.abs(off) < 1.8;
+      d.root.rotation.y = -0.16 - Math.max(-0.5, Math.min(0.5, off * 0.35));
+      if (Math.abs(off) < best) { best = Math.abs(off); focus = i; }
+      if (d.screen) {
+        const lit = Math.exp(-off * off * 3);
+        d.screen.mat.emissiveIntensity = (0.12 + 0.88 * lit) * (0.5 + 0.5 * S.mix);
+        if (d.root.visible && (d.lastDraw < 0 || (Math.abs(off) < 0.6 && spec && frameNo % 2 === 0))) { drawScreen(d, P[i], Math.abs(off) < 0.6 ? spec : null); d.lastDraw = frameNo; }
+      }
+    });
+    const kick = Math.min(1, dry * 3);
+    cones.forEach((c, k) => { c.position.z = kick * 0.004 * Math.sin(now * 0.06 + k); });
+    rBack.render(back, camera); rDev.render(front, camera);
+    emit(devices[focus].emit.map(f => toScreen(f())), level, now); drawRings(now);
+    const near = Math.max(0, Math.min(P.length - 1, Math.round(S.p)));
+    if (near !== shown) {
+      shown = near; const p = P[near];
+      nameEl.textContent = p.name; specEl.innerHTML = `${fmtHz(p.hp)} – ${fmtHz(p.lp)}<br>drive ${p.drive.toFixed(1)} dB`;
+      [...chips.children].forEach((b, i) => b.setAttribute("aria-pressed", i === near ? "true" : "false"));
+      chips.children[near].scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+    const m = Math.round((S.bypass ? 0 : S.mixUser) * 100);
+    mixOut.textContent = S.bypass ? "Bypass" : m >= 100 ? "Phone 100%" : m <= 0 ? "Studio 100%" : `Phone ${m}%`;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
