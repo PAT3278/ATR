@@ -264,7 +264,7 @@
           return { f, arms, torso, head };
         };
         for (let i = 0; i < 4; i++) {
-          const z0 = 17 + i * 6.2, H = 10.4 + (i % 2) * 0.9, wall = E.mat(['#6a4636', '#7d4034', '#5c4136', '#86563f'][i]), dz = z0 - 1.6;
+          const z0 = 17 + i * 6.2, H = 10.4 + (i % 2) * 0.9, wall = E.mat(['#b07a62', '#c0705c', '#a07060', '#c08a6a'][i], { map: E.tex('brick', 2, 3), rough: 0.9 }), dz = z0 - 1.6;
           bx(8, H, 6.1, X + 4, H / 2, z0, wall);
           bx(0.7, 0.5, 6.3, X - 0.15, H - 0.1, z0, trimM); bx(0.3, 0.25, 6.2, X - 0.05, H - 0.75, z0, trimM, false);        // cornice
           bx(0.3, 0.18, 6.2, X - 0.05, 4.75, z0, trimM, false);                                                             // string course
@@ -359,7 +359,7 @@
         // place is dropped by the game (p.spill); the survivors are drawn once that is settled (p.afterSpill).
         {
           const NB = E.batch(g), nb = NB.box, nr = E.rng(4747), kit = SW.Buildings.kit(E, 5), kr = E.rng(4848);
-          const walls = ['#6a4636', '#7d4034', '#5c4136', '#86563f', '#6e4a3a', '#5a3a30', '#7a5240'].map((c) => E.mat(c, { rough: 0.9 }));
+          const walls = ['#b07a62', '#c0705c', '#a07060', '#c08a6a', '#b08068', '#9a6a5c', '#b88a6c'].map((c) => E.mat(c, { map: E.tex('brick', 2, 3), rough: 0.9 }));   // photographed brick, tinted per house
           const paveM = E.mat('#77736c', { map: E.tex('paving', 1, 1), rough: 0.9 });
           const spill = [], holder = new THREE.Group(); g.add(holder);
           // xb0..xb1: the body across x; o: which way the front faces (+1 = +x, -1 = -x)
@@ -410,6 +410,11 @@
           const ZA = 8.8, ZB = 60, CURB_E = 1.6, CURB_W = -7.4, FRONT_W = -14;
           for (let k = 0; k < 8; k++) {   // the row across the street (part of this place now, not negotiable spill)
             const zc = 13 + k * 6.2, ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, draw = rowhouse(-22, FRONT_W, 1, zc, ha); draw();
+            // its back is a real back: sash windows on every floor, a back door, and a fire escape zigzagging down
+            for (let y = 1.6; y < ha - 1.2; y += 2.3) for (const dz of [-1.85, 0, 1.85]) { nb(0.06, 1.5, 0.9, -22.03, y + 0.6, zc + dz, nr() < 0.35 ? winLit : winDark, false); nb(0.14, 0.12, 1.1, -22.06, y - 0.2, zc + dz, trimM, false); nb(0.12, 0.16, 1.1, -22.06, y + 1.42, zc + dz, trimM, false); }
+            nb(0.08, 2.2, 1.1, -22.04, 1.1, zc - 1.85, doorM, false);
+            for (const y of [3.9, 6.2, 8.5]) { if (y > ha - 1.5) continue; nb(1.1, 0.06, 2.8, -22.6, y, zc + 0.6, ironM, false); nb(0.04, 0.9, 2.8, -23.13, y + 0.45, zc + 0.6, ironM, false); for (const zz of [-1.35, 1.35]) nb(1.1, 0.9, 0.04, -22.6, y + 0.45, zc + 0.6 + zz, ironM, false); }
+            for (const y of [3.9, 6.2]) { if (y + 2.3 > ha - 1.5) continue; const st = nb(0.5, 0.05, 2.7, -22.65, y + 1.15, zc + 0.6, ironM, false); st.rotation.x = 0.72; }
             p.addBox(-18, zc, 4.05, 3.1);
           }
           { const road = E.plane(CURB_E - CURB_W, ZB - ZA, E.mat('#2c2a30', { map: E.tex('asphalt', 3, 16), rough: 0.88 })); road.position.set((CURB_E + CURB_W) / 2, 0.04, (ZA + ZB) / 2); g.add(road); p.pick(road);

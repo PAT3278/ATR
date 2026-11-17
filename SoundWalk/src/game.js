@@ -1838,8 +1838,9 @@
         if (Math.random() < dt * 6) teaHud();
       }
     } else if (r.st === 'off') {
-      r.t = Math.min(1, r.t + dt / 0.8); const k = ease(r.t), g0 = groundAt(r.b.x, r.b.z);
-      P.x = r.from.x + (r.b.x - r.from.x) * k; P.z = r.from.z + (r.b.z - r.from.z) * k; P.y = r.from.y + (g0 - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.4;
+      if (!r.ex) r.ex = R.exit ? R.exit() : r.b;   // off at the exit gate
+      r.t = Math.min(1, r.t + dt / 0.9); const k = ease(r.t), g0 = groundAt(r.ex.x, r.ex.z);
+      P.x = r.from.x + (r.ex.x - r.from.x) * k; P.z = r.from.z + (r.ex.z - r.from.z) * k; P.y = r.from.y + (g0 - r.from.y) * k + Math.sin(Math.PI * r.t) * 0.4;
       if (r.t >= 1) { R.hold && R.hold(false); finishRide(); }
     }
   }

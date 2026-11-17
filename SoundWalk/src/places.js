@@ -968,7 +968,7 @@
         const w = p.toWorld(x, z); p.addCircle(x, z, 1.4); };
       const glowMat = (hex) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).convertSRGBToLinear() }); m.userData.lin = true; return m; };
       stall(-6.5, 1.5, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(6.5, -1.5, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-6, -17, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(7, -16, -Math.PI / 2, '#6cc070', 'LEMONADE');
-      stall(-2, -38, 0, '#9b7bd8', 'GAMES'); stall(8, -36, 0, '#ef7a1a', 'PRIZES');
+      stall(-9, -38, 0, '#9b7bd8', 'GAMES'); stall(8, -36, 0, '#ef7a1a', 'PRIZES');
       // trees in round planters, benches and lamp posts along the walks
       for (const [x, z] of [[-4, 8], [4, 8], [-8, -12], [8, -11], [-9, -24], [9, -26], [-4, -40], [11, -42], [18, -12], [20, -28], [-30, 12], [-44, -12], [-44, -32], [-6, -50], [22, -45]]) {
         pb(1.4, 0.45, 1.4, x, 0.22, z, E.mat('#bdb6aa', { rough: 0.9 }));
@@ -987,12 +987,47 @@
       { const sl = []; for (const sd of [-1, 1]) for (let i = 0; i <= 20; i++) { const t = i / 20, x = sd * (5 - t * 1.5), z = 10 - t * 13.5, y = 5.6 - Math.sin(t * Math.PI) * 1.2 - t * 1.0; sl.push(x, y, z); }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(sl, 3)); const pm = new THREE.PointsMaterial({ map: E.dot(), color: E.lin('#ffe2a0'), size: 0.5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); pm.userData.lin = true; g.add(new THREE.Points(geo, pm)); }
 
+      // Every ride has its way on and its way off: a green のりば (ENTRANCE) gate with a railed queue lane, and an orange
+      // おりば (EXIT) gate, each on a little platform facing out from the ride. The rides you can board start you at the
+      // entrance and set you down at the exit.
+      const gateAt = {}, gateSign = {};
+      const gate = (name, kind, x, z, ry) => {
+        const G = new THREE.Group(); G.position.set(x, 0, z); G.rotation.y = ry; g.add(G);
+        const c = Math.cos(ry), s2 = Math.sin(ry), toP = (lx, lz) => [x + lx * c + lz * s2, z - lx * s2 + lz * c];
+        const add = (geo, m, px, py, pz) => { const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.castShadow = true; G.add(o); return o; };
+        const col = E.mat(kind === 'in' ? '#2f8a4a' : '#d2602a', { rough: 0.5 });
+        add(new THREE.BoxGeometry(2.8, 0.15, 2.4), E.mat('#c9c2b0', { rough: 0.9 }), 0, 0.075, 0);
+        for (const sx of [-1.25, 1.25]) { add(new THREE.BoxGeometry(0.14, 2.7, 0.14), col, sx, 1.35, 0.9); p.addCircle(...toP(sx, 0.9), 0.15); }
+        add(new THREE.BoxGeometry(2.64, 0.55, 0.14), col, 0, 2.78, 0.9);
+        const key = kind + name; if (!gateSign[kind]) gateSign[kind] = new THREE.MeshBasicMaterial({ map: E.textTex(kind === 'in' ? 'のりば  ENTRANCE' : 'おりば  EXIT', { w: 512, h: 96, color: '#f4f1e6', font: '700 56px "Hind","Noto Sans JP",sans-serif' }), transparent: true, side: THREE.DoubleSide });
+        const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.45), gateSign[kind]); sg.position.set(0, 2.78, 0.98); G.add(sg);
+        if (kind === 'in') {   // the queue lane: two rails out from the gate
+          for (const sx of [-0.65, 0.65]) { add(new THREE.BoxGeometry(0.05, 0.05, 3.6), steelM, sx, 0.95, 2.9); for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.06, 0.95, 0.06), steelM, sx, 0.48, 1.2 + k * 1.15); for (let k = 0; k < 6; k++) p.addCircle(...toP(sx, 1.2 + k * 0.7), 0.12); }
+        }
+        gateAt[key] = toP(0, 0);
+        return toP;
+      };
+      const out = (cx, cz, dx, dz, r0) => { const l = Math.hypot(dx, dz); return [cx + (dx / l) * r0, cz + (dz / l) * r0, Math.atan2(dx, dz)]; };
+      const ridesG = {
+        carousel: [out(0, CZ, -0.6, 0.8, 7.0), out(0, CZ, 0.6, 0.8, 7.0)],
+        wheel: [[-2.8, WZ + 4.2, 0], [2.8, WZ + 4.2, 0]],
+        teacups: [out(TCX, TCZ, -0.3, 1, 6.1), out(TCX, TCZ, 0.5, 1, 6.1)],
+        swing: [out(SWX, SWZ, -0.45, 1, 8.2), out(SWX, SWZ, 0.15, 1, 8.2)],
+        drop: [out(DX, DZ, -1, 0.4, 4.4), out(DX, DZ, 1, 0.4, 4.4)],
+        bumper: [[BCX - 3.6, BCZ + 5.4, 0], [BCX + 3.6, BCZ + 5.4, 0]],
+        coaster: [[-14, 12.4, 0], [-23, 12.4, 0]],
+      };
+      const queuePts = [];
+      for (const [name, [a, b]] of Object.entries(ridesG)) { const toP = gate(name, 'in', ...a); gate(name, 'out', ...b); queuePts.push(toP(0, 1.7), toP(0, 2.8), toP(0, 3.9)); }
+      // a low fence round the swing ride, open at its two gates
+      { const R0 = 7.6, aIn = Math.atan2(ridesG.swing[0][1] - SWZ, ridesG.swing[0][0] - SWX), aOut = Math.atan2(ridesG.swing[1][1] - SWZ, ridesG.swing[1][0] - SWX);
+        for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, gap = (q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) < 0.2; if (gap(aIn) || gap(aOut)) continue;
+          const x = SWX + Math.cos(a) * R0, z = SWZ + Math.sin(a) * R0, rl = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.05), steelM); rl.position.set(x, 0.9, z); rl.rotation.y = -a + Math.PI / 2; g.add(rl);
+          const po = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.9, 0.06), steelM); po.position.set(x, 0.45, z); g.add(po); p.addCircle(x, z, 0.35); } }
       // the visitors: ordinary people in all sorts of clothes, queuing for the rides
       const bodyGeo = new THREE.CylinderGeometry(0.3, 0.42, 1.3, 10).translate(0, 0.65, 0), headGeo = new THREE.SphereGeometry(0.27, 14, 10).translate(0, 1.6, 0);
       const cells = [], queue = (x0, z0, dx, dz, n, col0) => { for (let i = 0; i < n; i++) { const x = x0 + dx * i + (r() - 0.5) * 0.3, z = z0 + dz * i + (r() - 0.5) * 0.3; cells.push({ x, z, col: (col0 + i) % 7 }); p.addCircle(x, z, 0.5); } };
-      queue(-2.5, -1.5, -1.1, 1.0, 5, 0); queue(2.8, -1.5, 1.1, 1.0, 4, 2);
-      queue(-6, -21, 0, 1.15, 5, 1); queue(-14, 2, -1.1, 0, 6, 3);
-      queue(16, -1, 0, 1.1, 4, 4); queue(13, -34, -1.1, 0, 4, 5); queue(10, -23, 0, -1.1, 4, 6); queue(-2, -41, 1.1, 0, 4, 2);
+      queuePts.forEach(([x, z], i) => queue(x, z, 0, 0, 1, i % 7));   // people waiting in each ride's queue lane
       const n = cells.length, bodies = new THREE.InstancedMesh(bodyGeo, E.mat('#ffffff', { rough: 0.7 }), n), heads = new THREE.InstancedMesh(headGeo, E.mat('#ffffff', { rough: 0.6 }), n);
       const clothes = ['#2b2f3a', '#7a2f2a', '#3a5a40', '#c9c2b0', '#1e1f22', '#4a6a8a', '#8a6a3a', '#5a3a5a', '#d8d2c0', '#2f4a5a'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
       cells.forEach((c, i) => { bodies.setColorAt(i, E.lin(clothes[Math.floor(r() * clothes.length)])); heads.setColorAt(i, E.lin(skins[Math.floor(r() * skins.length)])); c.h = 0.9 + r() * 0.2; });
@@ -1010,14 +1045,14 @@
       p.pathEnd = 12;
       p.clearR = 12;
       p.blocks = (lx, lz) => lx > -47 && lx < 29 && lz > -53 && lz < 15;
-      SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(0, WZ + 2.8), wheelHold: { on: false, i: 0, stopped: false } };
+      SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(gateAt.inwheel[0], gateAt.inwheel[1]), exit: () => p.toWorld(gateAt.outwheel[0], gateAt.outwheel[1]), wheelHold: { on: false, i: 0, stopped: false } };
       // ride the carousel: walk up to the platform, climb onto an outside horse
       const hv = new THREE.Vector3(), hq = new THREE.Quaternion(), hf = new THREE.Vector3();
       let horseI = 1;
       p.ride = {
-        board: () => p.toWorld(0, CZ + 6.2),
+        board: () => p.toWorld(gateAt.incarousel[0], gateAt.incarousel[1]), exit: () => p.toWorld(gateAt.outcarousel[0], gateAt.outcarousel[1]),
         hold: (on) => { carHold = on; }, stopped: () => carSpin === 0,
-        pick: () => { const b = p.toWorld(0, CZ + 6.2); let best = 1e9; horses.forEach((o, i) => { if (!(i % 2)) return; o.h.getWorldPosition(hv); const d = Math.hypot(hv.x - b.x, hv.z - b.z); if (d < best) { best = d; horseI = i; } }); },   // the outside horse nearest the gate
+        pick: () => { const b = p.toWorld(gateAt.incarousel[0], gateAt.incarousel[1]); let best = 1e9; horses.forEach((o, i) => { if (!(i % 2)) return; o.h.getWorldPosition(hv); const d = Math.hypot(hv.x - b.x, hv.z - b.z); if (d < best) { best = d; horseI = i; } }); },   // the outside horse nearest the gate
         seat: (v) => { const h = horses[horseI].h; h.getWorldPosition(v); v.y -= 0.62; h.getWorldQuaternion(hq); hf.set(0, 0, 1).applyQuaternion(hq); return Math.atan2(hf.x, hf.z); },
       };
 
@@ -1026,10 +1061,10 @@
       // the teacups as a ride: climb into the first cup; press in time (the game) to spin it faster
       const tq = new THREE.Quaternion(), tf = new THREE.Vector3();
       const tea = { boost: 0, held: false, game: true,
-        board: () => p.toWorld(TCX - 5.6, TCZ), hold: (on) => { tea.held = on; }, stopped: () => teaSpin === 0,
+        board: () => p.toWorld(gateAt.inteacups[0], gateAt.inteacups[1]), exit: () => p.toWorld(gateAt.outteacups[0], gateAt.outteacups[1]), hold: (on) => { tea.held = on; }, stopped: () => teaSpin === 0,
         seat: (v) => { cupL[0].getWorldPosition(v); v.y += 0.05; cupL[0].getWorldQuaternion(tq); tf.set(0, 0, 1).applyQuaternion(tq); return Math.atan2(tf.x, tf.z); },
         spin: () => (0.5 + 1.2 + tea.boost * 2.4) * teaSpin };
-      p.interact({ kind: 'ride', place: p, ride: tea, label: 'TEACUPS', lx: TCX - 5.6, lz: TCZ, r: 2.0, mark: 1.8 });
+      p.interact({ kind: 'ride', place: p, ride: tea, label: 'TEACUPS', lx: gateAt.inteacups[0], lz: gateAt.inteacups[1] + 2.6, r: 2.0, mark: 1.8 });   // at the head of the queue lane
       const cm4 = new THREE.Matrix4();
       p.update = (t, dt, f) => {
         const bob = f.pulse * 0.12;
@@ -1086,6 +1121,7 @@
       let ride = -1, lastT = -1e9;
       p.ride = {   // board the cabin at the bottom and ride it round
         board: () => (SW.parkRide ? SW.parkRide.board() : p.toWorld(0, 0)),
+        exit: () => (SW.parkRide ? SW.parkRide.exit() : p.toWorld(0, 0)),
         hold: (on, leaving) => { const R = SW.parkRide, H = R.wheelHold; if (!on) { H.on = false; return; }
           let pick = ride; if (!leaving) { let lo = 1e9; const n = R.gond.length; for (let i = 0; i < n; i++) { const m = ((((i / n) * Math.PI * 2 + R.wheel.rotation.z + Math.PI / 2) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); if (m < lo) { lo = m; pick = i; } } }   // the next cabin coming down to the bottom
           Object.assign(H, { on: true, i: pick, stopped: false }); ride = pick; },
