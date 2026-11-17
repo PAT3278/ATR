@@ -100,23 +100,22 @@ public:
     void setEditorScale (float scale) noexcept { editorScale = scale; }
     float getEditorScale() const noexcept { return editorScale.load(); }
 
-    /** Editor skin (0 = DECK, 1 = RECEIVER, 2 = LAB), remembered with the project. The
-        Live phone page follows it. */
-    void setEditorSkin (int skin) noexcept
-    {
-        editorSkin = juce::jlimit (0, 2, skin);
-        liveServer.setSkin (editorSkin.load());
-    }
-    int getEditorSkin() const noexcept { return editorSkin.load(); }
-
     /** Most recent output block's RMS / peak per side (0 = L, 1 = R), for the meter. */
     float getOutputRms (int side) const noexcept  { return meterRms[side & 1].load (std::memory_order_relaxed); }
     float getOutputPeak (int side) const noexcept { return meterPeak[side & 1].load (std::memory_order_relaxed); }
 
+    /** Most recent input block's peak (both sides), for the studio monitors in the editor. */
+    float getInputPeak() const noexcept { return inputPeak.load (std::memory_order_relaxed); }
+
+    /** The last numSamples of the output, summed to mono, for the editor's spectrum.
+        Lock-free and approximate: a block being written may tear, which a picture can afford. */
+    static constexpr int scopeSize = 4096;
+    void copyScope (float* dest, int numSamples) const noexcept;
+
 private:
     static constexpr const char* livePasswordProperty = "livePassword";
     static constexpr const char* editorScaleProperty = "editorScale";
-    static constexpr const char* editorSkinProperty = "editorSkin";
+    static constexpr const char* oldEditorSkinProperty = "editorSkin"; // from versions with several skins
 
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void processSubBlock (juce::AudioBuffer<float>& buffer, int start, int numSamples);
@@ -163,14 +162,15 @@ private:
 
     LiveMonitorServer liveServer;
     std::atomic<bool> liveMonitorActive { false };
-    std::atomic<float> meterRms[2] { 0.0f, 0.0f }, meterPeak[2] { 0.0f, 0.0f };
+    std::atomic<float> meterRms[2] { 0.0f, 0.0f }, meterPeak[2] { 0.0f, 0.0f }, inputPeak { 0.0f };
+    std::array<float, scopeSize> scope {};
+    std::atomic<int> scopeWrite { 0 };
     double currentSampleRate = 44100.0;
 
     mutable juce::CriticalSection passwordLock;
     juce::String livePassword;
     const juce::String autoAccessCode;
     std::atomic<float> editorScale { 1.0f };
-    std::atomic<int> editorSkin { 1 }; // RECEIVER
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessor)
 };

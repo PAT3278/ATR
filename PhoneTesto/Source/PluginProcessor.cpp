@@ -253,6 +253,13 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     if (numChannels == 0 || profileSettings.empty())
         return;
 
+    {
+        float in = 0.0f;
+        for (int ch = 0; ch < juce::jmin (numChannels, getTotalNumInputChannels()); ++ch)
+            in = juce::jmax (in, buffer.getMagnitude (ch, 0, numSamples));
+        inputPeak.store (in, std::memory_order_relaxed);
+    }
+
     // Hosts may send more samples than prepareToPlay promised; work in
     // prepared-size pieces so nothing ever has to allocate here.
     for (int start = 0; start < numSamples; start += maxBlockSize)
@@ -265,10 +272,30 @@ void PhoneTestoAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
         meterPeak[side].store (buffer.getMagnitude (ch, 0, numSamples), std::memory_order_relaxed);
     }
 
+    {
+        const float* l = buffer.getReadPointer (0);
+        const float* rr = buffer.getReadPointer (juce::jmin (1, numChannels - 1));
+        int w = scopeWrite.load (std::memory_order_relaxed);
+        for (int i = 0; i < numSamples; ++i)
+        {
+            scope[(size_t) w] = 0.5f * (l[i] + rr[i]);
+            w = (w + 1) & (scopeSize - 1);
+        }
+        scopeWrite.store (w, std::memory_order_release);
+    }
+
     // Not while the host renders offline (an export runs faster than real
     // time; phones would get it in garbled bursts).
     if (liveMonitorActive.load() && ! isNonRealtime())
         liveServer.pushAudio (buffer);
+}
+
+void PhoneTestoAudioProcessor::copyScope (float* dest, int numSamples) const noexcept
+{
+    numSamples = juce::jmin (numSamples, scopeSize);
+    const int end = scopeWrite.load (std::memory_order_acquire);
+    for (int i = 0; i < numSamples; ++i)
+        dest[i] = scope[(size_t) ((end - numSamples + i) & (scopeSize - 1))];
 }
 
 void PhoneTestoAudioProcessor::processSubBlock (juce::AudioBuffer<float>& buffer, int start, int n)
@@ -424,7 +451,6 @@ void PhoneTestoAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     state.setProperty (livePasswordProperty, getLivePassword(), nullptr);
     state.setProperty (editorScaleProperty, editorScale.load(), nullptr);
-    state.setProperty (editorSkinProperty, editorSkin.load(), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -440,15 +466,13 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     auto tree = juce::ValueTree::fromXml (*xml);
     const auto password = tree.getProperty (livePasswordProperty).toString();
     const auto scale = (float) tree.getProperty (editorScaleProperty, 1.0f);
-    const auto skin = (int) tree.getProperty (editorSkinProperty, editorSkin.load());
     tree.removeProperty (livePasswordProperty, nullptr);
     tree.removeProperty (editorScaleProperty, nullptr);
-    tree.removeProperty (editorSkinProperty, nullptr);
+    tree.removeProperty (oldEditorSkinProperty, nullptr);
 
     apvts.replaceState (tree);
     setLivePassword (password);
     editorScale = juce::jlimit (0.5f, 2.0f, scale);
-    setEditorSkin (skin);
 }
 
 } // namespace phonetesto

@@ -17,6 +17,7 @@
 //  * CPU          -- worst case (mid model-crossfade, both chains running)
 //                    stays a small fraction of real time
 #include "../Source/PluginProcessor.h"
+#include "../Source/PluginEditor.h"
 
 #include <cmath>
 #include <cstdio>
@@ -348,25 +349,14 @@ int main()
         setParam (*a, PhoneTestoAudioProcessor::monoParamId, 1.0f);
         a->setLivePassword ("pass word 123");
         a->setEditorScale (1.25f);
-        a->setEditorSkin (0);
         juce::MemoryBlock state;
         a->getStateInformation (state);
 
         auto b = makeProcessor (48000.0, 512);
-        check (b->getEditorSkin() == 1, "new instances open in the RECEIVER skin");
         b->setStateInformation (state.getData(), (int) state.getSize());
-        check (std::abs (b->getEditorScale() - 1.25f) < 0.001f && b->getEditorSkin() == 0,
-               "editor size and skin restored");
+        check (std::abs (b->getEditorScale() - 1.25f) < 0.001f, "editor size restored");
         check (! b->apvts.copyState().hasProperty ("editorSkin") && ! b->apvts.copyState().hasProperty ("editorScale"),
                "editor settings aren't left in the parameter tree");
-
-        a->setEditorSkin (2);
-        juce::MemoryBlock labState;
-        a->getStateInformation (labState);
-        auto c = makeProcessor (48000.0, 512);
-        c->setStateInformation (labState.getData(), (int) labState.getSize());
-        check (c->getEditorSkin() == 2, "the LAB skin is restored too");
-        a->setEditorSkin (0);
         auto value = [&] (const char* id) { return b->apvts.getParameter (id)->convertFrom0to1 (b->apvts.getParameter (id)->getValue()); };
         check (juce::roundToInt (value (PhoneTestoAudioProcessor::deviceParamId)) == 5
                    && std::abs (value (PhoneTestoAudioProcessor::mixParamId) - 42.0f) < 0.01f
@@ -426,12 +416,7 @@ int main()
             }
             return got.toString();
         };
-        a->setEditorSkin (0);
-        const bool deck = infoBody().contains ("\"skin\":\"deck\"");
-        a->setEditorSkin (2);
-        const bool lab = infoBody().contains ("\"skin\":\"lab\"");
-        a->setEditorSkin (1);
-        check (deck && lab && infoBody().contains ("\"skin\":\"receiver\""), "the phone page is told the plugin's skin");
+        check (infoBody().contains ("\"skin\":\"receiver\""), "the phone page is told its look");
 
         check (status ("/stream?fmt=pcm16") == 401, "stream without the code is refused, even with no password set");
         check (status ("/auth?key=" + code) == 204, "the code from the QR URL is accepted");
@@ -484,6 +469,40 @@ int main()
                        + std::to_string (realtimeBytes) + " for 1 s in real time)");
         }
         a->stopLiveMonitor();
+    }
+
+    std::printf ("Editor page and spectrum\n");
+    {
+        using Editor = PhoneTestoAudioProcessorEditor;
+        const auto page = Editor::getResource ("/");
+        const auto text = page ? juce::String::fromUTF8 (reinterpret_cast<const char*> (page->data.data()), (int) page->data.size()) : juce::String();
+        check (page && page->mimeType.startsWith ("text/html") && text.contains ("three.min.js"), "the editor's page is built in");
+        check (text.isNotEmpty() && ! text.containsAnyOf (juce::String::fromUTF8 ("\xc2\xb7\xe2\x80\x93")), "and is plain ASCII, so no web view can garble it");
+        bool allThere = true;
+        for (auto f : { "/three.min.js", "/fonts/Barlow-Medium.ttf", "/fonts/Barlow-SemiBold.ttf", "/fonts/BarlowCondensed-SemiBold.ttf", "/fonts/BarlowCondensed-Bold.ttf" })
+            allThere = allThere && Editor::getResource (f).has_value();
+        check (allThere, "three.js and the fonts it asks for are built in");
+        check (! Editor::getResource ("/nothing-here.js").has_value(), "anything else is not found");
+
+        // the output scope holds the last samples played, summed to mono
+        auto a = makeProcessor (48000.0, 512);
+        juce::AudioBuffer<float> buf (2, 512);
+        juce::MidiBuffer midi;
+        setParam (*a, PhoneTestoAudioProcessor::bypassParamId, 1.0f);
+        for (int block = 0; block < 40; ++block)
+        {
+            for (int i = 0; i < 512; ++i)
+            {
+                const float v = 0.5f * (float) std::sin (2.0 * juce::MathConstants<double>::pi * 1000.0 * (block * 512 + i) / 48000.0);
+                buf.setSample (0, i, v); buf.setSample (1, i, v);
+            }
+            a->processBlock (buf, midi);
+        }
+        std::vector<float> scope (2048);
+        a->copyScope (scope.data(), 2048);
+        float peak = 0.0f;
+        for (auto v : scope) peak = juce::jmax (peak, std::abs (v));
+        check (peak > 0.45f && peak < 0.55f && std::abs (a->getInputPeak() - 0.5f) < 0.01f, "the editor sees the output and the input levels");
     }
 
     if (failures > 0)

@@ -58,45 +58,33 @@ values in `Source/SpeakerProfiles.h` are hand-tuned approximations. If real
 measured impulse responses become available (device + mic + calibrated
 level), adding a convolution stage per profile is the natural next step.
 
-## The panel
+## The room
 
-The panel is drawn as real hardware:
+The editor is a room at night: the speakers stand in a row on a walnut desk
+under a lamp, drawn in 3D, with a pair of studio monitors on the far side.
+The picture is the control surface.
 
-- **Display** — plots the selected model's frequency response; with Live on
-  it shows the QR code, address, password and how many phones are listening.
-- **Speaker model** — eight keys under the display; the lit one is active.
-- **Meter** — the stereo output (−60…0 dBFS) with peak hold.
-- **MIX** / **OUTPUT** knobs over printed 0–10 scales, with seven-segment
-  readouts underneath; double-click to reset.
-- **MONO**, **BYPASS** and **ON AIR** (Live); the header lamp shows
-  EMULATE or ON AIR with the number of phones listening.
+- **Speaker model** — drag sideways along the desk (or press a model key
+  under the room, or the arrow keys). The camera slides to the next speaker
+  and the model changes as it takes the light. Each one is modelled from the
+  real thing: frame and edge, glass with the lamp in it, buttons, speaker
+  holes; the laptop's keyboard and grilles; the wired earbuds' shells,
+  stems and cable. Its screen shows the band it can play, lit by the
+  output's spectrum.
+- **Mix** — drag up or down (or the Focus slider): the focus pulls from the
+  speaker to the studio monitors behind it, and the lamp follows. All the way
+  to the monitors is the dry signal; their woofers move with it.
+- **Output**, **MONO** (the sound rings from the speaker's two ends draw
+  together into one) and **BYPASS** (focus and light move to the monitors).
+- **ON AIR** (Live) — the code to scan appears on the phone in the scene and
+  on a card in the corner, with the address, the number of phones listening
+  and the password.
 
-Drag the window's corner to resize; the whole panel scales, and the size is
-saved with the project. Fonts are Barlow / Barlow Condensed and DSEG7 for
-the readouts, embedded in the plugin.
+Drag the window's corner to resize; the size is saved with the project.
+Everything the page needs (three.js, the Barlow fonts) is built into the
+plugin, so it works offline. It is drawn by the system's web view: WebView2
+on Windows (part of Windows 10 and 11), WebKit on macOS and Linux.
 
-### Skins
-
-The skin key in the header steps through three looks (saved with the
-project), each taken from a kind of vintage gear:
-
-- **RECEIVER** (the default) — a 70s hi-fi receiver: champagne brushed
-  aluminium between walnut cheeks, the response curve on an amber-lit
-  black-glass dial with a tuning-dial frequency scale, two backlit needle
-  VU meters (−18 dBFS reads 0 VU) with peak lamps, spun-aluminium knobs,
-  aluminium keys with amber pilot lamps, bat-handle toggles for MONO and
-  BYPASS.
-- **DECK** — an 80s silver cassette deck: brushed aluminium, black knurled
-  knobs, dark keys with small LEDs, a cyan vacuum-fluorescent display, a
-  green/amber/red LED ladder meter with seven-segment peak readouts.
-- **LAB** — test equipment: grey hammertone paint, slotted screws, printed
-  section boxes, bakelite chicken-head knobs, toggles and jewel lamps, a
-  green phosphor CRT with a graticule, red LED bars and readouts, a red ON
-  AIR key.
-
-Nothing animates: the faceplate is rendered once and cached, so the editor
-costs nothing while idle beyond the meter. The phone page follows the
-plugin's skin, with the same materials, windows, keys and lamps.
 
 ## Live Monitor mode
 
@@ -172,7 +160,9 @@ time against it.
 ## Building
 
 Requires CMake ≥ 3.22 (CMake 4 works too) and a C++17 compiler. JUCE is fetched automatically
-via `FetchContent` — no manual JUCE install or submodule needed.
+via `FetchContent` — no manual JUCE install or submodule needed. On Windows the
+WebView2 SDK is fetched the same way; on Linux install WebKitGTK's headers
+(`libwebkit2gtk-4.1-dev`, plus JUCE's usual GTK/X11/ALSA ones).
 
 ```sh
 cmake -B build
@@ -225,7 +215,7 @@ cmake --build build -j
 ./build/PhoneTestoDspTest
 ./build/PhoneTestoLiveServerTest
 node Tests/browser/player_test.mjs build/PhoneTestoLiveDemo
-xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a display
+node Tests/browser/room_test.mjs
 ```
 
 - **PhoneTestoDspTest** — the processor as a host would drive it, at
@@ -256,20 +246,13 @@ xvfb-run -a build/PhoneTestoEditorSnapshot shots   # or run directly with a disp
   is exercised), the screen-off mode, the password flow including the QR
   code's `?k=` link, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
-- **PhoneTestoEditorSnapshot** — renders the editor in all three skins
-  (Emulate and Live) to PNGs for checking the layout, checks it reopens at
-  its saved size, and prints what a full redraw costs.
+- **room_test.mjs** — the editor's page in Playwright Chromium against its
+  built-in stand-in for the plugin: it loads with the bundled three.js and
+  fonts, draws the room, the model keys, MONO and ON AIR work.
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
   your phone).
-- **PhoneTestoUiSprites** — renders the editor's states (knob frames, keys,
-  meter, displays) into images for `Tools/web-panel/index.html`, a touchable
-  web copy of the panel for trying the controls on a phone:
-  `xvfb-run -a build/PhoneTestoUiSprites panel 1.5`, then copy
-  `Tools/web-panel/index.html` (and any `song.mp3`) into `panel/` and serve
-  that folder. Its sound is a Web Audio approximation of the emulation, not
-  the plugin's DSP.
 
 The VST3 build also passes Steinberg's VST3 validator (all 47 tests) and
 [pluginval](https://github.com/Tracktion/pluginval) at strictness 10.
@@ -301,28 +284,26 @@ Artifacts are kept for 30 days.
 ```
 CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps
 Resources/
+  room.html                The editor: the 3D room (three.js) and its control strip
   player.html              The phone-side player page (embedded into the plugin)
   player-worklet.js        Its playback core (AudioWorklet or ScriptProcessor): gapless
                            playback, jitter buffer, drift control
-  thirdparty/              opus-decoder (WASM Opus for plain-HTTP pages) + its licence
+  thirdparty/              three.js; opus-decoder (WASM Opus for plain-HTTP pages); licences
   fonts/                   Barlow and DSEG7 fonts + their licences (OFL)
 Source/
   PluginProcessor.h/.cpp   Parameters, speaker DSP chain, Live Monitor wiring
-  PluginEditor.h/.cpp      The rack-unit faceplate: layout, legends, scaling
-  HardwareStyle.h/.cpp     Fonts, the skin list, the LookAndFeel
-  GearStyle.h/.cpp         The three skins: faceplates, windows, keys, knobs, lamps, readouts
-  LevelMeter.h/.cpp        Stereo LED output meter
-  DisplayWindow.h/.cpp     Display: response curve / Live QR, address, password
+  PluginEditor.h/.cpp      Hosts room.html in a web view; parameters, levels, spectrum,
+                           Live state and QR code to the page, the page's controls back
   SpeakerProfiles.h        Per-device filter/drive tables
   LiveMonitorServer.h/.cpp Embedded HTTP server, listener threads, lock-free broadcast ring
   LiveStreamEncoder.h/.cpp Per-listener 48 kHz resampling + PCM16/PCM24/Opus packetising
-  QrCodeComponent.h/.cpp   Draws the "scan to listen" QR code
 Tests/
   DspTest.cpp              Processor tests: level match, clicks, bypass, latency, state
   LiveServerTest.cpp       Streaming server protocol/audio test
   LiveDemo.cpp             Stand-alone server with a test tone
-  EditorSnapshot.cpp       Renders the editor to PNG
   browser/player_test.mjs  In-browser player test (Playwright)
+  browser/room_test.mjs    The editor's page in a browser (Playwright)
+Tools/room/index.html      The Room as a stand-alone web demo (Web Audio, a song.mp3 beside it)
 ```
 
 ## Third-party code
@@ -337,6 +318,9 @@ Tests/
 - [DSEG7 Classic](https://github.com/keshikan/DSEG) by keshikan — SIL Open
   Font License 1.1 (`Resources/fonts/DSEG-OFL.txt`); unmodified, embedded in
   the plugin and served to the phone page.
+- [three.js](https://threejs.org) r128 — MIT
+  (`Resources/thirdparty/three-LICENSE.txt`); included in the repo and
+  embedded in the plugin.
 - [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
   Ethan Halsall — MIT, wrapping libopus (BSD)
   (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo

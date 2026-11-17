@@ -1,21 +1,24 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_dsp/juce_dsp.h>
 #include "PluginProcessor.h"
-#include "HardwareStyle.h"
-#include "GearStyle.h"
-#include "LevelMeter.h"
-#include "DisplayWindow.h"
 
 namespace phonetesto
 {
 
-/** The panel: a large display (speaker response curve, or the Live QR
-    code), a 2x4 grid of MODEL pads, a stereo meter, MIX and OUTPUT knobs
-    with live readouts, and buttons for MONO, BYPASS and ON AIR. Laid out on
-    a fixed 980x420 panel that's scaled as a whole when the window is
-    resized. Three skins (see HardwareStyle.h), switched from the header and
-    remembered with the project. */
+/** The editor is a room: the speakers stand on a lamp-lit desk, drawn in 3D
+    by a web page (Resources/room.html, with three.js) in the system's web
+    view. Moving along the desk changes the model; pulling focus between the
+    speaker and the studio monitors behind it sets the mix; ON AIR puts the
+    code to scan on the phone in the scene.
+
+    The page sends what the user does as "ui" events; this class turns them
+    into parameter changes (with gestures, so hosts record automation) and
+    Live Monitor actions, and sends the page the plugin's state 30 times a
+    second as a "state" event: parameters, levels, a spectrum of the output,
+    and Live (address, QR code, listeners, password). */
 class PhoneTestoAudioProcessorEditor : public juce::AudioProcessorEditor,
                                         private juce::Timer
 {
@@ -25,59 +28,33 @@ public:
 
     void resized() override;
 
-    static constexpr int faceWidth = 980;
-    static constexpr int faceHeight = 420;
+    static constexpr int defaultWidth = 1000;
+    static constexpr int defaultHeight = 660;
+
+    /** A file the page asks for (room.html, three.js, fonts), from the plugin's binary data. */
+    static std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
 
 private:
-    /** A child whose painting is a function of the editor's. */
-    struct Painted : public juce::Component
-    {
-        std::function<void (juce::Graphics&)> onPaint;
-        void paint (juce::Graphics& g) override { if (onPaint) onPaint (g); }
-    };
-
     void timerCallback() override;
-    void paintBackground (juce::Graphics&);
-    void paintOverlay (juce::Graphics&);
-    juce::Rectangle<float> statusPillBounds() const;
-    juce::String statusText() const;
-    void showSelectedModel (int index);
-    void toggleLive();
-    void updateLiveState();
-    void applySkin (hw::Skin);
+    void handleUi (const juce::var&);
+    void setParameter (const juce::String& id, double value);
+    void gesture (const juce::String& id, bool begin);
+    juce::var makeState();
+    juce::Array<juce::var> spectrumBands();
 
     PhoneTestoAudioProcessor& processor;
-    const float savedScale;
-    bool sizeRestored = false;
-    hw::LookAndFeel lookAndFeel;
-    hw::Skin skin = hw::Skin::receiver;
-    hw::gear::Faceplate faceplate;
+    juce::WebBrowserComponent browser;
 
-    // `panel` holds every control and paints the background; `overlay` sits
-    // behind the controls and paints the static text (header, labels,
-    // readouts). The faceplate, overlay and controls are all cached as
-    // images; only the meter and the display redraw as things change.
-    Painted panel, overlay;
+    static constexpr int fftOrder = 11, fftSize = 1 << fftOrder, numBands = 30;
+    juce::dsp::FFT fft { fftOrder };
+    juce::dsp::WindowingFunction<float> window { (size_t) fftSize, juce::dsp::WindowingFunction<float>::hann };
+    std::vector<float> fftData = std::vector<float> ((size_t) fftSize * 2, 0.0f);
+    std::array<float, numBands> bands {};
 
-    LevelMeter meter;
-    DisplayWindow display;
-    juce::Slider mixKnob, outputKnob;
-    std::array<juce::ToggleButton, 8> modelPads;
-    juce::ToggleButton monoButton { "MONO" }, bypassButton { "BYPASS" }, onAirButton { "ON AIR" };
-    juce::ToggleButton skinButton;
-
-    juce::String liveUrl;
+    juce::String liveUrl, qrText;
+    int qrSize = 0;
     bool liveStartFailed = false;
-    int shownListeners = -1;
-    bool shownLive = false;
-    double lastTimerSeconds = 0.0;
-
-    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
-    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-
-    std::unique_ptr<juce::ParameterAttachment> modelAttachment;
-    std::unique_ptr<SliderAttachment> mixAttachment, outputAttachment;
-    std::unique_ptr<ButtonAttachment> monoAttachment, bypassAttachment;
+    bool sizeRestored = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessorEditor)
 };

@@ -101,26 +101,13 @@ jobs:
           ${{ matrix.pluginvalExe }} --strictness-level 10 --skip-gui-tests --validate-in-process \
             --validate ~/Library/Audio/Plug-Ins/Components/PhoneTesto.component
 
-      - name: Editor snapshots
-        run: |
-          if [ "$RUNNER_OS" = Linux ]; then run="xvfb-run -a"; else run=""; fi
-          $run ${{ matrix.bin }}/PhoneTestoEditorSnapshot${{ matrix.exe }} build/shots 1.5
-
-      - name: QR code in the Live snapshots decodes to the phone URL
-        if: runner.os == 'Linux'
-        run: |
-          for skin in deck receiver lab; do
-            url=$(zbarimg -q --raw build/shots/editor-$skin-live.png)
-            echo "$skin: $url"
-            [[ "$url" == http://*/?k=* ]]
-          done
-
       - name: Phone player page tests (Chromium)
         if: runner.os == 'Linux'
         run: |
           npm install --no-save --no-package-lock "playwright@${PLAYWRIGHT_VERSION}"
           npx playwright install --with-deps chromium
           node Tests/browser/player_test.mjs build/PhoneTestoLiveDemo build/shots
+          node Tests/browser/room_test.mjs build/shots
 
       - name: Package plugins
         run: |

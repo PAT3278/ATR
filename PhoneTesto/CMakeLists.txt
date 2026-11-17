@@ -74,11 +74,29 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(qrcodegen)
 
-# The phone player page, its playback engine, a WebAssembly Opus decoder for
-# phones whose browser withholds WebCodecs (MIT, see Resources/thirdparty),
-# and the Barlow fonts (SIL OFL, see Resources/fonts/OFL.txt) used by both the
-# editor and that page.
+# WebView2 (Windows): the editor is a web page in the system's web view. Its
+# SDK comes as a NuGet package; fetch it here so a plain CMake build works
+# without installing it by hand. (Edge's WebView2 runtime itself ships with
+# Windows 10 and 11.)
+if(WIN32 AND NOT JUCE_WEBVIEW2_PACKAGE_LOCATION)
+    set(PHONETESTO_WEBVIEW2_VERSION 1.0.2903.40)
+    FetchContent_Declare(
+        webview2
+        URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/${PHONETESTO_WEBVIEW2_VERSION}
+        DOWNLOAD_NAME webview2.zip
+        SOURCE_DIR ${CMAKE_BINARY_DIR}/webview2/Microsoft.Web.WebView2.${PHONETESTO_WEBVIEW2_VERSION}
+    )
+    FetchContent_MakeAvailable(webview2)
+    set(JUCE_WEBVIEW2_PACKAGE_LOCATION ${CMAKE_BINARY_DIR}/webview2)
+endif()
+
+# The editor (a 3D room drawn with three.js, MIT, see Resources/thirdparty),
+# the phone player page, its playback engine, a WebAssembly Opus decoder for
+# phones whose browser withholds WebCodecs (MIT), and the Barlow fonts (SIL
+# OFL, see Resources/fonts/OFL.txt) used by both pages.
 juce_add_binary_data(PhoneTestoAssets SOURCES
+    Resources/room.html
+    Resources/thirdparty/three.min.js
     Resources/player.html
     Resources/player-worklet.js
     Resources/thirdparty/opus-decoder.min.js
@@ -114,6 +132,8 @@ juce_add_plugin(PhoneTesto
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+    NEEDS_WEB_BROWSER TRUE
+    NEEDS_WEBVIEW2 TRUE
     VST3_CATEGORIES Fx
     AU_MAIN_TYPE kAudioUnitType_Effect
     COPY_PLUGIN_AFTER_BUILD ${PHONETESTO_COPY_AFTER_BUILD}
@@ -126,13 +146,8 @@ target_sources(PhoneTesto
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
-        Source/HardwareStyle.cpp
-        Source/GearStyle.cpp
-        Source/LevelMeter.cpp
-        Source/DisplayWindow.cpp
         Source/LiveMonitorServer.cpp
         Source/LiveStreamEncoder.cpp
-        Source/QrCodeComponent.cpp
         ${qrcodegen_SOURCE_DIR}/cpp/qrcodegen.cpp
 )
 
@@ -140,7 +155,8 @@ target_include_directories(PhoneTesto PRIVATE ${qrcodegen_SOURCE_DIR}/cpp)
 
 target_compile_definitions(PhoneTesto
     PUBLIC
-        JUCE_WEB_BROWSER=0
+        JUCE_WEB_BROWSER=1
+        JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
         JUCE_USE_CURL=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
@@ -148,6 +164,7 @@ target_compile_definitions(PhoneTesto
 target_link_libraries(PhoneTesto
     PRIVATE
         juce::juce_audio_utils
+        juce::juce_gui_extra
         juce::juce_dsp
         PhoneTestoAssets
         opus
@@ -156,6 +173,17 @@ target_link_libraries(PhoneTesto
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+# The test programs build JUCE's modules too, so they need the web view's
+# headers and libraries like the plugin does.
+function(phonetesto_link_web_view target)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_libraries(${target} PRIVATE juce::pkgconfig_JUCE_BROWSER_LINUX_DEPS)
+        juce_link_with_embedded_linux_subprocess(${target})
+    elseif(WIN32)
+        target_link_libraries(${target} PRIVATE juce::juce_webview2)
+    endif()
+endfunction()
 
 # --- Offline DSP sanity test ---------------------------------------------
 # Headless check that every speaker profile produces finite, sane-level
@@ -167,6 +195,7 @@ target_link_libraries(PhoneTestoDspTest
         juce::juce_audio_processors
         juce::juce_dsp
 )
+phonetesto_link_web_view(PhoneTestoDspTest)
 
 # --- Offline Live Monitor sanity test ------------------------------------
 # Headless check that the embedded HTTP/WAV streaming server actually
@@ -180,6 +209,7 @@ target_link_libraries(PhoneTestoLiveServerTest
         juce::juce_core
         opus
 )
+phonetesto_link_web_view(PhoneTestoLiveServerTest)
 
 # --- Live Monitor demo server --------------------------------------------
 # Runs the streaming server on its own with a test tone, so the browser
@@ -191,25 +221,4 @@ target_link_libraries(PhoneTestoLiveDemo
         juce::juce_audio_basics
         juce::juce_core
 )
-
-# --- Editor snapshot ------------------------------------------------------
-# Renders the plugin editor (Emulate and Live states) to PNGs for layout
-# checks without a DAW. Needs a display (use xvfb-run on headless Linux).
-add_executable(PhoneTestoEditorSnapshot Tests/EditorSnapshot.cpp)
-target_link_libraries(PhoneTestoEditorSnapshot
-    PRIVATE
-        PhoneTesto
-        juce::juce_audio_processors
-        juce::juce_dsp
-)
-
-# Renders the editor's states into images for the touchable web copy of the
-# panel (Tools/web-panel). Needs a display, like the snapshot tool.
-add_executable(PhoneTestoUiSprites Tests/UiSprites.cpp)
-target_link_libraries(PhoneTestoUiSprites
-    PRIVATE
-        PhoneTesto
-        juce::juce_audio_processors
-        juce::juce_dsp
-)
-
+phonetesto_link_web_view(PhoneTestoLiveDemo)
