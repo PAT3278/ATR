@@ -157,7 +157,7 @@
           'float s=sin(vUv.x*420.+t*1.3+sin(vUv.y*40.+t)*2.)*sin(vUv.y*90.-t*2.);' +
           'float glint=smoothstep(.55,1.,s)*(.25+level*1.2);' +
           'float col=exp(-pow((vUv.x-.53)*28.,2.));c+=vec3(1.,.75,.45)*glint*(.35+col*1.6);' +
-          'c+=vec3(1.,.6,.35)*col*.25*(1.-y);' + E.WATER_GLSL + 'c*=.86+(wn1.z+wn2.z)*.07;c+=vec3(1.,.78,.5)*wSp*(.9+level*1.4)+a*wFr*.25;gl_FragColor=vec4(pow(c,vec3(2.2)),1.);}',
+          'c+=vec3(1.,.6,.35)*col*.25*(1.-y);' + E.WATER_GLSL + 'float wLt=clamp(.5+wN.x*1.6+wN.z*2.2,0.,1.);c*=.62+wLt*.62;c+=vec3(1.,.78,.5)*wSp*(1.6+level*1.6)+a*wFr*.35;gl_FragColor=vec4(pow(c,vec3(2.2)),1.);}'   // the same rippled water as the sea at OHH: light and shade on every little wave,
       }));
       water.rotation.x = -Math.PI / 2;
       water.position.set(0, 0.05, RZ);

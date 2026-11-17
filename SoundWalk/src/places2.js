@@ -720,7 +720,8 @@
      tall lamps and a few cars parked. In the place's frame; the road runs along x with its inner edge at z = zr.
        o: { y, zr, depth, half, taper, name, kiosk: [x0, x1], walkway: [x0, x1, z1] | null, ground(lx, lz), skip(lx, lz), slotX } */
   function parkingArea(p, E, g, o) {
-    const { y, zr, depth, half, taper } = o, zb = zr + depth, BB = E.batch(g), bx = BB.box, rr = E.rng(9191);
+    const { y, zr, depth, half, taper } = o, AB = (x, z, hx, hz) => p.addBox(x, z, hx, hz, y - 1.2, 1e9), AC = (x, z, r0) => p.addCircle(x, z, r0, y - 1.2, 1e9),   // up on the deck only: whatever runs underneath (a tunnel, a walk) is not blocked
+      zb = zr + depth, BB = E.batch(g), bx = BB.box, rr = E.rng(9191);
     const asph = E.mat('#3a3a3e', { map: E.tex('asphalt', 1, 1), rough: 0.85 }), conc = E.mat('#8a8680', { map: E.tex('concrete', 1, 1), rough: 0.9 }), concD = E.mat('#5a5754'), rail = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 }), paint = E.basic('#e9e4d6');
     // the deck: a trapezoid, wide at the road (the tapers) and the stalls' depth along the middle
     { const sh = new THREE.Shape(), T = 2.2; sh.moveTo(-half - taper, -zr); sh.lineTo(half + taper, -zr); sh.lineTo(half, -(zr + T)); sh.lineTo(half, -zb); sh.lineTo(-half, -zb); sh.lineTo(-half, -(zr + T)); sh.lineTo(-half - taper, -zr);
@@ -737,25 +738,25 @@
     // the back rail (open where you walk in), and a low barrier on the road side that only stops people on foot
     const openings = [o.walkway ? [o.walkway[0], o.walkway[1]] : null, o.kiosk ? [o.kiosk[0] - 0.5, o.kiosk[1] + 0.5] : null, ...(o.open || [])].filter(Boolean);
     let xs = -half; const cuts = openings.slice().sort((a, b) => a[0] - b[0]);
-    for (const [a, b] of cuts.concat([[half, half]])) { if (a > xs + 0.3) { bx(a - xs, 1.05, 0.12, (a + xs) / 2, y + 0.52, zb, rail); p.addBox((a + xs) / 2, zb, (a - xs) / 2, 0.2); } xs = Math.max(xs, b); }
+    for (const [a, b] of cuts.concat([[half, half]])) { if (a > xs + 0.3) { bx(a - xs, 1.05, 0.12, (a + xs) / 2, y + 0.52, zb, rail); AB((a + xs) / 2, zb, (a - xs) / 2, 0.2); } xs = Math.max(xs, b); }
     for (const sd of [-1, 1]) { const len = Math.hypot(taper, depth - 2.2), r2 = bx(len, 1.05, 0.12, sd * (half + taper / 2), y + 0.52, zr + 2.2 + (depth - 2.2) / 2, rail); r2.rotation.y = sd * Math.atan2(depth - 2.2, taper); }
-    p.addBox(0, zr + 0.45, half + taper, 0.2);
+    AB(0, zr + 0.45, half + taper, 0.2);
     // the building: toilets on one side, vending machines glowing under a deep roof, a bench
     if (o.kiosk) {
       const [k0, k1] = o.kiosk, kx = (k0 + k1) / 2, kz = zb + 2.4, W = k1 - k0 - 1;
       bx(W, 3.0, 3.2, kx, y + 1.5, kz + 0.4, E.mat('#d8d4cc', { rough: 0.8 })); bx(W + 2, 0.25, 4.6, kx, y + 3.15, kz - 0.1, E.mat('#3a3d42', { rough: 0.5 }));
-      p.addBox(kx, kz + 0.4, W / 2 + 0.1, 1.7);
+      AB(kx, kz + 0.4, W / 2 + 0.1, 1.7);
       const sign = (txt, w, x, yy, z, col, bg) => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, { w: 512, h: 96, color: col, bg, font: '700 62px "Hind","Noto Sans JP",sans-serif' }), transparent: true }); m.userData.lin = true; const s = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.19), m); s.position.set(x, yy, z); s.rotation.y = Math.PI; g.add(s); };
       sign(o.name, 4, kx, y + 3.55, kz - 2.42, '#f4f1e6', '#1f55b8');
       sign('トイレ  WC', 2.2, kx - W / 4, y + 2.6, kz - 1.22, '#1a1a1c', '#f4f1e6');
       bx(0.9, 2.2, 0.05, kx - W / 4, y + 1.1, kz - 1.21, E.mat('#5a6a7a', { rough: 0.6 }), false);
       const vend = ['#f4f1e6', '#d23a2a', '#2457c5'].map((c) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(c).convertSRGBToLinear().multiplyScalar(0.9) }); m.userData.lin = true; return m; });
       for (let k = 0; k < 3; k++) { const vx = kx + 0.4 + k * 1.05; bx(0.95, 1.85, 0.75, vx, y + 0.93, kz - 1.55, E.mat('#e4e2dc', { rough: 0.5 })); bx(0.75, 1.1, 0.02, vx, y + 1.15, kz - 1.93, vend[k], false); }
-      p.addBox(kx + 1.45, kz - 1.55, 1.6, 0.4);
+      AB(kx + 1.45, kz - 1.55, 1.6, 0.4);
       E.bench(g, kx - W / 2 + 0.8, kz - 1.8, Math.PI, y);
     }
     // lamps along the back, and pillars under the deck where it stands out over lower ground
-    for (let x = -half + 2; x <= half - 2; x += 14) { bx(0.16, 7.5, 0.16, x, y + 3.75, zb - 0.3, concD); bx(0.2, 0.1, 2.2, x, y + 7.45, zb - 1.3, concD); bx(0.6, 0.12, 0.35, x, y + 7.35, zb - 2.3, E.basic('#ffd9a0'), false); p.addCircle(x, zb - 0.3, 0.15); }
+    for (let x = -half + 2; x <= half - 2; x += 14) { bx(0.16, 7.5, 0.16, x, y + 3.75, zb - 0.3, concD); bx(0.2, 0.1, 2.2, x, y + 7.45, zb - 1.3, concD); bx(0.6, 0.12, 0.35, x, y + 7.35, zb - 2.3, E.basic('#ffd9a0'), false); AC(x, zb - 0.3, 0.15); }
     for (let x = -half - taper + 4; x <= half + taper - 4; x += 8) for (const z of [zr + 1.2, zb - 1.2]) {
       if (z > zr + 2.2 && Math.abs(x) > half - 0.5) continue;
       const g0 = o.ground ? o.ground(x, z) : 0; if (y - g0 < 1.6 || (o.skip && o.skip(x, z))) continue;
@@ -933,7 +934,7 @@
       const heightC = (lx, lz) => height(lx, lz) * carve(lx, lz);
       p.noPier = (lx, lz) => chanD(lx, lz) < 8;   // the ring road steps over the channel
       // Inside the tunnel (low down, within the channel) the ground is the water; anywhere else, the hill.
-      p.ground = (lx, lz, y) => (lz < -4.1 && lz > -10.7 && Math.abs(lx) < 18 + 10 * Math.max(0, Math.min(1, (-8.3 - lz) / 2.2)) ? RH + 0.03 : lx > 9 && lx < 17 && lz >= -4.1 && lz < 0.3 ? RH + 0.03 : y !== undefined && y < 4 && inChan(lx, lz) && height(lx, lz) > 0.2 ? 0 : heightC(lx, lz));
+      p.ground = (lx, lz, y) => (!(y !== undefined && y < 6 && inChan(lx, lz)) && lz < -4.1 && lz > -10.7 && Math.abs(lx) < 18 + 10 * Math.max(0, Math.min(1, (-8.3 - lz) / 2.2)) ? RH + 0.03 : lx > 9 && lx < 17 && lz >= -4.1 && lz < 0.3 ? RH + 0.03 : y !== undefined && y < 4 && inChan(lx, lz) && height(lx, lz) > 0.2 ? 0 : heightC(lx, lz));
       const hg = new THREE.RingGeometry(0.01, HR, 120, 48);
       const hp = hg.attributes.position;
       for (let i = 0; i < hp.count; i++) {
@@ -951,7 +952,7 @@
         hgeo = new THREE.BufferGeometry(); hgeo.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
       }
       hgeo.computeVertexNormals();
-      const hill = new THREE.Mesh(hgeo, E.mat('#728a4c', { flat: true }));
+      const hill = new THREE.Mesh(hgeo, E.mat('#b4c08e', { map: E.tex('grass', 16, 16), rough: 0.95 }));   // photographed grass (Poly Haven, CC0)
       hill.rotation.x = -Math.PI / 2; hill.receiveShadow = true;
       g.add(hill); p.pick(hill);
       const rockM = E.mat('#b0a696', { map: E.tex('rock', 1, 1), rough: 0.95 }), rockD = E.mat('#8a8070', { map: E.tex('rock', 1, 1), rough: 0.95 });   // photographed rock (Poly Haven, CC0)
@@ -1002,6 +1003,7 @@
           }
           // a headwall round each mouth: a stone face from the water to above the hill line, with the arch cut out of it,
           // so the slope over the bore never shows a gap
+          p.chanPts = P.map(([x, z]) => { const w = p.toWorld(x, z); return [w.x, w.z]; });   // for tests
           p.mouths = [[first, -1], [last, 1]].map(([i, out]) => { const [x, z] = P[i], [tx, tz] = tan(i), w = p.toWorld(x + tx * out * 12, z + tz * out * 12), m = p.toWorld(x, z); return { from: [w.x, w.z], at: [m.x, m.z] }; });   // for tests
           for (const [i, out] of [[first, -1], [last, 1]]) {
             const [x, z] = P[i], [tx, tz] = tan(i), WW = R + 8, HH = 9.5, sh = new THREE.Shape();
@@ -1010,6 +1012,10 @@
             const hw = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 1.6, bevelEnabled: false }), stone); hw.castShadow = hw.receiveShadow = true;
             const fr = new THREE.Group(); fr.position.set(x + tx * out * 0.4, 0, z + tz * out * 0.4); fr.rotation.y = Math.atan2(tx, tz) + (out > 0 ? 0 : Math.PI); hw.position.z = -0.8; fr.add(hw); g.add(fr);
           }
+          // up on the hill: a rail along the top of each headwall and along the rims of the open cutting, so you cannot walk
+          // off the edge onto the water; they only stop things up at hill level, never the craft in the channel
+          for (const i of [first, last]) { const [x, z] = P[i], [tx, tz] = tan(i); for (let s3 = -(R + 7); s3 <= R + 7; s3 += 1.2) p.addCircle(x - tz * s3, z + tx * s3, 0.7, 3.5, 1e9); }
+          for (let i = 0; i < n; i++) { if (i >= first && i <= last) continue; const [x, z] = P[i], [tx, tz] = tan(i); for (const sd of [-1, 1]) { const ox = x - tz * sd * (W + 3.2), oz = z + tx * sd * (W + 3.2); if (heightC(ox, oz) > 1.2) p.addCircle(ox, oz, 1.0, 1.0, 1e9); } }
           // keep walkers and craft inside the bore: its walls are solid below the hill
           for (let i = first; i <= last; i++) { const [x, z] = P[i], [tx, tz] = tan(i); for (const sd of [-1, 1]) p.addCircle(x - tz * sd * (R + 0.8), z + tx * sd * (R + 0.8), 1.1, -1e9, 4); }
           tunnelLamps = { lampM, lamps };
@@ -1117,7 +1123,7 @@
       // sea itself turns you into a boat), with people: under parasols on loungers, a game of beach volleyball, someone
       // doing pull-ups on a bar, a lifeguard tower.
       const BE = { x0: 13, x1: 128, z1: -64 }, BW = { x0: -132, x1: -55.5, z1: -64 };   // they meet the wharf's ends: no water you can step into by mistake
-      const onBeach = (lx, lz) => (lz <= -32 && lz >= -41.5 && !(lx > HB.x0 && lx < HB.x1 && lz < -40.3)) || (lz <= -32 && lz >= BE.z1 && lx >= BE.x0 && lx <= BE.x1) || (lz <= -32 && lz >= BW.z1 && lx >= BW.x0 && lx <= BW.x1);
+      const onBeach = (lx, lz) => chanD(lx, lz) > (chan ? chan.W + 0.4 : 0) && (lz <= -32 && lz >= -41.5 && !(lx > HB.x0 && lx < HB.x1 && lz < -40.3)) || (lz <= -32 && lz >= BE.z1 && lx >= BE.x0 && lx <= BE.x1) || (lz <= -32 && lz >= BW.z1 && lx >= BW.x0 && lx <= BW.x1);
       p.ground = ((g0) => (lx, lz, y) => Math.max(onBeach(lx, lz) ? 0.14 : 0, g0(lx, lz, y)))(p.ground);
       const beachLife = { players: [], ball: null, puller: null };
       {
