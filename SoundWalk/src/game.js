@@ -2012,6 +2012,9 @@
   });
 
   /* ================= audio + discovery ================= */
+  // How far the player is from a place for its light and its animation: from the viewpoint, or less where the place
+  // reaches out further (p.reach(lx, lz) -> a distance, e.g. FLIP's long avenue counts as being in the city).
+  const reachD = (p) => { const d = Math.hypot(P.x - p.vx, P.z - p.vz); if (!p.reach || d > 160) return d; const l = p.local(P.x, P.z), r = p.reach(l.x, l.z); return r == null ? d : Math.min(d, r); };
   const R_AUD = 34, R_VIEW = 3.2;
   const SILENT = { bass: 0, mid: 0, high: 0, level: 0, beat: false, pulse: 0, beats: 0, spectrum: null };
   let npT = 0, loudP = null;
@@ -2157,7 +2160,7 @@
     // Lighting: blend towards the closest place's grade.
     let bp = null, bw = 0, wsum = 0, wfar = 0;
     places.forEach((p) => {
-      const d = Math.hypot(P.x - p.vx, P.z - p.vz);
+      const d = reachD(p);
       const w = viewPlace === p ? 1 : smooth(48, 16, d - (drv ? 20 : 0));   // from the road the places are a little further off, so reach for them sooner
       if (w > bw) { bw = w; bp = p; }
       // the wider region: every place within ~115 m pulls the light a little its way, so day does not flip to night at a line
@@ -2173,7 +2176,7 @@
     ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;   // a view shows only its own place
 
     places.forEach((p) => {
-      const v = viewPlace === p ? 1 : smooth(60, 10, Math.hypot(P.x - p.vx, P.z - p.vz));
+      const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
       const f = p.f || SILENT;
       if (v > 0.001 || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
