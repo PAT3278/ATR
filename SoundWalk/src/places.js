@@ -782,20 +782,39 @@
       const allSlabs = slabs.slice();
 
       // The avenue's far stretch: past the crossing it carries straight on, under the elevated ring road, between
-      // narrower blocks, to a terminal building that closes the view (the edge of the world is just in front of it).
-      const AV0 = -33, AV1 = -96, ext = new THREE.Group(), extFeet = [], extSlabs = [], termClock = [];
+      // narrower blocks, and opens into a station forecourt: a roundabout the cabs drive round to head back up the
+      // avenue, a taxi rank, a bus stop and a canopy in front of the terminal that closes the view.
+      const AV0 = -33, AV2 = -70, RC = [0, -82], RI = 4.5, RO = 10.5, TF = -97, ext = new THREE.Group(), extFeet = [], extSlabs = [], termClock = [];
+      // the cabs' loop: down the southbound lane, round the roundabout (keeping the island on the left), back up
+      const cabLoop = (() => { const pts = [[2.2, 18], [2.2, -40], [2.2, -62], [2.8, -70.5]]; const R = (RI + RO) / 2;
+        for (let a = 0.55; a < Math.PI * 2 - 0.5; a += 0.25) pts.push([RC[0] + Math.sin(a) * R, RC[1] + Math.cos(a) * R]);
+        pts.push([-2.8, -70.5], [-2.2, -62], [-2.2, -40], [-2.2, 18]);
+        const c = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), L = c.getLength(), n = Math.round(L / 0.5), P = c.getSpacedPoints(n);
+        return { L, n, P }; })();
       {
         const xr = E.rng(5151), MB = E.batch(ext), mb = MB.box;
-        const road = E.plane(11, AV0 - AV1, E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 })); road.position.set(0, 0.03, (AV0 + AV1) / 2); ext.add(road); p.pick(road);
+        const asph = E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 }), asphR = E.mat('#27242e', { map: E.tex('asphalt', 3, 3), rough: 0.9 });
+        const road = E.plane(11, AV0 - AV2 + 1, asph); road.position.set(0, 0.03, (AV0 + AV2 - 1) / 2); ext.add(road); p.pick(road);
         const lineM = E.mat('#e8c43a', { rough: 0.6 }), whiteM = E.mat('#d9d4de');
-        for (const sd of [-0.12, 0.12]) { const l = E.plane(0.12, AV0 - AV1 - 1, lineM); l.position.set(sd, 0.045, (AV0 + AV1) / 2); ext.add(l); }   // the double yellow
-        for (let z = AV0 - 4; z > AV1 + 3; z -= 6) for (const x of [-2.75, 2.75]) { const l = E.plane(0.12, 2.6, whiteM); l.position.set(x, 0.045, z); ext.add(l); }
-        for (let k = -4; k <= 4; k++) { const st = E.plane(0.7, 3.2, whiteM); st.rotation.z = 0; st.position.set(k * 1.2, 0.046, AV1 + 6); ext.add(st); }   // a crossing in front of the terminal
-        // sidewalks either side, the full length
-        for (const sd of [-1, 1]) extSlabs.push({ cx: sd * 8.25, cz: (AV0 + AV1) / 2, hx: 2.75, hz: (AV0 - AV1) / 2, top: 0.15 });
-        // blocks either side; none under (or within a few metres of) the ring road and its ramps
+        for (const sd of [-0.12, 0.12]) { const l = E.plane(0.12, AV0 - AV2 - 6, lineM); l.position.set(sd, 0.045, (AV0 + AV2 + 6) / 2); ext.add(l); }   // the double yellow
+        for (let z = AV0 - 4; z > AV2 + 6; z -= 6) for (const x of [-2.75, 2.75]) { const l = E.plane(0.12, 2.6, whiteM); l.position.set(x, 0.045, z); ext.add(l); }
+        // the forecourt: paving wall to wall, the roundabout's carriageway, its island, a crossing on the avenue
+        const paveF = E.plane(54, TF - (AV2 + 2) < 0 ? (AV2 + 2) - TF + 4 : 30, E.mat('#8f8b83', { map: E.tex('paving', 14, 8), rough: 0.9 })); paveF.position.set(0, 0.035, (AV2 + 2 + TF - 4) / 2); ext.add(paveF); p.pick(paveF);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(RI, RO, 48, 1), asphR); ring.rotation.x = -Math.PI / 2; ring.position.set(RC[0], 0.045, RC[1]); ring.receiveShadow = true; ext.add(ring); p.pick(ring);
+        for (const r0 of [RI + 0.25, RO - 0.25]) { const e = new THREE.Mesh(new THREE.RingGeometry(r0 - 0.07, r0 + 0.07, 64, 1), whiteM); e.rotation.x = -Math.PI / 2; e.position.set(RC[0], 0.05, RC[1]); ext.add(e); }
+        const isl = new THREE.Mesh(new THREE.CylinderGeometry(RI, RI, 0.3, 40), E.mat('#9a948a', { rough: 0.9 })); isl.position.set(RC[0], 0.15, RC[1]); ext.add(isl);
+        const grass = new THREE.Mesh(new THREE.CircleGeometry(RI - 0.4, 40), E.mat('#5a7a44', { map: E.tex('grass', 2, 2), rough: 0.95 })); grass.rotation.x = -Math.PI / 2; grass.position.set(RC[0], 0.31, RC[1]); ext.add(grass);
+        p.addCircle(RC[0], RC[1], RI);
+        { const bed = E.mat('#3f6a34', { flat: true }); for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2, s = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), bed); s.position.set(RC[0] + Math.sin(a) * 2.6, 0.6, RC[1] + Math.cos(a) * 2.6); s.scale.y = 0.6; ext.add(s); } }
+        { const sm = new THREE.MeshBasicMaterial({ map: E.textTex('CENTRAL TERMINAL', { w: 512, h: 96, color: '#f4f1e6', font: '700 52px "Hind",sans-serif', bg: '#1f3a6a' }), side: THREE.DoubleSide }); sm.userData.lin = true;   // a sign on the island, low enough for the ramp overhead
+          mb(0.12, 2.2, 0.12, RC[0] - 1.2, 1.4, RC[1], E.mat('#2a2d32', { metal: 0.5 })); mb(0.12, 2.2, 0.12, RC[0] + 1.2, 1.4, RC[1], E.mat('#2a2d32', { metal: 0.5 }));
+          const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.55), sm); sg.position.set(RC[0], 2.2, RC[1]); ext.add(sg); }
+        for (let k = -4; k <= 4; k++) { const st = E.plane(0.7, 3.0, whiteM); st.position.set(k * 1.2, 0.05, AV2 + 3.5); ext.add(st); }   // a crossing where the avenue meets the forecourt
+        // sidewalks either side of the avenue, as far as the forecourt
+        for (const sd of [-1, 1]) extSlabs.push({ cx: sd * 8.25, cz: (AV0 + AV2 + 2) / 2, hx: 2.75, hz: (AV0 - AV2 - 2) / 2, top: 0.15 });
+        // blocks either side; none under (or within a few metres of) the ring road and its ramps, none on the forecourt
         const roadNear = (x, z, r) => E.ring && [[0, 0], [r, r], [-r, r], [r, -r], [-r, -r], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const w = p.toWorld(x + ox, z + oz); return E.ring.dist(w.x, w.z) < 10; });
-        for (const z of [-41, -50, -59, -68, -77, -86]) for (const x of [-15.5, 15.5, -27, 27]) {
+        for (const z of [-41, -50, -59]) for (const x of [-15.5, 15.5, -27, 27]) {
           const w = Math.abs(x) < 20 ? 6.6 + xr() * 0.8 : 8 + xr() * 2, d = 7.4 + xr() * 1.2;
           if (roadNear(x, z, Math.max(w, d) / 2 + 1)) continue;
           const h = (Math.abs(x) < 20 ? 20 : 14) + xr() * 22, style = xr() < 0.3 ? 2 : undefined;
@@ -808,30 +827,58 @@
             mb(1.4, 0.12, d - 1.4, fx + sd * 0.7, 3.0, z, E.mat(['#7a1f22', '#1f4a32', '#2457c5', '#2a2a2c'][Math.floor(xr() * 4)], { rough: 0.7 }));
           }
         }
+        // the forecourt's sides: low station wings (under the ramp's clearance) with shops along them
+        for (const sd of [-1, 1]) { const wx = sd * 30, wz = -86; mb(8, 5.6, 26, wx, 2.8, wz, E.mat('#8d877c', { map: E.tex('concrete', 2, 4), rough: 0.85 })); mb(0.1, 2.2, 22, wx - sd * 4.05, 1.4, wz, E.basic(sd < 0 ? '#ffe2b0' : '#d6ecff'), false); mb(2, 0.12, 24, wx - sd * 5, 3.0, wz, E.mat(sd < 0 ? '#1f4a32' : '#7a1f22', { rough: 0.7 })); p.addBox(wx, wz, 4.1, 13.1); }
         // street lamps down both kerbs, and sodium lights hung under the ring road's deck where the avenue passes below
         const poleM = E.mat('#2a2d32', { metal: 0.5, rough: 0.5 }), bulb = E.basic('#ffe2b0'), sodium = E.basic('#ffb04a');
-        for (let z = AV0 - 6; z > AV1 + 4; z -= 11) for (const sd of [-1, 1]) {
+        for (let z = AV0 - 6; z > AV2 + 2; z -= 11) for (const sd of [-1, 1]) {
           const x = sd * 6.1, w0 = p.toWorld(x, z);
           if (E.ring && E.ring.dist(w0.x, w0.z) < 9) continue;
           mb(0.14, 5.2, 0.14, x, 2.75, z, poleM); mb(1.4, 0.1, 0.1, x - sd * 0.7, 5.3, z, poleM); mb(0.5, 0.12, 0.3, x - sd * 1.35, 5.22, z, bulb, false); p.addCircle(x, z, 0.2);
         }
-        for (let z = AV0 - 3; z > AV1; z -= 3) { const w0 = p.toWorld(0, z); if (E.ring && E.ring.dist(w0.x, w0.z) < 6) for (const x of [-3, 3]) mb(0.9, 0.1, 0.3, x, 6.4, z, sodium, false); }
-        // the terminal: a granite hall with three tall arched windows, a clock and its name, across the end of the avenue
-        { const TZ = AV1 - 9, granite = E.mat('#8d877c', { map: E.tex('concrete', 4, 2), rough: 0.85 }), dark = E.mat('#3a3630', { rough: 0.8 });
+        for (let z = AV0 - 3; z > TF; z -= 3) { const w0 = p.toWorld(0, z); if (E.ring && E.ring.dist(w0.x, w0.z) < 6) for (const x of [-3, 3]) mb(0.9, 0.1, 0.3, x, 6.4, z, sodium, false); }
+        for (const [x, z] of [[-14, -74], [14, -74], [-14, -92], [14, -92], [-22, -82], [22, -82]]) { mb(0.14, 6, 0.14, x, 3, z, poleM); mb(0.6, 0.3, 0.6, x, 6.1, z, bulb, false); p.addCircle(x, z, 0.2); }   // lamps round the forecourt
+        // the taxi rank on the east side: cabs waiting in line, a sign, people queueing; the bus stop on the west
+        const cabP = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : new THREE.Group(); c.traverse((o) => { if (o.isMesh && o.name === 'paint') { o.material = o.material.clone(); o.material.color.set('#f2c21a').convertSRGBToLinear(); } }); const s = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 0.25), E.basic('#fff4d0')); s.position.set(0, (c.userData.hgt || 1.4) + 0.12, -0.1); c.add(s); return c; };
+        for (let k = 0; k < 4; k++) { const c = cabP(k + 1), z = -76 - k * 5.2; c.position.set(15.5, 0.04, z); c.rotation.y = Math.PI; ext.add(c); p.addBox(15.5, z, 1.0, 2.4); }
+        { const sm = new THREE.MeshBasicMaterial({ map: E.textTex('TAXI', { w: 256, h: 96, color: '#141210', font: '700 64px "Hind",sans-serif', bg: '#f2c21a' }), side: THREE.DoubleSide }); sm.userData.lin = true;
+          mb(0.12, 3, 0.12, 18.2, 1.5, -73.5, poleM); const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.45), sm); sg.position.set(18.2, 3.1, -73.5); ext.add(sg); p.addCircle(18.2, -73.5, 0.2); }
+        { const BXs = -15.5, BZs = -84, busM = E.mat('#e8e4da', { rough: 0.5, metal: 0.2 }), busS = E.mat('#2457c5', { rough: 0.5 }), winB = E.basic('#ffe9bd');   // a city bus at the stop, and the shelter
+          mb(2.5, 2.9, 11, BXs, 1.75, BZs, busM); mb(2.52, 0.35, 11.02, BXs, 0.75, BZs, busS); mb(2.54, 0.9, 9.6, BXs, 2.3, BZs - 0.3, winB, false); mb(2.3, 0.6, 0.06, BXs, 2.75, BZs - 5.52, winB, false);
+          for (const z of [BZs - 3.8, BZs + 3.4]) for (const sd of [-1, 1]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 14), E.mat('#141416', { rough: 0.8 })); wh.rotation.z = Math.PI / 2; wh.position.set(BXs + sd * 1.2, 0.5, z); ext.add(wh); }
+          p.addBox(BXs, BZs, 1.3, 5.6);
+          const sx = -19.2, sz = -85; mb(0.08, 2.5, 4, sx - 0.9, 1.3, sz, E.mat('#9aa6b0', { rough: 0.2, metal: 0.3 })); mb(1.9, 0.1, 4.4, sx, 2.6, sz, poleM); mb(0.6, 0.45, 3.4, sx - 0.5, 0.45, sz, E.mat('#6a5038', { rough: 0.8 }));
+          p.addBox(sx - 0.9, sz, 0.15, 2.0);
+          const sm = new THREE.MeshBasicMaterial({ map: E.textTex('BUS M42 · M50', { w: 512, h: 96, color: '#f4f1e6', font: '700 56px "Hind",sans-serif', bg: '#2457c5' }), side: THREE.DoubleSide }); sm.userData.lin = true; const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.42), sm); sg.position.set(sx, 2.95, sz); sg.rotation.y = Math.PI / 2; ext.add(sg); }
+        // people waiting: a taxi queue, people at the bus stop and under the canopy (they shift their weight now and then)
+        { const bodyM = E.mat('#ffffff', { rough: 0.7 }), coats = ['#1e2024', '#7a2f2a', '#c9ccd1', '#3a4038', '#d8d2c0', '#2457c5', '#8a6a3a'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8'];
+          const spots = []; for (let k = 0; k < 5; k++) spots.push([19.2, -76.5 - k * 1.1]); for (let k = 0; k < 4; k++) spots.push([-18.5 + (k % 2) * 0.6, -83.5 - k * 0.9]); for (let k = 0; k < 9; k++) spots.push([-10 + xr() * 20, -92.5 - xr() * 2.5]);
+          const NB = spots.length, bI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), bodyM, NB), hI = new THREE.InstancedMesh(new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0), E.mat('#ffffff', { rough: 0.6 }), NB);
+          const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+          spots.forEach(([x, z], i) => { m4.compose(new THREE.Vector3(x, 0.04, z), q.setFromAxisAngle(up, xr() * 6.28), new THREE.Vector3(1, 1, 1)); bI.setMatrixAt(i, m4); hI.setMatrixAt(i, m4); bI.setColorAt(i, E.lin(coats[Math.floor(xr() * coats.length)])); hI.setColorAt(i, E.lin(skins[Math.floor(xr() * skins.length)])); p.addCircle(x, z, 0.3); });
+          bI.castShadow = true; ext.add(bI, hI); }
+        // the terminal: a granite hall with three tall arched windows, a clock and its name, and a canopy over the doors
+        { const TZ = TF - 8, granite = E.mat('#8d877c', { map: E.tex('concrete', 4, 2), rough: 0.85 }), dark = E.mat('#3a3630', { rough: 0.8 });
           mb(46, 22, 16, 0, 11, TZ, granite); mb(48, 1.4, 17, 0, 22.5, TZ, dark); mb(20, 6, 12, 0, 26, TZ, granite);   // the hall, its cornice and the attic
           for (const x of [-22, 22]) mb(10, 34, 12, x, 17, TZ - 2, granite);   // two towers on the corners
           const glass = E.basic('#ffd08a');
           for (const x of [-8, 0, 8]) {
-            mb(5.6, 12, 0.3, x, 9.5, TZ + 8.05, glass, false);
-            const arch = new THREE.Mesh(new THREE.CircleGeometry(2.8, 20, 0, Math.PI), glass); arch.position.set(x, 15.5, TZ + 8.06); ext.add(arch);
-            for (let k = 1; k < 4; k++) mb(0.18, 14.6, 0.1, x - 2.8 + k * 1.4, 10.6, TZ + 8.2, dark, false);
+            mb(5.6, 12, 0.3, x, 10.5, TZ + 8.05, glass, false);
+            const arch = new THREE.Mesh(new THREE.CircleGeometry(2.8, 20, 0, Math.PI), glass); arch.position.set(x, 16.5, TZ + 8.06); ext.add(arch);
+            for (let k = 1; k < 4; k++) mb(0.18, 14.6, 0.1, x - 2.8 + k * 1.4, 11.6, TZ + 8.2, dark, false);
+            mb(3.2, 3.2, 0.2, x, 1.6, TZ + 8.1, E.basic('#fff0cc'), false);   // the doors, open and lit
           }
           for (const x of [-12.5, -4, 4, 12.5]) mb(1.6, 20, 1.2, x, 11, TZ + 8.3, granite);   // columns between the windows
           const clock = new THREE.Mesh(new THREE.CircleGeometry(2.2, 32), E.basic('#fff4d6')); clock.position.set(0, 26, TZ + 6.05); ext.add(clock);
           const hand = (len, a) => { const h = new THREE.Mesh(new THREE.PlaneGeometry(0.16, len), E.basic('#141210')); h.geometry.translate(0, len / 2, 0); h.position.set(0, 26, TZ + 6.07); h.rotation.z = a; ext.add(h); return h; };
           termClock.push(hand(1.3, 0), hand(1.9, 0));
           const nm = new THREE.MeshBasicMaterial({ map: E.textTex('CENTRAL TERMINAL', { w: 1024, h: 120, color: '#ffe9c4', glow: '#ffb03a', font: '700 74px "Hind",sans-serif' }), transparent: true, depthWrite: false }); nm.userData.lin = true;
-          const sg = new THREE.Mesh(new THREE.PlaneGeometry(20, 2.3), nm); sg.position.set(0, 19.6, TZ + 8.4); ext.add(sg);
+          const sg = new THREE.Mesh(new THREE.PlaneGeometry(20, 2.3), nm); sg.position.set(0, 20.6, TZ + 8.4); ext.add(sg);
+          // the canopy (glass on a steel frame) over the doors and the drop-off, and the departures board under it
+          mb(30, 0.35, 7, 0, 4.8, TF + 3.5, poleM); mb(29, 0.05, 6.4, 0, 4.6, TF + 3.5, E.basic('#fff2d8'), false);
+          for (const x of [-14, -7, 7, 14]) { mb(0.3, 4.8, 0.3, x, 2.4, TF + 6.6, poleM); p.addCircle(x, TF + 6.6, 0.25); }
+          const dep = E.textTex('DEPARTURES  21:04 HUDSON LINE  ·  21:12 HARLEM LINE  ·  21:20 NEW HAVEN', { w: 2048, h: 96, color: '#ffb02a', font: '700 52px "Hind",sans-serif', bg: '#050505' });
+          const dm = new THREE.MeshBasicMaterial({ map: dep }); dm.userData.lin = true; const db = new THREE.Mesh(new THREE.PlaneGeometry(14, 0.7), dm); db.position.set(0, 3.9, TF + 0.6); ext.add(db); mb(14.4, 0.9, 0.2, 0, 3.9, TF + 0.45, poleM);
           p.addBox(0, TZ, 24, 8.2); }
         MB.flush();
         allSlabs.push(...extSlabs); ext.add(slabMesh(extSlabs));
@@ -887,13 +934,13 @@
         // yellow cabs: parked along both kerbs, and two running up and down the avenue
         const cab = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : new THREE.Group(); c.traverse((o) => { if (o.isMesh && o.name === 'paint') { o.material = o.material.clone(); o.material.color.set('#f2c21a').convertSRGBToLinear(); } });
           const sign = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 0.25), E.basic('#fff4d0')); sign.position.set(0, (c.userData.hgt || 1.4) + 0.12, -0.1); c.add(sign); return c; };
-        for (const [x, z0, z1] of [[-5.1, -92, 14], [5.1, -92, 14]]) for (let z = z0 + 3; z < z1; z += 7 + mr() * 6) { if (Math.abs(z - CZ) < 8 || mr() < 0.35) continue; const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, z); c.rotation.y = x < 0 ? 0 : Math.PI; g.add(c); p.addBox(x, z, 1.0, 2.4); }
-        for (const [x, dir] of [[-2.2, 1], [2.2, -1]]) { const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, dir > 0 ? -30 : 10); c.rotation.y = dir > 0 ? 0 : Math.PI; g.add(c); mid.cabs.push({ c, dir, x, v: 8 }); }
+        for (const [x, z0, z1] of [[-5.1, -64, 14], [5.1, -64, 14]]) for (let z = z0 + 3; z < z1; z += 7 + mr() * 6) { if (Math.abs(z - CZ) < 8 || mr() < 0.35) continue; const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, z); c.rotation.y = x < 0 ? 0 : Math.PI; g.add(c); p.addBox(x, z, 1.0, 2.4); }
+        for (let k = 0; k < 4; k++) { const c = cab(Math.floor(mr() * 7)); g.add(c); mid.cabs.push({ c, s: (k / 4) * cabLoop.L, v: 8, yaw: 0 }); }   // running the avenue and round the station's roundabout
         // crowds on the sidewalks
         const NP = 110, bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), headG = new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0);
         const pb = new THREE.InstancedMesh(bodyG, E.mat('#ffffff', { rough: 0.7 }), NP), ph = new THREE.InstancedMesh(headG, E.mat('#ffffff', { rough: 0.6 }), NP);
         const coats = ['#1e2024', '#2c3036', '#7a2f2a', '#3a4038', '#c9ccd1', '#4a4f58', '#8a6a3a', '#2b2f3a', '#d8d2c0', '#2457c5'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
-        for (let i = 0; i < NP; i++) { const west = i % 2 === 0, x = (west ? -1 : 1) * (7.4 + mr() * 3.6); mid.ped.push({ x, z: -90 + mr() * 103, dir: mr() < 0.5 ? 1 : -1, v: 0.9 + mr() * 0.7, ph: mr() * 6 }); pb.setColorAt(i, E.lin(coats[Math.floor(mr() * coats.length)])); ph.setColorAt(i, E.lin(skins[Math.floor(mr() * skins.length)])); }
+        for (let i = 0; i < NP; i++) { const west = i % 2 === 0, x = (west ? -1 : 1) * (7.4 + mr() * 3.6); mid.ped.push({ x, z: -66 + mr() * 79, dir: mr() < 0.5 ? 1 : -1, v: 0.9 + mr() * 0.7, ph: mr() * 6 }); pb.setColorAt(i, E.lin(coats[Math.floor(mr() * coats.length)])); ph.setColorAt(i, E.lin(skins[Math.floor(mr() * skins.length)])); }
         pb.castShadow = true; pb.frustumCulled = ph.frustumCulled = false; g.add(pb, ph); mid.peds = [pb, ph];
         // the subway entrance: stairs going down behind railings, green globes, a sign
         { const SX = -8.6, SZ = CZ + 9; mb(1.8, 0.02, 4.2, SX, 0.17, SZ, E.mat('#050505', { rough: 1 }), false);
@@ -951,7 +998,7 @@
         sun: '#8a7cff', sunInt: 0.35, hemi: 0.22, sunDir: [-0.3, 0.8, 0.2],
         tint: [0.98, 0.92, 1.12], expo: 1.2, sat: 1.12, stars: 0.4,
       };
-      p.map = [{ t: 'rect', x: 0, z: -8, w: 60, h: 50, c: '#2b2831' }, { t: 'rect', x: 0, z: -64.5, w: 11, h: 63, c: '#2b2831' }];
+      p.map = [{ t: 'rect', x: 0, z: -8, w: 60, h: 50, c: '#2b2831' }, { t: 'rect', x: 0, z: -51.5, w: 11, h: 37, c: '#2b2831' }, { t: 'rect', x: 0, z: -84, w: 54, h: 28, c: '#55524c' }];
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
@@ -974,8 +1021,11 @@
         // Midtown: screens pulse with their bands, the ticker runs, cabs drive, people walk, the lights change, steam rises
         mid.screens.forEach((s2) => { const v = 0.55 + band(f, s2.k * 3 % 24, 24) * 0.8 + Math.sin(t * 1.3 + s2.seed) * 0.08; s2.m.color.setRGB(v, v, v); });
         if (mid.ticker) mid.ticker.offset.x = (t * 0.035) % 1;
-        mid.cabs.forEach((c) => { const z = c.c.position.z + c.dir * c.v * dt; c.c.position.z = c.dir > 0 ? (z > 18 ? -90 : z) : (z < -90 ? 18 : z); });
-        { const [pb, ph] = mid.peds; mid.ped.forEach((q, i) => { q.z += q.dir * q.v * dt; if (q.z > 14) q.z = -90; if (q.z < -90) q.z = 14; m4.compose(ps.set(q.x, 0.15 + Math.abs(Math.sin(t * 6 * q.v + q.ph)) * 0.04, q.z), qq.setFromAxisAngle(upV, q.dir > 0 ? 0 : Math.PI), sc.set(1, 1, 1)); pb.setMatrixAt(i, m4); ph.setMatrixAt(i, m4); }); pb.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true; }
+        mid.cabs.forEach((c) => { const nearRb = (() => { const f = c.s / cabLoop.L; return f > 0.35 && f < 0.65; })(); c.s = (c.s + c.v * (nearRb ? 0.6 : 1) * dt) % cabLoop.L;   // slower round the roundabout
+          const u = (c.s / cabLoop.L) * cabLoop.n, i = Math.min(cabLoop.n - 1, Math.floor(u)), a = cabLoop.P[i], b2 = cabLoop.P[i + 1], k = u - i;
+          c.c.position.set(a.x + (b2.x - a.x) * k, 0.03, a.z + (b2.z - a.z) * k);
+          const want = Math.atan2(b2.x - a.x, b2.z - a.z), d = Math.atan2(Math.sin(want - c.yaw), Math.cos(want - c.yaw)); c.yaw = Math.abs(d) > 2.5 ? want : c.yaw + d * Math.min(1, dt * 8); c.c.rotation.y = c.yaw; });
+        { const [pb, ph] = mid.peds; mid.ped.forEach((q, i) => { q.z += q.dir * q.v * dt; if (q.z > 14) q.z = -66; if (q.z < -66) q.z = 14; m4.compose(ps.set(q.x, 0.15 + Math.abs(Math.sin(t * 6 * q.v + q.ph)) * 0.04, q.z), qq.setFromAxisAngle(upV, q.dir > 0 ? 0 : Math.PI), sc.set(1, 1, 1)); pb.setMatrixAt(i, m4); ph.setMatrixAt(i, m4); }); pb.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true; }
         { const ph2 = (t % 15) / 15, avenue = ph2 < 0.4 ? 'g' : ph2 < 0.5 ? 'a' : 'r', cross = ph2 < 0.5 ? 'r' : ph2 < 0.9 ? 'g' : 'a', L = mid.lampM;
           mid.lights.forEach((lt) => { const st = lt.ax ? cross : avenue; lt.lamps[0].material = st === 'r' ? L.red : L.off; lt.lamps[1].material = st === 'a' ? L.amb : L.off; lt.lamps[2].material = st === 'g' ? L.grn : L.off; }); }
         { const a = mid.steam.geometry.attributes.position; mid.steamP.forEach((q, i) => { q.t += dt * (0.6 + (i % 5) * 0.1); if (q.t > 3) q.t = 0; a.setXYZ(i, q.h[0] + Math.sin(q.t * 2 + i) * 0.25 * q.t, 0.2 + q.t * 1.3, q.h[1] + Math.cos(q.t * 1.7 + i) * 0.2 * q.t); }); a.needsUpdate = true; }
