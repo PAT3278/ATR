@@ -13,6 +13,11 @@
  *   p.pathEnd    local z where the path from the plaza ends
  *   p.blocks     (lx, lz) -> true where random trees must not grow
  *   p.ground     optional (lx, lz) -> height
+ *   p.trail      optional [[lx, lz], ...]: the bends of a trail of its own from the plaza to the viewpoint
+ *   p.onHill     the hills are not flattened round it or its trail (KEYAKI's trail climbs over them)
+ *   p.afterHills optional ({ groundAt, layTrail, path }): build what has to stand on the hills, once they exist
+ *   p.rim        optional (lx, lz) -> metres outside its grounds: the hills rise right from that edge (the funfair)
+ *   p.lookout    its view looks out over the world: the other places are not hidden while it is viewed
  * and uses p.addCircle / p.addBox for collisions and p.pick for click-to-walk surfaces.
  */
 (function () {
@@ -33,94 +38,214 @@
   SW.band = band;
 
   /* ------------------------------------------------------------------ */
-  /* KEYAKI — zelkova avenue in golden afternoon light                   */
+  /* KEYAKI — a mountain trail up to a lookout under an old zelkova      */
   /* ------------------------------------------------------------------ */
   PLACES.keyaki = {
     build(p, E) {
+      // The hills cover what was the zelkova avenue. KEYAKI is a trail now: from the plaza up the spur of the mountain
+      // between OHH and the funfair (game.js PEAKS), in log steps where it is steep, past a log bench on the shoulder,
+      // across the flank with a rope railing over the drop, round a hairpin and up a last flight of steps to a timber
+      // lookout on the summit (the viewpoint: songs.js x/z), under an old zelkova, in the same golden afternoon with its
+      // leaves coming down. The trail's bends are world metres because the hills are; everything along it waits for the
+      // hills (p.afterHills) and stands on groundAt, so nothing floats or is buried.
       const g = p.group, r = E.rng(11);
-      const pave = E.plane(7.5, 66, E.mat('#d2c3a2', { map: E.tex('paving', 2, 17) }));
-      pave.position.set(0, 0.03, -27);
-      g.add(pave); p.pick(pave);
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(6, 32), E.mat('#d2c3a2', { map: E.tex('paving', 3, 3) }));
-      disc.rotation.x = -Math.PI / 2; disc.position.y = 0.035; disc.receiveShadow = true;
-      g.add(disc); p.pick(disc);
+      const TW = [[-26, -30], [-31, -38], [-37, -47], [-41, -53], [-36, -60], [-44, -64], [-40, -73]];   // past the loop, up the spur, the shoulder, across to the saddle, a hairpin, and up the summit's east side to the deck's steps
+      const VW = [-0.966, -0.259], cr = Math.cos(p.rot), sr = Math.sin(p.rot);   // the way the lookout faces (world): west by north, over the hills and OHH's beach to the sea (SHOT's towers stay off to the right)
+      const A = Math.atan2(-(VW[0] * cr - VW[1] * sr), -(VW[0] * sr + VW[1] * cr)), cA = Math.cos(A), sA = Math.sin(A);   // the deck's own frame: its -Z looks out
+      const toDeck = (lx, lz) => [lx * cA - lz * sA, lx * sA + lz * cA], fromDeck = (u, v) => [u * cA + v * sA, -u * sA + v * cA];
+      const DW = 3.4, DD = 2.3, RISE = 0.22, TREAD = 0.3;   // the deck's half-width along the rail and half-depth; the steps up onto it at the back
+      p.trail = TW.map(([x, z]) => { const l = p.local(x, z); return [l.x, l.z]; }).concat([fromDeck(0, DD + 2.8), [0, 0]]);   // the last few metres straight up the deck's steps
+      p.onHill = true; p.lookout = true;   // its view looks out over the other places, so they stay drawn
+      let deckY = 0, nStep = 0, gAt = () => 0;
+      p.ground = (lx, lz) => {
+        if (!deckY) return 0;
+        const [u, v] = toDeck(lx, lz);
+        if (Math.abs(u) < DW && Math.abs(v) < DD) return deckY;
+        const k = Math.ceil((v - DD) / TREAD); return Math.abs(u) < 1.1 && v > DD && k <= nStep ? deckY - k * RISE : 0;
+      };
+      p.face = Math.atan2(VW[0], VW[1]) - p.rot;
+      p.pathEnd = 7; p.clearR = 7;
+      p.blocks = (lx, lz) => { if (Math.hypot(lx, lz) < 8) return true; const [u, v] = toDeck(lx, lz); return v < 0 && v > -50 && Math.abs(u) < 7 - v * 0.95; };   // the deck's clearing, and no tall trees across the view (as wide as the view's drift)
+      p.map = [{ t: 'circle', x: 0, z: 0, r: 3.2, c: '#9a7a4a' }];
+      p.grade = {
+        top: '#86b4d9', bottom: '#ffe6ad', fog: '#efdcaa', near: 50, far: 320,   // from the summit the haze opens out
+        sun: '#ffd08a', sunInt: 2.5, hemi: 0.62, sunDir: [0.3, 0.42, -0.6],   // low in the north, ahead and to the right of the view: the old tree's leaves lit from behind, the sea still blue
+        tint: [1.05, 1.0, 0.88], expo: 0.98, sat: 1.0, stars: 0,
+      };
 
-      const trunkM = E.mat('#5b4230');
-      const leafMs = ['#4c8a3b', '#5a9a44', '#6ba94b', '#86b04a', '#b8c55c'].map((c) => E.mat(c, { flat: true }));
+      const trunkM = E.mat('#5b4230'), wood = E.mat('#7a5a3a', { rough: 0.9 }), rope = E.mat('#b9a27c', { rough: 1 }), logM = E.mat('#9a8670', { map: E.tex('bark', 1, 1), rough: 0.95 });
+      const rockM = E.mat('#a49a88', { map: E.tex('rock', 1, 1), rough: 0.95 });
+      const leafMs = ['#5a9a44', '#6ba94b', '#86b04a', '#b8c55c', '#d6b84a', '#c9963e'].map((c) => E.mat(c, { flat: true }));   // late summer going gold
+      const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+      const plank = canvasTex(64, 256, (x) => { for (let i = 0; i < 8; i++) { x.fillStyle = ['#8a6a48', '#7d5f40', '#93714c', '#84653f'][i % 4]; x.fillRect(0, i * 32, 64, 31); x.fillStyle = '#3e2c1c'; x.fillRect(0, i * 32 + 31, 64, 1); } });
+      plank.wrapS = plank.wrapT = THREE.RepeatWrapping; plank.repeat.set(3, 2.6);
+      const carved = (lines, w, h, px, left) => canvasTex(w, h, (x) => { x.fillStyle = '#6b4a2c'; x.fillRect(0, 0, w, h); x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(0, h - 6, w, 6); x.fillStyle = '#f1e6cc'; x.font = `700 ${px}px "Noto Sans JP","Hind",sans-serif`; x.textBaseline = 'middle'; x.textAlign = left === undefined ? 'center' : left ? 'left' : 'right'; lines.forEach((ln, i) => x.fillText(ln, left === undefined ? w / 2 : left ? 18 : w - 18, (h * (i + 0.5)) / lines.length + 2)); });   // white letters on brown, as on park signposts
+
+      // sticks: logs, posts, ropes and stakes, each kind one instanced draw; a stick runs from a to b ([x, y, z], local)
+      const sticks = new Map(), up = new THREE.Vector3(0, 1, 0);
+      const stick = (m, rad, a, b) => { if (!sticks.has(m)) sticks.set(m, []); sticks.get(m).push([rad, a, b]); };
+      const flushSticks = () => {
+        const geo = new THREE.CylinderGeometry(1, 1, 1, 7), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), d = new THREE.Vector3();
+        sticks.forEach((list, m) => {
+          const im = new THREE.InstancedMesh(geo, m, list.length);
+          list.forEach(([rad, a, b], i) => { d.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]); const L = d.length(); q.setFromUnitVectors(up, d.normalize()); ps.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); sc.set(rad, L, rad); im.setMatrixAt(i, m4.compose(ps, q, sc)); });
+          im.castShadow = im.receiveShadow = true; g.add(im);
+        });
+      };
+
+      // a zelkova: a short trunk that splits into limbs fanning up and out, under a wide round crown
       const trees = [];
-      const blobs = [[0, 2.4, 0, 2.1], [1.7, 1.7, 0.4, 1.6], [-1.7, 1.8, -0.3, 1.6], [0.3, 1.6, 1.6, 1.5], [-0.2, 1.5, -1.6, 1.5], [1.1, 3.2, -0.6, 1.4], [-1, 3.3, 0.7, 1.4], [0, 4, 0, 1.2]];
-      for (let i = 0; i < 11; i++) {
-        for (const side of [-1, 1]) {
-          const x = side * 5.2, z = 3 - i * 5.6;
-          const tree = new THREE.Group();
-          tree.position.set(x, 0, z);
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.45, 3.8, 7), trunkM);
-          trunk.position.y = 1.9; trunk.castShadow = true;
-          tree.add(trunk);
-          for (const s of [-1, 1]) {
-            const br = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 2.2, 5), trunkM);
-            br.position.set(s * 0.5, 3.8, 0); br.rotation.z = -s * 0.5;
-            tree.add(br);
-          }
-          const canopy = new THREE.Group();
-          canopy.position.y = 3.4;
-          for (const [bx, by, bz, br] of blobs) {
-            const m = new THREE.Mesh(new THREE.IcosahedronGeometry(br * (0.85 + r() * 0.3), 0), leafMs[Math.floor(r() * leafMs.length)]);
-            m.position.set(bx * 1.1, by, bz);
-            m.rotation.set(r() * 3, r() * 3, 0);
-            m.castShadow = true;
-            canopy.add(m);
-          }
-          tree.add(canopy);
-          g.add(tree);
-          trees.push({ canopy, seed: r() * 6 });
-          p.addCircle(x, z, 0.6);
+      const zelkova = (x, y, z, s) => {
+        const t = new THREE.Group(); t.position.set(x, y, z); t.rotation.y = r() * 6.28; t.scale.setScalar(s); g.add(t);
+        const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.6, 3.4, 8), trunkM); tr.position.y = 1.4; tr.castShadow = true; t.add(tr);   // its foot sunk into the slope
+        for (let k = 0; k < 5; k++) {
+          const a = (k / 5) * 6.28 + r() * 0.6, lean = 0.42 + r() * 0.25, L = 3 + r(), dir = new THREE.Vector3(Math.cos(a) * Math.sin(lean), Math.cos(lean), Math.sin(a) * Math.sin(lean));
+          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.25, L, 6), trunkM); b.quaternion.setFromUnitVectors(up, dir); b.position.set((dir.x * L) / 2, 2.9 + (dir.y * L) / 2, (dir.z * L) / 2); b.castShadow = true; t.add(b);
         }
-      }
-      E.bench(g, -2.6, 1.2, Math.PI);
-      p.addBox(-2.6, 1.2, 1.2, 0.4);
+        const canopy = new THREE.Group(); canopy.position.y = 5.2; t.add(canopy);
+        for (let k = 0; k < 13; k++) {
+          const a = r() * 6.28, d = k ? 1.3 + r() * 2.3 : 0, m = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2 + r() * 0.8, 0), leafMs[Math.floor(r() * leafMs.length)]);
+          m.position.set(Math.cos(a) * d, 0.5 + (3.4 - d) * 0.5 + r() * 0.6, Math.sin(a) * d); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true; canopy.add(m);
+        }
+        trees.push({ canopy, seed: r() * 6 });
+        p.addCircle(x, z, 0.55 * s);
+        return t;
+      };
+      const [KX, KZ] = fromDeck(-DW - 1.6, -DD + 0.4);   // the old zelkova, off the deck's left rail by the front; one long low limb reaches out over the rail into the view
 
-      // Falling leaves
-      const N = 460, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), seed = new Float32Array(N);
+      // falling leaves round the old tree and the deck (each lands where the slope is under it)
+      const N = 420, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), seed = new Float32Array(N), floor = new Float32Array(N);
       const lc = ['#9bc75a', '#7fb24a', '#e3c55a', '#c99a45', '#b6d36a'].map((c) => new THREE.Color(c).convertSRGBToLinear());
-      for (let i = 0; i < N; i++) {
-        pos[i * 3] = (r() - 0.5) * 16; pos[i * 3 + 1] = r() * 8; pos[i * 3 + 2] = 6 - r() * 62;
-        const c = lc[i % lc.length]; col.set([c.r, c.g, c.b], i * 3); seed[i] = r() * 10;
-      }
+      const drop = (i, high) => { const a = r() * 6.28, d = Math.sqrt(r()) * 12, x = KX * 0.4 + Math.cos(a) * d, z = KZ * 0.4 + Math.sin(a) * d, w = p.toWorld(x, z), f = gAt(w.x, w.z); floor[i] = f; pos[i * 3] = x; pos[i * 3 + 2] = z; pos[i * 3 + 1] = f + (high ? 7 + r() * 3 : r() * 10); };
+      for (let i = 0; i < N; i++) { const c = lc[i % lc.length]; col.set([c.r, c.g, c.b], i * 3); seed[i] = r() * 10; }
       const lg = new THREE.BufferGeometry();
       lg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       lg.setAttribute('color', new THREE.BufferAttribute(col, 3));
       const leaves = new THREE.Points(lg, new THREE.PointsMaterial({ size: 0.13, map: E.dot(), alphaTest: 0.3, vertexColors: true, transparent: true, depthWrite: false }));
-      g.add(leaves);
+      leaves.frustumCulled = false; g.add(leaves);
 
-      // Shafts of light through the canopy
+      // shafts of low sun through the old tree's crown
       const rays = [];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 6; i++) {
         const m = new THREE.MeshBasicMaterial({ color: '#fff0bf', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-        const ray = new THREE.Mesh(new THREE.PlaneGeometry(1.2 + r() * 1.4, 14), m);
-        ray.position.set((r() - 0.5) * 7, 5, -4 - i * 7);
-        ray.rotation.set(0, r() * Math.PI, 0.35);
-        g.add(ray);
-        rays.push({ m, seed: r() * 6 });
+        rays.push({ m, ray: new THREE.Mesh(new THREE.PlaneGeometry(1.2 + r() * 1.4, 14), m), seed: r() * 6, ox: (r() - 0.5) * 9, oz: (r() - 0.5) * 7, ry: r() * Math.PI });
       }
 
-      p.grade = {
-        top: '#86b4d9', bottom: '#ffe6ad', fog: '#efdcaa', near: 22, far: 120,
-        sun: '#ffd08a', sunInt: 2.5, hemi: 0.62, sunDir: [0.3, 0.42, -0.6],
-        tint: [1.05, 1.0, 0.88], expo: 0.98, sat: 1.0, stars: 0,
+      p.afterHills = (H) => {
+        gAt = H.groundAt;
+        const at = (lx, lz) => { const w = p.toWorld(lx, lz); return gAt(w.x, w.z); };
+        // the deck: level with the summit's highest point under it, on posts, with steps up at the back
+        let top = 0; for (const u of [-DW, 0, DW]) for (const v of [-DD, 0, DD]) { const [x, z] = fromDeck(u, v); top = Math.max(top, at(x, z)); }
+        deckY = top + 0.28;
+        while (nStep < 10) { const k = nStep + 1, [x, z] = fromDeck(0, DD + (k - 0.5) * TREAD); if (at(x, z) >= deckY - k * RISE - 0.04) break; nStep = k; }   // down until the ground meets a tread (the stair is steeper than the summit, so it does)
+        const D = new THREE.Group(); D.position.y = deckY; D.rotation.y = A; g.add(D);
+        const DB = E.batch(D), rot = (b) => { b.c = Math.cos(p.rot + A); b.s = Math.sin(p.rot + A); };   // colliders square to the deck
+        const boards = new THREE.Mesh(new THREE.BoxGeometry(DW * 2, 0.14, DD * 2), [wood, wood, E.mat('#ffffff', { map: plank, rough: 0.85 }), wood, wood, wood]); boards.position.y = -0.07; boards.receiveShadow = boards.castShadow = true; D.add(boards); p.pick(boards);
+        for (const u of [-DW + 0.2, 0, DW - 0.2]) for (const v of [-DD + 0.2, DD - 0.2]) { const [x, z] = fromDeck(u, v); stick(wood, 0.1, [x, at(x, z) - 0.3, z], [x, deckY - 0.1, z]); }
+        const rail = (u0, v0, u1, v1) => {   // posts, a hand rail and a mid rail, and a collider along them
+          const L = Math.hypot(u1 - u0, v1 - v0), n = Math.max(1, Math.round(L / 1.15));
+          for (let i = 0; i <= n; i++) DB.box(0.11, 1.05, 0.11, u0 + ((u1 - u0) * i) / n, 0.52, v0 + ((v1 - v0) * i) / n, wood);
+          for (const y of [1.02, 0.55]) { const o = DB.box(L, y > 1 ? 0.09 : 0.06, y > 1 ? 0.13 : 0.05, (u0 + u1) / 2, y, (v0 + v1) / 2, wood); o.rotation.y = Math.atan2(-(v1 - v0), u1 - u0); }
+          const [x, z] = fromDeck((u0 + u1) / 2, (v0 + v1) / 2); rot(p.addBox(x, z, Math.abs(u1 - u0) / 2 + 0.08, Math.abs(v1 - v0) / 2 + 0.08));
+        };
+        const e = 0.06; rail(-DW + e, -DD + e, DW - e, -DD + e); rail(-DW + e, -DD + e, -DW + e, DD - e); rail(DW - e, -DD + e, DW - e, DD - e);
+        rail(-DW + e, DD - e, -1.15, DD - e); rail(1.15, DD - e, DW - e, DD - e);   // the back, open in the middle for the steps
+        for (let k = 1; k <= nStep; k++) { const v = DD + (k - 0.5) * TREAD, [x, z] = fromDeck(0, v), y1 = -k * RISE, y0 = Math.min(at(x, z) - deckY, y1) - 0.4; DB.box(2.2, y1 - y0, TREAD + 0.02, 0, (y0 + y1) / 2, v, wood); }
+        for (const u of [-2, 2]) { E.bench(D, u, 1.3, Math.PI); const [x, z] = fromDeck(u, 1.3); rot(p.addBox(x, z, 1.05, 0.32)); }   // two benches looking out, a wide gap between them from the steps
+        { const [x, z] = fromDeck(DW + 1.1, -DD + 0.5), y = at(x, z); stick(wood, 0.1, [x, y - 0.3, z], [x, y + 1.75, z]); p.addCircle(x, z, 0.16);   // the summit post
+          const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.62), new THREE.MeshStandardMaterial({ map: carved(['けやき山', '展望台'], 256, 320, 64), roughness: 0.9 })); pl.position.set(x + Math.sin(A) * 0.11, y + 1.2, z + Math.cos(A) * 0.11); pl.rotation.y = A; g.add(pl); }
+        DB.flush();
+        zelkova(KX, at(KX, KZ) - 0.4, KZ, 1.45);
+        { const y0 = at(KX, KZ) + 2.6, [tx, tz] = fromDeck(-0.3, -DD - 3.2), d = new THREE.Vector3(tx - KX, deckY + 3.9 - y0, tz - KZ), L = d.length();   // the low limb, swaying from its root
+          const limb = new THREE.Group(); limb.position.set(KX, y0, KZ); g.add(limb); d.normalize();
+          const br = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.22, L, 6), trunkM); br.quaternion.setFromUnitVectors(up, d); br.position.copy(d).multiplyScalar(L / 2); br.castShadow = true; limb.add(br);
+          for (let k = 0; k < 7; k++) { const f = 0.45 + (k / 6) * 0.6, m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.75 + r() * 0.5, 0), leafMs[Math.floor(r() * leafMs.length)]); m.position.copy(d).multiplyScalar(L * Math.min(f, 1.02)).add(new THREE.Vector3((r() - 0.5) * 1.4, 0.2 + (r() - 0.6) * 0.9, (r() - 0.5) * 1.4)); m.rotation.set(r() * 3, r() * 3, 0); m.castShadow = true; limb.add(m); }
+          trees.push({ canopy: limb, seed: r() * 6 }); }
+        rays.forEach((q) => { q.ray.position.set(KX + q.ox, deckY + 6, KZ + q.oz); q.ray.rotation.set(0, q.ry, 0.35); g.add(q.ray); });
+
+        // the trail: resampled every 0.25 m with the ground under it, a tangent and its right-hand side
+        const P = H.path.map((q) => p.local(q.x, q.z)), S = [];
+        for (let i = 0; i < P.length - 1; i++) { const n = Math.max(1, Math.ceil(Math.hypot(P[i + 1].x - P[i].x, P[i + 1].z - P[i].z) / 0.25)); for (let k = 0; k < n; k++) S.push({ x: P[i].x + ((P[i + 1].x - P[i].x) * k) / n, z: P[i].z + ((P[i + 1].z - P[i].z) * k) / n }); }
+        S.push({ x: P[P.length - 1].x, z: P[P.length - 1].z });
+        S.forEach((q, i) => { q.s = i ? S[i - 1].s + Math.hypot(q.x - S[i - 1].x, q.z - S[i - 1].z) : 0; q.y = at(q.x, q.z); });
+        S.forEach((q, i) => { const a = S[Math.max(0, i - 4)], b = S[Math.min(S.length - 1, i + 4)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; q.tx = (b.x - a.x) / l; q.tz = (b.z - a.z) / l; q.nx = -q.tz; q.nz = q.tx; });
+        const atDeck = (q) => { const [u, v] = toDeck(q.x, q.z); return Math.abs(u) < DW + 0.4 && v > -DD - 0.4 && v < DD + nStep * TREAD + 0.25; };
+        const T = S.filter((q, i) => !atDeck(q) && (i % 5 === 0)).map((q) => p.toWorld(q.x, q.z));
+        H.layTrail(T, { w: 1.1 });   // worn earth, over the hill mesh
+        // log steps where it is steep: a log across the trail every 0.26 m of height, a stake at each end on the downhill side
+        let lastY = null;
+        S.forEach((q, i) => {
+          if (atDeck(q) || q.y < 0.3) { lastY = null; return; }
+          const a = S[Math.max(0, i - 3)], b = S[Math.min(S.length - 1, i + 3)], gr = (b.y - a.y) / Math.max(0.1, b.s - a.s);
+          if (Math.abs(gr) < 0.24) { lastY = null; return; }
+          if (lastY !== null && Math.abs(q.y - lastY) < 0.26) return;
+          lastY = q.y;
+          const sg = gr > 0 ? -0.14 : 0.14, ends = [1, -1].map((sd) => { const x = q.x + q.nx * sd * 0.95, z = q.z + q.nz * sd * 0.95; return [x, at(x, z), z]; });
+          stick(logM, 0.1, [ends[0][0], ends[0][1] + 0.01, ends[0][2]], [ends[1][0], ends[1][1] + 0.01, ends[1][2]]);
+          ends.forEach(([x, y, z]) => stick(wood, 0.035, [x + q.tx * sg, y - 0.25, z + q.tz * sg], [x + q.tx * sg, y + 0.14, z + q.tz * sg]));
+        });
+        // a rope railing on the side that drops away: posts every 2.2 m wherever the ground 2.6 m out is a metre down
+        const runs = { 1: [], '-1': [] }, fence = (run) => {
+          if (run.length > 1) run.forEach(([x, y, z], k) => {
+            stick(wood, 0.06, [x, y - 0.25, z], [x, y + 1.02, z]); p.addCircle(x, z, 0.1);
+            const nx = run[k + 1]; if (!nx) return;
+            for (const hh of [0.95, 0.55]) { const m = [(x + nx[0]) / 2, (y + nx[1]) / 2 + hh - 0.09, (z + nx[2]) / 2]; stick(rope, 0.018, [x, y + hh, z], m); stick(rope, 0.018, m, [nx[0], nx[1] + hh, nx[2]]); }
+          });
+          run.length = 0;
+        };
+        let lastS = -9;
+        S.forEach((q) => {
+          if (q.s - lastS < 2.2) return; lastS = q.s;
+          for (const sd of [1, -1]) {
+            const run = runs[sd];
+            if (atDeck(q) || q.y < 0.5) { fence(run); continue; }
+            const sx = q.x + q.nx * sd * 2.6, sz = q.z + q.nz * sd * 2.6;
+            if (q.y - at(sx, sz) > 1) { const x = q.x + q.nx * sd * 1.45, z = q.z + q.nz * sd * 1.45; run.push([x, at(x, z), z]); } else fence(run);
+          }
+        });
+        fence(runs[1]); fence(runs[-1]);
+        // signposts: where the climb starts, on the shoulder and at the hairpin
+        const near = (w) => { const l = p.local(w[0], w[1]); return S.reduce((b, q) => (Math.hypot(q.x - l.x, q.z - l.z) < Math.hypot(b.x - l.x, b.z - l.z) ? q : b), S[0]); };
+        const sign = (q, sd, list) => {
+          const x = q.x + q.nx * sd * 1.8, z = q.z + q.nz * sd * 1.8, y = at(x, z);
+          stick(wood, 0.07, [x, y - 0.3, z], [x, y + 2.15, z]); p.addCircle(x, z, 0.12);
+          list.forEach(([text, dir], k) => {
+            const bd = new THREE.Group(); bd.position.set(x, y + 1.9 - k * 0.34, z); bd.rotation.y = Math.atan2(-q.tz * dir, q.tx * dir); g.add(bd);   // its +X points the way
+            const bx = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.25, 0.05), wood); bx.position.x = 0.62; bx.castShadow = true; bd.add(bx);
+            for (const f of [1, -1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 0.23), new THREE.MeshStandardMaterial({ map: carved([f > 0 ? text + ' ▶' : '◀ ' + text], 512, 96, 46, f < 0), roughness: 0.9 })); m.position.set(0.62, 0, f * 0.027); if (f < 0) m.rotation.y = Math.PI; bd.add(m); }   // the arrow at the end it points to, read from either side
+          });
+        };
+        const climb = S.find((q) => q.y > 0.4) || S[0], head = S.reduce((b, q) => (Math.abs(q.s - (climb.s - 4)) < Math.abs(b.s - (climb.s - 4)) ? q : b), S[0]);
+        sign(head, 1, [['けやき展望台', 1], ['広場', -1]]);
+        const shoulder = near(TW[3]), hair = near(TW[5]);
+        sign(hair, -1, [['展望台', 1], ['広場', -1]]);
+        { // the rest on the shoulder: a log bench on two stumps on the open side, and a signpost across from it
+          const sd = at(shoulder.x + shoulder.nx * 2.6, shoulder.z + shoulder.nz * 2.6) < at(shoulder.x - shoulder.nx * 2.6, shoulder.z - shoulder.nz * 2.6) ? 1 : -1;
+          const cx = shoulder.x + shoulder.nx * sd * 2.4, cz = shoulder.z + shoulder.nz * sd * 2.4, ends = [1, -1].map((k) => { const x = cx + shoulder.tx * k * 0.85, z = cz + shoulder.tz * k * 0.85; return [x, at(x, z), z]; }), seat = Math.max(ends[0][1], ends[1][1]) + 0.34;
+          ends.forEach(([x, y, z]) => { stick(logM, 0.17, [x, y - 0.2, z], [x, seat - 0.05, z]); p.addCircle(x, z, 0.3); });
+          stick(logM, 0.16, [ends[0][0] + shoulder.tx * 0.25, seat, ends[0][2] + shoulder.tz * 0.25], [ends[1][0] - shoulder.tx * 0.25, seat, ends[1][2] - shoulder.tz * 0.25]);
+          sign(shoulder, -sd, [['展望台', 1], ['広場', -1]]);
+        }
+        // boulders by the way, and young zelkovas on the upper slopes among the woods
+        let nextRock = 6, nextTree = 30;
+        S.forEach((q, i) => {
+          if (atDeck(q) || q.y < 0.6) return;
+          if (q.s > nextRock) { nextRock = q.s + 9 + r() * 8; const sd = i % 2 ? 1 : -1, d = 2 + r() * 1.2, x = q.x + q.nx * sd * d, z = q.z + q.nz * sd * d, s = 0.35 + r() * 0.5; const m = new THREE.Mesh(E.rockGeo(i), rockM); m.scale.setScalar(s); m.rotation.y = r() * 6; m.position.set(x, at(x, z) - s * 0.25, z); m.castShadow = m.receiveShadow = true; g.add(m); p.addCircle(x, z, s * 0.8); }
+          if (q.y > 5 && q.s > nextTree) {
+            nextTree = q.s + 7 + r() * 6;
+            const sd = r() < 0.5 ? 1 : -1, d = 4.5 + r() * 2, x = q.x + q.nx * sd * d, z = q.z + q.nz * sd * d, s = 0.72 + r() * 0.3;
+            if (Math.hypot(x, z) < 9 || p.blocks(x, z) || S.some((o) => Math.hypot(o.x - x, o.z - z) < 3.6)) return;
+            zelkova(x, at(x, z) - 0.35 * s, z, s);
+          }
+        });
+        flushSticks();
+        for (let i = 0; i < N; i++) drop(i, false);
+        lg.attributes.position.needsUpdate = true;
       };
-      p.map = [{ t: 'rect', x: 0, z: -27, w: 16, h: 66, c: '#4f7a3a' }, { t: 'rect', x: 0, z: -27, w: 7.5, h: 66, c: '#cdbf9f' }];
-      p.face = Math.PI;
-      p.pathEnd = 7;
-      p.clearR = 10;
-      p.blocks = (lx, lz) => Math.abs(lx) < 9.5 && lz > -66 && lz < 9;
 
       p.update = (t, dt, f, v) => {
         const sway = 0.022 * (1 + f.bass * 3);
-        trees.forEach((tr) => {
-          tr.canopy.rotation.z = Math.sin(t * 1.2 + tr.seed) * sway;
-          tr.canopy.rotation.x = Math.cos(t * 0.9 + tr.seed) * sway * 0.7;
-        });
+        trees.forEach((tr) => { tr.canopy.rotation.z = Math.sin(t * 1.2 + tr.seed) * sway; tr.canopy.rotation.x = Math.cos(t * 0.9 + tr.seed) * sway * 0.7; });
         if (v > 0.01) {
           const fall = 0.45 + f.high * 1.8 + f.pulse * 0.5;
           for (let i = 0; i < N; i++) {
@@ -128,15 +253,16 @@
             pos[k + 1] -= dt * fall * (0.6 + (seed[i] % 1) * 0.8);
             pos[k] += Math.sin(t * 1.7 + seed[i]) * dt * 0.5;
             pos[k + 2] += Math.cos(t * 1.3 + seed[i]) * dt * 0.25;
-            if (pos[k + 1] < 0.02) { pos[k + 1] = 6 + r() * 2.5; pos[k] = (r() - 0.5) * 16; pos[k + 2] = 6 - r() * 62; }
+            if (pos[k + 1] < floor[i] + 0.02) drop(i, true);
           }
           lg.attributes.position.needsUpdate = true;
         }
         rays.forEach((ry) => { ry.m.opacity = v * (0.025 + f.mid * 0.11) * (0.6 + 0.4 * Math.sin(t * 0.7 + ry.seed)); });
       };
-      p.shot = (t, f) => {
-        const k = Math.sin(t * 0.11) * 0.5 + 0.5;
-        return { pos: [Math.sin(t * 0.21) * 0.5, 1.7, 2 - k * 18], look: [0, 3.4, -70], roll: Math.sin(t * 0.3) * 0.01 };
+      // the view: at the front rail of the deck, drifting along it, looking out over the hills under the old tree's branches
+      p.shot = (t) => {
+        const k = Math.sin(t * 0.07) * 1.5, ph = Math.sin(t * 0.045) * 0.3, [x, z] = fromDeck(k, -1.2), [lx, lz] = fromDeck(k + Math.sin(ph) * 60, -1.2 - Math.cos(ph) * 60);
+        return { pos: [x, deckY + 1.62 + Math.sin(t * 0.3) * 0.03, z], look: [lx, deckY - 1.5, lz], roll: Math.sin(t * 0.3) * 0.01 };   // just under the horizon: the beach and the sea, the limb's leaves along the top
       };
     },
   };
@@ -1280,6 +1406,7 @@
       p.pathEnd = 12;
       p.clearR = 12;
       p.blocks = (lx, lz) => lx > -47 && lx < 29 && lz > -53 && lz < 15;
+      p.rim = (lx, lz) => { const ox = Math.max(-47 - lx, lx - 29), oz = Math.max(-53 - lz, lz - 15); return ox > 0 || oz > 0 ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) : Math.max(ox, oz); };   // metres outside the grounds (negative inside): the hills come right up to their edge (game.js)
       SW.parkRide = { wheel, gond, grade: p.grade, board: () => p.toWorld(gateAt.inwheel[0], gateAt.inwheel[1]), exit: () => p.toWorld(gateAt.outwheel[0], gateAt.outwheel[1]), wheelHold: { on: false, i: 0, stopped: false } };
       // ride the carousel: walk up to the platform, climb onto an outside horse
       const hv = new THREE.Vector3(), hq = new THREE.Quaternion(), hf = new THREE.Vector3();

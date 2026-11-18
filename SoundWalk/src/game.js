@@ -440,11 +440,12 @@
   });
 
   var hillField = null;   // the rolling hills north of OHH (built once the places and paths exist, below)
-  function hillAt(x, z) {
+  function hillAt(x, z) {   // the height of the drawn hill mesh: each grid cell is the same two triangles PlaneGeometry makes, so feet, trails and signposts sit on the facets
     const F = hillField; if (!F) return 0;
     const fx = (x - F.x0) / F.d, fz = (z - F.z0) / F.d; if (fx < 0 || fz < 0 || fx >= F.nx - 1 || fz >= F.nz - 1) return 0;
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = F.h, n = F.nx;
-    return (H[j * n + i] * (1 - u) + H[j * n + i + 1] * u) * (1 - v) + (H[(j + 1) * n + i] * (1 - u) + H[(j + 1) * n + i + 1] * u) * v;
+    const a = H[j * n + i], b = H[(j + 1) * n + i], c = H[(j + 1) * n + i + 1], d = H[j * n + i + 1];
+    return u + v <= 1 ? a + (d - a) * u + (b - a) * v : c + (b - c) * (1 - u) + (d - c) * (1 - v);
   }
   function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
     let h = hillAt(x, z);
@@ -710,17 +711,24 @@
     const len = Math.hypot(p.x, p.z), ux = p.x / len, uz = p.z / len;
     const a = { x: ux * (PLAZA_R - 0.5), z: uz * (PLAZA_R - 0.5) };
     const [vlx, vlz] = p.vp || [0, 0];   // a place may put its viewpoint (and so its sound) somewhere other than its own origin
-    const e = p.toWorld(vlx, p.pathEnd), eIn = p.toWorld(vlx, p.pathEnd + 14);
+    const T = p.trail && p.trail.map(([lx, lz]) => p.toWorld(lx, lz));   // a trail of its own (KEYAKI's, over the hills): to its first bend, then through its bends to the viewpoint
+    const e = T ? T[0] : p.toWorld(vlx, p.pathEnd), eIn = T ? { x: e.x - ((T[1].x - e.x) / Math.hypot(T[1].x - e.x, T[1].z - e.z)) * 10, z: e.z - ((T[1].z - e.z) / Math.hypot(T[1].x - e.x, T[1].z - e.z)) * 10 } : p.toWorld(vlx, p.pathEnd + 14);
     const b = { x: a.x + ux * 12, z: a.z + uz * 12 };
     const pts = [];
     const N = 70;
     for (let i = 0; i <= N; i++) { const t = i / N; pts.push({ x: cubic(a.x, b.x, eIn.x, e.x, t), z: cubic(a.z, b.z, eIn.z, e.z, t) }); }
-    // continue straight to the viewpoint
-    const vp = p.toWorld(vlx, vlz), last = pts[pts.length - 1];
-    const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
-    for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
+    if (T) for (let k = 0; k < T.length - 1; k++) {   // Catmull-Rom through the bends, a point every 1.2 m or so
+      const p0 = T[Math.max(0, k - 1)], p1 = T[k], p2 = T[k + 1], p3 = T[Math.min(T.length - 1, k + 2)], n = Math.ceil(Math.hypot(p2.x - p1.x, p2.z - p1.z) / 1.2);
+      const cr = (a0, a1, a2, a3, t) => 0.5 * (2 * a1 + (a2 - a0) * t + (2 * a0 - 5 * a1 + 4 * a2 - a3) * t * t + (3 * a1 - a0 - 3 * a2 + a3) * t * t * t);
+      for (let i = 1; i <= n; i++) pts.push({ x: cr(p0.x, p1.x, p2.x, p3.x, i / n), z: cr(p0.z, p1.z, p2.z, p3.z, i / n) });
+    } else {   // continue straight to the viewpoint
+      const vp = p.toWorld(vlx, vlz), last = pts[pts.length - 1];
+      const extra = Math.ceil(Math.hypot(vp.x - last.x, vp.z - last.z) / 1.5);
+      for (let i = 1; i <= extra; i++) pts.push({ x: last.x + ((vp.x - last.x) * i) / extra, z: last.z + ((vp.z - last.z) * i) / extra });
+    }
     p.path = pts;
-    if (p.road) {   // a paved road instead of a trail: asphalt, a dashed centre line, and the trees kept further back
+    if (p.onHill) { /* laid over the hills once they exist (p.afterHills, below) */ }
+    else if (p.road) {   // a paved road instead of a trail: asphalt, a dashed centre line, and the trees kept further back
       const tr = [{ x: ux * 4.6, z: uz * 4.6 }, { x: ux * 7.5, z: uz * 7.5 }, ...pts.slice(0, N + 1)];   // right up to the fountain's rim
       layTrail(tr, { w: p.road.hw, mat: mat('#2a2830', { map: tex('asphalt', 1, 1), rough: 0.88 }), us: 8, vs: 8, y: 0.065 });
       const dash = (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 64; const g2 = c.getContext('2d'); g2.clearRect(0, 0, 8, 64); g2.fillStyle = '#e8e2d4'; g2.fillRect(0, 0, 8, 34); const tt = new THREE.CanvasTexture(c); tt.wrapS = tt.wrapT = THREE.RepeatWrapping; return tt; })();
@@ -753,26 +761,31 @@
   scene.add(ringView.group);
   ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
 
-  // Hills: OHH's hill runs on north, then north-east towards the funfair, as a chain of grassy rolling hills. They
-  // sink to nothing at every path (the paths pass through in cuttings), at the ring road and its ramps, at the plaza
-  // and the loop, and round every other place, so nothing that stands on flat ground ends up buried.
+  // Hills: OHH's hill runs on north, then north-east towards the funfair, as a chain of grassy rolling hills, and
+  // between them KEYAKI's mountain rises higher and runs on east to the funfair's edge. They sink to nothing at every
+  // path (the paths pass through in cuttings), at the ring road and its ramps, at the plaza and the loop, and round
+  // every other place, so nothing that stands on flat ground ends up buried. A place that lives on the hills (p.onHill:
+  // KEYAKI's trail climbs over them) keeps them; one with an edge (p.rim, the funfair) has them come right up to it.
   {
-    const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair (either side of KEYAKI's avenue)
+    const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair
+    const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top
     const X0 = -164, X1 = 40, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
     others.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
     const dirs = [[0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dirs.push([Math.cos(a) * 7, Math.sin(a) * 7], [Math.cos(a) * 14, Math.sin(a) * 14]); }
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const x = X0 + i * D, z = Z0 + j * D;
-      let H = 0; for (const [bx, bz, bh, br] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) H += bh * Math.exp(-q * 1.6); }
-      if (H < 0.05) continue;
-      H = 16 * (1 - Math.exp(-H / 16)) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
+      let H = 0, M = 0; for (const [bx, bz, bh, br] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) H += bh * Math.exp(-q * 1.6); }
+      for (const [bx, bz, bh, br] of PEAKS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) M += bh * Math.exp(-q * 1.6); }
+      if (H + M < 0.05) continue;
+      H = (16 * (1 - Math.exp(-H / 16)) + 24 * (1 - Math.exp(-M / 24))) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
       let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d) * smooth(9, 21, ring.dist(x, z));
       m *= smooth(8, 18, Math.hypot(x - shopAt.x, z - shopAt.z)) * smooth(8, 18, Math.hypot(x - hallAt.x, z - hallAt.z));
-      for (const p of places) { if (m <= 0) break; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
+      for (const p of places) { if (m <= 0) break; if (p.onHill) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
       for (const p of others) {
         if (m <= 0) break;
-        if (Math.hypot(x - p.x, z - p.z) > 140) continue;
+        if (p.onHill || Math.hypot(x - p.x, z - p.z) > 140) continue;
+        if (p.rim) { const l = p.local(x, z); m *= smooth(1.5, 7, p.rim(l.x, l.z)); continue; }   // the hills rise from its edge (from 1.5 m out, so no slope reaches in over it): its own ground stays flat
         m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z));
         const core = coreOf(p); let hit = 1;
         for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
@@ -788,11 +801,14 @@
     geo.computeVertexNormals();
     const hm = new THREE.Mesh(geo, mat('#b4c08e', { map: tex('grass', 44, 27), rough: 0.95 }));
     hm.receiveShadow = true; hm.castShadow = false; scene.add(hm);
+    hm.userData.ground = true; pick.push(hm); hm.updateMatrixWorld(true);   // click to walk up a slope; trails laid from here on drape over it
     // the map: the hills drawn once, in shades of green, under everything else
     const hc = document.createElement('canvas'); hc.width = hc.height = 300; const hg = hc.getContext('2d');
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const v = h[j * nx + i]; if (v < 0.6) continue; hg.fillStyle = `rgba(${70 + v * 3},${92 + v * 4},${58 + v * 2},${Math.min(0.85, 0.25 + v / 14)})`; hg.fillRect(X0 + i * D + 150 - D / 2, Z0 + j * D + 150 - D / 2, D + 0.4, D + 0.4); }
     hillField.mapCanvas = hc;
   }
+  // A place that lives on the hills (KEYAKI) lays its trail over them now they exist, and dresses it on groundAt.
+  places.forEach((p) => p.afterHills && p.afterHills({ groundAt, layTrail, path: p.path }));
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
@@ -806,7 +822,8 @@
       }
       return true;
     };
-    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z) && !(hillAt(x, z) > 1.5 && r() < 0.85)) spots.push([x, z, 0.8 + r() * 0.7]); }   // the hills keep only copses: open grass between
+    const woods = (x, z) => places.some((p) => p.onHill && distToPath(x, z, p.path).d < 26);   // ...but a trail over them climbs through woods
+    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z) && !(hillAt(x, z) > 1.5 && r() < (woods(x, z) ? 0.3 : 0.85))) spots.push([x, z, 0.8 + r() * 0.7]); }   // the hills keep only copses: open grass between
     for (let i = 0; i < 240; i++) { const t = (i / 240) * 4, sd = Math.floor(t), f = (t % 1) * 304 - 152; const x = sd === 0 ? f : sd === 1 ? 152 : sd === 2 ? -f : -152, z = sd === 0 ? -152 : sd === 1 ? f : sd === 2 ? 152 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
     // Each tree is two crossed cards cut from photographed young firs and pines (Poly Haven, CC0), baked into one
     // atlas (tex/trees.png): 6 trees across, a front view on the top row and a side view below. One draw per tree.
@@ -2180,7 +2197,7 @@
     if (drv) { /* the car sets the height */ }
     else if (ride) rideTick(dt);   // the ride sets it
     else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
-    else P.y += (gh - P.y) * Math.min(1, dt * 14);
+    else { P.y += (gh - P.y) * Math.min(1, dt * 14); if (hillAt(P.x, P.z) > 0.05) P.y = clamp(P.y, gh - 0.06, gh + 0.12); }   // the easing that softens a kerb would lag a long slope, sinking the feet into it going up
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
     avatar.G.visible = !drv && !pool && !(ride && (ride.st === 'on' || ride.st === 'stopping')) && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
@@ -2229,7 +2246,7 @@
       const f = p.f || SILENT;
       if (v > 0.001 || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
-      p.group.visible = !viewPlace || viewPlace === p || camBlend < 1;
+      p.group.visible = !viewPlace || viewPlace === p || viewPlace.lookout || camBlend < 1;   // a view keeps to its own place, unless it is a lookout over the rest
       const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
       p.beam.visible = !hide;
       p.beam.material.opacity = (p.found ? 0.07 : 0.12) + f.pulse * 0.16;
@@ -2453,7 +2470,7 @@
   }
   let last = performance.now(), camHold = null;
   function loop(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = clamp((now - last) / 1000, 0, 0.05);   // the first frame's stamp can predate the clock read after a long build: never run time backwards (FLIP's cabs index off their loop)
     last = now; t += dt;
     if (mode === 'dialog') tickDlg(dt);
     update(dt);
