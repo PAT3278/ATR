@@ -12,6 +12,8 @@ namespace
     constexpr float maxDriveDb = 18.0f;
     constexpr double modelWarmupSeconds = 0.03;    // new chain runs unheard first, so its filters' start-up transient has died away
     constexpr double modelCrossfadeSeconds = 0.04;
+    constexpr double morphSmoothingSeconds = 0.025; // the blend follows the user's position this smoothly
+    constexpr double morphMaxModelsPerSecond = 14.0; // and never faster, so a block crosses at most one speaker
     constexpr double switchRampSeconds = 0.03;  // bypass, mono, Live
     constexpr double knobRampSeconds = 0.05;    // mix, output
 
@@ -185,6 +187,8 @@ void PhoneTestoAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
 
     activeChain = 0;
     crossfading = false;
+    morphing = false;
+    morphActive = false;
 
     const int latency = juce::roundToInt (chains[0].oversampling->getLatencyInSamples());
     setLatencySamples (latency);
@@ -312,7 +316,12 @@ void PhoneTestoAudioProcessor::processSubBlock (juce::AudioBuffer<float>& buffer
 
     const int wanted = juce::jlimit (0, (int) profileSettings.size() - 1,
                                      juce::roundToInt (apvts.getRawParameterValue (deviceParamId)->load()));
-    if (! crossfading && wanted != chains[activeChain].profile)
+    const float morphTo = morphRequest.load (std::memory_order_relaxed);
+
+    if (! crossfading && ! morphing && morphTo >= 0.0f && profileSettings.size() > 1)
+        beginMorph();
+
+    if (! crossfading && ! morphing && wanted != chains[activeChain].profile)
         startModelCrossfade (wanted);
 
     // Latency-aligned dry signal, and the (optionally mono-summed) feed for
@@ -337,6 +346,39 @@ void PhoneTestoAudioProcessor::processSubBlock (juce::AudioBuffer<float>& buffer
         wetL[i] = l + mono * (mid - l);
         wetR[i] = r + mono * (mid - r);
     }
+
+    if (morphing)
+        processMorph (n, morphTo, wanted);
+    else
+        processModel (n);
+
+    // emulation -> mix with dry -> (Live: dry) -> output level -> bypass
+    for (int i = 0; i < n; ++i)
+    {
+        const float mix = mixAmount.getNextValue();
+        const float live = liveAmount.getNextValue();
+        const float gain = outputGain.getNextValue();
+        const float engage = engageAmount.getNextValue();
+
+        auto stage = [&] (float dry, float wet)
+        {
+            const float emulated = dry + mix * (wet - dry);
+            const float active = (emulated + live * (dry - emulated)) * gain;
+            return dry + engage * (active - dry);
+        };
+
+        outL[i] = stage (dryL[i], wetL[i]);
+        if (outR != nullptr)
+            outR[i] = stage (dryR[i], wetR[i]);
+    }
+}
+
+//==============================================================================
+void PhoneTestoAudioProcessor::processModel (int n)
+{
+    // One model, or a short crossfade to a newly chosen one.
+    auto* wetL = wetScratch.getWritePointer (0);
+    auto* wetR = wetScratch.getWritePointer (1);
 
     if (crossfading)
         for (int ch = 0; ch < 2; ++ch)
@@ -372,25 +414,128 @@ void PhoneTestoAudioProcessor::processSubBlock (juce::AudioBuffer<float>& buffer
             crossfading = false;
         }
     }
+}
 
-    // emulation -> mix with dry -> (Live: dry) -> output level -> bypass
-    for (int i = 0; i < n; ++i)
+// Morph: two chains hold the speakers either side of the position and the
+// output blends them linearly (their outputs are strongly correlated, so a
+// linear blend keeps the level). Model m always sits next to m - 1 and m + 1;
+// passing a speaker re-tunes the chain whose weight is exactly zero there.
+
+void PhoneTestoAudioProcessor::beginMorph()
+{
+    const int numModels = (int) profileSettings.size();
+    const int current = chains[activeChain].profile;
+    const int neighbour = current + 1 < numModels ? current + 1 : current - 1;
+    const int other = 1 - activeChain;
+
+    chains[other].load (profileSettings[(size_t) neighbour], neighbour);
+    chains[other].reset();
+
+    morphing = true;
+    morphActive = true;
+    morphPosition = (float) current;
+    // the neighbour runs unheard first, so its filters' start-up has died away before it's blended in
+    morphWarmupRemaining = juce::roundToInt (modelWarmupSeconds * currentSampleRate);
+}
+
+void PhoneTestoAudioProcessor::holdModels (int lo, int hi)
+{
+    int loChain = chains[0].profile == lo ? 0 : chains[1].profile == lo ? 1 : -1;
+    int hiChain = chains[0].profile == hi ? 0 : chains[1].profile == hi ? 1 : -1;
+
+    // Coefficients only, no reset: the chain re-tuned here is silent at this
+    // point, and keeping its running state avoids a start-up transient.
+    if (loChain < 0 && hiChain < 0)
     {
-        const float mix = mixAmount.getNextValue();
-        const float live = liveAmount.getNextValue();
-        const float gain = outputGain.getNextValue();
-        const float engage = engageAmount.getNextValue();
+        chains[0].load (profileSettings[(size_t) lo], lo);
+        chains[1].load (profileSettings[(size_t) hi], hi);
+    }
+    else if (loChain < 0)
+    {
+        loChain = 1 - hiChain;
+        chains[loChain].load (profileSettings[(size_t) lo], lo);
+    }
+    else if (hiChain < 0)
+    {
+        hiChain = 1 - loChain;
+        chains[hiChain].load (profileSettings[(size_t) hi], hi);
+    }
+}
 
-        auto stage = [&] (float dry, float wet)
-        {
-            const float emulated = dry + mix * (wet - dry);
-            const float active = (emulated + live * (dry - emulated)) * gain;
-            return dry + engage * (active - dry);
-        };
+void PhoneTestoAudioProcessor::processMorphSegment (int start, int length, float fromPosition, float toPosition)
+{
+    const int numModels = (int) profileSettings.size();
+    const int lo = juce::jlimit (0, numModels - 2, (int) std::floor (0.5f * (fromPosition + toPosition)));
+    holdModels (lo, lo + 1);
 
-        outL[i] = stage (dryL[i], wetL[i]);
-        if (outR != nullptr)
-            outR[i] = stage (dryR[i], wetR[i]);
+    const int a = chains[0].profile == lo ? 0 : 1, b = 1 - a;
+
+    for (int ch = 0; ch < 2; ++ch)
+        fadeScratch.copyFrom (ch, start, wetScratch, ch, start, length);
+
+    chains[a].process (juce::dsp::AudioBlock<float> (wetScratch).getSubBlock ((size_t) start, (size_t) length));
+    chains[b].process (juce::dsp::AudioBlock<float> (fadeScratch).getSubBlock ((size_t) start, (size_t) length));
+
+    auto* wetL = wetScratch.getWritePointer (0, start);
+    auto* wetR = wetScratch.getWritePointer (1, start);
+    const auto* hiL = fadeScratch.getReadPointer (0, start);
+    const auto* hiR = fadeScratch.getReadPointer (1, start);
+
+    for (int i = 0; i < length; ++i)
+    {
+        const float p = fromPosition + (toPosition - fromPosition) * (float) (i + 1) / (float) length;
+        const float f = juce::jlimit (0.0f, 1.0f, p - (float) lo);
+        wetL[i] += f * (hiL[i] - wetL[i]);
+        wetR[i] += f * (hiR[i] - wetR[i]);
+    }
+}
+
+void PhoneTestoAudioProcessor::processMorph (int n, float request, int wanted)
+{
+    const int numModels = (int) profileSettings.size();
+    const float top = (float) (numModels - 1);
+    const float target = juce::jlimit (0.0f, top, request >= 0.0f ? request : (float) wanted);
+
+    const float p0 = morphPosition;
+    float p1 = p0;
+
+    if (morphWarmupRemaining > 0)
+        morphWarmupRemaining = juce::jmax (0, morphWarmupRemaining - n);
+    else
+    {
+        const float follow = 1.0f - std::exp (-(float) n / (float) (morphSmoothingSeconds * currentSampleRate));
+        const float maxStep = juce::jmin (0.9f, (float) (morphMaxModelsPerSecond * n / currentSampleRate));
+        p1 = juce::jlimit (0.0f, top, p0 + juce::jlimit (-maxStep, maxStep, (target - p0) * follow));
+
+        if (std::abs (target - p1) < 1.0e-3f)
+            p1 = target;
+    }
+
+    auto pairOf = [numModels] (float p) { return juce::jlimit (0, numModels - 2, (int) std::floor (p)); };
+
+    if (juce::exactlyEqual (p0, p1) || pairOf (p0) == pairOf (p1))
+        processMorphSegment (0, n, p0, p1);
+    else
+    {
+        // passing a speaker: change pairs exactly there
+        const float k = (float) (p1 > p0 ? pairOf (p1) : pairOf (p0));
+        const int split = juce::jlimit (0, n, juce::roundToInt ((k - p0) / (p1 - p0) * (float) n));
+
+        if (split > 0)
+            processMorphSegment (0, split, p0, k);
+        if (split < n)
+            processMorphSegment (split, n - split, k, p1);
+    }
+
+    morphPosition = p1;
+
+    if (request < 0.0f && juce::exactlyEqual (p1, target))
+    {
+        // let go and settled on one speaker: carry on with it alone
+        const int model = juce::roundToInt (target);
+        activeChain = chains[0].profile == model ? 0 : 1;
+        morphing = false;
+        morphActive = false;
     }
 }
 

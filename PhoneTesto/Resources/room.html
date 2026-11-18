@@ -34,6 +34,7 @@
   .app { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
   .stage { position: relative; overflow: hidden; touch-action: none; cursor: grab; }
   .stage:active { cursor: grabbing; }
+  .stage:focus-visible { outline: 2px solid var(--lamp); outline-offset: -3px; }
   .stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 46%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
   .hud { position: absolute; left: 18px; right: 18px; top: 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; pointer-events: none; }
@@ -45,17 +46,26 @@
   .hint.gone { opacity: 0; }
 
   /* Live: a card with the code to scan; the phone in the scene shows it too */
-  .live { position: absolute; right: 18px; top: 64px; width: 214px; padding: 14px; border-radius: 6px; background: rgba(21, 19, 17, 0.88);
-          box-shadow: 0 12px 40px rgba(0,0,0,0.5); display: grid; gap: 10px; cursor: default; }
+  .live { --qr: 186px; position: absolute; right: 18px; top: 64px; width: max(184px, calc(var(--qr) + 28px)); padding: 14px; border-radius: 6px;
+          background: rgba(21, 19, 17, 0.9); box-shadow: 0 12px 40px rgba(0,0,0,0.5); display: grid; gap: 10px; cursor: default;
+          max-height: calc(100% - 78px); overflow: hidden; }
   .live h2 { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 12px var(--cond); letter-spacing: 0.2em; color: var(--air); }
   .live h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--air); box-shadow: 0 0 10px var(--air); }
-  .live canvas { width: 186px; height: 186px; background: #fff; border-radius: 4px; image-rendering: pixelated; }
+  .live > * { min-width: 0; }
+  .live canvas { width: var(--qr); height: var(--qr); background: #fff; border-radius: 4px; image-rendering: pixelated; justify-self: center; }
   .live .url { font: 500 11px/1.35 var(--sans); color: var(--dim); word-break: break-all; user-select: text; -webkit-user-select: text; }
   .live .count { font: 600 13px var(--sans); }
   .live label { display: grid; gap: 4px; font: 600 11px var(--cond); letter-spacing: 0.12em; color: var(--dim); }
-  .live input { font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
+  .live input { width: 100%; min-width: 0; font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
                 user-select: text; -webkit-user-select: text; }
   .live .err { font: 500 12px/1.4 var(--sans); color: var(--air); }
+  /* a short window: a smaller code (still crisp: it's drawn at twice this size) and no label over the password */
+  @media (max-height: 640px) {
+    .live { --qr: 118px; top: 58px; padding: 10px; gap: 7px; }
+    .live label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .live .url { font-size: 10px; }
+  }
+  @media (max-height: 520px) { .live { --qr: 96px; } .live .url { display: none; } .live .count { font-size: 12px; } }
 
   .strip { background: var(--strip); border-top: 1px solid var(--line); display: grid; gap: 12px; padding: 12px 18px 14px; }
   .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -79,29 +89,44 @@
          font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; flex: none; }
   .tog[aria-pressed="true"] { border-color: var(--lamp); color: var(--lamp); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+
+  /* outside the plugin: play a song through the page's sketch of the emulation */
+  .demo { display: flex; align-items: center; gap: 12px; flex: 1 1 210px; min-width: 0; }
+  .play { appearance: none; border: 0; width: 40px; height: 40px; border-radius: 50%; background: var(--lamp); color: #1b1208; cursor: pointer;
+          display: grid; place-items: center; flex: none; }
+  .play svg { width: 15px; height: 15px; fill: currentColor; }
+  .song { display: grid; gap: 2px; min-width: 0; }
+  .song b { font: 600 13px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song label { font: 500 12px var(--sans); color: var(--dim); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; width: max-content; }
+  .song input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .song input:focus-visible + label { outline: 2px solid var(--lamp); outline-offset: 2px; }
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="stage" id="stage" aria-label="Speaker room. Drag sideways to change speakers, drag up or down to pull focus.">
+  <div class="stage" id="stage" tabindex="0" role="group" aria-label="Speaker room. Drag sideways or press the left and right arrows to change speakers; drag up or down or press the up and down arrows to pull focus between the speaker and the studio monitors.">
     <canvas id="back"></canvas>
     <canvas id="dev"></canvas>
     <canvas id="fx"></canvas>
     <div class="vignette"></div>
-    <div class="hud"><div><div class="brand">PHONETESTO</div><div class="name" id="name">Phone 15/16 Pro</div></div><div class="spec" id="spec"></div></div>
+    <div class="hud"><div><div class="brand">PHONETESTO</div><div class="name" id="name" aria-live="polite">Phone 15/16 Pro</div></div><div class="spec" id="spec"></div></div>
     <div class="hint" id="hint">Drag sideways to change speakers &#xb7; Drag up or down to pull focus</div>
-    <div class="live" id="live" hidden>
+    <div class="live" id="live" role="region" aria-label="Live listening" hidden>
       <h2 id="liveTitle">ON AIR</h2>
-      <canvas id="qr" width="186" height="186" aria-label="QR code to open the listening page on a phone"></canvas>
+      <canvas id="qr" width="372" height="372" role="img" aria-label="QR code to open the listening page on a phone"></canvas>
       <div class="url" id="liveUrl"></div>
       <div class="count" id="liveCount"></div>
-      <label for="pw">PASSWORD <input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false"></label>
+      <label for="pw"><span>PASSWORD</span> <input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false" aria-label="Password for phones"></label>
       <div class="err" id="liveErr" hidden></div>
     </div>
   </div>
   <div class="strip">
     <div class="chips" id="chips" role="group" aria-label="Speaker model"></div>
     <div class="row">
+      <div class="demo" id="demo" hidden>
+        <button class="play" id="play" type="button" aria-label="Play" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M3 1.5v13l11-6.5z"/></svg></button>
+        <div class="song"><b id="songName">song.mp3</b><input id="file" type="file" accept="audio/*"><label for="file" id="pick">Choose a song</label></div>
+      </div>
       <button class="air" id="air" type="button" aria-pressed="false">ON AIR</button>
       <label class="ctl" for="mix"><span>Focus <output id="mixOut">Phone 100%</output></span><input id="mix" type="range" min="0" max="100" step="0.5" value="100"></label>
       <label class="ctl" for="vol"><span>Output <output id="volOut">100%</output></span><input id="vol" type="range" min="0" max="100" step="0.5" value="100"></label>
@@ -114,36 +139,128 @@
 <script>
 (() => {
   const ja = /^ja/i.test(navigator.language || "");
+  if (ja) document.documentElement.lang = "ja";
   if (ja) document.getElementById("hint").textContent = "\u6a2a\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u6a5f\u7a2e\u3092\u5207\u308a\u66ff\u3048\u30fb\u4e0a\u4e0b\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u30d4\u30f3\u30c8";
 
   // ---- the plugin: parameters and meters come in as "state", controls go out as "ui" ----
   const backend = window.__JUCE__ && window.__JUCE__.backend;
   const listeners = [];
-  const mock = (() => {
-    // Opened outside the plugin (a browser), the page runs against this stand-in so it can be tried.
-    if (backend) return null;
+  const demo = backend ? null : (() => {
+    // Opened outside the plugin (in a browser), the page runs against this stand-in: it
+    // plays a song through a Web Audio sketch of the emulation (a song.mp3 beside the
+    // page, or one the viewer chooses), so the room can be tried by ear.
     const st = { device: 3, mix: 100, output: 100, mono: false, bypass: false, peak: [0, 0], dry: 0, bands: [],
-                 live: { on: false, failed: false, url: "", listeners: 0, password: "", code: "K7PX2Q", qr: "", qrSize: 0 } };
-    const ids = { device: "device", mix: "mix", output: "output", monoSum: "mono", bypass: "bypass" };
-    let t = 0;
-    setInterval(() => {
-      t += 1 / 30;
-      const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 2 * 2)), 8);
-      st.peak = [0.25 + 0.5 * beat, 0.24 + 0.5 * beat]; st.dry = 0.3 + 0.6 * beat;
-      st.bands = Array.from({ length: 30 }, (_, k) => Math.max(0, 0.75 - k * 0.018 + 0.2 * Math.sin(t * 3 + k) * beat));
-      listeners.forEach(f => f(JSON.parse(JSON.stringify(st))));
-    }, 1000 / 30);
-    return { handle(o) {
-      if (o.type === "param") { const k = ids[o.id]; if (k) st[k] = (k === "mono" || k === "bypass") ? !!o.value : o.value; }
-      if (o.type === "onAir") { st.live.on = !!o.on; st.live.url = o.on ? "http://192.168.1.20:51813/?k=K7PX2Q" : "";
-        st.live.qrSize = o.on ? 25 : 0; st.live.qr = o.on ? Array.from({ length: 625 }, (_, i) => ((i * 7919) % 13 < 6 ? "1" : "0")).join("") : ""; }
-      if (o.type === "password") st.live.password = o.value;
-    } };
+                 live: { on: false, failed: false, example: false, url: "", listeners: 0, password: "", code: "", qr: "", qrSize: 0 } };
+    const keys = { device: "device", mix: "mix", output: "output", monoSum: "mono", bypass: "bypass" };
+    const audio = new Audio(); audio.loop = true; audio.preload = "auto"; audio.src = "song.mp3";
+    const bands = new Array(30).fill(0);
+    let ctx = null, A = null, morphPos = null;
+
+    function shaperCurve(db) { const g = Math.pow(10, db / 20), c = new Float32Array(2048);
+      for (let i = 0; i < c.length; i++) { const x = i / 2047 * 2 - 1; c[i] = Math.tanh(g * x) / g; } return c; }
+    function build() {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = ctx.createMediaElementSource(audio), n = { chains: [] };
+      n.stereo = ctx.createGain(); n.monoSum = ctx.createGain();
+      n.monoSum.channelCount = 1; n.monoSum.channelCountMode = "explicit"; n.monoSum.channelInterpretation = "speakers";
+      n.monoTap = ctx.createGain(); n.pre = ctx.createGain();
+      src.connect(n.stereo); src.connect(n.monoSum); n.monoSum.connect(n.monoTap); n.stereo.connect(n.pre); n.monoTap.connect(n.pre);
+      n.wet = ctx.createGain(); n.dry = ctx.createGain(); n.out = ctx.createGain(); n.engaged = ctx.createGain(); n.bypassed = ctx.createGain();
+      for (let k = 0; k < 2; k++) {
+        const c = { model: -1 };
+        c.hp1 = ctx.createBiquadFilter(); c.hp1.type = "highpass"; c.hp1.Q.value = 0.7071;
+        c.hp2 = ctx.createBiquadFilter(); c.hp2.type = "highpass"; c.hp2.Q.value = 0.7071;
+        c.pk = ctx.createBiquadFilter(); c.pk.type = "peaking";
+        c.lp = ctx.createBiquadFilter(); c.lp.type = "lowpass"; c.lp.Q.value = 0.7071;
+        c.sh = ctx.createWaveShaper(); c.sh.oversample = "2x"; c.mk = ctx.createGain(); c.gain = ctx.createGain(); c.gain.gain.value = 0;
+        n.pre.connect(c.hp1); c.hp1.connect(c.hp2); c.hp2.connect(c.pk); c.pk.connect(c.lp); c.lp.connect(c.sh); c.sh.connect(c.mk); c.mk.connect(c.gain); c.gain.connect(n.wet);
+        n.chains.push(c);
+      }
+      // as in the plugin: emulation, mixed with the dry signal, output level; BYPASS passes the dry signal untouched
+      n.wet.connect(n.out); src.connect(n.dry); n.dry.connect(n.out); n.out.connect(n.engaged); n.engaged.connect(ctx.destination);
+      src.connect(n.bypassed); n.bypassed.connect(ctx.destination); n.bypassed.gain.value = 0;
+      n.anOut = ctx.createAnalyser(); n.anOut.fftSize = 2048; n.anOut.smoothingTimeConstant = 0; n.engaged.connect(n.anOut); n.bypassed.connect(n.anOut);
+      n.anIn = ctx.createAnalyser(); n.anIn.fftSize = 2048; src.connect(n.anIn);
+      n.td = new Float32Array(2048); n.fd = new Float32Array(1024);
+      A = n;
+    }
+    function program(c, i) {
+      if (c.model === i) return;
+      const p = P[i], t = ctx.currentTime;
+      c.hp1.frequency.setValueAtTime(p.hp, t); c.hp2.frequency.setValueAtTime(p.hp, t);
+      c.pk.frequency.setValueAtTime(p.pk, t); c.pk.Q.setValueAtTime(p.q, t); c.pk.gain.setValueAtTime(p.g, t);
+      c.lp.frequency.setValueAtTime(Math.min(p.lp, ctx.sampleRate * 0.45), t);
+      c.sh.curve = shaperCurve(p.drive); c.mk.gain.setValueAtTime(Math.pow(10, p.mk / 20), t);
+      c.model = i;
+    }
+    const peakOf = an => { an.getFloatTimeDomainData(A.td); let m = 0; for (let i = 0; i < an.fftSize; i++) m = Math.max(m, Math.abs(A.td[i])); return m; };
+    function frame() {
+      const playing = !!A && !audio.paused;
+      if (A) {
+        // the speakers either side of the position, blended linearly, as the plugin does
+        const t = ctx.currentTime, k = 0.012, top = P.length - 1;
+        const pos = Math.max(0, Math.min(top, morphPos !== null ? morphPos : st.device));
+        const lo = Math.min(top - 1, Math.floor(pos)), f = pos - lo;
+        program(A.chains[lo % 2], lo); program(A.chains[(lo + 1) % 2], lo + 1);
+        A.chains[lo % 2].gain.gain.setTargetAtTime(1 - f, t, k); A.chains[(lo + 1) % 2].gain.gain.setTargetAtTime(f, t, k);
+        const mono = st.mono ? 1 : 0, mix = st.mix / 100, on = st.bypass ? 0 : 1;
+        A.stereo.gain.setTargetAtTime(1 - mono, t, k); A.monoTap.gain.setTargetAtTime(mono, t, k);
+        A.wet.gain.setTargetAtTime(mix, t, k); A.dry.gain.setTargetAtTime(1 - mix, t, k);
+        A.out.gain.setTargetAtTime(st.output / 100, t, k);
+        A.engaged.gain.setTargetAtTime(on, t, k); A.bypassed.gain.setTargetAtTime(1 - on, t, k);
+      }
+      const out = playing ? peakOf(A.anOut) : 0;
+      st.peak = [out, out]; st.dry = playing ? peakOf(A.anIn) : 0;
+      if (playing) {
+        A.anOut.getFloatFrequencyData(A.fd);
+        const lo = Math.log(60), hi = Math.log(18000), binHz = ctx.sampleRate / A.anOut.fftSize;
+        for (let b = 0; b < 30; b++) {
+          const f0 = Math.exp(lo + (hi - lo) * b / 30), f1 = Math.exp(lo + (hi - lo) * (b + 1) / 30);
+          let m = -200;
+          for (let i = Math.max(1, Math.floor(f0 / binHz)); i <= Math.min(A.fd.length - 1, Math.ceil(f1 / binHz)); i++) m = Math.max(m, A.fd[i]);
+          bands[b] = Math.max(Math.max(0, Math.min(1, (m + 85) / 66)), bands[b] * 0.86); // the plugin's scale, quick rise, gentle fall
+        }
+      } else bands.fill(0);
+      st.bands = bands.slice();
+      listeners.forEach(fn => fn(JSON.parse(JSON.stringify(st))));
+    }
+    setInterval(frame, 1000 / 30);
+
+    // ON AIR needs the plugin on a network: here the card shows what it looks like, marked as an example
+    function example() {
+      const n = 25, bits = [];
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const finder = (x < 7 && y < 7) || (x >= n - 7 && y < 7) || (x < 7 && y >= n - 7);
+        const fx = x >= n - 7 ? x - (n - 7) : x, fy = y >= n - 7 ? y - (n - 7) : y;
+        bits.push(finder ? ((fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx > 1 && fx < 5 && fy > 1 && fy < 5)) ? "1" : "0")
+                         : (((x * 7 + y * 13 + x * y) % 5) < 2 ? "1" : "0"));
+      }
+      return { on: true, example: true, url: "", qr: bits.join(""), qrSize: n };
+    }
+    return {
+      audio,
+      handle(o) {
+        if (o.type === "param") { const key = keys[o.id]; if (key) st[key] = (key === "mono" || key === "bypass") ? !!o.value : o.value; }
+        if (o.type === "morph") morphPos = o.end ? null : o.pos;
+        if (o.type === "onAir") Object.assign(st.live, o.on ? example() : { on: false, example: false, qr: "", qrSize: 0 });
+        if (o.type === "password") st.live.password = o.value;
+      },
+      async toggle() {
+        if (!ctx) build();
+        if (ctx.state === "suspended") await ctx.resume();
+        if (audio.paused) { try { await audio.play(); } catch (e) { return false; } } else audio.pause();
+        return !audio.paused;
+      },
+      choose(file) { audio.src = URL.createObjectURL(file); if (ctx) audio.play().catch(() => {}); }
+    };
   })();
-  const send = o => { try { backend ? backend.emitEvent("ui", o) : mock.handle(o); } catch (e) {} };
+  const send = o => { try { backend ? backend.emitEvent("ui", o) : demo.handle(o); } catch (e) {} };
   const onState = f => { if (backend) backend.addEventListener("state", f); else listeners.push(f); };
   const setParam = (id, value) => send({ type: "param", id, value });
   const gesture = (id, on) => send({ type: "gesture", id, on });
+  // script errors go to the plugin, which logs them in its self-test
+  window.addEventListener("error", e => send({ type: "diag", kind: "error", message: String(e.message || e), where: (e.filename || "") + ":" + (e.lineno || 0) }));
+  window.addEventListener("unhandledrejection", e => send({ type: "diag", kind: "error", message: String(e.reason) }));
 
   // ---- the room, in real 3D ----
   // Two layers share one camera: the studio behind (wall, far desk, monitors) and the
@@ -496,6 +613,7 @@
       g.fillStyle = "rgba(238,231,220,0.8)"; g.font = `500 ${Math.round(sh * 0.07)}px Barlow, sans-serif`;
       g.fillText(S.live.listeners ? `${S.live.listeners} listening` : "Scan to listen", sx + sw * 0.08, sy + sh * 0.45);
       drawQr(g, q, S.live.qr, S.live.qrSize, qx0, qy0);
+      if (S.live.example) markExample(g, qx0, qy0, q);
       g.restore(); d.screen.tex.needsUpdate = true; return;
     }
     const n = 30, lo = Math.log(60), hi = Math.log(18000), bw = sw * 0.78 / n;
@@ -524,14 +642,35 @@
   }
   // ---- camera and layout ----
   const PITCH = 0.13;
+  // Render resolution follows the machine: on a slow GPU (or none) the room is drawn at
+  // fewer pixels and with a smaller shadow map, so it stays fluid; it climbs back when fast.
+  let quality = 1;
   function resize() {
     DPR = Math.min(2, window.devicePixelRatio || 1); W = stage.clientWidth; H = stage.clientHeight;
-    for (const r of [rBack, rDev]) { r.setPixelRatio(DPR); r.setSize(W, H, false); }
+    for (const r of [rBack, rDev]) { r.setPixelRatio(DPR * quality); r.setSize(W, H, false); }
     fxC.width = Math.round(W * DPR); fxC.height = Math.round(H * DPR);
     camera.aspect = W / H; camera.updateProjectionMatrix();
     wake();
   }
   new ResizeObserver(resize).observe(stage); resize();
+  const frameMs = [];
+  function adaptQuality(ms) {
+    frameMs.push(ms);
+    if (frameMs.length < 24) return;
+    frameMs.sort((a, b) => a - b);
+    const typical = frameMs[frameMs.length >> 1];
+    frameMs.length = 0;
+    const was = quality;
+    if (typical > 30 && quality > 0.5) quality = Math.max(0.5, quality - 0.25);
+    else if (typical < 18 && quality < 1) quality = Math.min(1, quality + 0.25);
+    if (quality === was) return;
+    const shadow = quality < 0.75 ? 1024 : 2048;
+    if (lamp.shadow.mapSize.x !== shadow) {
+      lamp.shadow.mapSize.set(shadow, shadow);
+      if (lamp.shadow.map) { lamp.shadow.map.dispose(); lamp.shadow.map = null; }
+    }
+    resize();
+  }
   const cam = { x: 0, dist: 1, aim: 0.04 };
   function distFor(i) {
     // how far back the camera stands so the speaker fills about half the frame's width (more on a narrow screen)
@@ -597,8 +736,12 @@
   // ---- controls ----
   const S = { p: 3, pTarget: 3, pVel: 0, mix: 1, mixUser: 1, mono: 0, monoT: 0, out: 1, bypass: false, dragging: false,
               device: 3, sentDevice: -1, mixBusy: false, outBusy: false, level: 0, dry: 0, bands: null,
+              userMove: false, selfTest: false,
               live: { on: false, failed: false, url: "", listeners: 0, password: "", code: "", qr: "", qrSize: 0 } };
   let haveState = false;
+  // read-only view for the page's tests
+  window.__ptRoom = { get p() { return S.p; }, get userMove() { return S.userMove; }, get level() { return S.level; },
+                      get mix() { return S.mixUser; }, get bands() { return S.bands; } };
   const chips = document.getElementById("chips");
   P.forEach((p, i) => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = short[i];
     b.setAttribute("aria-pressed", i === 3 ? "true" : "false"); b.addEventListener("click", () => { pick(i); hint(); }); chips.appendChild(b); });
@@ -608,7 +751,9 @@
   const monoB = document.getElementById("mono"), bypB = document.getElementById("bypass"), airB = document.getElementById("air");
   let hinted = false; function hint() { if (!hinted) { hinted = true; document.getElementById("hint").classList.add("gone"); } }
 
-  function pick(i) { S.pTarget = i; sendDevice(i); }
+  // A move the user makes (drag, model key, arrow) carries the sound with the camera:
+  // the plugin blends the speakers either side of the position until it settles.
+  function pick(i) { S.pTarget = i; S.userMove = true; sendDevice(i); }
   function sendDevice(i) { if (i === S.sentDevice) return; S.sentDevice = i; gesture("device", true); setParam("device", i); gesture("device", false); }
 
   // sliders: a gesture for the whole drag, so a host records one automation move
@@ -619,6 +764,10 @@
     el.addEventListener("input", () => { onValue(+el.value); setParam(id, +el.value); hint(); });
   }
   bindSlider(mixIn, "mix", "mixBusy", v => { S.mixUser = v / 100; });
+  function nudgeMix(delta) {
+    S.mixUser = Math.max(0, Math.min(1, S.mixUser + delta / 100)); mixIn.value = (S.mixUser * 100).toFixed(1);
+    gesture("mix", true); setParam("mix", S.mixUser * 100); gesture("mix", false);
+  }
   bindSlider(volIn, "output", "outBusy", v => { S.outT = v / 100; });
   S.outT = 1;
   const toggle = (id, on) => { gesture(id, true); setParam(id, on ? 1 : 0); gesture(id, false); };
@@ -638,7 +787,11 @@
   stage.addEventListener("pointermove", e => {
     if (!drag) return;
     const ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
-    if (!drag.axis && Math.hypot(ddx, ddy) > 6) { drag.axis = Math.abs(ddx) > Math.abs(ddy) ? "x" : "y"; if (drag.axis === "y") { S.mixBusy = true; gesture("mix", true); } }
+    if (!drag.axis && Math.hypot(ddx, ddy) > 6) {
+      drag.axis = Math.abs(ddx) > Math.abs(ddy) ? "x" : "y";
+      if (drag.axis === "x") S.userMove = true;
+      if (drag.axis === "y") { S.mixBusy = true; gesture("mix", true); }
+    }
     if (drag.axis === "x") {
       S.p = Math.max(-0.25, Math.min(P.length - 0.75, drag.p - ddx / (W * 0.45))); S.pTarget = S.p;
       sendDevice(Math.max(0, Math.min(P.length - 1, Math.round(S.p))));
@@ -652,15 +805,51 @@
     drag = null; S.dragging = false;
   };
   stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+  // Keys. The room uses the arrows; the rest belong to the host (the space bar: play/stop).
+  // After mouse use the plugin takes keyboard focus back from the page, so keys go to it
+  // and on to the host as with any plugin. While the page has focus (tabbed into), keys it
+  // doesn't use are passed on: on Windows by the plugin; WebKit passes them up itself.
+  const isTyping = el => !!el && el.tagName === "INPUT" && el.type === "text";
+  const passKeysOn = !!backend && /Win/i.test(navigator.platform || navigator.userAgent || "");
+  const passedOn = new Set();
+  const ownsKey = e => {
+    const t = e.target;
+    if (isTyping(t) || e.key === "Tab") return true;
+    const control = t && (t.tagName === "BUTTON" || (t.tagName === "INPUT" && t.type === "range"));
+    if (control && (e.key === " " || e.key === "Enter")) return true;              // pressing the focused control
+    if (t && t.tagName === "INPUT" && t.type === "range" && e.key.startsWith("Arrow")) return true; // a slider's own keys
+    return false;
+  };
   window.addEventListener("keydown", e => {
-    if (e.target.tagName === "INPUT") return;
-    if (e.key === "ArrowRight") pick(Math.min(P.length - 1, Math.round(S.pTarget) + 1));
-    if (e.key === "ArrowLeft") pick(Math.max(0, Math.round(S.pTarget) - 1));
+    if (ownsKey(e) || e.ctrlKey || e.metaKey || e.altKey) {
+      if (!ownsKey(e) && passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
+      return;
+    }
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      pick(Math.max(0, Math.min(P.length - 1, Math.round(S.pTarget) + (e.key === "ArrowRight" ? 1 : -1)))); hint(); e.preventDefault(); return;
+    }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") { nudgeMix(e.key === "ArrowUp" ? 5 : -5); hint(); e.preventDefault(); return; }
+    if (passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
   });
+  window.addEventListener("keyup", e => {
+    if (passedOn.has(e.keyCode)) { passedOn.delete(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: false }); e.preventDefault(); }
+  });
+  document.addEventListener("pointerup", () => {
+    if (!backend || isTyping(document.activeElement)) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.blur) a.blur();
+    send({ type: "releaseFocus" });
+  }, true);
 
   // the plugin's state: follow the host (automation, presets) whenever the user isn't touching that control
   const qrC = document.getElementById("qr"), qx = qrC.getContext("2d");
   let qrShown = "";
+  function markExample(g, x0, y0, size) {
+    // the stand-in's code isn't a real one: say so across it
+    g.save(); g.fillStyle = "rgba(13,12,11,0.82)"; g.fillRect(x0, y0 + size * 0.4, size, size * 0.2);
+    g.fillStyle = "#ffb45e"; g.font = `700 ${Math.round(size * 0.11)}px "Barlow Condensed", sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(ja ? "\u4f8b" : "EXAMPLE", x0 + size / 2, y0 + size / 2); g.restore();
+  }
   function drawQr(g, size, qr, n, x0, y0) {
     const quiet = 2, cell = size / (n + quiet * 2);
     g.fillStyle = "#fff"; g.fillRect(x0, y0, size, size); g.fillStyle = "#000";
@@ -670,6 +859,7 @@
   onState(st => {
     if (!st) return;
     haveState = true;
+    if (st.selfTest && !S.selfTest) { S.selfTest = true; wake(); }
     if (st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || st.device !== S.device || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
     if (!S.dragging && st.device !== S.device) { S.device = st.device; S.sentDevice = st.device; S.pTarget = st.device; }
     S.device = st.device;
@@ -690,35 +880,93 @@
     document.getElementById("liveErr").textContent = ja ? "\u3053\u306ePC\u3067\u53d7\u4fe1\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30d5\u30a1\u30a4\u30a2\u30a6\u30a9\u30fc\u30eb\u306e\u8a2d\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002" : "Couldn't start listening on this computer. Check the firewall settings.";
     qrC.hidden = !L.on;
     document.getElementById("liveUrl").textContent = L.url;
-    document.getElementById("liveCount").textContent = !L.on ? "" : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3067\u8aad\u307f\u53d6\u3063\u3066\u518d\u751f") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Scan with a phone on the same Wi-Fi");
+    document.getElementById("liveCount").textContent = !L.on ? "" : L.example
+      ? (ja ? "\u30d7\u30e9\u30b0\u30a4\u30f3\u3067\u306f\u3001\u540c\u3058Wi-Fi\u306e\u30b9\u30de\u30db\u3067\u3053\u306e\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u53d6\u3063\u3066\u8074\u304d\u307e\u3059" : "In the plugin, phones on the same Wi-Fi scan this code to listen")
+      : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3067\u8aad\u307f\u53d6\u3063\u3066\u518d\u751f") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Scan with a phone on the same Wi-Fi");
     if (document.activeElement !== pw && pw.value !== L.password) pw.value = L.password;
     pw.placeholder = L.code || "AUTO";
-    if (L.on && L.qr && L.qr !== qrShown) { qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0); devices.forEach(d => d.lastDraw = -1); wake(); }
+    if (L.on && L.qr && L.qr !== qrShown) {
+      qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0);
+      if (L.example) markExample(qx, 0, 0, qrC.width);
+      devices.forEach(d => d.lastDraw = -1); wake();
+    }
     if (!L.on && qrShown) { qrShown = ""; devices.forEach(d => d.lastDraw = -1); wake(); }
   });
   send({ type: "ready" });
 
+  if (demo) {
+    // outside the plugin: a song to play through the sketch of the emulation
+    document.getElementById("demo").hidden = false;
+    const playB = document.getElementById("play"), icon = document.getElementById("playIcon"), songName = document.getElementById("songName");
+    const title = document.querySelector('meta[name="pt-demo-title"]');
+    if (title) songName.textContent = title.content;
+    if (ja) document.getElementById("pick").textContent = "\u66f2\u3092\u9078\u3076";
+    const show = () => { const on = !demo.audio.paused; icon.setAttribute("d", on ? "M3 2h3.5v12H3zM9.5 2H13v12H9.5z" : "M3 1.5v13l11-6.5z");
+      playB.setAttribute("aria-pressed", on ? "true" : "false"); playB.setAttribute("aria-label", on ? "Pause" : "Play"); };
+    demo.audio.addEventListener("play", show); demo.audio.addEventListener("pause", show);
+    demo.audio.addEventListener("error", () => { if (!document.getElementById("file").files.length) songName.textContent = ja ? "\u66f2\u304c\u3042\u308a\u307e\u305b\u3093" : "No song loaded"; });
+    playB.addEventListener("click", () => { demo.toggle(); hint(); });
+    document.getElementById("file").addEventListener("change", e => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      demo.choose(f); songName.textContent = f.name.replace(/\.[^.]+$/, "");
+    });
+  }
+
+  // ---- the plugin's self-test: what was drawn, with a picture ----
+  let reported = false;
+  function selfTestReport() {
+    const w = Math.round(W * DPR), h = Math.round(H * DPR), scale = Math.min(1, 1200 / Math.max(1, w));
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * scale)); c.height = Math.max(1, Math.round(h * scale));
+    const g = c.getContext("2d");
+    g.fillStyle = "#0d0c0b"; g.fillRect(0, 0, c.width, c.height);
+    for (const layer of [backC, devC, fxC]) g.drawImage(layer, 0, 0, c.width, c.height);
+    const d = g.getImageData(0, 0, c.width, c.height).data, count = d.length / 4;
+    let sum = 0, sum2 = 0, lit = 0;
+    for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; sum += y; sum2 += y * y; if (y > 40) lit++; }
+    const mean = sum / count, sd = Math.sqrt(Math.max(0, sum2 / count - mean * mean));
+    const m = document.createElement("canvas"); m.width = m.height = 64; const mg = m.getContext("2d");
+    mg.drawImage(devC, devC.width * 0.3, devC.height * 0.25, devC.width * 0.4, devC.height * 0.4, 0, 0, 64, 64);
+    const md = mg.getImageData(0, 0, 64, 64).data; let covered = 0;
+    for (let i = 3; i < md.length; i += 4) if (md[i] > 0) covered++;
+    let renderer = "none";
+    try { const gl = rDev.getContext(), ext = gl.getExtension("WEBGL_debug_renderer_info"); renderer = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) {}
+    send({ type: "diag", kind: "rendered", webgl: renderer, fonts: document.fonts.check('600 20px "Barlow Condensed"'),
+           size: [W, H, DPR], meanLuma: +mean.toFixed(1), lumaSpread: +sd.toFixed(1), litShare: +(lit / count).toFixed(3),
+           speakerCover: +(covered / 4096).toFixed(3), model: P[Math.max(0, Math.min(P.length - 1, Math.round(S.p)))].name });
+    send({ type: "snapshot", png: c.toDataURL("image/png") });
+  }
+
   // ---- one clock for the picture ----
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let prev = performance.now(), shown = -1, frameNo = 0;
+  let lastRendered = 0;
   function tick(now) {
-    const dt = Math.min(0.05, (now - prev) / 1000); prev = now; frameNo++;
+    const realDt = Math.min(0.25, Math.max(0, (now - prev) / 1000)), dt = Math.min(0.05, realDt); prev = now; frameNo++;
     if (!S.dragging) {
+      // in small steps, so the camera keeps real time even when frames are slow
       const k = reduce ? 60 : 26, damp = reduce ? 16 : 9.5;
-      const a = (S.pTarget - S.p) * k - S.pVel * damp; S.pVel += a * dt; S.p += S.pVel * dt;
+      for (let left = realDt; left > 1e-6; left -= 0.016) {
+        const h = Math.min(0.016, left), a = (S.pTarget - S.p) * k - S.pVel * damp;
+        S.pVel += a * h; S.p += S.pVel * h;
+      }
       if (Math.abs(S.pTarget - S.p) < 0.0005 && Math.abs(S.pVel) < 0.001) { S.p = S.pTarget; S.pVel = 0; }
     } else S.pVel = 0;
-    const ease = (v, t, r) => v + (t - v) * Math.min(1, dt * r);
+    const ease = (v, t, r) => v + (t - v) * Math.min(1, realDt * r);
     S.mix = ease(S.mix, S.bypass ? 0 : S.mixUser, 7);
     S.mono = ease(S.mono, S.monoT, 7);
     S.out = ease(S.out, S.outT, 12);
+    if (S.userMove) {
+      // the sound follows the camera while the user's move plays out, then settles on the model
+      if (!S.dragging && S.p === S.pTarget && S.pVel === 0) { send({ type: "morph", end: true }); S.userMove = false; }
+      else send({ type: "morph", pos: Math.max(0, Math.min(P.length - 1, S.p)) });
+    }
     // Inside a DAW the room shouldn't cost anything while nothing moves: draw only
     // while something animates, sound is playing, or the state just changed.
     const moving = S.dragging || Math.abs(S.pTarget - S.p) > 1e-4 || Math.abs(S.pVel) > 1e-4
       || Math.abs(S.mix - (S.bypass ? 0 : S.mixUser)) > 1e-3 || Math.abs(S.mono - S.monoT) > 1e-3 || Math.abs(S.out - S.outT) > 1e-3
-      || rings.length > 0 || S.level > 0.002 || S.dry > 0.002;
+      || rings.length > 0 || S.level > 0.002 || S.dry > 0.002 || (S.selfTest && !reported);
     if (moving) redraw = Math.max(redraw, 2);
-    if (redraw <= 0) { requestAnimationFrame(tick); return; }
+    if (redraw <= 0) { lastRendered = 0; requestAnimationFrame(tick); return; }
     redraw--;
     setCamera(); applyFocus();
     let best = 1e9, focus = 0;
@@ -736,7 +984,11 @@
     const kick = Math.min(1, S.dry * 2);
     cones.forEach((c, k) => { c.position.z = kick * 0.004 * Math.sin(now * 0.06 + k); });
     rBack.render(back, camera); rDev.render(front, camera);
-    emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now); drawRings(now);
+    if (lastRendered && now - lastRendered < 250) adaptQuality(now - lastRendered);
+    lastRendered = now;
+    if (!reduce) emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now);
+    drawRings(now);
+    if (S.selfTest && !reported && frameNo > 30) { reported = true; selfTestReport(); }
     const near = Math.max(0, Math.min(P.length - 1, Math.round(S.p)));
     if (near !== shown) {
       shown = near; const p = P[near];

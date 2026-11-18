@@ -101,6 +101,20 @@ jobs:
           ${{ matrix.pluginvalExe }} --strictness-level 10 --skip-gui-tests --validate-in-process \
             --validate ~/Library/Audio/Plug-Ins/Components/PhoneTesto.component
 
+      # The stand-alone app opens its editor and the page reports what it drew
+      # (in the system's web view: WebView2, WebKit, WebKitGTK), then it quits.
+      - name: Editor self-test (the room in the system's web view)
+        timeout-minutes: 5
+        env:
+          PHONETESTO_EDITOR_SELFTEST: build/shots/editor-${{ matrix.name }}
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   timeout 150 xvfb-run -a -s "-screen 0 1280x800x24" "$ARTEFACTS/Standalone/PhoneTesto" || true ;;
+            Windows) timeout 150 "$ARTEFACTS/Standalone/PhoneTesto.exe" || true ;;
+            macOS)   perl -e 'alarm shift; exec @ARGV' 150 "$ARTEFACTS/Standalone/PhoneTesto.app/Contents/MacOS/PhoneTesto" || true ;;
+          esac
+          node Tests/check_editor_selftest.mjs "$PHONETESTO_EDITOR_SELFTEST"
+
       - name: Phone player page tests (Chromium)
         if: runner.os == 'Linux'
         run: |

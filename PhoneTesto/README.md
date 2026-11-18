@@ -65,13 +65,16 @@ under a lamp, drawn in 3D, with a pair of studio monitors on the far side.
 The picture is the control surface.
 
 - **Speaker model** — drag sideways along the desk (or press a model key
-  under the room, or the arrow keys). The camera slides to the next speaker
-  and the model changes as it takes the light. Each one is modelled from the
+  under the room, or ← →). The camera slides to the next speaker and the
+  sound goes with it: while you move, the two speakers either side of the
+  camera are blended by where it is, so you hear one turn into the next;
+  when it settles you hear that model alone (exactly as if picked from the
+  host's Model parameter, which follows too). Each one is modelled from the
   real thing: frame and edge, glass with the lamp in it, buttons, speaker
   holes; the laptop's keyboard and grilles; the wired earbuds' shells,
   stems and cable. Its screen shows the band it can play, lit by the
   output's spectrum.
-- **Mix** — drag up or down (or the Focus slider): the focus pulls from the
+- **Mix** — drag up or down (or the Focus slider, or ↑ ↓): the focus pulls from the
   speaker to the studio monitors behind it, and the lamp follows. All the way
   to the monitors is the dry signal; their woofers move with it.
 - **Output**, **MONO** (the sound rings from the speaker's two ends draw
@@ -83,7 +86,35 @@ The picture is the control surface.
 Drag the window's corner to resize; the size is saved with the project.
 Everything the page needs (three.js, the Barlow fonts) is built into the
 plugin, so it works offline. It is drawn by the system's web view: WebView2
-on Windows (part of Windows 10 and 11), WebKit on macOS and Linux.
+on Windows (part of Windows 10 and 11), WebKit on macOS and Linux. Without a
+web view (an old Windows without the WebView2 Runtime) the window says what
+to install; the sound works either way.
+
+- **Keys belong to the host.** After you use the mouse in the room, keyboard
+  focus goes back to the plugin window, so the space bar starts and stops
+  your DAW as usual; only the arrow keys are the room's. Typing in the Live
+  password field keeps the keys there.
+- **It costs nothing while idle.** The room is drawn only while something
+  moves, sound plays or a setting changes. On a slow graphics card it draws
+  at a lower resolution (and smaller shadows) to stay fluid, and goes back up
+  when it can.
+- **Keyboard and screen readers:** the room takes focus with Tab and answers
+  the arrows; the model name is announced when it changes; with *reduce
+  motion* set, the camera moves quickly and the sound rings are off.
+
+### Trying the room in a browser
+
+The same page runs outside the plugin, playing a song through a Web Audio
+sketch of the emulation (the sound is approximate — the plugin's DSP is the
+reference):
+
+```sh
+node Tools/room-demo.mjs path/to/song.mp3
+```
+
+then open the printed address on this computer, or on a phone on the same
+Wi-Fi. ON AIR there only shows what the card looks like, marked as an
+example.
 
 
 ## Live Monitor mode
@@ -221,7 +252,9 @@ node Tests/browser/room_test.mjs
 - **PhoneTestoDspTest** — the processor as a host would drive it, at
   44.1/48/96 kHz: every model within ±1 dB (K-weighted) of the input on
   −18 dBFS pink noise and never clipping; no clicks when switching models,
-  bypass, mono, mix or output mid-tone; bypass bit-exact to the delayed
+  bypass, mono, mix or output mid-tone; the room's morph across all eight
+  speakers and back (faster than it may move), settling exactly on the chosen
+  model and leaving the Model parameter working; bypass bit-exact to the delayed
   input; latency the same before and after prepare; odd and oversized block
   sizes, silence and decay; CPU use; project save/restore (including the
   password and a corrupt state blob); and the Live access code (random per
@@ -246,9 +279,21 @@ node Tests/browser/room_test.mjs
   is exercised), the screen-off mode, the password flow including the QR
   code's `?k=` link, and auto-reconnect when the plugin goes away and comes
   back. Chromium isn't iPhone Safari — see the Live Monitor caveats.
-- **room_test.mjs** — the editor's page in Playwright Chromium against its
-  built-in stand-in for the plugin: it loads with the bundled three.js and
-  fonts, draws the room, the model keys, MONO and ON AIR work.
+- **room_test.mjs** — the editor's page in Playwright Chromium. As the
+  browser demo: it loads with the bundled three.js and fonts, draws the
+  room, plays a test song, a drag moves through the speakers and settles.
+  As the plugin's editor, against a stand-in for JUCE's bridge: it sends the
+  camera position while the user moves and ends the blend when it settles,
+  hands keyboard focus back after mouse use, passes unused keys on to the
+  host (space included) but keeps them while the password is typed. And the
+  layout at 720×480, 1000×660 and 1600×1000 with the Live card up.
+- **Editor self-test** — the stand-alone app with
+  `PHONETESTO_EDITOR_SELFTEST=<folder>` opens its editor, and the page
+  reports what it drew (WebGL renderer, how much of the room the speaker
+  covers, picture statistics, fonts, any script error) and saves a snapshot;
+  then the app quits. `node Tests/check_editor_selftest.mjs <folder>` checks
+  the report. CI runs it on Windows, macOS and Linux, so the room is seen
+  drawn by each system's own web view.
 - **PhoneTestoLiveDemo** — runs the server on its own with a test tone, so
   you can try the phone page without a DAW
   (`build/PhoneTestoLiveDemo --port 51813`, then open the printed URL on
@@ -261,9 +306,9 @@ The VST3 build also passes Steinberg's VST3 validator (all 47 tests) and
 
 Every push that touches `PhoneTesto/` builds the plugin on **Windows,
 macOS and Linux** (`.github/workflows/phonetesto.yml`) and runs on each:
-the DSP and Live Monitor tests, pluginval at strictness 10, and editor
-snapshots. macOS also runs Apple's `auval` on the Audio Unit. Linux also
-runs the phone-page browser tests and checks that the QR code decodes.
+the DSP and Live Monitor tests, pluginval at strictness 10, and the editor
+self-test in the system's web view. macOS also runs Apple's `auval` on the
+Audio Unit. Linux also runs the phone-page and room-page browser tests.
 
 **Downloading a build** without compiling: repository → **Actions** →
 **PhoneTesto** → the latest run with a green tick → **Artifacts** at the
@@ -275,7 +320,8 @@ bottom:
   code-signed yet, so macOS quarantines them after download; clear that with
   `xattr -dr com.apple.quarantine <path to the .vst3/.component/.app>`.
 - `PhoneTesto-Linux` — VST3 and standalone.
-- `snapshots-*` — the editor (and, on Linux, the phone page) as PNGs.
+- `snapshots-*` — the editor as each system drew it, with its self-test
+  report (and, on Linux, the phone and room pages) as PNGs.
 
 Artifacts are kept for 30 days.
 
@@ -303,7 +349,8 @@ Tests/
   LiveDemo.cpp             Stand-alone server with a test tone
   browser/player_test.mjs  In-browser player test (Playwright)
   browser/room_test.mjs    The editor's page in a browser (Playwright)
-Tools/room/index.html      The Room as a stand-alone web demo (Web Audio, a song.mp3 beside it)
+  check_editor_selftest.mjs Checks the stand-alone app's editor self-test report
+Tools/room-demo.mjs        Serves the editor's page as a browser demo (Web Audio, your song)
 ```
 
 ## Third-party code

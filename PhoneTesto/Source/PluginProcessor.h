@@ -104,6 +104,15 @@ public:
     float getOutputRms (int side) const noexcept  { return meterRms[side & 1].load (std::memory_order_relaxed); }
     float getOutputPeak (int side) const noexcept { return meterPeak[side & 1].load (std::memory_order_relaxed); }
 
+    /** The room in the editor: while the user moves between speakers, the two
+        either side of `position` (0 = first model .. numModels - 1) are blended
+        by where it is, so the sound follows the camera. Lock-free; call from any
+        thread. endMorph() glides to the Model parameter and carries on with that
+        model alone; a model change from the host is ignored until then. */
+    void setMorphPosition (float position) noexcept { morphRequest.store (juce::jmax (0.0f, position), std::memory_order_relaxed); }
+    void endMorph() noexcept { morphRequest.store (-1.0f, std::memory_order_relaxed); }
+    bool isMorphing() const noexcept { return morphActive.load (std::memory_order_relaxed); }
+
     /** Most recent input block's peak (both sides), for the studio monitors in the editor. */
     float getInputPeak() const noexcept { return inputPeak.load (std::memory_order_relaxed); }
 
@@ -120,6 +129,11 @@ private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void processSubBlock (juce::AudioBuffer<float>& buffer, int start, int numSamples);
     void startModelCrossfade (int profileIndex);
+    void processModel (int numSamples);
+    void beginMorph();
+    void processMorph (int numSamples, float request, int wanted);
+    void processMorphSegment (int start, int length, float fromPosition, float toPosition);
+    void holdModels (int lo, int hi);
 
     using Coefficients = juce::dsp::IIR::Coefficients<float>;
     using FilterDuplicator = juce::dsp::ProcessorDuplicator<juce::dsp::IIR::Filter<float>, Coefficients>;
@@ -154,6 +168,12 @@ private:
     bool crossfading = false;
     int warmupRemaining = 0;
     float crossfadePosition = 0.0f, crossfadeStep = 0.0f;
+
+    std::atomic<float> morphRequest { -1.0f }; // a position while the user moves, -1 when they've let go
+    std::atomic<bool> morphActive { false };
+    bool morphing = false;
+    float morphPosition = 0.0f;
+    int morphWarmupRemaining = 0;
 
     juce::SmoothedValue<float> mixAmount, outputGain, monoAmount, liveAmount, engageAmount;
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 1024 };

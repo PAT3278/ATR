@@ -27,6 +27,7 @@ public:
     ~PhoneTestoAudioProcessorEditor() override;
 
     void resized() override;
+    bool keyPressed (const juce::KeyPress&) override;
 
     static constexpr int defaultWidth = 1000;
     static constexpr int defaultHeight = 660;
@@ -37,6 +38,11 @@ public:
 private:
     void timerCallback() override;
     void handleUi (const juce::var&);
+    void releaseKeyboardToPlugin();
+    void forwardKeyToHost (const juce::var&);
+    void stepParameter (const juce::String& id, double delta);
+    void selfTestLog (const juce::String& line);
+    void finishSelfTest (const juce::String& why);
     void setParameter (const juce::String& id, double value);
     void gesture (const juce::String& id, bool begin);
     juce::var makeState();
@@ -55,6 +61,14 @@ private:
     juce::String liveUrl, qrText;
     int qrSize = 0, qrVersion = 0, qrSentVersion = -1, framesSinceQr = 0;
     bool liveStartFailed = false;
+    bool morphOpen = false;
+
+    // Self-test (PHONETESTO_EDITOR_SELFTEST=<folder>): log what the page reports,
+    // save its snapshot, then close the stand-alone app. Used by CI on each OS.
+    juce::File selfTestDir;
+    juce::uint32 selfTestStarted = 0;
+    bool selfTestRendered = false, selfTestSnapshot = false, selfTestDone = false;
+    juce::uint32 lastMorphMessage = 0;
     bool sizeRestored = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhoneTestoAudioProcessorEditor)

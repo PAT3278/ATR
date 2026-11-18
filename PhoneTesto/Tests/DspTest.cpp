@@ -19,6 +19,7 @@
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -248,6 +249,97 @@ int main()
         checkSmooth (r + "mix 100% -> 0%", rate, 512, [] (auto&) {}, [] (auto& p) { setParam (p, PhoneTestoAudioProcessor::mixParamId, 0.0f); });
         checkSmooth (r + "mono sum on (L 440 / R 660 Hz)", rate, 512, [] (auto&) {},
                      [] (auto& p) { setParam (p, PhoneTestoAudioProcessor::monoParamId, 1.0f); }, true);
+    }
+
+    std::printf ("Morph: the sound follows the room's camera between speakers (440 Hz tone at -12 dBFS)\n");
+    for (double rate : { 44100.0, 96000.0 })
+    {
+        const int block = 512;
+        auto tone = [rate] (int, int n) { return (float) (0.25 * std::sin (2.0 * juce::MathConstants<double>::pi * 440.0 * n / rate)); };
+        const auto at = [rate] (double sec) { return (size_t) (sec * rate); };
+        const int numModels = (int) profiles.size();
+
+        // each model on its own: how sharp its steady output is, and how loud
+        float steadyCurve = 0.0f;
+        std::vector<double> modelRms;
+        for (int m = 0; m < numModels; ++m)
+        {
+            auto q = makeProcessor (rate, block);
+            setParam (*q, PhoneTestoAudioProcessor::deviceParamId, (float) m);
+            const auto out = run (*q, rate, block, 0.8, tone);
+            steadyCurve = std::max (steadyCurve, maxCurvature (out, at (0.3), at (0.8)));
+            modelRms.push_back (rmsDb (out, at (0.3), at (0.8)));
+        }
+        const double quietest = *std::min_element (modelRms.begin(), modelRms.end());
+        const double loudest = *std::max_element (modelRms.begin(), modelRms.end());
+
+        // the user's path: slowly across all eight, back much faster than the
+        // morph may move, then let go with the Model parameter on 2
+        auto p = makeProcessor (rate, block);
+        const double sweepUp0 = 0.3, sweepUp1 = 1.8, back0 = 2.0, back1 = 2.25, release = 2.6, total = 3.4;
+        auto position = [&] (double t)
+        {
+            if (t < sweepUp0) return 0.0;
+            if (t < sweepUp1) return (t - sweepUp0) / (sweepUp1 - sweepUp0) * (numModels - 1);
+            if (t < back0) return (double) (numModels - 1);
+            if (t < back1) return (1.0 - (t - back0) / (back1 - back0)) * (numModels - 1);
+            return 0.0;
+        };
+
+        juce::AudioBuffer<float> buf (2, block);
+        juce::MidiBuffer midi;
+        std::vector<float> out;
+        bool released = false, stillMorphingAtEnd = true;
+        for (int start = 0; start < (int) (total * rate); start += block)
+        {
+            const double t = start / rate;
+            if (t >= sweepUp0 && t < release)
+                p->setMorphPosition ((float) position (t));
+            else if (t >= release && ! released)
+            {
+                setParam (*p, PhoneTestoAudioProcessor::deviceParamId, 2.0f);
+                p->endMorph();
+                released = true;
+            }
+            for (int ch = 0; ch < 2; ++ch)
+                for (int i = 0; i < block; ++i)
+                    buf.setSample (ch, i, tone (ch, start + i));
+            p->processBlock (buf, midi);
+            for (int i = 0; i < block; ++i)
+                out.push_back (buf.getSample (0, i));
+            stillMorphingAtEnd = p->isMorphing();
+        }
+
+        const auto r = juce::String (rate / 1000.0, 1).toStdString() + " kHz ";
+        const float during = maxCurvature (out, at (sweepUp0), at (release + 0.5));
+        char line[220];
+        std::snprintf (line, sizeof (line), "%sacross all eight and back: no click (spike %.4f vs the sharpest model alone %.4f)",
+                       r.c_str(), during, steadyCurve);
+        check (during <= steadyCurve * 1.35f + 1.0e-4f, line);
+
+        double low = 1e9, high = -1e9;
+        for (double t = sweepUp0; t + 0.02 < release + 0.5; t += 0.02)
+        {
+            const double w = rmsDb (out, at (t), at (t + 0.02));
+            low = std::min (low, w);
+            high = std::max (high, w);
+        }
+        std::snprintf (line, sizeof (line), "%sno drop-outs or jumps in level (%.1f..%.1f dB; the models alone %.1f..%.1f dB)",
+                       r.c_str(), low, high, quietest, loudest);
+        check (low > quietest - 12.0 && high < loudest + 1.5, line);
+
+        // after letting go it's model 2 alone, exactly as if chosen directly
+        const double settled = rmsDb (out, at (total - 0.3), at (total));
+        std::snprintf (line, sizeof (line), "%sletting go settles on the Model parameter (%.2f dB, model 2 alone %.2f dB)",
+                       r.c_str(), settled, modelRms[2]);
+        check (! stillMorphingAtEnd && std::abs (settled - modelRms[2]) < 0.1, line);
+
+        // and the host's Model parameter works as before afterwards
+        const auto after = run (*p, rate, block, 0.8, tone, 0.1, [&] { setParam (*p, PhoneTestoAudioProcessor::deviceParamId, 5.0f); });
+        const double now5 = rmsDb (after, at (0.4), at (0.8));
+        std::snprintf (line, sizeof (line), "%sa later model change from the host still applies (%.2f dB, model 5 alone %.2f dB)",
+                       r.c_str(), now5, modelRms[5]);
+        check (std::abs (now5 - modelRms[5]) < 0.1, line);
     }
 
     std::printf ("Latency\n");
