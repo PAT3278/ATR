@@ -44,6 +44,7 @@ private:
 
     PhoneTestoAudioProcessor& processor;
     juce::WebBrowserComponent browser;
+    juce::Label unavailable; // shown instead when the system has no usable web view
 
     static constexpr int fftOrder = 11, fftSize = 1 << fftOrder, numBands = 30;
     juce::dsp::FFT fft { fftOrder };
@@ -52,7 +53,7 @@ private:
     std::array<float, numBands> bands {};
 
     juce::String liveUrl, qrText;
-    int qrSize = 0;
+    int qrSize = 0, qrVersion = 0, qrSentVersion = -1, framesSinceQr = 0;
     bool liveStartFailed = false;
     bool sizeRestored = false;
 

@@ -153,6 +153,7 @@
   const backC = document.getElementById("back"), devC = document.getElementById("dev"), fxC = document.getElementById("fx");
   const fx = fxC.getContext("2d");
   let W = 1, H = 1, DPR = 1;
+  let redraw = 4; const wake = () => { redraw = Math.max(redraw, 3); };
   const T3 = window.THREE;
 
   function mkRenderer(canvas, alpha) {
@@ -162,7 +163,16 @@
     if (alpha) r.setClearColor(0x000000, 0);
     return r;
   }
-  const rBack = mkRenderer(backC, false), rDev = mkRenderer(devC, true);
+  let rBack, rDev;
+  try { rBack = mkRenderer(backC, false); rDev = mkRenderer(devC, true); }
+  catch (e) {
+    // no WebGL (a blocked or very old graphics driver): the controls below still work
+    const msg = document.createElement("div");
+    msg.style.cssText = "position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:#8f877b;font:500 14px/1.5 Barlow,sans-serif";
+    msg.textContent = "The room can't be drawn on this computer's graphics. The controls below still work.";
+    stage.appendChild(msg);
+    rBack = rDev = { render() {}, setPixelRatio() {}, setSize() {}, shadowMap: {} };
+  }
   const camera = new T3.PerspectiveCamera(26, 1, 0.01, 40);
   const back = new T3.Scene(), front = new T3.Scene();
   back.background = new T3.Color(0x0c0b0a);
@@ -179,7 +189,7 @@
     panel(2, 0.25, 0x6c7a90, 2.5, 0.6, -4.9, 0);
     const pm = new T3.PMREMGenerator(renderer), tex = pm.fromScene(s, 0.035).texture; pm.dispose(); return tex;
   }
-  back.environment = envFor(rBack); front.environment = envFor(rDev);
+  if (rBack.isWebGLRenderer) { back.environment = envFor(rBack); front.environment = envFor(rDev); }
 
   // walnut desk
   function walnut() {
@@ -519,6 +529,7 @@
     for (const r of [rBack, rDev]) { r.setPixelRatio(DPR); r.setSize(W, H, false); }
     fxC.width = Math.round(W * DPR); fxC.height = Math.round(H * DPR);
     camera.aspect = W / H; camera.updateProjectionMatrix();
+    wake();
   }
   new ResizeObserver(resize).observe(stage); resize();
   const cam = { x: 0, dist: 1, aim: 0.04 };
@@ -659,6 +670,7 @@
   onState(st => {
     if (!st) return;
     haveState = true;
+    if (st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || st.device !== S.device || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
     if (!S.dragging && st.device !== S.device) { S.device = st.device; S.sentDevice = st.device; S.pTarget = st.device; }
     S.device = st.device;
     if (!S.mixBusy && !(drag && drag.axis === "y")) { S.mixUser = st.mix / 100; mixIn.value = st.mix; }
@@ -667,7 +679,10 @@
     S.monoT = st.mono ? 1 : 0; monoB.setAttribute("aria-pressed", st.mono ? "true" : "false");
     S.bypass = !!st.bypass; bypB.setAttribute("aria-pressed", st.bypass ? "true" : "false");
     S.level = Math.max(st.peak[0], st.peak[1]); S.dry = st.dry; S.bands = st.bands && st.bands.length ? st.bands : null;
-    const L = st.live; S.live = L;
+    const L = st.live;
+    if (L.qr === undefined) { L.qr = S.live.qr; L.qrSize = S.live.qrSize; } // sent only when it changes
+    if (!L.on) { L.qr = ""; L.qrSize = 0; }
+    S.live = L;
     airB.setAttribute("aria-pressed", L.on ? "true" : "false");
     const card = document.getElementById("live");
     card.hidden = !(L.on || L.failed);
@@ -678,8 +693,8 @@
     document.getElementById("liveCount").textContent = !L.on ? "" : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3067\u8aad\u307f\u53d6\u3063\u3066\u518d\u751f") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Scan with a phone on the same Wi-Fi");
     if (document.activeElement !== pw && pw.value !== L.password) pw.value = L.password;
     pw.placeholder = L.code || "AUTO";
-    if (L.on && L.qr && L.qr !== qrShown) { qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0); devices.forEach(d => d.lastDraw = -1); }
-    if (!L.on && qrShown) { qrShown = ""; devices.forEach(d => d.lastDraw = -1); }
+    if (L.on && L.qr && L.qr !== qrShown) { qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0); devices.forEach(d => d.lastDraw = -1); wake(); }
+    if (!L.on && qrShown) { qrShown = ""; devices.forEach(d => d.lastDraw = -1); wake(); }
   });
   send({ type: "ready" });
 
@@ -697,6 +712,14 @@
     S.mix = ease(S.mix, S.bypass ? 0 : S.mixUser, 7);
     S.mono = ease(S.mono, S.monoT, 7);
     S.out = ease(S.out, S.outT, 12);
+    // Inside a DAW the room shouldn't cost anything while nothing moves: draw only
+    // while something animates, sound is playing, or the state just changed.
+    const moving = S.dragging || Math.abs(S.pTarget - S.p) > 1e-4 || Math.abs(S.pVel) > 1e-4
+      || Math.abs(S.mix - (S.bypass ? 0 : S.mixUser)) > 1e-3 || Math.abs(S.mono - S.monoT) > 1e-3 || Math.abs(S.out - S.outT) > 1e-3
+      || rings.length > 0 || S.level > 0.002 || S.dry > 0.002;
+    if (moving) redraw = Math.max(redraw, 2);
+    if (redraw <= 0) { requestAnimationFrame(tick); return; }
+    redraw--;
     setCamera(); applyFocus();
     let best = 1e9, focus = 0;
     devices.forEach((d, i) => {

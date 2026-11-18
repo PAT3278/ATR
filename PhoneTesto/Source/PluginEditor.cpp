@@ -15,7 +15,9 @@ namespace
         juce::ignoreUnused (editor);
 
         return Options {}
-            .withBackend (Options::Backend::webview2)
+           #if JUCE_WINDOWS
+            .withBackend (Options::Backend::webview2) // WebView2 exists only on Windows; elsewhere the default is WebKit
+           #endif
             .withWinWebView2Options (Options::WinWebView2 {}
                                          // a plugin can't rely on writing next to the host's executable
                                          .withUserDataFolder (juce::File::getSpecialLocation (juce::File::tempDirectory)
@@ -67,8 +69,23 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
       processor (p),
       browser (browserOptions (*this, [this] (const juce::var& v) { handleUi (v); }))
 {
-    addAndMakeVisible (browser);
-    browser.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
+    if (juce::WebBrowserComponent::areOptionsSupported (browserOptions (*this, {})))
+    {
+        addAndMakeVisible (browser);
+        browser.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
+    }
+    else
+    {
+        // Without a web view the room can't be drawn; say what's missing instead of showing nothing.
+        unavailable.setText ("PhoneTesto draws its window with the system's web view, which isn't available here.\n\n"
+                             "On Windows, install the Microsoft Edge WebView2 Runtime (free, from microsoft.com), "
+                             "then reopen the plugin. The sound works without it.",
+                             juce::dontSendNotification);
+        unavailable.setJustificationType (juce::Justification::centred);
+        unavailable.setColour (juce::Label::textColourId, juce::Colour (0xffeee7dc));
+        unavailable.setFont (juce::FontOptions (16.0f));
+        addAndMakeVisible (unavailable);
+    }
 
     setResizable (true, true);
     setResizeLimits (720, 480, 1920, 1280);
@@ -87,6 +104,7 @@ PhoneTestoAudioProcessorEditor::~PhoneTestoAudioProcessorEditor()
 void PhoneTestoAudioProcessorEditor::resized()
 {
     browser.setBounds (getLocalBounds());
+    unavailable.setBounds (getLocalBounds().reduced (60));
 
     // Remember the size the user picks, to reopen at it.
     if (sizeRestored)
@@ -98,7 +116,9 @@ void PhoneTestoAudioProcessorEditor::handleUi (const juce::var& v)
 {
     const auto type = v["type"].toString();
 
-    if (type == "param")
+    if (type == "ready")
+        qrSentVersion = -1; // a fresh page: send everything
+    else if (type == "param")
         setParameter (v["id"].toString(), (double) v["value"]);
     else if (type == "gesture")
         gesture (v["id"].toString(), (bool) v["on"]);
@@ -188,6 +208,8 @@ juce::var PhoneTestoAudioProcessorEditor::makeState()
         qrText.clear();
         qrSize = 0;
 
+        ++qrVersion;
+
         if (url.isNotEmpty())
         {
             const auto qr = qrcodegen::QrCode::encodeText (url.toRawUTF8(), qrcodegen::QrCode::Ecc::MEDIUM);
@@ -208,8 +230,16 @@ juce::var PhoneTestoAudioProcessorEditor::makeState()
     liveState->setProperty ("listeners", live ? processor.getLiveListenerCount() : 0);
     liveState->setProperty ("password", processor.getLivePassword());
     liveState->setProperty ("code", processor.getAutoAccessCode());
-    liveState->setProperty ("qr", qrText);
-    liveState->setProperty ("qrSize", qrSize);
+    // The code only changes with the address: send it then, and once a second
+    // in case the page missed it (it ignores events while hidden).
+    liveState->setProperty ("qrVersion", qrVersion);
+    if (qrVersion != qrSentVersion || ++framesSinceQr >= 30)
+    {
+        liveState->setProperty ("qr", qrText);
+        liveState->setProperty ("qrSize", qrSize);
+        qrSentVersion = qrVersion;
+        framesSinceQr = 0;
+    }
     state->setProperty ("live", juce::var (liveState));
 
     return juce::var (state);
