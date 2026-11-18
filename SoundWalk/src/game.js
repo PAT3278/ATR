@@ -439,8 +439,15 @@
     }
   });
 
+  var hillField = null;   // the rolling hills north of OHH (built once the places and paths exist, below)
+  function hillAt(x, z) {
+    const F = hillField; if (!F) return 0;
+    const fx = (x - F.x0) / F.d, fz = (z - F.z0) / F.d; if (fx < 0 || fz < 0 || fx >= F.nx - 1 || fz >= F.nz - 1) return 0;
+    const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = F.h, n = F.nx;
+    return (H[j * n + i] * (1 - u) + H[j * n + i + 1] * u) * (1 - v) + (H[(j + 1) * n + i] * (1 - u) + H[(j + 1) * n + i + 1] * u) * v;
+  }
   function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
-    let h = 0;
+    let h = hillAt(x, z);
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
     return h;
   }
@@ -746,6 +753,47 @@
   scene.add(ringView.group);
   ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
 
+  // Hills: OHH's hill runs on north, then north-east towards the funfair, as a chain of grassy rolling hills. They
+  // sink to nothing at every path (the paths pass through in cuttings), at the ring road and its ramps, at the plaza
+  // and the loop, and round every other place, so nothing that stands on flat ground ends up buried.
+  {
+    const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair (either side of KEYAKI's avenue)
+    const X0 = -164, X1 = 40, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz);
+    const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
+    others.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
+    const dirs = [[0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dirs.push([Math.cos(a) * 7, Math.sin(a) * 7], [Math.cos(a) * 14, Math.sin(a) * 14]); }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const x = X0 + i * D, z = Z0 + j * D;
+      let H = 0; for (const [bx, bz, bh, br] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) H += bh * Math.exp(-q * 1.6); }
+      if (H < 0.05) continue;
+      H = 16 * (1 - Math.exp(-H / 16)) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
+      let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d) * smooth(9, 21, ring.dist(x, z));
+      m *= smooth(8, 18, Math.hypot(x - shopAt.x, z - shopAt.z)) * smooth(8, 18, Math.hypot(x - hallAt.x, z - hallAt.z));
+      for (const p of places) { if (m <= 0) break; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
+      for (const p of others) {
+        if (m <= 0) break;
+        if (Math.hypot(x - p.x, z - p.z) > 140) continue;
+        m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z));
+        const core = coreOf(p); let hit = 1;
+        for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
+        m *= hit;
+      }
+      h[j * nx + i] = H * m;
+    }
+    hillField = { x0: X0, z0: Z0, d: D, nx, nz, h };
+    // the mesh: one grid over the whole field, its flat parts tucked just under the ground
+    const geo = new THREE.PlaneGeometry(X1 - X0, Z1 - Z0, nx - 1, nz - 1); geo.rotateX(-Math.PI / 2);
+    const pa = geo.attributes.position;
+    for (let k = 0; k < pa.count; k++) { const x = pa.getX(k) + (X0 + X1) / 2, z = pa.getZ(k) + (Z0 + Z1) / 2, hh = hillAt(x, z); pa.setXYZ(k, x, hh > 0.03 ? hh : -0.35, z); }
+    geo.computeVertexNormals();
+    const hm = new THREE.Mesh(geo, mat('#b4c08e', { map: tex('grass', 44, 27), rough: 0.95 }));
+    hm.receiveShadow = true; hm.castShadow = false; scene.add(hm);
+    // the map: the hills drawn once, in shades of green, under everything else
+    const hc = document.createElement('canvas'); hc.width = hc.height = 300; const hg = hc.getContext('2d');
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const v = h[j * nx + i]; if (v < 0.6) continue; hg.fillStyle = `rgba(${70 + v * 3},${92 + v * 4},${58 + v * 2},${Math.min(0.85, 0.25 + v / 14)})`; hg.fillRect(X0 + i * D + 150 - D / 2, Z0 + j * D + 150 - D / 2, D + 0.4, D + 0.4); }
+    hillField.mapCanvas = hc;
+  }
+
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
     const r = rng(99), spots = [];
@@ -758,7 +806,7 @@
       }
       return true;
     };
-    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z)) spots.push([x, z, 0.8 + r() * 0.7]); }
+    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z) && !(hillAt(x, z) > 1.5 && r() < 0.85)) spots.push([x, z, 0.8 + r() * 0.7]); }   // the hills keep only copses: open grass between
     for (let i = 0; i < 240; i++) { const t = (i / 240) * 4, sd = Math.floor(t), f = (t % 1) * 304 - 152; const x = sd === 0 ? f : sd === 1 ? 152 : sd === 2 ? -f : -152, z = sd === 0 ? -152 : sd === 1 ? f : sd === 2 ? 152 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
     // Each tree is two crossed cards cut from photographed young firs and pines (Poly Haven, CC0), baked into one
     // atlas (tex/trees.png): 6 trees across, a front view on the top row and a side view below. One draw per tree.
@@ -792,7 +840,7 @@
       list.forEach(([x, z, s], j) => {
         const ht = (9 + r() * 7) * s, h = ht / Math.max(...ASPECT[k].map((a) => Math.min(1, 0.5 / a)));   // so the tree itself, not its card, is 8-14 m
         const lift = Math.max(2.8, ht * 0.26) * (0.9 + r() * 0.25);   // bare trunk below the first branches
-        q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, lift, z); sc.set(h, h, h);
+        q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, lift + hillAt(x, z), z); sc.set(h, h, h);
         trunks.push([x, z, lift + ht * 0.45, (0.13 + r() * 0.06) * s]);
         im.setMatrixAt(j, m4.compose(ps, q, sc)); im.setColorAt(j, col.copy(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85 + r() * 0.3));
         circles.push({ x, z, r: 0.3 * s });
@@ -802,7 +850,7 @@
     });
     {
       const tm = new THREE.InstancedMesh(trunkGeo, mat('#6b5f52', { map: tex('bark', 1, 3), rough: 0.95 }), trunks.length);
-      trunks.forEach(([x, z, th, rad], j) => { q.setFromAxisAngle(up, r() * 6.28); ps.set(x, 0, z); sc.set(rad, th, rad); tm.setMatrixAt(j, m4.compose(ps, q, sc)); });
+      trunks.forEach(([x, z, th, rad], j) => { q.setFromAxisAngle(up, r() * 6.28); ps.set(x, hillAt(x, z) - 0.3, z); sc.set(rad, th, rad); tm.setMatrixAt(j, m4.compose(ps, q, sc)); });
       tm.castShadow = tm.receiveShadow = true; scene.add(tm);
     }
   }
@@ -1915,6 +1963,7 @@
   function drawMap(at) {
     const g = mg, W = mapCv.width;
     g.fillStyle = '#141412'; g.fillRect(0, 0, W, W);
+    if (hillField && hillField.mapCanvas) g.drawImage(hillField.mapCanvas, 0, 0, W, W);   // the hills, drawn once (the map spans -150..150)
     g.lineCap = 'round';
     places.forEach((p) => {
       (p.map || []).forEach((sh) => {
@@ -2435,5 +2484,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
