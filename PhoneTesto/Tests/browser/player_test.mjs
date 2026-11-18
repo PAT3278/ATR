@@ -154,8 +154,8 @@ try {
           return { skin: document.documentElement.dataset.skin,
                    segments: document.fonts.check('700 20px "DSEG7"'), barlow: document.fonts.check('700 12px "Barlow Condensed"') };
         });
-        check(fonts.skin === "receiver" && fonts.segments && fonts.barlow,
-              `RECEIVER look with the plugin's fonts (skin=${fonts.skin}, DSEG7 ${fonts.segments}, Barlow Condensed ${fonts.barlow})`);
+        check(fonts.skin === "room" && fonts.segments && fonts.barlow,
+              `the room's look with the plugin's fonts (skin=${fonts.skin}, DSEG7 ${fonts.segments}, Barlow Condensed ${fonts.barlow})`);
         check(eng.output === c.output, `playback engine: ${eng.output} (want ${c.output})`);
         check(c.keepAwake.includes(eng.keepAwake), `keep-screen-on via: ${eng.keepAwake || "nothing"} (want ${c.keepAwake.join(" or ")})`);
       }
@@ -334,18 +334,18 @@ try {
     proc.kill("SIGTERM");
   }
 
-  // The page follows the plugin's skin, reported in /info.
-  console.log("Page follows the plugin's skin");
-  for (const skin of ["receiver", "deck", "lab"]) {
-    const { proc, port } = await startDemo(["--skin", skin]);
+  // The page takes the look the plugin reports in /info: the room.
+  console.log("Page takes the room's look");
+  for (const skin of ["room"]) {
+    const { proc, port } = await startDemo([]);
     ({ context, page, errors } = await newPage(browser, "ja-JP"));
     await page.goto(`http://${lanAddress}:${port}/`);
     await page.waitForFunction(() => document.getElementById("conn").classList.contains("ok"));
     const shown = await page.evaluate(() => ({ skin: document.documentElement.dataset.skin,
                                                bg: getComputedStyle(document.body).backgroundColor,
                                                theme: document.querySelector('meta[name="theme-color"]').content }));
-    check(shown.skin === skin && shown.theme === { deck: "#c9cbcc", receiver: "#cfc5ad", lab: "#bcbeb7" }[skin],
-          `plugin on ${skin.toUpperCase()} -> page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
+    check(shown.skin === skin && shown.theme === "#0d0c0b" && shown.bg === "rgb(13, 12, 11)",
+          `page shows ${String(shown.skin).toUpperCase()} (background ${shown.bg}, theme-color ${shown.theme})`);
     if (shotDir) await page.screenshot({ path: path.join(shotDir, `player-${skin}.png`), fullPage: true });
     check(errors.length === 0, "no page/console errors" + (errors.length ? ": " + errors.join(" | ") : ""));
     await context.close();

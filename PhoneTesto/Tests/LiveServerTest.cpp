@@ -286,14 +286,7 @@ int main()
                    && info.bodyText().find ("\"sampleRate\":48000") != std::string::npos,
                "GET /info reports 48 kHz, no password: " + info.bodyText());
 
-        // the phone page follows the plugin's skin
-        const bool receiverByDefault = info.bodyText().find ("\"skin\":\"receiver\"") != std::string::npos;
-        server.setSkin (0);
-        const bool deckAfter = get (port, "/info").bodyText().find ("\"skin\":\"deck\"") != std::string::npos;
-        server.setSkin (2);
-        const bool labAfter = get (port, "/info").bodyText().find ("\"skin\":\"lab\"") != std::string::npos;
-        server.setSkin (1);
-        check (receiverByDefault && deckAfter && labAfter, "/info reports the plugin's skin (receiver by default, then deck, then lab)");
+        check (info.bodyText().find ("\"skin\":\"room\"") != std::string::npos, "/info tells the page to take the room's look");
 
         bool fontsOk = true;
         for (auto* font : { "/fonts/DSEG7Classic-Bold.ttf", "/fonts/BarlowCondensed-Bold.ttf", "/fonts/Barlow-Bold.ttf" })

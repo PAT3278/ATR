@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-skin="receiver">
+<html lang="en" data-skin="room">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#cfc5ad">
+<meta name="theme-color" content="#0d0c0b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>PhoneTesto Live</title>
@@ -115,30 +115,6 @@
      hi-fi receiver) and LAB (test equipment). Panel text is printed on the
      plate; the meter, status and quality picker sit in dark windows; buttons
      are keys in holes in the plate, with a lamp that lights when on. */
-  html[data-skin="deck"] {
-    --plate: #c9cbcc; --plate-top: #d7d9da; --plate-bottom: #b2b5b7; --brush: 0.05;
-    --legend: #17181a; --legend-dim: #4b4e52;
-    --window: #040a09; --trace: 94, 242, 207;
-    --key-top: #3a3b3d; --key-bottom: #1c1d1e; --key-text: #e8e8e4; --key-light: 0.18;
-    --lamp: 70, 245, 110; --live: 255, 51, 36;
-    --legend-font: 600 12px "Barlow", sans-serif; --legend-track: 0.05em;
-  }
-  html[data-skin="receiver"] {
-    --plate: #cfc5ad; --plate-top: #dcd2bb; --plate-bottom: #b6aa8f; --brush: 0.04;
-    --legend: #2a2018; --legend-dim: #5f5243;
-    --window: #0b0806; --trace: 255, 181, 71;
-    --key-top: #f0ebdf; --key-bottom: #b8af9c; --key-text: #2a2018; --key-light: 0.6;
-    --lamp: 255, 181, 71; --live: 255, 74, 46;
-    --legend-font: 500 12px "Barlow", sans-serif; --legend-track: 0.12em;
-  }
-  html[data-skin="lab"] {
-    --plate: #bcbeb7; --plate-top: #c5c7c0; --plate-bottom: #aaada5; --brush: 0;
-    --legend: #141513; --legend-dim: #474a44;
-    --window: #030805; --trace: 109, 255, 143;
-    --key-top: #e6e5df; --key-bottom: #c4c3bb; --key-text: #141513; --key-light: 0.6;
-    --lamp: 79, 255, 108; --live: 255, 58, 34;
-    --legend-font: 700 13px "Barlow Condensed", sans-serif; --legend-track: 0.03em;
-  }
 
   /* the plate: brushed metal (DECK, RECEIVER) or hammertone paint (LAB) */
   html[data-skin], html[data-skin] body {
@@ -149,22 +125,7 @@
       linear-gradient(var(--plate-top), var(--plate-bottom));
     background-attachment: scroll;
   }
-  html[data-skin="lab"], html[data-skin="lab"] body {
-    background-image:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='h'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.11' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.32 .2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23h)'/%3E%3C/svg%3E"),
-      linear-gradient(var(--plate-top), var(--plate-bottom));
-  }
   /* RECEIVER: walnut cheeks down both sides */
-  html[data-skin="receiver"] body::before, html[data-skin="receiver"] body::after {
-    content: ""; position: fixed; top: 0; bottom: 0; width: 9px; z-index: 5; pointer-events: none;
-    background:
-      repeating-linear-gradient(90deg, rgba(42, 22, 11, 0.45) 0 1px, transparent 1px 3px, rgba(122, 75, 42, 0.35) 3px 4px, transparent 4px 6px),
-      linear-gradient(90deg, #5a341d, #3a2112);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
-  }
-  html[data-skin="receiver"] body::before { left: 0; }
-  html[data-skin="receiver"] body::after { right: 0; }
-  html[data-skin="receiver"] main { padding-left: 26px; padding-right: 26px; }
 
   html[data-skin] .label { font: var(--legend-font); letter-spacing: var(--legend-track); color: var(--legend-dim); }
   html[data-skin] .note { color: var(--legend-dim); font-weight: 500; }
@@ -173,20 +134,12 @@
   /* header: wordmark, model, power / on-air lamp */
   html[data-skin] header { flex-wrap: wrap; row-gap: 8px; }
   html[data-skin] .logo { color: var(--legend); white-space: nowrap; }
-  html[data-skin="deck"] .logo { font: 700 26px/1 "Barlow", sans-serif; letter-spacing: -0.01em; text-transform: none; }
-  html[data-skin="receiver"] .logo { font: 500 19px/1 "Barlow", sans-serif; letter-spacing: 0.34em; }
-  html[data-skin="lab"] .logo { font: 700 28px/1 "Barlow Condensed", sans-serif; letter-spacing: 0; }
   html[data-skin] .badge { border-radius: 0; }
-  html[data-skin="deck"] .badge { background: var(--legend); color: var(--plate-top); font: 700 14px/1 "Barlow Condensed", sans-serif; padding: 3px 7px; }
-  html[data-skin="receiver"] .badge { background: none; color: var(--legend-dim); font: 500 11px/1 "Barlow", sans-serif; letter-spacing: 0.12em; padding: 0; }
-  html[data-skin="lab"] .badge { background: none; color: var(--legend); border: 1.2px solid var(--legend); font: 700 13px/1 "Barlow Condensed", sans-serif; padding: 3px 12px; }
   html[data-skin] .conn { background: none; border: 0; padding: 0; gap: 8px; }
   html[data-skin] .conn .label { color: var(--legend); white-space: nowrap; }
   html[data-skin] .led { width: 8px; height: 8px; background: rgba(var(--lamp), 0.25); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35); }
   html[data-skin] .conn.ok .led { background: rgb(var(--lamp)); box-shadow: 0 0 6px 1px rgba(var(--lamp), 0.6); }
   html[data-skin] .conn.bad .led { background: rgb(var(--live)); box-shadow: 0 0 6px 1px rgba(var(--live), 0.6); }
-  html[data-skin="deck"] .divider, html[data-skin="lab"] .divider { height: 1.5px; background: var(--legend); }
-  html[data-skin="receiver"] .divider { height: 1px; background: rgba(0, 0, 0, 0.35); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6); }
 
   /* windows: dark glass set into the plate */
   html[data-skin] .well {
@@ -194,7 +147,6 @@
     box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5), 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 2px 0 rgba(0, 0, 0, 0.6);
     background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.07), transparent 40%);
   }
-  html[data-skin="lab"] .well { border-radius: 12px; background-image: radial-gradient(ellipse at center, #0b1a10, #020503 75%); }
   html[data-skin] .well .label { color: rgba(var(--trace), 0.6); font: 600 11px "Barlow Condensed", sans-serif; letter-spacing: 0.1em; }
   html[data-skin] #status, html[data-skin] .readouts b {
     font-family: "Barlow Condensed", sans-serif; font-weight: 600; color: rgb(var(--trace));
@@ -218,9 +170,6 @@
      casting a soft shadow; a slight dome of light on the face and a fine
      grain (brushed on RECEIVER's aluminium, a speckle on plastic). A
      latched key sinks, its walls hidden and its top edge shaded by the rim. */
-  html[data-skin="deck"] { --key-wall: #121314; --key-grain: var(--speckle); }
-  html[data-skin="receiver"] { --key-wall: #8b8370; --key-grain: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 0.5px, rgba(0, 0, 0, 0.05) 0.5px 1px, transparent 1px 1.5px); }
-  html[data-skin="lab"] { --key-wall: #9b9a91; --key-grain: var(--speckle); }
   html[data-skin] {
     --speckle: linear-gradient(transparent, transparent); /* plain: a noise image costs paint time while audio starts */
   }
@@ -240,8 +189,6 @@
       0 6px 7px rgba(0, 0, 0, 0.28);
     transition: transform 0.06s ease, box-shadow 0.06s ease;
   }
-  html[data-skin="deck"] .btn { text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.6); }
-  html[data-skin="lab"] .btn { border-radius: 2.5px; font-size: 15px; }
   html[data-skin] .btn:active {
     filter: none; transform: translateY(2px);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, var(--key-light)), inset 0 -5px 6px -4px rgba(0, 0, 0, 0.22),
@@ -256,34 +203,47 @@
     color: var(--key-text); filter: brightness(0.9); transform: translateY(3px);
     box-shadow: inset 0 -4px 6px -4px rgba(0, 0, 0, 0.22), 0 1px 0 var(--key-wall), 0 1px 0 1px rgba(0, 0, 0, 0.24), 0 2px 3px rgba(0, 0, 0, 0.25);
   }
-  html[data-skin="lab"] #play {
-    background: radial-gradient(ellipse 75% 120% at 50% 8%, rgba(255, 255, 255, 0.18), transparent 70%), var(--speckle), linear-gradient(#cf5244, #9a2a1f);
-    color: #fff2ec; text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.4); --key-wall: #6a1a13;
-  }
   /* the lamp: a bar LED (DECK), a round pilot lamp (RECEIVER), a jewel (LAB) */
   html[data-skin] .btn[aria-pressed]::before {
     content: ""; position: absolute; border-radius: 50%; margin: 0;
     background: rgba(var(--lamp), 0.2); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
   }
-  html[data-skin="deck"] .btn[aria-pressed]::before { right: 12px; left: auto; top: 8px; width: 14px; height: 4px; border-radius: 1px; }
-  html[data-skin="receiver"] .btn[aria-pressed]::before { left: 16px; top: 50%; width: 8px; height: 8px; margin-top: -4px; box-shadow: 0 0 0 2px #d9d6cf, 0 0 0 3px rgba(0, 0, 0, 0.25); }
-  html[data-skin="lab"] .btn[aria-pressed]::before { left: auto; right: 16px; top: 50%; width: 10px; height: 10px; margin-top: -5px; box-shadow: 0 0 0 2.5px #d6d7d2, 0 0 0 3.5px rgba(0, 0, 0, 0.3); }
   html[data-skin] .btn[aria-pressed="true"]::before { background: rgb(var(--lamp)); }
-  html[data-skin="deck"] .btn[aria-pressed="true"]::before { box-shadow: 0 0 8px 2px rgba(var(--lamp), 0.55); }
-  html[data-skin="receiver"] .btn[aria-pressed="true"]::before { box-shadow: 0 0 0 2px #d9d6cf, 0 0 9px 3px rgba(var(--lamp), 0.6); }
-  html[data-skin="lab"] .btn[aria-pressed="true"]::before { box-shadow: 0 0 0 2.5px #d6d7d2, 0 0 10px 3px rgba(var(--lamp), 0.6); }
   /* LISTEN lights red, like ON AIR */
   html[data-skin] #play[aria-pressed]::before { background: rgba(var(--live), 0.22); }
   html[data-skin] #play[aria-pressed="true"]::before { background: rgb(var(--live)); }
-  html[data-skin="deck"] #play[aria-pressed="true"]::before { box-shadow: 0 0 8px 2px rgba(var(--live), 0.55); }
-  html[data-skin="receiver"] #play[aria-pressed="true"]::before { box-shadow: 0 0 0 2px #d9d6cf, 0 0 9px 3px rgba(var(--live), 0.6); }
-  html[data-skin="lab"] #play[aria-pressed="true"]::before { box-shadow: 0 0 0 2.5px #d6d7d2, 0 0 10px 3px rgba(var(--live), 0.6); }
   html[data-skin] #play { min-height: 64px; font-size: 18px; letter-spacing: 0.14em; }
   html[data-skin] #wake { width: 104px; }
   /* keep legends clear of their lamps */
-  html[data-skin="deck"] .btn[aria-pressed] { padding-top: 6px; }
-  html[data-skin="receiver"] .btn[aria-pressed] { padding-left: 34px; }
-  html[data-skin="lab"] .btn[aria-pressed] { padding-right: 36px; }
+
+  /* ROOM: the plugin's room at night, a warm lamp over dark wood */
+  html[data-skin="room"] {
+    --plate: #0d0c0b; --plate-top: #1a1511; --plate-bottom: #0b0a09; --brush: 0;
+    --legend: #eee7dc; --legend-dim: #8f877b;
+    --window: #070605; --trace: 255, 180, 94;
+    --key-top: #2b2723; --key-bottom: #1a1714; --key-text: #eee7dc; --key-light: 0.07;
+    --key-wall: #090807; --key-grain: var(--speckle);
+    --lamp: 255, 180, 94; --live: 255, 90, 60;
+    --legend-font: 600 12px "Barlow Condensed", sans-serif; --legend-track: 0.14em;
+  }
+  html[data-skin="room"], html[data-skin="room"] body {
+    background-color: var(--plate);
+    background-image: radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255, 170, 90, 0.16), transparent 70%),
+                      linear-gradient(var(--plate-top), var(--plate-bottom));
+  }
+  html[data-skin="room"] .logo { font: 700 15px/1 "Barlow Condensed", sans-serif; letter-spacing: 0.26em; color: var(--legend-dim); }
+  html[data-skin="room"] .badge { display: none; }
+  html[data-skin="room"] .divider { height: 1px; background: rgba(238, 231, 220, 0.12); }
+  html[data-skin="room"] .well, html[data-skin="room"] .field {
+    box-shadow: inset 0 0 0 1px rgba(238, 231, 220, 0.08), inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  }
+  html[data-skin="room"] .btn { text-shadow: none; border-radius: 999px; }
+  html[data-skin="room"] .btn[aria-pressed]::before { left: 18px; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; box-shadow: none; }
+  html[data-skin="room"] .btn[aria-pressed="true"]::before { box-shadow: 0 0 10px 2px rgba(var(--lamp), 0.6); }
+  html[data-skin="room"] #play[aria-pressed="true"]::before { box-shadow: 0 0 10px 2px rgba(var(--live), 0.6); }
+  html[data-skin="room"] .btn[aria-pressed] { padding-left: 36px; }
+  html[data-skin="room"] .btn[aria-pressed="true"] { color: rgb(var(--lamp)); }
+  html[data-skin="room"] #play[aria-pressed="true"] { color: rgb(var(--live)); }
 </style>
 </head>
 <body>
@@ -942,8 +902,8 @@ $("wake").addEventListener("click", () => {
 $("play").addEventListener("click", () => togglePlay());
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && wantPlaying) requestWakeLock(); });
 
-// The page follows the plugin's skin (RECEIVER until /info says otherwise).
-const SKIN_COLOURS = { deck: "#c9cbcc", receiver: "#cfc5ad", lab: "#bcbeb7" };
+// The page takes the look the plugin reports in /info (the room).
+const SKIN_COLOURS = { room: "#0d0c0b" };
 function applySkin(skin) {
   if (!SKIN_COLOURS[skin]) return;
   if (document.documentElement.dataset.skin === skin) return;

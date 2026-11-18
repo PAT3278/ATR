@@ -416,7 +416,7 @@ int main()
             }
             return got.toString();
         };
-        check (infoBody().contains ("\"skin\":\"receiver\""), "the phone page is told its look");
+        check (infoBody().contains ("\"skin\":\"room\""), "the phone page is told its look");
 
         check (status ("/stream?fmt=pcm16") == 401, "stream without the code is refused, even with no password set");
         check (status ("/auth?key=" + code) == 204, "the code from the QR URL is accepted");

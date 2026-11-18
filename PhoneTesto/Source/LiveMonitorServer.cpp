@@ -457,7 +457,7 @@ private:
                  << ",\"auth\":" << (server.hasPassword() ? "true" : "false")
                  << ",\"listeners\":" << server.numStreaming.load()
                  << ",\"maxListeners\":" << maxListeners
-                 << ",\"skin\":\"" << (server.skin.load() == 1 ? "receiver" : server.skin.load() == 2 ? "lab" : "deck") << "\"}";
+                 << ",\"skin\":\"room\"}"; // the page's look, matching the plugin's room
             sendResponse (200, "application/json", json.toRawUTF8(), json.getNumBytesAsUTF8(), head);
             return;
         }

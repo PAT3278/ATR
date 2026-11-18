@@ -102,10 +102,6 @@ public:
     static constexpr int maxFailuresPerWindow = 10;
     static constexpr juce::uint32 failureWindowMs = 60000, lockoutMs = 60000;
 
-    /** The plugin's skin, so the phone page can match it (0 deck, 1 receiver,
-        2 lab; reported by name in /info). */
-    void setSkin (int index) noexcept { skin = juce::jlimit (0, 2, index); }
-
     int getNumListeners() const;
     juce::StringArray getListenerAddresses() const;
 
@@ -127,7 +123,6 @@ private:
     std::atomic<int> boundPort { 0 };
     std::atomic<double> inputSampleRate { 48000.0 };
     std::atomic<int> numStreaming { 0 };
-    std::atomic<int> skin { 1 };
 
     BroadcastRing ring;
 
