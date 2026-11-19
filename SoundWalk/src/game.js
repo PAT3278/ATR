@@ -872,7 +872,7 @@
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.1, 48), additive(p.color, 0.6));
     ring.rotation.x = -Math.PI / 2; ring.position.set(vp.x, gy + 0.08, vp.z);
     scene.add(beam, ring);
-    const ia = { kind: 'view', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6 };
+    const ia = { kind: 'view', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6, y0: gy - DECK_STEP, y1: gy + 2.5 };   // only at the viewpoint's level: SHOT's is up on a walkway you can also walk under
     beam.userData.ia = ring.userData.ia = ia;
     pick.push(ring, beam);
     interact.push(ia);
@@ -1125,9 +1125,9 @@
 
   /* ================= state ================= */
   const KEY = 'soundwalk-v1';
-  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false };
+  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false, jy: 0 };
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
-  function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
+  function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; P.jy = P.y; } }   // jy: where you took off (see update)
   let camYaw = Math.PI, camPitch = 0.2, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
   function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
@@ -1750,7 +1750,7 @@
     for (const h of hits) {
       const ia = h.object.userData.ia;
       if (ia) {
-        if (Math.hypot(ia.x - P.x, ia.z - P.z) < ia.r) { faceTo(ia); act(ia); return; }
+        if (Math.hypot(ia.x - P.x, ia.z - P.z) < ia.r && level(ia)) { faceTo(ia); act(ia); return; }
         if (ia.place) routeTo(ia.place, ia); else auto = { pts: [{ x: ia.sx, z: ia.sz }], i: 0, then: ia };
         return;
       }
@@ -1794,6 +1794,7 @@
   function pressA() { if (mode === 'hoop') { hoopShoot(); return; } if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else if (!drv) jump(); } }
   $('#btnB').addEventListener('pointerdown', (e) => { e.preventDefault(); dashOn = !dashOn; $('#btnB').classList.toggle('on', dashOn); });
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
+  function level(ia) { return (ia.y0 === undefined || P.y >= ia.y0) && (ia.y1 === undefined || P.y <= ia.y1); }   // at its height too: a thing on a deck is not yours from under it
   function act(ia) {
     auto = null; keys.clear();
     if (ia.kind === 'view') { if (ia.place.ride) startRide(ia.place); else enterView(ia.place); return; }
@@ -2009,9 +2010,10 @@
     });
     ring.pas.forEach((pa) => { const [x, y] = toMap(...Object.values(pa.f.toWorld(10, -10))); g.save(); g.translate(x, y); g.fillStyle = '#e8e2d0'; g.strokeStyle = '#141412'; g.lineWidth = 2;
       g.beginPath(); g.rect(-9, -5, 18, 8); g.rect(-5, -10, 10, 5); g.fill(); g.stroke(); g.fillStyle = '#141412'; g.beginPath(); g.arc(-5, 4, 3, 0, 7); g.arc(5, 4, 3, 0, 7); g.fill(); g.restore(); });
-    const [px, py] = toMap((at || P).x, (at || P).z);
+    let [px, py] = toMap((at || P).x, (at || P).z); const off = Math.min(px, py) < 12 || Math.max(px, py) > W - 12;   // out past the map's 150 m (OHH's far beaches): kept at its edge, drawn hollow
+    px = clamp(px, 12, W - 12); py = clamp(py, 12, W - 12);
     g.save(); g.translate(px, py); g.rotate(at ? 0 : -P.face + Math.PI); if (at) g.scale(1.6, 1.6);
-    g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill();
+    g.fillStyle = g.strokeStyle = '#e8e2d0'; g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); if (off) g.stroke(); else g.fill();
     g.restore();
   }
   function openMap() {
@@ -2092,7 +2094,7 @@
       // Behind the wheel the car radio picks up whichever song you are driving past: by direction, not distance.
       const radio = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
       const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), radio * 0.85);
-      p.dwell = (d < 4.5 || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);
+      p.dwell = ((d < 4.5 && P.y > p.vy - DECK_STEP) || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);   // lingering at the viewpoint, not under it
       const prox = 0.4 * pp * pp;
       p.gain = Math.max(prox + (1 - prox) * ease(p.dwell) * pp, radio * 0.5);
       p.pp = pp;
@@ -2151,7 +2153,7 @@
         const lastPt = auto.i === auto.pts.length - 1;
         if (d < (lastPt ? 0.3 : 1.2 + P.v * 0.25)) {   // faster means a wider turn, so count a waypoint as reached from further out
           if (!lastPt) auto.i++;
-          else { const th = auto.then; auto = null; if (th) { faceTo(th); act(th); } }
+          else { const th = auto.then; auto = null; if (th && level(th)) { faceTo(th); act(th); } }
         } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : top; }
       }
       if (sp > 0) {
@@ -2167,7 +2169,7 @@
         const moved = Math.hypot(P.x - ox, P.z - oz);
         if (auto && moved < P.v * dt * 0.2) {
           auto.stuck = (auto.stuck || 0) + dt;
-          if (auto.stuck > 0.5) { const th = auto.then; auto = null; if (th && Math.hypot(th.x - P.x, th.z - P.z) < th.r + 1) { faceTo(th); act(th); } }
+          if (auto.stuck > 0.5) { const th = auto.then; auto = null; if (th && Math.hypot(th.x - P.x, th.z - P.z) < th.r + 1 && level(th)) { faceTo(th); act(th); } }
         } else if (auto) auto.stuck = 0;
         if (moved < P.v * dt * 0.4) P.v *= 0.8;
         let df = Math.atan2(P.hx, P.hz) - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 12);
@@ -2181,7 +2183,7 @@
       const fx = Math.sin(P.face), fz = Math.cos(P.face);
       for (const ia of interact) {
         const dx = ia.x - P.x, dz = ia.z - P.z, d = Math.hypot(dx, dz);
-        if (d > ia.r || ia.off || (ia.y0 !== undefined && P.y < ia.y0) || (ia.y1 !== undefined && P.y > ia.y1)) continue;
+        if (d > ia.r || ia.off || !level(ia)) continue;
         const dot = (dx * fx + dz * fz) / (d || 1);
         if (dot < 0.15 && d > 1.4) continue;
         const sc = d - dot;
@@ -2191,10 +2193,17 @@
       P.speed += (0 - P.speed) * Math.min(1, dt * 10); P.v = 0; P.lean = 0; boost += (0 - boost) * Math.min(1, dt * 4);
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
-    const gh = groundAt(P.x, P.z, P.y);
+    // In the air you land only on what was within reach of where you took off (a deck up to two steps above it), and never
+    // on one you jump at from underneath, however high the jump: a deck you are under is your ceiling (head stops below it).
+    const gh = groundAt(P.x, P.z, P.air ? Math.min(P.y, P.jy + DECK_STEP) : P.y);
     if (drv) { /* the car sets the height */ }
     else if (ride) rideTick(dt);   // the ride sets it
-    else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
+    else if (P.air) {
+      const top = groundAt(P.x, P.z), under = top > gh && !onDeck(top, P.y);
+      P.vy -= 24 * dt; P.y += P.vy * dt;
+      if (under && P.y > Math.max(gh, top - HEADROOM)) { P.y = Math.max(gh, top - HEADROOM); P.vy = Math.min(P.vy, 0); }
+      if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; }
+    }
     else P.y += (gh - P.y) * Math.min(1, dt * 14);
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;

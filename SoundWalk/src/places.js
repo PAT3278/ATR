@@ -218,6 +218,14 @@
         const emb = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, z0 - z1), embM); emb.position.set(BX, 1.8, (z0 + z1) / 2); emb.castShadow = true; g.add(emb);
         p.addBox(BX, (z0 + z1) / 2, 2.55, (z0 - z1) / 2);
       }
+      // Past the world's land edge the meadow south of OHH's beach runs on to the embankment's last stretch (p.shore: the
+      // strip on its sea side, as long as it is): you walk it from the sand up to the embankment, and where the embankment
+      // ends a post-and-rail fence runs from it out into the sea, so the land stops at something you can see.
+      p.shore = (lx, lz) => lx > BX + 2.5 && lx < BX + 80 && lz >= RZ - 137 && lz <= -75;
+      { const FB = E.batch(g), fb = FB.box, fm = E.mat('#6b5b48', { rough: 0.9 }), fz = RZ - 137, x0 = BX + 2.5, x1 = BX + 29.5;   // the sea is ~27 m out from the embankment here
+        for (let x = x0 + 0.1; x < x1 + 0.1; x += 2.2) fb(0.14, 1.5, 0.14, x, 0.4, fz, fm);   // posts, their feet in the ground (or the water)
+        for (const y of [0.5, 0.98]) fb(x1 - x0, 0.1, 0.05, (x0 + x1) / 2, y, fz + 0.09, fm);
+        FB.flush(); p.addBox((x0 + x1) / 2, fz, (x1 - x0) / 2, 0.12); }
       for (const [z0, z1] of [[-38.5, -49.5], [-69, -75]]) {
         const gd = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.8, z0 - z1 + 0.6), steel); gd.position.set(BX, 3.2, (z0 + z1) / 2); gd.castShadow = true; g.add(gd);
         for (const sx of [-2.05, 2.05]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.0, z0 - z1 + 0.6), steel); rl.position.set(BX + sx, 4.1, (z0 + z1) / 2); g.add(rl); }
