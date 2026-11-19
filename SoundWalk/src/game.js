@@ -273,8 +273,22 @@
     const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.encoding = THREE.sRGBEncoding;
     try { const pm = new THREE.PMREMGenerator(renderer), out = pm.fromEquirectangular(t).texture; pm.dispose(); t.dispose(); return out; } catch (e) { return null; }
   })();
+  // The jeweller's light box, for gold, silver and ice: warm white overhead, softboxes round the sides, a dark floor. A metal
+  // shows nothing but its reflection, and under the sky above every flat bit of gold that faced the grass came out lime.
+  const studioTex = (() => {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, '#fff4e0'); gr.addColorStop(0.3, '#a8a19a'); gr.addColorStop(0.5, '#6a645e'); gr.addColorStop(0.62, '#3a3633'); gr.addColorStop(1, '#1c1b1a');
+    g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
+    for (const [x, y, w, h] of [[40, 70, 70, 60], [200, 50, 40, 90], [300, 80, 90, 34], [430, 60, 46, 76], [130, 150, 120, 10], [380, 148, 90, 8]]) {   // softboxes, two strip lights low down
+      const sg = g.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, Math.max(w, h) * 0.7); sg.addColorStop(0, '#ffffff'); sg.addColorStop(0.6, 'rgba(255,250,240,.9)'); sg.addColorStop(1, 'rgba(255,250,240,0)');
+      g.fillStyle = sg; g.fillRect(x - w * 0.2, y - h * 0.2, w * 1.4, h * 1.4);
+    }
+    const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.encoding = THREE.sRGBEncoding;
+    try { const pm = new THREE.PMREMGenerator(renderer), out = pm.fromEquirectangular(t).texture; pm.dispose(); t.dispose(); return out; } catch (e) { return null; }
+  })();
   function gloss(hex, o = {}) {
-    const m = new THREE.MeshStandardMaterial({ color: lin(hex), roughness: o.rough ?? 0.2, metalness: o.metal ?? 0.05, envMap: envTex, envMapIntensity: o.env ?? 0.7, map: o.map || null, transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined });
+    const m = new THREE.MeshStandardMaterial({ color: lin(hex), roughness: o.rough ?? 0.2, metalness: o.metal ?? 0.05, envMap: o.envMap || envTex, envMapIntensity: o.env ?? 0.7, map: o.map || null, transparent: o.opacity !== undefined, opacity: o.opacity ?? 1, depthWrite: o.opacity === undefined });
     m.userData.lin = true; m.onBeforeCompile = rimPatch;
     return m;
   }
@@ -415,16 +429,25 @@
   const kitCache = {}, kc = (key, f) => kitCache[key] || (kitCache[key] = f());
   const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
   const M4 = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V3(sx, sy, sz));
-  function mergeGeos(list) {   // [[geometry, matrix?], ...] -> one non-indexed geometry
-    const gs = list.map(([g, m]) => { const n = g.index ? g.toNonIndexed() : g.clone(); if (m) n.applyMatrix4(m); return n; });
+  function mergeGeos(list) {   // [[geometry, matrix?], ...] -> one indexed geometry: each shared vertex is stored and shaded once
+    const gs = list.map(([g, m]) => { const n = g.clone(); if (m) n.applyMatrix4(m); return n; }), nv = gs.reduce((s, g) => s + g.attributes.position.count, 0);
     const out = new THREE.BufferGeometry();
-    for (const k of gs.every((g) => g.attributes.uv) ? ['position', 'normal', 'uv'] : ['position', 'normal']) {
-      const sz = gs[0].attributes[k].itemSize, arr = new Float32Array(gs.reduce((s, g) => s + g.attributes[k].count * sz, 0)); let o = 0;
+    for (const k of ['position', 'normal', 'uv', 'color'].filter((k) => gs.every((g) => g.attributes[k]))) {
+      const sz = gs[0].attributes[k].itemSize, arr = new Float32Array(nv * sz); let o = 0;
       for (const g of gs) { const n = g.attributes[k].count * sz; arr.set(g.attributes[k].array.subarray(0, n), o); o += n; }
       out.setAttribute(k, new THREE.BufferAttribute(arr, sz));
     }
+    const idx = new (nv > 65535 ? Uint32Array : Uint16Array)(gs.reduce((s, g) => s + (g.index ? g.index.count : g.attributes.position.count), 0)); let o = 0, base = 0;
+    for (const g of gs) { const n = g.attributes.position.count; if (g.index) for (let i = 0; i < g.index.count; i++) idx[o++] = g.index.array[i] + base; else for (let i = 0; i < n; i++) idx[o++] = i + base; base += n; }   // a non-indexed part counts its vertices in order
+    out.setIndex(new THREE.BufferAttribute(idx, 1));
     gs.forEach((g) => g.dispose()); return out;
   }
+  // Texture scale per part, in the geometry's own uvs: a tileable print (camo, denim) keeps one size from the chest to the
+  // cuff, and a whole number of repeats round a body or a sleeve hides the seam that cylinders and lathes have at the front.
+  const uvs = (g, su, sv) => { const a = g.attributes.uv; for (let i = 0; i < a.count; i++) a.setXY(i, a.getX(i) * su, a.getY(i) * sv); return g; };
+  // Gold, silver and ice: real metal in the jeweller's light box above. A little warm glow keeps gold gold-coloured even
+  // where it can only reflect the dark floor.
+  const jewel = (hex, o = {}) => { const m = gloss(hex, { rough: 0.16, metal: 1, env: 1.3, ...o, envMap: studioTex }); m.emissive.copy(lin(o.glow || '#000000')); return m; };
   // A dressed figure is a hundred small parts; merge each bone's leaf meshes per material, so it draws in a handful of calls
   // and every pose still works (only meshes with no children of their own are merged; userData.keep opts one out).
   function compact(root) {
@@ -443,23 +466,32 @@
   // scalp. Each runs out over the skull and hangs, longest down the back (o.drape tips them back over the shoulders);
   // o.len / o.n / o.th / o.out make long dreads,
   // thin box braids or short twists that stick out. o.front adds locks either side of the face; o.seg / o.rad thin out the
-  // mesh for a crowd. Returns the hair, the
+  // mesh for a crowd. o.tilt lifts the roots towards the face, following a cap's rim (o.bulge: how far they stand off the
+  // scalp just below the roots, so a cap's rim can hide them); o.clear lists ellipsoids
+  // [cx, cy, cz, rx, ry, rz] (a hood, the shoulders, the back) the locs lie over instead of passing through. Returns the hair, the
   // dyed ends (o.tips of them) and gold cuffs (o.cuffs of them) as three geometries.
   function locs(R, o = {}) {
     return kc('locs' + R + JSON.stringify(o), () => {
       const r = rng(o.seed || 7), n = o.n || 30, th = o.th || R * 0.09, hair = [], tips = [], cuffs = [];
+      const fit = (pts) => { for (const p of pts) for (const [cx, cy, cz, ...e] of o.clear) {   // push each point out onto the surface it would sink into (grown by a lock's thickness)
+        const [ex, ey, ez] = e.map((v) => v + th * 1.4), qx = (p.x - cx) / ex, qy = (p.y - cy) / ey, qz = (p.z - cz) / ez, l = Math.hypot(qx, qy, qz);
+        if (l < 1) p.set(cx + (qx / l) * ex, cy + (qy / l) * ey, cz + (qz / l) * ez); } return pts; };
+      const drape = (pts) => { fit(pts); for (let it = 0; it < 4; it++) { const q = pts.map((p) => p.clone()); for (let k = 1; k < pts.length - 1; k++) pts[k].copy(q[k - 1]).add(q[k + 1]).multiplyScalar(0.25).addScaledVector(q[k], 0.5); fit(pts); } return pts; };   // pushed out, then relaxed so it bends over a hump instead of kinking
       const one = (a, e, L, out) => {
-        const sa = Math.sin(a), ca = Math.cos(a), h0 = R * Math.cos(e), y0 = R * Math.sin(e), bulge = o.cap !== undefined ? 1.09 : 1.1 + 0.12 * Math.sin(e);
-        const c = new THREE.QuadraticBezierCurve3(V3(sa * h0, y0, ca * h0), V3(sa * R * bulge, y0 + 0.012, ca * R * bulge), V3(sa * (R * 1.06 + out), y0 - L, ca * (R * 1.06 + out) - L * (o.drape ?? 0.1)));
+        const sa = Math.sin(a), ca = Math.cos(a), h0 = R * Math.cos(e), y0 = R * Math.sin(e), bulge = o.bulge ?? (o.cap !== undefined ? 1.09 : 1.1 + 0.12 * Math.sin(e));
+        let c = new THREE.QuadraticBezierCurve3(V3(sa * h0, y0, ca * h0), V3(sa * R * bulge, y0 + 0.012, ca * R * bulge), V3(sa * (R * 1.06 + out), y0 - L, ca * (R * 1.06 + out) - L * (o.drape ?? 0.1)));
+        if (o.clear) c = new THREE.CatmullRomCurve3(drape(Array.from({ length: 11 }, (_, k) => c.getPoint(k / 10))));
         const t = th * (0.85 + r() * 0.3); hair.push([new THREE.TubeGeometry(c, o.seg || 6, t, o.rad || 5)]);
-        if (r() < (o.tips || 0)) tips.push([new THREE.TubeGeometry(new THREE.CatmullRomCurve3([0.7, 0.8, 0.9, 1].map((k) => c.getPoint(k))), 3, t * 1.12, o.rad || 5)]);
+        if (r() < (o.tips || 0)) {   // the dyed end: a sleeve over the lock's own last segments, wide enough that the lock's corners never poke through
+          const sg = o.seg || 6, i0 = Math.round(sg * 0.7), path = new THREE.CurvePath(); for (let i = i0; i < sg; i++) path.add(new THREE.LineCurve3(c.getPointAt(i / sg), c.getPointAt((i + 1) / sg)));
+          tips.push([new THREE.TubeGeometry(path, sg - i0, (t * 1.06) / Math.cos(Math.PI / (o.rad || 5)), o.rad || 5)]); }
         if (r() < (o.cuffs || 0)) { const k = 0.3 + r() * 0.3, p = c.getPoint(k), q = new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), c.getTangent(k)); cuffs.push([new THREE.TorusGeometry(t * 1.15, t * 0.45, 4, 8), new THREE.Matrix4().compose(p, q, V3(1, 1, 1))]); }
       };
       for (let i = 0; i < n; i++) {
         const a = 0.62 + ((i + r() * 0.8) / n) * (Math.PI * 2 - 1.24), back = (1 - Math.cos(a)) / 2;   // round the sides and back: the face stays clear
-        one(a, o.cap !== undefined ? o.cap + (r() - 0.5) * 0.1 : 0.1 + r() * 1.2, (o.len || 0.3) * (0.55 + 0.45 * back) * (0.85 + r() * 0.3), (o.out ?? 0.03) * (0.5 + r()));
+        one(a, o.cap !== undefined ? o.cap + (o.tilt || 0) * Math.cos(a) + (r() - 0.5) * 0.1 : 0.1 + r() * 1.2, (o.len || 0.3) * (0.55 + 0.45 * back) * (0.85 + r() * 0.3), (o.out ?? 0.03) * (0.5 + r()));
       }
-      for (let i = 0; i < (o.front || 0); i++) for (const sd of [-1, 1]) one(sd * (0.5 + i * 0.16 + r() * 0.05), o.cap !== undefined ? o.cap : 0.5, (o.len || 0.3) * 0.62, 0.004);
+      for (let i = 0; i < (o.front || 0); i++) for (const sd of [-1, 1]) { const fa = 0.5 + i * 0.16 + r() * 0.05; one(sd * fa, o.cap !== undefined ? o.cap + (o.tilt || 0) * Math.cos(fa) : 0.5, (o.len || 0.3) * 0.62, 0.004); }
       return { hair: mergeGeos(hair), tips: tips.length ? mergeGeos(tips) : null, cuffs: cuffs.length ? mergeGeos(cuffs) : null };
     });
   }
@@ -518,7 +550,7 @@
     } else chain = new THREE.TubeGeometry(curve, o.lo ? 36 : 64, th, o.lo ? 5 : 6, true);
     if (!o.pend) return { chain };
     const r = o.pend, y = yn - drop - r - th * 1.5, z = zc + 0.014;
-    return { chain: mergeGeos([[chain], [new THREE.TorusGeometry(th * 1.3, th * 0.5, 4, 10), M4(0, yn - drop - th * 0.8, zc + 0.01)]]), bezel: new THREE.TorusGeometry(r, r * 0.16, 6, 24).translate(0, y, z),
+    return { chain: mergeGeos([[chain], [new THREE.TorusGeometry(th * 1.3, th * 0.5, 4, 10), M4(0, yn - drop - th * 0.8, zc + 0.01)]]), bezel: new THREE.TorusGeometry(r, r * 0.16, o.lo ? 4 : 6, o.lo ? 14 : 24).translate(0, y, z),
       ice: new THREE.IcosahedronGeometry(r * 0.92, 1).scale(1, 1, 0.32).translate(0, y, z) };
   });
   // High-tops for a foot whose sole sits at y = 0 under the ankle (toe to +z): the base upper, overlays (toe and heel),
@@ -532,8 +564,8 @@
       white: mergeGeos([B(w + 0.014, 0.032, len + 0.018, 0, 0.026, 0), ...[0, 1, 2, 3].map((k) => B(w * 0.62, 0.009, 0.014, 0, 0.122 - k * 0.0095, 0.03 + k * 0.03, 0.32))]),   // midsole, laces
     };
   });
-  // Skinny jeans stacked on the shoe: three uneven folds of denim bunched at the ankle (r = the leg there).
-  const stackGeo = (r, h) => kc('stack' + r + h, () => mergeGeos([0, 1, 2].map((k) => { const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(new THREE.Vector2(r * (1 + 0.1 * Math.sin(t * Math.PI)), t * h * 0.42)); } return [new THREE.LatheGeometry(pts, 12), M4(0, k * h * 0.29, 0, [0.14, -0.1, 0.06][k], 0, [-0.08, 0.12, -0.04][k])]; })));
+  // Skinny jeans stacked on the shoe: three uneven folds of denim bunched at the ankle (r = the leg there; seg: round it).
+  const stackGeo = (r, h, seg = 12) => kc('stack' + r + h + seg, () => mergeGeos([0, 1, 2].map((k) => { const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(new THREE.Vector2(r * (1 + 0.1 * Math.sin(t * Math.PI)), t * h * 0.42)); } return [new THREE.LatheGeometry(pts, seg), M4(0, k * h * 0.29, 0, [0.14, -0.1, 0.06][k], 0, [-0.08, 0.12, -0.04][k])]; })));
   // A quilted puffer body (lathe with a roll every `h / rolls`), wider than the man inside it; `gap` leaves the front open.
   const pufferGeo = (rt, rb, h, rolls, gap = 0, y0 = 0, seg = 22) => kc('puf' + [rt, rb, h, rolls, gap, y0, seg], () => {
     const pts = [new THREE.Vector2(rb * 0.92, y0 - 0.01)], N = rolls * 6;
@@ -541,7 +573,7 @@
     pts.push(new THREE.Vector2(rt * 0.75, y0 + h + 0.035), new THREE.Vector2(rt * 0.45, y0 + h + 0.05));
     return new THREE.LatheGeometry(pts, seg, gap / 2, Math.PI * 2 - gap);
   });
-  const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact };
+  const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact, uvs, jewel, studio: studioTex };
   const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
@@ -1046,9 +1078,9 @@
   function makeAvatar() {
     const A = new THREE.Group(), body = new THREE.Group(); A.add(body);
     // Dressed in the swag-era rap style of the streetwear kit above: a tonal camo full-zip hoodie over a white tee, a Cuban
-    // link and a rope chain with an iced medallion, a designer belt, black skinny denim stacked on white / patent / red
+    // link and a rope chain with an iced medallion, a designer belt, indigo skinny denim stacked on white / patent / red
     // high-tops, a flat-brim fitted in the shoes' red, dreads under it, white shutter shades. Expensive, loud, no logos.
-    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = mat('#a3b27a', { map: tex('camo', 1.6, 1.6), rough: 0.8 }), pants = mat('#33456e', { map: tex('denim', 2, 3), rough: 0.85 });
+    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = mat('#a3b27a', { map: tex('camo'), rough: 0.8 }), pants = mat('#33456e', { map: tex('denim', 2, 3), rough: 0.85 });
     const cyl = (rt, rb, h, m, seg = 12) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m);
     const hips = new THREE.Group(); hips.position.y = 0.95; body.add(hips);
     const legs = [-1, 1].map((sd) => {   // skinny: close to the leg all the way down
@@ -1059,14 +1091,15 @@
       return { pivot, knee };
     });
     const pelvis = cyl(0.172, 0.165, 0.2, pants); pelvis.position.y = 0.03; pelvis.scale.z = 0.7; hips.add(pelvis);
-    const torso = cyl(0.2, 0.18, 0.52, hoodie); torso.position.y = 0.36; torso.scale.z = 0.66; hips.add(torso);   // the hoodie stops at the waist so the belt shows
-    const sh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), hoodie); sh.scale.set(1, 0.35, 0.66); sh.position.y = 0.61; hips.add(sh);
-    const hood = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 6, 14), hoodie); hood.rotation.x = Math.PI / 2; hood.position.set(0, 0.66, -0.04); hips.add(hood);
+    // the camo is scaled per part (swag.uvs) to one blob size, about a third of a metre, on the body and the sleeves alike
+    const torso = cyl(0.2, 0.18, 0.52, hoodie); swag.uvs(torso.geometry, 3, 1.6); torso.position.y = 0.36; torso.scale.z = 0.66; hips.add(torso);   // the hoodie stops at the waist so the belt shows
+    const sh = new THREE.Mesh(swag.uvs(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), 3, 0.6), hoodie); sh.scale.set(1, 0.35, 0.66); sh.position.y = 0.61; hips.add(sh);
+    const hood = new THREE.Mesh(swag.uvs(new THREE.TorusGeometry(0.12, 0.045, 6, 14), 2, 1), hoodie); hood.rotation.x = Math.PI / 2; hood.position.set(0, 0.66, -0.02); hips.add(hood);
     const arms = [-1, 1].map((sd) => {
       const pivot = new THREE.Group(); pivot.position.set(sd * 0.245, 0.56, 0); hips.add(pivot);
-      const upper = cyl(0.062, 0.056, 0.3, hoodie); upper.position.y = -0.15; pivot.add(upper);
+      const upper = cyl(0.062, 0.056, 0.3, hoodie); swag.uvs(upper.geometry, 1, 0.9); upper.position.y = -0.15; pivot.add(upper);
       const elbow = new THREE.Group(); elbow.position.y = -0.3; pivot.add(elbow);
-      const lower = cyl(0.056, 0.05, 0.25, hoodie); lower.position.y = -0.125; elbow.add(lower);
+      const lower = cyl(0.056, 0.05, 0.25, hoodie); swag.uvs(lower.geometry, 1, 0.75); lower.position.y = -0.125; elbow.add(lower);
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), skin); hand.position.y = -0.3; elbow.add(hand);
       pivot.rotation.z = sd * 0.08;
       return { pivot, elbow };
@@ -1076,20 +1109,20 @@
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.112, 18, 14), skin); skull.scale.set(0.95, 1.12, 1.02); head.add(skull);
     for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), mat('#111111')); e.position.set(sd * 0.04, 0.01, 0.1); head.add(e); }
     { const S = swag, rib = mat('#4c553a', { rough: 0.9 }), white = mat('#f4f3ee', { rough: 0.7 }), skinD = mat('#c99673', { rough: 0.7 }), brow = mat('#1a110b', { rough: 0.8 }), hair = mat('#1b130e', { rough: 0.75 });
-      const gold = gloss('#e2b64a', { rough: 0.16, metal: 1, env: 1.3 }), ice = gloss('#eef6ff', { rough: 0.05, metal: 1, env: 1.6 }), leather = gloss('#111113', { rough: 0.35, env: 0.4 });
+      const gold = S.jewel('#e2b64a', { glow: '#2a1c05' }), ice = S.jewel('#eef6ff', { rough: 0.05, env: 1.6, glow: '#56606c' }), leather = gloss('#111113', { rough: 0.35, env: 0.4 });
       const red = gloss('#c3161f', { rough: 0.45, env: 0.35 }), patent = gloss('#0b0b0d', { rough: 0.12, metal: 0.1, env: 0.55 }), kicksW = gloss('#f3f1ec', { rough: 0.5, env: 0.3 });
-      ice.flatShading = true; ice.emissive.copy(lin('#56606c'));   // diamonds: faceted, catching the light
+      ice.flatShading = true;   // diamonds: faceted, catching the light
       const add = (par, geo, m, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { if (!geo) return null; const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); par.add(o); return o; };
       const sph = (r, a = 12, b = 9) => new THREE.SphereGeometry(r, a, b), cg = (rt, rb, h, n = 10) => new THREE.CylinderGeometry(rt, rb, h, n);
       // hoodie: hood, hem and cuff ribs, pocket, a gold zip, the white tee's neck showing
-      add(hips, sph(0.15, 12, 8), hoodie, 0, 0.6, -0.125, 0, 0, 0, 1, 0.62, 0.48);   // hood down, under the dreads
+      add(hips, S.uvs(sph(0.15, 12, 8), 2, 1), hoodie, 0, 0.585, -0.13, 0, 0, 0, 1, 0.6, 0.36);   // hood down, flat on the back under the dreads
       add(hips, cg(0.186, 0.182, 0.04, 16), rib, 0, 0.115, 0, 0, 0, 0, 1, 1, 0.68);
-      add(hips, new THREE.BoxGeometry(0.24, 0.11, 0.025), hoodie, 0, 0.2, 0.118);
+      add(hips, S.uvs(new THREE.BoxGeometry(0.24, 0.11, 0.025), 0.7, 0.33), hoodie, 0, 0.2, 0.118);
       arms.forEach(({ elbow }) => add(elbow, cg(0.054, 0.052, 0.045), rib, 0, -0.235, 0));
-      add(hips, new THREE.BoxGeometry(0.011, 0.38, 0.006), gold, 0, 0.32, 0.129, -0.025); add(hips, new THREE.BoxGeometry(0.018, 0.03, 0.008), gold, 0, 0.5, 0.134);
+      add(hips, cg(0.0055, 0.0055, 0.38, 6), gold, 0, 0.32, 0.129, -0.025); add(hips, new THREE.BoxGeometry(0.018, 0.03, 0.008), gold, 0, 0.5, 0.134);   // a round zip catches a highlight; a flat strip mirrored one colour
       add(hips, new THREE.TorusGeometry(0.07, 0.012, 6, 16), white, 0, 0.645, 0.01, Math.PI / 2 + 0.25);
       // the belt: black leather, a polished gold plate buckle
-      add(hips, cg(0.176, 0.176, 0.034, 18), leather, 0, 0.083, 0, 0, 0, 0, 1, 1, 0.72); add(hips, new THREE.BoxGeometry(0.07, 0.045, 0.01), gold, 0, 0.083, 0.13, -0.2);
+      add(hips, cg(0.176, 0.176, 0.034, 18), leather, 0, 0.083, 0, 0, 0, 0, 1, 1, 0.72); add(hips, new THREE.CylinderGeometry(0.183, 0.183, 0.045, 5, 1, true, -0.2, 0.4), gold, 0, 0.083, 0, 0, 0, 0, 1, 1, 0.72);   // the plate curves round the belt
       // jewellery: a short Cuban link, a longer rope with an iced medallion, an iced watch
       add(hips, S.chainGeo({ yn: 0.665, rn: 0.105, zc: 0.13, drop: 0.17, w: 0.1, th: 0.0075, links: 1 }).chain, gold);
       { const c = S.chainGeo({ yn: 0.67, rn: 0.11, zc: 0.13, drop: 0.28, w: 0.105, th: 0.0042, pend: 0.032 }); add(hips, c.chain, gold); add(hips, c.bezel, gold); add(hips, c.ice, ice); }
@@ -1104,12 +1137,15 @@
       add(head, new THREE.ConeGeometry(0.018, 0.05, 5), skinD, 0, -0.015, 0.118, 1.3);
       add(head, new THREE.BoxGeometry(0.04, 0.007, 0.01), skinD, 0, -0.058, 0.103);
       add(head, sph(0.09, 12, 8), skin, 0, -0.06, 0.02, 0, 0, 0, 0.95, 0.75, 0.95);
-      add(head, new THREE.SphereGeometry(0.117, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 0.012, -0.006, -0.25, 0, 0, 0.98, 1.08, 1.06);   // hair under the cap
-      // dreads from under the cap, a few dyed at the ends and a few with gold cuffs, two locks either side of the face
-      { const L = S.locs(0.112, { cap: 0.2, n: 34, len: 0.34, out: 0.03, drape: 0.2, tips: 0.3, cuffs: 0.18, front: 2, seed: 21 }); add(head, L.hair, hair); add(head, L.tips, mat('#b8894a', { rough: 0.7 })); add(head, L.cuffs, gold); }
+      add(head, new THREE.SphereGeometry(0.115, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), hair, 0, 0.02, -0.004, 0, 0, 0, 0.98, 1.05, 1.05);   // hair under the cap, no lower than its rim
+      // dreads from under the cap (rooted along its tilted rim), a few dyed at the ends and a few with gold cuffs, two
+      // locks either side of the face; down the back they lie over the hood and the shoulders (in the head's frame: o.clear)
+      { const L = S.locs(0.112, { cap: 0.413, tilt: 0.17, bulge: 1.02, n: 26, th: 0.0088, len: 0.34, out: 0.025, drape: 0.18, tips: 0.3, cuffs: 0.18, front: 2, seg: 10, seed: 21,
+          clear: [[0, -0.16, -0.02, 0.165, 0.045, 0.165], [0, -0.235, -0.13, 0.15, 0.09, 0.054], [0, -0.21, 0, 0.2, 0.07, 0.132], [0, -0.47, 0, 0.2, 0.42, 0.14]] });   // collar, hood, shoulders, back
+        add(head, L.hair, hair); add(head, L.tips, mat('#b8894a', { rough: 0.7 })); add(head, L.cuffs, gold); }
       // the fitted: red, flat brim turned a touch to the side, green underbrim, sticker still on
       { const c = S.capGeos(0.104, 0.105), cap = new THREE.Group(); cap.position.set(0, 0.045, 0.004); cap.rotation.set(-0.16, 0.22, 0); head.add(cap);
-        add(cap, c.crown, red); add(cap, c.brim, red); add(cap, c.under, mat('#2f6b3a', { rough: 0.8 })); add(cap, c.sticker, gloss('#d8d4c4', { rough: 0.2, metal: 1, env: 1.2 })); add(cap, c.strap, leather); }
+        add(cap, c.crown, red); add(cap, c.brim, red); add(cap, c.under, mat('#2f6b3a', { rough: 0.8 })); add(cap, c.sticker, S.jewel('#d8d4c4', { rough: 0.2, env: 1.2 })); add(cap, c.strap, leather); }
       add(head, S.shadesGeo(0.115, 'shutter').frame, gloss('#f6f6f2', { rough: 0.3, env: 0.4 }), 0, -0.006, 0.002);
     }
     A.traverse((m) => { if (m.isMesh) m.castShadow = true; });

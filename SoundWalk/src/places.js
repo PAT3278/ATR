@@ -275,19 +275,28 @@
       // oversized white tees, camo and loud hoodies, glossy puffers, varsity jackets; gold and iced chains, designer belts,
       // stacked skinny denim and high-tops in loud colourways; a ski mask or a bandana on a few. The looks are dealt from
       // shuffled decks, so every one of them turns up, and each moves to the music in its own way.
-      const crowd = [], cr = E.rng(909);
+      // Which crowd gets drawn is decided as each frame is drawn (the renderer calls a THREE.LOD's update(camera) before it
+      // culls; this one looks at where the camera is, not only how far). The room is shut on three sides and under the
+      // station floor, so from outside it shows only through the doorway: in the room, or in front of the door within 40 m
+      // of the room's middle (33 m of the door; less the more side-on you look in, as less of the room shows, so the plaza,
+      // 36 m off at 53 degrees and behind the pool hall, gets the far figures), the dressed crowd, ~90k triangles; in front
+      // of it out to 110 m, eighteen plain figures in their clothes' colours, one draw call; anywhere else, nothing.
+      const crowd = [], cr = E.rng(909), crowdLOD = new THREE.LOD(), crowdG = new THREE.Group(), farG = new THREE.Group(), farParts = [], eye = new THREE.Vector3();
+      crowdLOD.add(crowdG, farG); V.add(crowdLOD);
+      crowdLOD.update = (cam) => { const c = V.worldToLocal(eye.setFromMatrixPosition(cam.matrixWorld)), d = Math.hypot(c.x, c.z), inside = Math.abs(c.x) < 6.8 && Math.abs(c.z) < 7.8 && c.y < 3.4, door = c.x > 6.6;
+        crowdG.visible = inside || (door && d < 40 * Math.min(1, Math.max(0.5, (1.4 * c.x) / d))); farG.visible = !crowdG.visible && door && d < 110; };
       {
         const K = E.swag, wr = E.rng(4410), pick = (a) => a[Math.floor(wr() * a.length)];
         const deck = (a) => { const d = a.slice(); for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(wr() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } let k = 0; return () => d[k++ % d.length]; };
-        const M = (c, o = {}) => E.mat(c, o), G = (c, o = {}) => E.gloss(c, o);
+        const M = (c, o = {}) => E.mat(c, o), G = (c, o = {}) => E.gloss(c, { ...o, envMap: K.studio });   // gloss indoors reflects a dim room, not the sky and grass
         const skins = ['#f0c9a4', '#d9a57c', '#b07a52', '#8a5a3c', '#5e3d2a', '#4a2f20'].map((c) => M(c, { rough: 0.7 }));
-        const gold = G('#e2b64a', { rough: 0.16, metal: 1, env: 1.3 }), silver = G('#e4e8ee', { rough: 0.12, metal: 1, env: 1.3 }), ice = G('#eef6ff', { rough: 0.05, metal: 1, env: 1.6 });
-        ice.flatShading = true; ice.emissive.copy(E.lin('#56606c'));   // diamonds: faceted, catching every light in the room
+        const gold = K.jewel('#e2b64a', { glow: '#2a1c05' }), silver = K.jewel('#e4e8ee', { rough: 0.12, glow: '#1a1c1f' }), ice = K.jewel('#eef6ff', { rough: 0.05, env: 1.6, glow: '#56606c' });
+        ice.flatShading = true;   // diamonds: faceted, catching every light in the room
         const white = M('#f4f3ee', { rough: 0.75 }), leather = G('#111113', { rough: 0.35, env: 0.4 });
         const hairM = ['#0f0c0a', '#1b130e', '#2a1a10'].map((c) => M(c, { rough: 0.75 })), tipM = ['#b8894a', '#d2b05a', '#9a2a22'].map((c) => M(c, { rough: 0.7 }));
-        const denim = (c) => M(c, { map: E.tex('denim', 2, 3), rough: 0.85 }), camo = (c) => M(c, { map: E.tex('camo', 1.4, 1.4), rough: 0.8 });
+        const denim = (c) => M(c, { map: E.tex('denim', 2, 3), rough: 0.85 }), camo = (c) => M(c, { map: E.tex('camo'), rough: 0.8 });   // scaled in the uvs of the shapes below
         const jeans = ['#33456e', '#1c1d22', '#7d93b4', '#26304a', '#a3161c', '#1c1d22'].map(denim);   // indigo, black, light wash, dark rinse, red skinnies
-        const tees = [white, white, white, M('#17171a', { rough: 0.8 })];
+        const tees = [['#ebeae4', 2], ['#8e9096', 1], ['#17171a', 1]].flatMap(([c, n]) => { const m = E.mat(c, { rough: 0.85 }, true); m.vertexColors = true; return Array(n).fill(m); });   // white tees (a shade off pure white), a heather grey, a black; the folds are shaded in vertex colours
         const hoodies = [camo('#a3b27a'), camo('#86a9d6'), camo('#c0a3dc'), M('#b3161d', { rough: 0.8 }), M('#1f49c8', { rough: 0.8 }), M('#d8a02a', { rough: 0.8 }), M('#121214', { rough: 0.85 })];
         const puffers = ['#111114', '#a3141c', '#1d3fa6', '#e9e9ea', '#d9a51c', '#111114'].map((c) => G(c, { rough: 0.3, metal: 0.1, env: 0.5 }));   // glossy: the expensive kind
         const varsity = [['#7a1218', '#ece4cf'], ['#111114', '#ece4cf'], ['#173a7a', '#ece4cf'], ['#1d4a2a', '#d8b04a']].map(([b, s]) => [M(b, { rough: 0.9 }), G(s, { rough: 0.5, env: 0.3 })]);   // wool body, leather sleeves
@@ -296,18 +305,29 @@
           .map((k) => k.map((c, i) => G(c, { rough: i === 1 ? 0.15 : 0.45, env: i === 1 ? 0.55 : 0.3 })));                                     // base, overlays, collar
         const shutterM = ['#f6f6f2', '#121214', '#d4161f', '#9be22d', '#f5d218', '#2aa4ff'].map((c) => G(c, { rough: 0.3, env: 0.4 })), lensM = G('#08090b', { rough: 0.05, metal: 0.5, env: 1.1 });
         const knit = ['#111114', '#2a2b30', '#5a1a1a'].map((c) => M(c, { rough: 0.95 })), bandM = ['#b3161d', '#1f49c8', '#111114'].map((c) => M(c, { rough: 0.85 }));
-        // shared shapes (head radius HR; the hips are the origin of `up`, the front +z)
+        // shared shapes (head radius HR; the hips are the origin of `up`, the front +z). ones(): plain white vertex colours, for parts that share a tee's material
+        const ones = (g) => g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
         const HR = 0.13, headG = new THREE.SphereGeometry(HR, 12, 9), neckG = new THREE.CylinderGeometry(0.055, 0.06, 0.12, 7), handG = new THREE.SphereGeometry(0.055, 7, 6);
         const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff', side: THREE.DoubleSide });
         const legG = new THREE.CylinderGeometry(0.075, 0.058, 0.84, 8).translate(0, 0.42, 0), seatG = new THREE.CylinderGeometry(0.19, 0.185, 0.16, 10);   // skinny jeans
-        const bodyG = new THREE.CylinderGeometry(0.21, 0.185, 0.55, 10).translate(0, 0.325, 0), teeG = new THREE.CylinderGeometry(0.222, 0.232, 0.76, 10).translate(0, 0.22, 0);   // a waist-length top, the tall tee
-        const pufG = K.pufferGeo(0.25, 0.235, 0.55, 4, 0, 0.03, 16), pufArmG = K.pufferGeo(0.085, 0.07, 0.5, 3, 0, -0.55, 10);
-        const armG = new THREE.CylinderGeometry(0.058, 0.048, 0.58, 8).translate(0, -0.29, 0), sleeveG = new THREE.CylinderGeometry(0.088, 0.08, 0.25, 8).translate(0, -0.11, 0), foreG = new THREE.CylinderGeometry(0.05, 0.043, 0.38, 7).translate(0, -0.4, 0);
-        const cuffG = new THREE.CylinderGeometry(0.052, 0.05, 0.05, 8), hoodG = new THREE.SphereGeometry(0.14, 9, 6), collarG = new THREE.TorusGeometry(0.11, 0.035, 5, 10), ribG = new THREE.CylinderGeometry(0.19, 0.188, 0.05, 10);
+        const bodyG = K.uvs(new THREE.CylinderGeometry(0.21, 0.185, 0.55, 10), 3, 1.55).translate(0, 0.325, 0);   // a waist-length top (camo: three repeats round, one size with the sleeves)
+        // the tall tee: from a hem flared a little, rippled into folds that fade out up the chest, to sloping shoulders
+        const teeG = (() => {
+          const pts = [[0.238, -0.16], [0.232, -0.1], [0.224, 0.1], [0.222, 0.38], [0.216, 0.5], [0.196, 0.565], [0.155, 0.6], [0.1, 0.615]].map(([r, y]) => new THREE.Vector2(r, y)), g = new THREE.LatheGeometry(pts, 16), a = g.attributes.position;
+          const sh = new Float32Array(a.count * 3);
+          for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i), z = a.getZ(i), fade = Math.max(0, 1 - (y + 0.16) / 0.66), w = Math.sin(Math.atan2(x, z) * 7 + 0.7), k = 1 + 0.07 * fade * w; a.setXYZ(i, x * k, y, z * k); sh.fill(1 - 0.24 * Math.max(0, -w) * (0.3 + 0.7 * fade), i * 3, i * 3 + 3); }
+          g.setAttribute('color', new THREE.BufferAttribute(sh, 3));   // darker down the hollow of each fold
+          g.computeVertexNormals(); const n = g.attributes.normal, np = pts.length;
+          for (let j = 0; j < np; j++) { const v = new THREE.Vector3(n.getX(j) + n.getX(16 * np + j), n.getY(j) + n.getY(16 * np + j), n.getZ(j) + n.getZ(16 * np + j)).normalize(); n.setXYZ(j, v.x, v.y, v.z); n.setXYZ(16 * np + j, v.x, v.y, v.z); }   // no crease down the front seam
+          return g;
+        })();
+        const pufG = K.pufferGeo(0.25, 0.235, 0.55, 4, 0, 0.03, 12), pufArmG = K.pufferGeo(0.085, 0.07, 0.5, 3, 0, -0.55, 8);
+        const armG = K.uvs(new THREE.CylinderGeometry(0.058, 0.048, 0.58, 8), 1, 1.6).translate(0, -0.29, 0), sleeveG = ones(new THREE.CylinderGeometry(0.088, 0.08, 0.25, 8).translate(0, -0.11, 0)), foreG = new THREE.CylinderGeometry(0.05, 0.043, 0.38, 7).translate(0, -0.4, 0);
+        const cuffG = new THREE.CylinderGeometry(0.052, 0.05, 0.05, 8), hoodG = K.uvs(new THREE.SphereGeometry(0.14, 9, 6), 2, 1), collarG = ones(new THREE.TorusGeometry(0.11, 0.035, 5, 10)), ribG = new THREE.CylinderGeometry(0.19, 0.188, 0.05, 10);
         const hairG = new THREE.SphereGeometry(HR * 1.06, 12, 8, 0, 6.3, 0, 1.7), fadeG = new THREE.SphereGeometry(HR * 1.025, 12, 8, 0, 6.3, 0, 1.4), beanieG = new THREE.SphereGeometry(HR * 1.1, 10, 7, 0, 6.3, 0, 1.55);
-        const bandG = new THREE.CylinderGeometry(0.192, 0.192, 0.034, 12, 1, true), buckleG = new THREE.BoxGeometry(0.07, 0.045, 0.012), snapG = new THREE.SphereGeometry(0.012, 5, 4), watchG = new THREE.TorusGeometry(0.05, 0.011, 5, 12);
-        const capG = K.capGeos(0.124, 0.105), shoe = K.hightopGeo(0.12, 0.27), stackG = K.stackGeo(0.064, 0.09);
-        const locStyles = { locs: { n: 40, len: 0.34, out: 0.03, drape: 0.18, tips: 0.25, cuffs: 0.15, front: 1, seg: 5, rad: 4 }, braids: { n: 50, len: 0.4, th: HR * 0.055, out: 0.012, drape: 0.15, cuffs: 0.08, seg: 5, rad: 4 }, twists: { n: 44, len: 0.07, th: HR * 0.08, out: 0.05, drape: 0, seg: 3, rad: 4 } };
+        const bandG = new THREE.CylinderGeometry(0.192, 0.192, 0.034, 12, 1, true), buckleG = new THREE.CylinderGeometry(0.2, 0.2, 0.045, 5, 1, true, -0.18, 0.36), snapG = new THREE.SphereGeometry(0.012, 5, 4), watchG = new THREE.TorusGeometry(0.05, 0.011, 5, 12);
+        const capG = K.capGeos(0.124, 0.105), shoe = K.hightopGeo(0.12, 0.27), stackG = K.stackGeo(0.064, 0.09, 6);
+        const locStyles = { locs: { n: 28, len: 0.34, out: 0.03, drape: 0.18, tips: 0.25, cuffs: 0.15, front: 1, seg: 5, rad: 4 }, braids: { n: 34, len: 0.4, th: HR * 0.055, out: 0.012, drape: 0.15, cuffs: 0.08, seg: 5, rad: 4 }, twists: { n: 30, len: 0.07, th: HR * 0.08, out: 0.05, drape: 0, seg: 3, rad: 4 } };
         const outfit = { top: deck(['tee', 'tee', 'tee', 'tee', 'tee', 'hoodie', 'hoodie', 'hoodie', 'hoodie', 'hoodie', 'puffer', 'puffer', 'puffer', 'puffer', 'puffer', 'varsity', 'varsity', 'varsity']),
           hair: deck(['locs', 'locs', 'locs', 'locs', 'locs', 'locs', 'braids', 'braids', 'braids', 'twists', 'twists', 'twists', 'rows', 'rows', 'fade', 'fade', 'ski', 'ski']),
           hat: deck(['fitted', 'fitted', 'fitted', 'fitted', 'fitted', 'fitted', 'cocked', 'cocked', 'cocked', 'back', 'back', 'bandana', 'mouth', 'beanie', 'none', 'none', 'none', 'none']),
@@ -324,25 +344,25 @@
           for (const sd of [-1, 1]) { add(f, legG, jm, sd * 0.09); add(f, stackG, jm, sd * 0.09, 0.18); add(f, shoe.base, kc[0], sd * 0.09); add(f, shoe.accent, kc[1], sd * 0.09); add(f, shoe.collar, kc[2], sd * 0.09); add(f, shoe.white, white, sd * 0.09); }
           up.position.y = 0.86; f.add(up);                                                      // everything above the hips sways and twists together
           // the top, and the arms that go with it (front of the chest at zc, for the chains)
-          let zc = 0.145;
+          let zc = 0.145, topM;
           const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.26, 0.56, 0); up.add(piv); return piv; });
           if (top === 'tee') {                                                                   // the long white tee, short sleeves, bare forearms
-            const topM = pick(tees); zc = 0.163; add(up, teeG, topM).scale.z = 0.68; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(0.8, 0.8, 0.5);
+            topM = pick(tees); zc = 0.163; add(up, teeG, topM).scale.z = 0.68; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(0.8, 0.8, 0.5);
             arms.forEach((a) => { add(a, sleeveG, topM); add(a, foreG, skin); });
             if (wr() < 0.6) add(arms[0], watchG, wr() < 0.5 ? gold : ice, 0, -0.55, 0, Math.PI / 2);
           } else {
             add(up, seatG, jm, 0, 0.02, 0).scale.z = 0.68;
-            if (top === 'puffer') { const topM = pick(puffers); zc = 0.185; add(up, pufG, topM).scale.z = 0.72; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(1.05, 1.05, 2.2); arms.forEach((a) => add(a, pufArmG, topM)); }
+            if (top === 'puffer') { topM = pick(puffers); zc = 0.185; add(up, pufG, topM).scale.z = 0.72; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(1.05, 1.05, 2.2); arms.forEach((a) => add(a, pufArmG, topM)); }
             else if (top === 'hoodie') {
-              const topM = pick(hoodies); add(up, bodyG, topM).scale.z = 0.68; add(up, ribG, topM, 0, 0.075, 0).scale.z = 0.69;
-              add(up, hoodG, topM, 0, 0.56, -0.13).scale.set(1.1, 0.7, 0.55); add(up, new THREE.BoxGeometry(0.24, 0.12, 0.03), topM, 0, 0.2, 0.125);
+              topM = pick(hoodies); add(up, bodyG, topM).scale.z = 0.68; add(up, ribG, topM, 0, 0.075, 0).scale.z = 0.69;
+              add(up, hoodG, topM, 0, 0.56, -0.13).scale.set(1.1, 0.7, 0.55); add(up, K.uvs(new THREE.BoxGeometry(0.24, 0.12, 0.03), 0.7, 0.35), topM, 0, 0.2, 0.125);
               arms.forEach((a) => { add(a, armG, topM); add(a, cuffG, topM, 0, -0.53, 0); });
             } else {                                                                             // varsity: wool body, leather sleeves, striped rib, snaps
-              const [b, s] = pick(varsity); add(up, bodyG, b).scale.z = 0.68; add(up, ribG, b, 0, 0.075, 0).scale.z = 0.69; add(up, collarG, b, 0, 0.6, 0, Math.PI / 2).scale.set(1, 1, 0.8);
+              const [b, s] = pick(varsity); topM = b; add(up, bodyG, b).scale.z = 0.68; add(up, ribG, b, 0, 0.075, 0).scale.z = 0.69; add(up, collarG, b, 0, 0.6, 0, Math.PI / 2).scale.set(1, 1, 0.8);
               add(up, ribG, s, 0, 0.085, 0).scale.set(1.01, 0.12, 0.7); for (let k = 0; k < 4; k++) add(up, snapG, s, 0, 0.17 + k * 0.11, 0.142);
               arms.forEach((a) => { add(a, armG, s); add(a, cuffG, b, 0, -0.53, 0); });
             }
-            if (top !== 'puffer') { add(up, bandG, leather, 0, 0.03, 0).scale.z = 0.7; add(up, buckleG, gold, 0, 0.03, 0.137, -0.15); }   // the belt shows under a waist-length top
+            if (top !== 'puffer') { add(up, bandG, leather, 0, 0.03, 0).scale.z = 0.7; add(up, buckleG, gold, 0, 0.03, 0).scale.z = 0.7; }   // the belt shows under a waist-length top; the plate curves round it
           }
           arms.forEach((a) => add(a, handG, skin, 0, -0.6, 0));
           add(up, neckG, skin, 0, 0.64, 0);
@@ -352,25 +372,30 @@
             add(up, c.chain, m); add(up, c.bezel, m); add(up, c.ice, ice);
           }
           // the head: hair, a hat, glasses
-          const head = add(up, headG, skin, 0, 0.76, 0), hm = pick(hairM), capped = hat === 'fitted' || hat === 'cocked' || hat === 'back';
-          if (hairK === 'ski') add(head, K.maskGeo(HR), pick(knit));
+          const head = add(up, headG, skin, 0, 0.76, 0), hm = pick(hairM), capped = hat === 'fitted' || hat === 'cocked' || hat === 'back'; let hatM = hm;
+          if (hairK === 'ski') add(head, K.maskGeo(HR), hatM = pick(knit));
           else {
             if (hairK === 'fade' || hairK === 'rows' || capped || hat === 'beanie') add(head, fadeG, hm, 0, 0.01, 0, -0.15); else add(head, hairG, hm, 0, 0.01, 0, -0.1);
             if (hairK === 'rows' && !capped && hat !== 'beanie') add(head, K.cornrows(HR * 1.03), hm);
             if (locStyles[hairK]) { const L = K.locs(HR, { ...locStyles[hairK], cap: capped || hat === 'beanie' ? 0.22 : undefined, seed: 30 + i }); add(head, L.hair, hm); add(head, L.tips, pick(tipM)); add(head, L.cuffs, gold); }
-            if (capped) { const [cm, um] = pick(caps), g = new THREE.Group(); g.position.set(0, 0.05, 0.004); g.rotation.set(-0.12, hat === 'back' ? Math.PI : hat === 'cocked' ? (wr() < 0.5 ? -1 : 1) * (0.45 + wr() * 0.3) : (wr() - 0.5) * 0.2, 0); head.add(g);
+            if (capped) { const [cm, um] = pick(caps), g = new THREE.Group(); hatM = cm; g.position.set(0, 0.05, 0.004); g.rotation.set(-0.12, hat === 'back' ? Math.PI : hat === 'cocked' ? (wr() < 0.5 ? -1 : 1) * (0.45 + wr() * 0.3) : (wr() - 0.5) * 0.2, 0); head.add(g);
               add(g, capG.crown, cm); add(g, capG.brim, cm); add(g, capG.under, um); if (wr() < 0.6) add(g, capG.sticker, silver); }
-            else if (hat === 'beanie') add(head, beanieG, pick(knit), 0, 0.03, 0);
+            else if (hat === 'beanie') add(head, beanieG, hatM = pick(knit), 0, 0.03, 0);
             else if (hat === 'bandana' || hat === 'mouth') add(head, K.bandanaGeo(HR, hat === 'mouth'), pick(bandM));
           }
           if (shades) { const s = K.shadesGeo(HR, shades === 'shutter' ? 'shutter' : 'dark'); add(head, s.frame, shades === 'shutter' ? pick(shutterM) : gold, 0, -0.008, 0); add(head, s.lens, lensM, 0, -0.008, 0); }
           const style = Math.floor(cr() * 4);                                                   // 0 pumping one fist, 1 both hands up, 2 filming with a phone, 3 swaying
           if (style === 2) { const ph = new THREE.Mesh(lightG, lightM); ph.position.set(0, -0.68, 0.03); ph.rotation.y = Math.PI; arms[1].add(ph); ph.userData.keep = true; }
           f.position.set(x, 0.05, z); f.rotation.y = -Math.PI / 2 + (cr() - 0.5) * 0.5;          // facing the stage
-          f.scale.setScalar(0.9 + cr() * 0.2); V.add(K.compact(f)); f.userData.look = { top, hair: hairK, hat, shades, chains: nCh };
+          f.scale.setScalar(0.9 + cr() * 0.2); crowdG.add(K.compact(f)); f.userData.look = { top, hair: hairK, hat, shades, chains: nCh };
+          { f.updateMatrix(); const col = (g, m) => { const c = m.color, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let k = 0; k < n; k++) a.set([c.r, c.g, c.b], k * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return [g, f.matrix]; };   // the far figure
+            farParts.push(col(new THREE.BoxGeometry(0.3, 0.86, 0.19).translate(0, 0.43, 0), jm), col(new THREE.CylinderGeometry(0.22, 0.21, top === 'tee' ? 0.78 : 0.6, 6).translate(0, top === 'tee' ? 1.24 : 1.17, 0), topM),
+              col(new THREE.SphereGeometry(0.15, 6, 4).translate(0, 1.62, 0), skin), col(new THREE.SphereGeometry(0.155, 6, 3, 0, 6.3, 0, 1.4).translate(0, 1.64, 0), hatM));
+            for (const sd of style === 1 ? [-1, 1] : style === 3 ? [] : [1]) farParts.push(col(new THREE.BoxGeometry(0.1, 0.62, 0.1).translate(sd * 0.27, 1.72, 0.1), top === 'tee' ? skin : topM)); }   // hands up, as they are close to
           crowd.push({ f, up, head, arms, style, s: cr() * 6.28, e: 0.6 + cr() * 0.7, jump: 0 });
           p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3);
         }
+        const farM = E.mat('#ffffff', { rough: 0.85 }, true); farM.vertexColors = true; farG.add(new THREE.Mesh(K.mergeGeos(farParts), farM));
       }
       // open entrance: lit frame, marquee, light spilling onto the ground outside
       const neon = new THREE.MeshBasicMaterial({ color: '#ff3a44' });
@@ -395,7 +420,8 @@
         beams.forEach((b) => { b.m.opacity = 0.08 + f.pulse * 0.22 + 0.05 * Math.sin(t * 2 + b.s); b.beam.rotation.x = Math.sin(t * 0.8 + b.s) * 0.25; });
         wash[0].opacity = 0.035 + f.pulse * 0.1; wash[1].opacity = 0.035 + f.high * 0.12;
         const en = 0.45 + f.level * 1.6;                                                        // how hard the room is going
-        crowd.forEach((c) => {
+        farG.position.y = f.pulse * 0.06;                                                      // from afar the room just bounces
+        if (crowdG.visible) crowd.forEach((c) => {
           const k = en * c.e, ph = t * 3.4 + c.s, bounce = Math.abs(Math.sin(ph));
           if (f.beat && f.bass > 0.6 && Math.sin(c.s * 7 + f.beats) > 0.2) c.jump = 1;           // some of them jump on the big hits
           c.jump *= Math.exp(-dt * 5);
