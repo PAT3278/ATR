@@ -1797,15 +1797,20 @@
     }
   }
 
-  // Walk along paths to a place (used by the map and by clicking a far beacon).
+  // Walk along paths to a place (used by the map and by clicking a far beacon). A path's points may carry y (SHOT's
+  // stair tower, where the landings stand one above another): then the nearest is the nearest at your height. A place
+  // can first lead you off its path round what stands in the way (p.lead(lx, lz, y) -> local [x, z] points: from under
+  // SHOT's footbridge round its tower to the door). Walking back, the tight points (a flight's turns) are all taken.
   function routeTo(p, then) {
     const pts = [];
+    let fx = P.x, fz = P.z;
+    for (const q of places) { if (!q.lead) continue; const l = q.local(P.x, P.z), w = q.lead(l.x, l.z, P.y); if (w) for (const [lx, lz] of w) { const o = Object.assign(q.toWorld(lx, lz), { tight: true }); pts.push(o); fx = o.x; fz = o.z; } }   // tight: walked, and each corner turned where it is
     let near = null;
-    for (const q of places) { const r = distToPath(P.x, P.z, q.path); if (r.d < 7 && (!near || r.d < near.d)) near = { q, ...r }; }
+    for (const q of places) for (let i = 0; i < q.path.length; i++) { const c = q.path[i], d = Math.hypot(c.x - fx, c.z - fz) + (c.y === undefined ? 0 : 3 * Math.abs(c.y - P.y)); if (d < 7 && (!near || d < near.d)) near = { q, i, d }; }
     if (near && near.q === p) {
       for (let i = near.i; i < p.path.length; i++) pts.push(p.path[i]);
     } else {
-      if (near) for (let i = near.i; i >= 0; i -= 2) pts.push(near.q.path[i]);
+      if (near) for (let i = near.i; i >= 0; i -= near.q.path[i].tight || (near.q.path[i - 1] || {}).tight ? 1 : 2) pts.push(near.q.path[i]);
       const a = near ? Math.atan2(near.q.z, near.q.x) : Math.atan2(P.z, P.x), b = Math.atan2(p.z, p.x);
       let da = Math.atan2(Math.sin(b - a), Math.cos(b - a));
       for (let k = 1, n = Math.ceil(Math.abs(da) / 0.5); k < n; k++) { const m = a + (da * k) / n; pts.push({ x: Math.cos(m) * 8.6, z: Math.sin(m) * 8.6 }); }   // round the plaza between the well/board and the lamps
@@ -2012,7 +2017,7 @@
     setTimeout(() => {
       if (drv) { endDrive(null); camBlend = 1; }   // no camera glide from the road: the fade covers the jump
       const q = p.path[Math.max(0, p.path.length - 9)];
-      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z); P.v = 0; auto = null;
+      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z, q.y); P.v = 0; auto = null;   // q.y: the level its path runs at there (the top of SHOT's stairs)
       P.face = Math.atan2(p.vx - q.x, p.vz - q.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face); camYaw = P.face + Math.PI;
       regionKey = ''; updateRegion(true); save();
       f.classList.remove('on'); mode = 'walk';
