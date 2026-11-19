@@ -1034,7 +1034,7 @@
   // rising 1.6 m per metre out from the deck's edge); paths to places on its floor come in through its own tunnels
   // (p.bore), any other path runs in a narrow gorge along it, the rock rising sheer from the path's edge. It is drawn in dark rock instead of grass.
   {
-    const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair
+    const BLOBS = [[-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: north of OHH inside the ring road, then north-east towards the funfair; outside the ring road is OHH's coast, which the hills stay off
     const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7], [-69, -58, 8, 10], [-87, -45, 3, 6], [-33, -88, 9, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top; the last three keep OHH's canal buried (a saddle west of the mountain, a knoll north of OHH, the mountain's foot by SHOT's way)
     const X0 = -164, X1 = 92, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz), rk = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
@@ -1080,6 +1080,7 @@
         for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
         R = Math.min(R * m, Math.max(0, deckCap(x, z)));
       }
+      if (H > 0 && ohh && ohh.hillMask) { const l = ohh.local(x, z); H *= ohh.hillMask(l.x, l.z); }   // OHH's coast: the hills come down behind its beaches, never over the sand, the harbour or the sea
       h[j * nx + i] = Math.max(H, R); rk[j * nx + i] = R > H ? Rk : 0;
     }
     hillField = { x0: X0, z0: Z0, d: D, nx, nz, h, rk };
@@ -2799,7 +2800,10 @@
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
       const f = p.f || SILENT;
-      if (v > 0.001 || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
+      const l = (p.wake || p.lod) && p.local(P.x, P.z);
+      if (p.lod) p.lod(l.x, l.z, scene.fog.far);   // a place spread far and wide (OHH's beaches) leaves out what the fog has swallowed, wherever you are
+      const awake = v > 0.001 || (p.wake && p.wake(l.x, l.z));   // a place whose life reaches further than its light (OHH's beaches) keeps moving while you are out there
+      if (awake || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
       p.group.visible = !viewPlace || viewPlace === p || viewPlace.lookout || camBlend < 1;   // a view keeps to its own place, unless it is a lookout over the rest
       const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
