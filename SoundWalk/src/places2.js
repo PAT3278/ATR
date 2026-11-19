@@ -1144,11 +1144,12 @@
         // One instanced mesh per shape for everything on the sand and everyone on it, each piece in its own colour (a
         // couple of dozen draws for the lot). A piece is an empty node; a person is a rig of them (placement, hips, limbs
         // on pivots). Still pieces are written once; every frame the update poses the moving rigs and copies only theirs.
-        const K = BL.kit, kit = (n, geo, o = {}) => { const m = E.mat('#ffffff', { rough: o.rough ?? 0.7, map: o.map || null }, true); if (o.side) m.side = o.side; if (o.vc) m.vertexColors = true; K[n] = { geo, m, list: [] }; };
+        const K = BL.kit, kit = (n, geo, o = {}) => { const m = E.mat('#ffffff', { rough: o.rough ?? 0.7, map: o.map || null }, true); if (o.side) m.side = o.side; if (o.vc) m.vertexColors = true; K[n] = { geo, m, list: [], flat: !!o.flat }; };
         const stripeTex = (cols, n, w = 256, h = 32) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x2 = c.getContext('2d'); for (let i = 0; i < n; i++) { x2.fillStyle = cols[i % cols.length]; x2.fillRect((i * w) / n, 0, w / n + 1, h); } const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; };
         kit('box', new THREE.BoxGeometry(1, 1, 1)); kit('cyl', new THREE.CylinderGeometry(1, 1, 1, 12)); kit('cone', new THREE.ConeGeometry(1, 1, 12));
-        kit('taper', new THREE.CylinderGeometry(1, 0.88, 1, 8), { rough: 0.6 }); kit('limb', new THREE.CylinderGeometry(1, 0.8, 1, 6).translate(0, -0.5, 0), { rough: 0.6 });   // low-poly: there are a couple of hundred people
-        kit('sph', new THREE.SphereGeometry(1, 10, 7), { rough: 0.45 }); kit('cap', new THREE.SphereGeometry(1, 10, 4, 0, PI * 2, 0, PI * 0.56), { rough: 0.9 });
+        kit('taper', new THREE.CylinderGeometry(1, 0.88, 1, 7), { rough: 0.6 }); kit('limb', new THREE.CylinderGeometry(1, 0.8, 1, 5).translate(0, -0.5, 0), { rough: 0.6 });   // low-poly: there are a couple of hundred people
+        kit('head', new THREE.SphereGeometry(1, 8, 6), { rough: 0.45 }); kit('cap', new THREE.SphereGeometry(1, 8, 3, 0, PI * 2, 0, PI * 0.56), { rough: 0.9 }); kit('sph', new THREE.SphereGeometry(1, 10, 7), { rough: 0.45 });
+        kit('flat', new THREE.PlaneGeometry(1, 1).rotateX(-PI / 2), { flat: true });   // towels, mats, flip-flops: their top face only, and no shadow of their own
         kit('torus', new THREE.TorusGeometry(1, 0.32, 8, 18), { rough: 0.5 }); kit('dome', new THREE.SphereGeometry(1, 16, 8, 0, PI, 0, PI / 2), { side: THREE.DoubleSide, rough: 0.8 });   // a pop-up tent: a quarter sphere, open towards -Z
         kit('ball', new THREE.SphereGeometry(1, 14, 10), { map: stripeTex(['#d23a2a', '#f4f1e6', '#2457c5', '#e8d03a', '#f4f1e6', '#1f8a4a'], 6), rough: 0.4 });
         { const P = [[0, 0.62], [0.46, 0.12], [0, -0.58], [-0.46, 0.12]], pos = [], col = []; for (let i = 0; i < 4; i++) { const a = P[i], b = P[(i + 1) % 4], v = i % 2 ? 1 : 0.5; pos.push(0, 0.12, 0, a[0], a[1], 0, b[0], b[1], 0); for (let j = 0; j < 9; j++) col.push(v); }   // a diamond kite in two shades of its colour
@@ -1171,7 +1172,7 @@
           const sk = skins[k % skins.length], ents = [], pt = (kk, par, c, ...a) => { const n = node(...a); ents.push(put(kk, n, c, par)); return n; };
           pt('taper', b, o.top || (k % 3 === 1 ? suits[(k * 3 + 2) % suits.length] : sk), 0, 0.3, 0, 0.19, 0.62, 0.133);   // a third in a one-piece or a top
           pt('taper', b, o.suit || suits[(k * 3) % suits.length], 0, 0.08, 0, 0.2, 0.22, 0.144);
-          pt('sph', b, sk, 0, 0.76, 0, 0.12, 0.125, 0.12);
+          pt('head', b, sk, 0, 0.76, 0, 0.12, 0.125, 0.12);
           if (!o.bald) pt('cap', b, o.hat || hairs[(k * 5 + 1) % hairs.length], 0, 0.78, -0.014, 0.13, 0.13, 0.13, 0, -0.42);   // hair (or a cap), tipped back off the face
           const limb = (x, y, len, rr, c) => { const pv = new THREE.Object3D(); pv.position.set(x, y, 0); b.add(pv); pt('limb', pv, c, 0, 0, 0, rr, len, rr); return pv; };
           const arms = [limb(-0.25, 0.56, 0.6, 0.055, o.sleeves || sk), limb(0.25, 0.56, 0.6, 0.055, o.sleeves || sk)], legs = [limb(-0.1, 0, 0.86, 0.068, o.legs || sk), limb(0.1, 0, 0.86, 0.068, o.legs || sk)];
@@ -1195,8 +1196,12 @@
         const route = (pts, v, pause = []) => { const seg = []; let T = 0; pts.forEach((a, i) => { const b2 = pts[(i + 1) % pts.length], w = pause[(i + 1) % pts.length] || 0, t1 = T + Math.hypot(b2[0] - a[0], b2[1] - a[1]) / v; seg.push({ a, b: b2, t0: T, t1, w }); BL.seg.push([a, b2]); T = t1 + w; }); return { seg, T, v }; };
         const along = (R, t) => { const u = ((t % R.T) + R.T) % R.T; for (const s of R.seg) { if (u < s.t1) { const k = (u - s.t0) / (s.t1 - s.t0 || 1); return { x: s.a[0] + (s.b[0] - s.a[0]) * k, z: s.a[1] + (s.b[1] - s.a[1]) * k, yaw: face(s.a[0], s.a[1], s.b[0], s.b[1]), go: true }; } if (u < s.t1 + s.w) return { x: s.b[0], z: s.b[1], yaw: null, go: false }; } return { x: R.seg[0].a[0], z: R.seg[0].a[1], yaw: null, go: false }; };
         // someone following a route, walking or running; o.after(m, t, q) poses what the gait leaves alone
-        const walker = (m, R, o = {}) => { live(pose(m, 'stand')); BL.acts.push((t, dt) => { const q = along(R, t + (o.off || 0)), s = m.s;
-          m.f.position.x = q.x + (o.dx || 0); m.f.position.z = q.z + (o.dz || 0); turn(m.f, q.yaw, dt, o.run ? 8 : 5);
+        const crossers = [];   // where everyone walking about will be at time t: the kids running down to the sea wait for them to go by
+        const walker = (m, R, o = {}) => { live(pose(m, 'stand')); if (o.side) R.seg.forEach(({ a, b }) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, ox = (-(b[1] - a[1]) / L) * o.side, oz = ((b[0] - a[0]) / L) * o.side; BL.seg.push([[a[0] + ox, a[1] + oz], [b[0] + ox, b[1] + oz]]); });   // walking beside the line: keep that clear too
+          crossers.push((t) => { const q = along(R, t + (o.off || 0)), sd = o.side || 0, fy = q.yaw ?? 0; return [q.x + (o.dx || 0) - Math.cos(fy) * sd, q.z + (o.dz || 0) + Math.sin(fy) * sd]; });
+          BL.acts.push((t, dt) => { const q = along(R, t + (o.off || 0)), s = m.s;
+          turn(m.f, q.yaw, dt, o.run ? 8 : 5); const sd = o.side || 0, fy = m.f.rotation.y;   // o.side: that far to the right of the line, by the way they face (so it swings round smoothly at the corners)
+          m.f.position.x = q.x + (o.dx || 0) - Math.cos(fy) * sd; m.f.position.z = q.z + (o.dz || 0) + Math.sin(fy) * sd;
           if (q.go) { m.ph += dt * R.v * (o.run ? 2.9 : 4.4) / s; gait(m, m.ph, o.run ? 0.85 : 0.42); m.f.position.y = 0.14 - 0.03 * s + Math.abs(Math.cos(m.ph)) * (o.run ? 0.07 : 0.025); m.b.rotation.x = o.run ? 0.14 : 0.03; }
           else { gait(m, 0, 0); m.f.position.y = 0.14 - 0.03 * s; m.b.rotation.x = 0; }
           if (o.after) o.after(m, t, q); }); return m; };
@@ -1288,7 +1293,8 @@
         const iceFlag = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 160; const x2 = c.getContext('2d'); x2.fillStyle = '#ffffff'; x2.fillRect(0, 0, 128, 160); x2.fillStyle = '#2a6fd0'; for (let i = 0; i < 4; i++) { x2.beginPath(); x2.arc(16 + i * 32, 160, 18, PI, 0); x2.fill(); }
           x2.fillStyle = '#d8262a'; x2.font = '700 96px "Noto Serif JP",serif'; x2.textAlign = 'center'; x2.textBaseline = 'middle'; x2.fillText('氷', 64, 70); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t; })();   // the kakigori flag: red 氷 over blue waves
         { const F = stand(-70, -42.4, { wall: '#eef2f4', counter: '#2a6fd0', awn: 'wb0', sign: iceFlag, sw: 0.7, sh: 0.88, sy: 2.95, k: 41 });
-          S('cyl', '#6e5137', F, 1.95, 1.75, -1.25, 0.03, 3.3, 0.03); const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.78), new THREE.MeshBasicMaterial({ map: iceFlag, side: THREE.DoubleSide })); fl.position.set(-70 + 1.95 - 0.33, 2.95, -42.4 - 1.25); g.add(fl);   // and a flag on a pole by the counter
+          S('cyl', '#6e5137', F, 1.95, 1.75, -1.25, 0.03, 3.3, 0.03);   // and a flag on a pole by the counter: two one-sided sheets back to back, so 氷 reads the right way round from either side
+          { const fg = new THREE.PlaneGeometry(0.62, 0.78), fm = new THREE.MeshBasicMaterial({ map: iceFlag }); for (const ry of [0, PI]) { const fl = new THREE.Mesh(fg, fm); fl.position.set(-70 + 1.95 - 0.33, 2.95, -42.4 - 1.25); fl.rotation.y = ry; g.add(fl); } }
           S('box', '#c8ccd0', F, -1.2, 1.38, -0.62, 0.3, 0.5, 0.3); S('cyl', '#d23a2a', F, -1.2, 1.7, -0.62, 0.1, 0.15, 0.1); }   // the shaving machine
         // a shower post on a slatted floor, and someone rinsing off under it
         { const SX = 53, SZ = -35.4;
@@ -1308,10 +1314,10 @@
         // pieces that camps and people share
         const towelC = ['#d23a2a', '#2457c5', '#1f8a4a', '#e8b23a', '#ef7a1a', '#9b7bd8', '#7ad0c8', '#f4f1e6', '#22252a'], coolC = ['#2457c5', '#d23a2a', '#1f8a4a', '#ef7a1a'];
         const bagC = ['#e8d2a8', '#2457c5', '#d23a2a', '#22252a', '#7ad0c8', '#c86a2a'], toyC = ['#d23a2a', '#2457c5', '#e8b23a', '#1f8a4a', '#ef7a1a'], boardC = ['#f4f1e6', '#2a9fd6', '#e8b23a', '#d23a2a', '#1f8a4a', '#ef7a1a', '#7ad0c8'];
-        const towel = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); S('box', towelC[k % towelC.length], T, 0, 0.147, 0, 0.88, 0.014, 1.76); if (k % 3 !== 2) for (const dz of [-0.6, 0.6]) S('box', towelC[(k + 4) % towelC.length], T, 0, 0.151, dz, 0.89, 0.014, 0.18); return T; };
+        const towel = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); S('flat', towelC[k % towelC.length], T, 0, 0.154, 0, 0.88, 1, 1.76); if (k % 3 !== 2) for (const dz of [-0.6, 0.6]) S('flat', towelC[(k + 4) % towelC.length], T, 0, 0.158, dz, 0.89, 1, 0.18); return T; };
         const cooler = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); S('box', coolC[k % coolC.length], T, 0, 0.32, 0, 0.56, 0.36, 0.36); S('box', '#f4f1e6', T, 0, 0.53, 0, 0.58, 0.07, 0.38); S('box', '#f4f1e6', T, 0, 0.6, 0, 0.34, 0.04, 0.05); col(F, x, z, 0.36); };
         const bag = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); S('box', bagC[k % bagC.length], T, 0, 0.3, 0, 0.44, 0.32, 0.16, 0, 0, 0.1); S('box', bagC[(k + 3) % bagC.length], T, 0.03, 0.52, 0, 0.3, 0.14, 0.02, 0, 0, 0.1); };
-        const flops = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); for (const sx of [-0.08, 0.08]) S('box', toyC[k % toyC.length], T, sx, 0.147, sx * 0.8, 0.1, 0.02, 0.26, sx * 1.6); };
+        const flops = (F, x, z, ry, k) => { const T = frame(F, x, z, ry); for (const sx of [-0.08, 0.08]) S('flat', toyC[k % toyC.length], T, sx, 0.157, sx * 0.8, 0.1, 1, 0.26, sx * 1.6); };
         const bucket = (F, x, z, k) => { S('cyl', toyC[k % toyC.length], F, x, 0.25, z, 0.12, 0.22, 0.12); const T = frame(F, x + 0.3, z + 0.12, 0.6 + k); S('box', toyC[(k + 1) % toyC.length], T, 0, 0.155, 0, 0.13, 0.02, 0.15); S('box', toyC[(k + 1) % toyC.length], T, 0, 0.16, 0.22, 0.03, 0.03, 0.3); };
         const ball = (F, x, z) => S('ball', '#ffffff', F, x, 0.34, z, 0.2, 0.2, 0.2, rc() * 6, rc() * 3);
         const boards = (F, x, z, n, k) => { for (let i = 0; i < n; i++) { const bx = x + (i - (n - 1) / 2) * 0.62; S('sph', boardC[(k + i * 3) % boardC.length], F, bx, 0.84, z + (rc() - 0.5) * 0.3, 0.27, 1.0, 0.045, (rc() - 0.5) * 0.5, (rc() - 0.5) * 0.2, (rc() - 0.5) * 0.25); col(F, bx, z, 0.3); } };   // stuck upright in the sand
@@ -1334,7 +1340,8 @@
 
         // the people out and about (placed before the camps, which keep clear of where they go)
         // swimmers: bobbing and treading water, floating on their backs, swimming lengths, kids in rubber rings
-        const swim = (B, n, seed) => { for (let i = 0, made = 0; i < 60 && made < n; i++) { const x = B.x0 + 8 + rc() * (B.x1 - B.x0 - 14), z = -67.6 - rc() * 8.5, k = seed + made; if (!seaClear(x, z, 3)) continue; made++;
+        const KIDS = [[56.4, 80, 0], [59.6, 81, 2.6], [101, 82, 1.1], [-115, 83, 0.4], [-111.8, 84, 3.9]];   // where kids run into the waves (x), well apart
+        const swim = (B, n, seed) => { for (let i = 0, made = 0; i < 60 && made < n; i++) { const x = B.x0 + 8 + rc() * (B.x1 - B.x0 - 14), z = -67.6 - rc() * 8.5, k = seed + made; if (!seaClear(x, z, 3) || KIDS.some(([kx]) => Math.abs(x - kx) < 2.5 && z > -70.5)) continue; made++;
           const kind = made % 5 === 2 ? 'float' : made % 5 === 4 ? 'ring' : 'tread', m = live(person(k, { x, z, ry: PI + (rc() - 0.5) * 2, kid: kind === 'ring' })), ph = rc() * 9;
           if (kind === 'float') { m.b.rotation.x = -PI / 2 + 0.06; m.f.position.y = -0.88; m.arms.forEach((a, j) => (a.rotation.z = (j ? 1 : -1) * 1.35)); m.legs.forEach((l, j) => (l.rotation.z = (j ? -1 : 1) * 0.25)); }
           if (kind === 'ring') hold(m, 'torus', toyC[k % toyC.length], m.f, 0, 1.06, 0, 0.36, 0.36, 0.36, 0, PI / 2);
@@ -1350,15 +1357,20 @@
           BL.acts.push((t, dt) => { const q = along(R, t); m.f.position.x = q.x; m.f.position.z = q.z; turn(m.f, q.yaw, dt, 1.5); m.arms.forEach((a, j) => a.rotation.set(-t * 3.1 - j * PI, 0, (j ? 1 : -1) * 0.25)); m.legs.forEach((l, j) => (l.rotation.x = Math.sin(t * 9 + j * PI) * 0.22)); m.f.position.y = -0.82 + Math.sin(t * 3.1) * 0.03; });
           BL.seg.length -= 4;   // out at sea: nothing on the sand to keep off this route
         }
-        // kids running into the waves, splashing about and running back out
-        const waves = (x, k, ph) => { const m = live(pose(person(k, { kid: true, x, z: -60, top: k % 2 ? undefined : tees[k % tees.length] }), 'stand')), fx = [0, 1, 2].map(() => live(put('sph', node(x, 0.08, -66, 0.001, 0.001, 0.001), '#f4f6f8')).o);
-          BL.acts.push((t, dt) => { const T = 7.5, u = (((t + ph) % T) + T) % T, zD = -60, zW = -67.2; let z, go = 0, yaw;
-            if (u < 2.3) { z = zD + (zW - zD) * (u / 2.3); go = 1; yaw = PI; } else if (u < 3.8) { z = zW + Math.sin((u - 2.3) * 4) * 0.4; go = 0.3; yaw = PI + Math.sin(u * 3) * 0.7; } else if (u < 6.1) { z = zW + (zD - zW) * ((u - 3.8) / 2.3); go = 1; yaw = 0; } else { z = zD; yaw = PI; }
+        // kids running into the waves, splashing about and running back out; at the top of the wet sand they wait for whoever
+        // is coming along the water's edge (strollers, joggers, the dog) to go by before they dash across
+        const zD = -59, zW = -67.2, runZ = (u) => (u < 2.3 ? zD + (zW - zD) * (u / 2.3) : u < 3.8 ? zW + Math.sin((u - 2.3) * 4) * 0.4 : u < 6.1 ? zW + (zD - zW) * ((u - 3.8) / 2.3) : zD);
+        const clearRun = (x, t) => { for (let s = 0; s <= 6.1; s += 0.3) { const z = runZ(s); for (const c of crossers) { const q = c(t + s); if (Math.abs(q[0] - x) < 1.7 && Math.abs(q[1] - z) < 0.9) return false; } } return true; };
+        const waves = (x, k, ph) => { const m = live(pose(person(k, { kid: true, x, z: zD, top: k % 2 ? undefined : tees[k % tees.length] }), 'stand')), fx = [0, 1, 2].map(() => live(put('sph', node(x, 0.08, -66, 0.001, 0.001, 0.001), '#f4f6f8')).o), st = { t0: -ph };
+          take(x, zD, 1.3);
+          BL.acts.push((t, dt) => { let u = t - st.t0; if (u < 0 || u >= 7.5) { if (clearRun(x, t)) { st.t0 = t; u = 0; } else u = 7; }   // a run starts only when it is clear the whole way out and back
+            const z = runZ(u); let go = 0, yaw;
+            if (u < 2.3) { go = 1; yaw = PI; } else if (u < 3.8) { go = 0.3; yaw = PI + Math.sin(u * 3) * 0.7; } else if (u < 6.1) { go = 1; yaw = 0; } else yaw = PI;
             const gy = z > -64 ? 0.14 : 0.14 - Math.min(0.3, (-64 - z) * 0.12), splash = u > 2.3 && u < 3.8;
             m.f.position.set(x + Math.sin(t * 0.5 + ph) * 0.7, gy - 0.03 * m.s + (splash ? Math.abs(Math.sin(u * 7)) * 0.16 : 0), z); turn(m.f, yaw, dt, 9);
             m.arms.forEach((a, i) => a.rotation.set(0, 0, (i ? 1 : -1) * 0.12)); m.ph += dt * go * 11; gait(m, m.ph, 0.9 * go); if (splash) m.arms.forEach((a, i) => a.rotation.set(-0.3, 0, (i ? 1 : -1) * (1.6 + Math.sin(u * 9 + i) * 0.5)));
             const sp = z < -64.3 ? (splash ? 1 : 0.6) : 0; fx.forEach((o, i) => { o.position.set(m.f.position.x + Math.cos(t * 7 + i * 2.1) * 0.3, 0.08, z + Math.sin(t * 7 + i * 2.1) * 0.3); o.scale.set(0.16 * sp, 0.07 * sp + 0.001, 0.16 * sp); }); }); };
-        waves(57.2, 80, 0); waves(58.8, 81, 2.6); waves(101, 82, 1.1); waves(-114, 83, 0.4); waves(-112.6, 84, 3.9);
+        KIDS.forEach(([x, k, ph]) => waves(x, k, ph));
         // frisbee and catch: something thrown back and forth, a disc in a flat curving arc, a ball lobbed high
         const toss = (A, B2, kA, kB, o) => {
           const P = [A, B2].map((q, i) => live(pose(person(i ? kB : kA, { x: q[0], z: q[1], ry: i ? face(B2[0], B2[1], A[0], A[1]) : face(A[0], A[1], B2[0], B2[1]), kid: o.kids && i === 1 }), 'stand'))), it = live(put(o.k, node(A[0], 1.2, A[1], ...o.s), o.c)).o;
@@ -1379,13 +1391,15 @@
         const trot = (dg, go, t, dt, v = 1) => { dg.ph += dt * go * v * 7; dg.legs.forEach((l, i) => (l.rotation.x = Math.sin(dg.ph + ((i === 0 || i === 3) ? 0 : PI)) * 0.55 * go)); dg.tail.rotation.z = Math.sin(t * 14) * 0.6; dg.head.rotation.x = Math.sin(dg.ph * 2) * 0.06 * go; };
         const lines = []; BL.after.push(() => lines.forEach((l, i) => { const [a, b2] = l(); BL.lp.set([a.x, a.y, a.z, b2.x, b2.y, b2.z], i * 6); }));   // strings: leashes, fishing lines and kite strings, one draw for all
         // someone walking a dog along the water's edge, on a lead
-        { const R = route([[22, -62.8], [122, -62.8], [122, -63.4], [22, -63.4]], 1.15), dg = dog('#c89a5a', '#8a5a2a', 22, -63);
+        { const R = route([[22, -63.3], [122, -63.3], [122, -63.7], [22, -63.7]], 1.15), dg = dog('#c89a5a', '#8a5a2a', 22, -63.8); dg.f.position.y = 0.1;   // the lowest lane, at the top of the wet sand, the dog on the sea side
           const wm = walker(person(95, { top: tees[1], legs: '#3a4a6a' }), R, { after: (m) => { m.arms[1].rotation.set(-0.45, 0, 0.12); } });
-          BL.acts.push((t, dt) => { const q = along(R, t + 1.6 / R.v); dg.f.position.x = q.x + Math.sin(t * 0.7) * 0.3; dg.f.position.z = q.z - 0.5; turn(dg.f, q.yaw, dt, 6); trot(dg, q.go ? 1 : 0, t, dt, 1.2); });
+          const at = (t) => { const q = along(R, t); return [q.x + Math.round(Math.sin(q.yaw)) * 0.75, q.z - 0.62, q.yaw]; };   // a step ahead, always on the sea side: at each end it swings round on that side, never back through its walker
+          BL.acts.push((t, dt) => { const [x, z, yaw] = at(t), k = Math.min(1, dt * 4); dg.f.position.x += (x + Math.sin(t * 0.7) * 0.12 - dg.f.position.x) * k; dg.f.position.z += (z - dg.f.position.z) * k; turn(dg.f, yaw, dt, 6); trot(dg, 1, t, dt, 1.2); });
+          crossers.push(at);
           lines.push(() => [hand(wm, 1, V1).clone(), dg.head.localToWorld(V2.set(0, 0, 0)).clone()]); BL.at.dog = dg.f; }
         // ...and one fetching a ball, out to where it lands and back
-        { const O = [-80, -47.5], spots = [[-78, -57.5], [-86.5, -56.5], [-82, -58.8]], dg = dog('#22201e', '#f4f1e6', O[0], O[1] - 1), m = live(pose(person(96, { x: O[0], z: O[1], ry: PI, top: tees[4] }), 'stand')), bl = live(put('ball', node(0, 0, 0, 0.11, 0.11, 0.11), '#ffffff')).o;
-          take(-82, -53, 5.6); BL.at.fetch = dg.f;
+        { const O = [-77, -50], spots = [[-75.5, -56.2], [-80.5, -55.8], [-78, -57.2]], dg = dog('#22201e', '#f4f1e6', O[0], O[1] - 1), m = live(pose(person(96, { x: O[0], z: O[1], ry: PI, top: tees[4] }), 'stand')), bl = live(put('ball', node(0, 0, 0, 0.11, 0.11, 0.11), '#ffffff')).o;
+          take(-78, -53.6, 4.8); BL.at.fetch = dg.f;   // east of the old parasols: every run out and back keeps clear of their loungers
           BL.acts.push((t, dt) => { const T = 7, n = Math.floor(t / T), u = t - n * T, L = spots[((n % 3) + 3) % 3], H = [O[0], O[1] - 0.9];
             m.f.rotation.y = face(O[0], O[1], L[0], L[1]); m.arms[1].rotation.set(u < 0.5 ? 0.8 - 3.2 * (u / 0.5) : u < 0.9 ? -2.4 + 2.3 * ((u - 0.5) / 0.4) : u > 5.6 ? -0.8 : -0.1, 0, 0.12);
             let dx, dz, go = 0, yaw;
@@ -1401,17 +1415,17 @@
             else if (u < 2.6) bl.position.set(L[0], 0.25, L[1]); else if (u < 5.6) dg.head.localToWorld(bl.position.set(0, -0.02, 0.27)); else hand(m, 1, bl.position);
             bl.updateMatrixWorld(true); }); }
         // joggers along the water's edge, and a couple strolling hand in hand
-        walker(person(97, { top: tees[2], legs: '#22252a', hat: '#22252a' }), route([[20, -61.2], [125, -61.2], [125, -62.0], [20, -62.0]], 3.1), { run: true });
-        walker(person(98, { top: '#22252a', legs: '#22252a' }), route([[20, -61.5], [125, -61.5], [125, -62.2], [20, -62.2]], 2.7), { run: true, off: 31 });
+        { const R = route([[20, -61.3], [125, -61.3], [125, -62.3], [20, -62.3]], 2.9);   // the same pace on the same loop half a lap apart: they pass each other a metre apart and never catch up
+          walker(person(97, { top: tees[2], legs: '#22252a', hat: '#22252a' }), R, { run: true }); walker(person(98, { top: '#22252a', legs: '#22252a' }), R, { run: true, off: R.T / 2 }); }
         walker(person(99, { top: tees[5] }), route([[-129, -61.3], [-64, -61.3], [-64, -62.1], [-129, -62.1]], 2.9), { run: true, off: 7 });
-        { const R = route([[24, -60.4], [100, -60.4]], 0.9, [8, 8]); for (const [k, dz] of [[100, 0.32], [101, -0.32]]) walker(person(k, { top: k % 2 ? tees[3] : undefined }), R, { dz, after: (m) => { const sd = dz * Math.sin(m.f.rotation.y) > 0 ? 1 : 0; m.arms[sd].rotation.set(-0.15, 0, (sd ? 1 : -1) * 0.3); } }); }   // the inner hands reach for each other's
+        { const R = route([[24, -60.2], [100, -60.2]], 0.9, [8, 8]); for (const [k, dz] of [[100, 0.3], [101, -0.3]]) walker(person(k, { top: k % 2 ? tees[3] : undefined }), R, { dz, after: (m) => { const sd = dz * Math.sin(m.f.rotation.y) > 0 ? 1 : 0; m.arms[sd].rotation.set(-0.15, 0, (sd ? 1 : -1) * 0.3); } }); }   // the inner hands reach for each other's
         // people walking from one spot to the next: from the ice-cream stand down to the water and back past the shower; a
         // surfer carrying a board down to the water; from the shaved-ice stand to the water and round the parasols
         { const m = person(102, { top: tees[6] }), hf = frame(m.arms[1], 0, 0, 0, -0.62); hf.rotation.x = 1.05; hold(m, 'cone', '#d9a55a', hf, 0, 0, 0.05, 0.04, 0.12, 0.04, 0, PI); hold(m, 'sph', '#f4c2d0', hf, 0, 0.09, 0.05, 0.05, 0.05, 0.05);   // an ice cream, held upright
           walker(m, route([[45.8, -34.6], [49.7, -42], [49.7, -59.2], [59.2, -57], [59.2, -40], [53, -37.1]], 1.05, [3, 0, 5, 0, 0, 4]), { after: (q, t) => q.arms[1].rotation.set(-1.05 - Math.max(0, Math.sin(t * 0.7)) * 0.7, 0, 0.1) }); }
         { const m = person(103, { top: '#141416', sleeves: '#141416', legs: '#141416' }); hold(m, 'sph', boardC[1], m.f, 0.36, 1.02, 0.1, 0.04, 0.27, 1.0);
-          walker(m, route([[80, -36.2], [79.6, -59.2], [80.6, -59.2], [81, -36.2]], 1.0, [4, 0, 6]), { after: (q) => q.arms[1].rotation.set(0, 0, 0.3) }); }
-        { const R = route([[-68.2, -44.2], [-78, -59.2], [-92, -53], [-90.5, -44.6]], 1.1, [3, 4, 0, 0]); walker(person(104, { top: tees[0] }), R); walker(person(105, { kid: true }), R, { dx: 0.75, dz: 0.3, off: -0.4 }); }   // a parent and a kid
+          walker(m, route([[80, -36.2], [79.6, -58.3], [80.6, -58.3], [81, -36.2]], 1.0, [4, 0, 6]), { after: (q) => q.arms[1].rotation.set(0, 0, 0.3) }); }
+        { const R = route([[-67.6, -44.4], [-71, -59.3], [-90, -59.3], [-90.5, -46.6], [-72.8, -47.6], [-67.6, -47.4]], 1.1, [3, 4, 0, 2, 0, 0]); walker(person(104, { top: tees[0] }), R); walker(person(105, { kid: true }), R, { side: 0.75 }); }   // a parent and a kid, back round the front of the queue, not through it
         // photos: someone snapping a couple posing with the sea behind them, the flash going off; someone shooting the sunset
         { const m = live(pose(person(106, { x: 31, z: -55.6, ry: PI, top: tees[7] }), 'stand')), ph = hold(m, 'box', '#1a1c20', m.arms[1], 0.1, -0.64, 0.05, 0.08, 0.15, 0.02), fl = hold(m, 'sph', '#ffffff', m.arms[1], 0.1, -0.66, 0.0, 0.001, 0.001, 0.001);
           const cp = [[30.4, -59.2, 107], [31.5, -59.3, 108]].map(([x, z, k]) => live(pose(person(k, { x, z }), 'stand')));
@@ -1488,7 +1502,7 @@
             boards(F, 0, 1.3, 2 + (ci % 2), ci); towel(F, 0.2, -0.3, 0.1, k); S('sph', boardC[(ci + 5) % boardC.length], F, -1.3, 0.19, -0.4, 0.27, 0.045, 1.0, 0.2); bag(F, 1.6, 0.9, 0, k);
             sitter(F, k, 0.2, 0.1, PI, { top: '#141416', legs: '#141416', sleeves: '#141416' }); if (rc() < 0.5) { towel(F, 1.4, -0.6, -0.1, k + 1); lie(F, k + 1, 1.4, -0.6, -0.1 + PI); }
           } else if (u < 0.94) {   // friends round a cool box on a big mat, with a ball
-            S('box', towelC[ci % towelC.length], F, 0, 0.147, 0, 3.0, 0.014, 3.0, 0.3); cooler(F, 0, 0, 0.3, k); ball(F, 2.0, -1.5); bag(F, -1.9, 1.6, 0, k); bag(F, 1.8, 1.6, 0.6, k + 2);
+            S('flat', towelC[ci % towelC.length], F, 0, 0.154, 0, 3.0, 1, 3.0, 0.3); cooler(F, 0, 0, 0.3, k); ball(F, 2.0, -1.5); bag(F, -1.9, 1.6, 0, k); bag(F, 1.8, 1.6, 0.6, k + 2);
             for (let i = 0; i < 3; i++) { const a = (i / 3) * PI * 2 + 0.4; sitter(F, k + i, Math.sin(a) * 1.4, Math.cos(a) * 1.4, a + PI); }
           } else {   // someone on their own with a book and a bag
             towel(F, 0, 0, 0, k); bag(F, 0.8, 0.9, 0.3, k); flops(F, -0.7, 1.0, 0, k); sitter(F, k, 0, 0.5, PI);
@@ -1508,18 +1522,32 @@
           else if (u < 0.85) boards(F, 0, 0, 1 + (made % 2), k);
           else { towel(F, 0, 0, 0, k); sitter(F, k, 0, 0.45, PI); }
         }
-        // build the meshes: one per kit, every piece written once; the moving ones are copied again every frame
+        // build the meshes: per kit, one for each stretch of sand about 40 m long with its still pieces, written once, and one
+        // for each side of the harbour with everything that moves, the only ones copied again every frame. Each has a bounding
+        // sphere round its own pieces (round the whole side and out to sea for the moving ones), so the renderer skips it when
+        // it is out of the picture, and the shadow pass skips it when it is out of the sun's shadow box; p.lod hides what the
+        // fog has swallowed. A couple of hundred thousand triangles no longer go out every frame wherever you are.
         BL.lives.forEach((x) => { (x.ents || [x]).forEach((e) => (e.dyn = true)); BL.roots.push(x.f || x.o); });
-        for (const n in K) { const q = K[n]; if (!q.list.length) continue; const im = new THREE.InstancedMesh(q.geo, q.m, q.list.length);
-          q.list.forEach((e, i) => { e.o.updateWorldMatrix(true, false); im.setMatrixAt(i, e.o.matrixWorld); im.setColorAt(i, e.c); });
-          im.castShadow = im.receiveShadow = true; im.frustumCulled = false; g.add(im); q.im = im; q.dyn = q.list.map((e, i) => (e.dyn ? i : -1)).filter((i) => i >= 0); }
+        const HM = (HB.x0 + HB.x1) / 2, VP = new THREE.Vector3(), MS = BL.meshes = [];
+        for (const n in K) { const q = K[n]; if (!q.list.length) continue; const few = q.list.length < 40, grp = {};
+          q.list.forEach((e) => { e.o.updateWorldMatrix(true, false); const x = e.o.matrixWorld.elements[12], sd = x > HM ? 'E' : 'W', key = sd + (e.dyn ? 'L' : few ? 'S' : Math.floor((x - (sd === 'E' ? BE.x0 : BW.x0)) / 40)); (grp[key] = grp[key] || { sd, dyn: !!e.dyn, list: [] }).list.push(e); });
+          for (const key in grp) { const G = grp[key], geo = new THREE.BufferGeometry(), bx = new THREE.Box3();
+            geo.index = q.geo.index; for (const a in q.geo.attributes) geo.setAttribute(a, q.geo.attributes[a]);   // the kit's own buffers (uploaded once), bounds of its own
+            G.list.forEach((e) => { const m = e.o.matrixWorld.elements, r = Math.max(Math.hypot(m[0], m[1], m[2]), Math.hypot(m[4], m[5], m[6]), Math.hypot(m[8], m[9], m[10])) * 1.8 + 0.1; bx.expandByPoint(VP.set(m[12] - r, m[13] - r, m[14] - r)).expandByPoint(VP.set(m[12] + r, m[13] + r, m[14] + r)); });
+            if (G.dyn) { const B = G.sd === 'E' ? BE : BW; bx.expandByScalar(9).expandByPoint(VP.set(B.x0 - 2, -1.5, B.z1 - 4)).expandByPoint(VP.set(B.x1 + 2, 3, -30)); }   // where they go: all along their side, out to sea, up with the kites
+            geo.boundingBox = bx; geo.boundingSphere = bx.getBoundingSphere(new THREE.Sphere());
+            const im = new THREE.InstancedMesh(geo, q.m, G.list.length); G.list.forEach((e, i) => { im.setMatrixAt(i, e.o.matrixWorld); im.setColorAt(i, e.c); });
+            im.castShadow = !q.flat; im.receiveShadow = true; im.frustumCulled = true; g.add(im); MS.push({ im, list: G.list, dyn: G.dyn, box: bx, kit: n }); } }   // r128's InstancedMesh turns culling off: the sphere above makes it safe to turn back on
         { const lg = new THREE.BufferGeometry(); BL.lp = new Float32Array(Math.max(1, lines.length) * 6); lg.setAttribute('position', new THREE.BufferAttribute(BL.lp, 3));
-          const lm = new THREE.LineBasicMaterial({ color: lin('#ece6d6'), transparent: true, opacity: 0.55 }); lm.userData.lin = true; const ls = new THREE.LineSegments(lg, lm); ls.frustumCulled = false; g.add(ls); BL.lg = lg; }
+          const lm = new THREE.LineBasicMaterial({ color: lin('#ece6d6'), transparent: true, opacity: 0.55 }); lm.userData.lin = true; const ls = new THREE.LineSegments(lg, lm); ls.frustumCulled = false; g.add(ls); BL.lg = lg; BL.ls = ls; }
         BL.tick = (t, dt) => {
           BL.acts.forEach((a) => a(t, dt)); BL.roots.forEach((o) => o.updateMatrixWorld(true)); BL.after.forEach((a) => a(t));
-          for (const n in K) { const q = K[n]; if (!q.im || !q.dyn.length) continue; for (const i of q.dyn) q.im.setMatrixAt(i, q.list[i].o.matrixWorld); q.im.instanceMatrix.needsUpdate = true; }
+          for (const M of MS) { if (!M.dyn || !M.im.visible) continue; M.list.forEach((e, i) => M.im.setMatrixAt(i, e.o.matrixWorld)); M.im.instanceMatrix.needsUpdate = true; }
           BL.lg.attributes.position.needsUpdate = true;
         };
+        // out of sight in the fog: a mesh whose nearest point is further than 1.5x the fog's far end (anywhere in the picture
+        // the depth the fog goes by is at least two thirds of the distance) is not drawn at all
+        p.lod = (lx, lz, far) => { const R = far * 1.5 + 12; let any = false; for (const M of MS) { const b = M.box, dx = Math.max(b.min.x - lx, 0, lx - b.max.x), dz = Math.max(b.min.z - lz, 0, lz - b.max.z); M.im.visible = dx * dx + dz * dz < R * R; any = any || (M.dyn && M.im.visible); } BL.ls.visible = any; };
         BB2.flush();
       }
       // Sea stacks and the far mountains

@@ -757,7 +757,7 @@
   // sink to nothing at every path (the paths pass through in cuttings), at the ring road and its ramps, at the plaza
   // and the loop, and round every other place, so nothing that stands on flat ground ends up buried.
   {
-    const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair (either side of KEYAKI's avenue)
+    const BLOBS = [[-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: north of OHH inside the ring road, then north-east towards the funfair (either side of KEYAKI's avenue); outside the ring road is OHH's coast, which the hills stay off
     const X0 = -164, X1 = 40, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
     others.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
@@ -2227,7 +2227,9 @@
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
       const f = p.f || SILENT;
-      const awake = v > 0.001 || (p.wake && ((l) => p.wake(l.x, l.z))(p.local(P.x, P.z)));   // a place whose life reaches further than its light (OHH's beaches) keeps moving while you are out there
+      const l = (p.wake || p.lod) && p.local(P.x, P.z);
+      if (p.lod) p.lod(l.x, l.z, scene.fog.far);   // a place spread far and wide (OHH's beaches) leaves out what the fog has swallowed, wherever you are
+      const awake = v > 0.001 || (p.wake && p.wake(l.x, l.z));   // a place whose life reaches further than its light (OHH's beaches) keeps moving while you are out there
       if (awake || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
       p.group.visible = !viewPlace || viewPlace === p || camBlend < 1;
