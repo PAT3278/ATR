@@ -207,7 +207,7 @@ void PhoneTestoAudioProcessor::prepareToPlay (double sampleRate, int samplesPerB
     resetSmoother (mixAmount, knobRampSeconds, apvts.getRawParameterValue (mixParamId)->load() / 100.0f);
     resetSmoother (outputGain, knobRampSeconds, apvts.getRawParameterValue (outputParamId)->load() / 100.0f);
     resetSmoother (monoAmount, switchRampSeconds, apvts.getRawParameterValue (monoParamId)->load() > 0.5f ? 1.0f : 0.0f);
-    resetSmoother (liveAmount, switchRampSeconds, liveMonitorActive.load() ? 1.0f : 0.0f);
+    resetSmoother (liveAmount, switchRampSeconds, liveMode.load() ? 1.0f : 0.0f);
     resetSmoother (engageAmount, switchRampSeconds, apvts.getRawParameterValue (bypassParamId)->load() > 0.5f ? 0.0f : 1.0f);
 
     // The stream to phones is always 48 kHz, so a host rate change only needs
@@ -311,7 +311,7 @@ void PhoneTestoAudioProcessor::processSubBlock (juce::AudioBuffer<float>& buffer
     mixAmount.setTargetValue (apvts.getRawParameterValue (mixParamId)->load() / 100.0f);
     outputGain.setTargetValue (apvts.getRawParameterValue (outputParamId)->load() / 100.0f);
     monoAmount.setTargetValue (apvts.getRawParameterValue (monoParamId)->load() > 0.5f ? 1.0f : 0.0f);
-    liveAmount.setTargetValue (liveMonitorActive.load() ? 1.0f : 0.0f);
+    liveAmount.setTargetValue (liveMode.load() ? 1.0f : 0.0f); // Live: no emulation
     engageAmount.setTargetValue (apvts.getRawParameterValue (bypassParamId)->load() > 0.5f ? 0.0f : 1.0f);
 
     const int wanted = juce::jlimit (0, (int) profileSettings.size() - 1,
@@ -545,6 +545,8 @@ bool PhoneTestoAudioProcessor::startLiveMonitor (int port)
     liveServer.setPassword (getLiveAccessCode());
     const bool ok = liveServer.start (port, currentSampleRate);
     liveMonitorActive = ok;
+    if (ok)
+        liveMode = true; // phones get the mix as it is
     return ok;
 }
 
@@ -596,6 +598,7 @@ void PhoneTestoAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     state.setProperty (livePasswordProperty, getLivePassword(), nullptr);
     state.setProperty (editorScaleProperty, editorScale.load(), nullptr);
+    state.setProperty (modeProperty, liveMode.load() ? "live" : "emulate", nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -611,6 +614,8 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     auto tree = juce::ValueTree::fromXml (*xml);
     const auto password = tree.getProperty (livePasswordProperty).toString();
     const auto scale = (float) tree.getProperty (editorScaleProperty, 1.0f);
+    const auto mode = tree.getProperty (modeProperty, "emulate").toString(); // projects from before modes were emulating
+    tree.removeProperty (modeProperty, nullptr);
     tree.removeProperty (livePasswordProperty, nullptr);
     tree.removeProperty (editorScaleProperty, nullptr);
     tree.removeProperty (oldEditorSkinProperty, nullptr);
@@ -618,6 +623,7 @@ void PhoneTestoAudioProcessor::setStateInformation (const void* data, int sizeIn
     apvts.replaceState (tree);
     setLivePassword (password);
     editorScale = juce::jlimit (0.5f, 2.0f, scale);
+    liveMode = mode == "live";
 }
 
 } // namespace phonetesto

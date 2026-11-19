@@ -65,13 +65,21 @@ public:
 
     static constexpr int defaultLiveMonitorPort = 51813;
 
-    // --- Live Monitor: stream audio to real phones over the network ----
-    // instead of emulating one with DSP (see LiveMonitorServer). Driven
-    // directly by the editor's toggle rather than an apvts parameter --
-    // opening a network listener isn't something a host should be able to
-    // automate -- so its on/off state isn't restored with the project: the
-    // server always starts off and the user switches it on deliberately.
-    // The optional password *is* saved with the project.
+    // --- What the plugin is for --------------------------------------------
+    // Live (the main use): the mix plays on the user's own phones over the
+    // network (see LiveMonitorServer) -- phones get it as it is and the host
+    // hears it untouched; no emulation. Emulate (a bonus): a speaker's sound
+    // is emulated on the host's output. Not a host parameter (switching
+    // network listening isn't something to automate); saved with the project.
+    // A new instance starts in Live; a project saved before modes existed
+    // opens in emulation, as it was.
+    void setLiveMode (bool shouldBeLive) noexcept { liveMode = shouldBeLive; }
+    bool isLiveMode() const noexcept { return liveMode.load(); }
+
+    // The server runs once the editor has started it (it does on opening in
+    // Live); starting it puts the plugin in Live. It isn't started with the
+    // project, so loading one never opens a network port by itself. The
+    // optional password is saved with the project.
     bool startLiveMonitor (int port = defaultLiveMonitorPort);
     void stopLiveMonitor();
     bool isLiveMonitorRunning() const noexcept { return liveMonitorActive.load(); }
@@ -125,6 +133,7 @@ private:
     static constexpr const char* livePasswordProperty = "livePassword";
     static constexpr const char* editorScaleProperty = "editorScale";
     static constexpr const char* oldEditorSkinProperty = "editorSkin"; // from versions with several skins
+    static constexpr const char* modeProperty = "mode";
 
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void processSubBlock (juce::AudioBuffer<float>& buffer, int start, int numSamples);
@@ -182,6 +191,7 @@ private:
 
     LiveMonitorServer liveServer;
     std::atomic<bool> liveMonitorActive { false };
+    std::atomic<bool> liveMode { true };
     std::atomic<float> meterRms[2] { 0.0f, 0.0f }, meterPeak[2] { 0.0f, 0.0f }, inputPeak { 0.0f };
     std::array<float, scopeSize> scope {};
     std::atomic<int> scopeWrite { 0 };

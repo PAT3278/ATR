@@ -1,7 +1,7 @@
 // Reads what the stand-alone app's editor self-test wrote (PHONETESTO_EDITOR_SELFTEST)
-// and fails unless the room was really drawn: the web view was there, WebGL drew the
-// speaker in the middle of a lit room, the fonts loaded, no script errors, and a
-// snapshot was saved.
+// and fails unless the window really came up: the web view was there, it opened on the
+// air with the code to scan, WebGL drew the room behind it, the fonts loaded, no script
+// errors, and a snapshot was saved.
 //
 //   node Tests/check_editor_selftest.mjs <folder>
 
@@ -26,6 +26,9 @@ const checks = [
   [drawn && drawn.speakerCover > 0.2, `the speaker fills the middle of the room (${drawn ? drawn.speakerCover : "-"})`],
   [drawn && drawn.lumaSpread > 4 && drawn.meanLuma > 3, `the picture isn't blank (mean ${drawn ? drawn.meanLuma : "-"}, spread ${drawn ? drawn.lumaSpread : "-"})`],
   [drawn && drawn.fonts, "the built-in fonts loaded"],
+  [drawn && drawn.screen === "live" && drawn.onAir, `it opens on the air, on the code to scan (screen: ${drawn ? drawn.screen : "-"})`],
+  [drawn && drawn.qr && drawn.qr.shown && drawn.qr.modules >= 21 && drawn.qr.px >= 140,
+   `the code is shown large enough to scan (${drawn && drawn.qr ? drawn.qr.modules + " modules at " + drawn.qr.px + " px" : "-"}) for ${drawn ? drawn.url : "-"}`],
   [errors.length === 0, "no script errors" + (errors.length ? ": " + errors.map(e => e.message).join("; ") : "")],
   [fs.existsSync(path.join(dir, "editor-snapshot.png")), "a snapshot was saved"],
   [log.includes("self-test done"), "the self-test finished"],

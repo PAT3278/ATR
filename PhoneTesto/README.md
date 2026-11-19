@@ -1,19 +1,159 @@
 # PhoneTesto (working title)
 
-An audio effect plugin for monitoring a mix the way it would sound on a
-phone, without bouncing audio and transferring it to a physical device
-every time. It does this two ways:
+An audio effect plugin for hearing your mix on **your own phone** while you
+work on it — no bouncing, no transferring files. Open the plugin and it is on
+the air: scan the code it shows with the phone, and the mix plays on the
+phone's own speaker, live, over your Wi-Fi.
 
-1. **Emulate** — DSP that approximates a given phone/laptop speaker's
-   frequency response and drive character, so you can hear an approximation
-   through your studio monitors or headphones.
-2. **Live Monitor** — streams the actual audio to a real phone over your
-   local Wi-Fi network, so you hear it through that phone's real speaker
-   instead of a simulation of one.
+1. **Live** (what opening it starts) — the actual audio goes to real phones
+   on the same network, so you hear the phone's real speaker instead of a
+   simulation of one. The DAW hears the mix untouched meanwhile.
+2. **Speaker emulation** (a bonus) — DSP that approximates a phone's, a
+   laptop's or wired earbuds' speaker on your studio monitors or headphones,
+   for when no phone is at hand.
 
-Insert it on your master bus (or any track) and pick whichever mode fits.
+One at a time: on the air there is no emulation, and phones get the mix as
+it is. Insert it as the last plugin on your master bus.
 
-## Emulate mode
+## Live: the mix on your own phone
+
+Insert PhoneTesto as the **last plugin on your master bus** and open it: it's
+on the air, and the window shows a code to scan. (If you've switched to the
+speaker emulation, **LISTEN ON PHONE** brings you back.)
+
+1. A small server starts inside the plugin (port `51813`, or the next free
+   one) when the window opens. Loading a project doesn't open a network port
+   by itself.
+2. **Scan the code** with the phone's camera (or type the address shown next
+   to it). The phone must be on the **same Wi-Fi** as the computer.
+3. The player page opens in the phone's browser — no app to install. Tap
+   **LISTEN**. The page has the same look as the plugin, including a level
+   meter showing what the phone is receiving.
+
+What you get:
+
+- **Up to 32 phones at once**, each picking its own settings.
+- **Quality (per phone)**: PCM 24-bit or PCM 16-bit (lossless, default), or
+  Opus 96–320 kbps if the Wi-Fi is weak. Everything is sent at 48 kHz; a
+  host sample-rate change doesn't disconnect anyone.
+- **Two playback modes on the phone**:
+  - *Screen-off* (default): hands the stream to the phone's own media
+    player so it keeps playing in the background, with the screen locked
+    or another app open. About 1–3 s behind; 16-bit only.
+  - *Low latency*: about 0.2 s behind the DAW, with a "keep screen on"
+    option. Needs the page open and the screen on. If a slow
+    phone's browser can't keep up (a dropout), the page notices and
+    switches to a bigger buffer (about 0.35 s) for the rest of the visit,
+    instead of continuing to click.
+    The phone remembers whichever mode was picked last.
+- **Access code.** Live is never open to everyone on the network (on shared
+  or office Wi-Fi that would let anyone listen to an unreleased mix). By
+  default a random 8-character code is made each time the plugin loads; it
+  is built into the QR code, so scanning just works, and it's shown (dimmed)
+  in the password field for typing the address by hand. Type your own password
+  there to replace it (saved with the project). After 10 wrong attempts
+  from one address, that address is locked out for a minute.
+- **Listener count** in the plugin, and automatic reconnect on the phone if
+  the plugin restarts.
+- **No emulation on the air**: the real phone does the speaker colouring
+  itself, so the phones and your monitors get the same mix, untouched. The
+  emulation's controls aren't shown then; OUTPUT still sets the level.
+- **Works over plain HTTP.** The plugin can't have an HTTPS certificate for
+  a LAN address, and browsers withhold some audio features from plain-HTTP
+  pages. The page detects this and uses fallbacks that work there: a
+  ScriptProcessor instead of an AudioWorklet for low latency, a bundled
+  WebAssembly Opus decoder instead of WebCodecs, and a silent looping video
+  instead of the Wake Lock API to keep the screen on. Nothing is loaded from
+  the internet; everything is served by the plugin.
+
+**Status of testing.** The streaming server is tested with plain socket
+clients that decode every format and check pitch and level, and the player
+page is tested in a real browser (Chromium on a phone-sized screen,
+including the screen-off mode and password flow) — see Testing. It has
+**not** been tried on a real iPhone/Safari yet, which has its own audio
+rules, so treat iOS behaviour (especially screen-off mode) as unconfirmed
+until you try it.
+
+**If the phone can't connect / hears nothing:**
+- Same Wi-Fi network for both; turn off VPN; guest or "client isolation"
+  Wi-Fi networks block device-to-device traffic.
+- **Windows**: allow your DAW (e.g. FL Studio) through Windows Defender
+  Firewall for *private* networks when prompted the first time the plugin
+  opens. If the network refused, the window says so with **Try again**.
+- **macOS**: allow the DAW under System Settings → Privacy & Security →
+  Local Network, and in the firewall if it's enabled.
+- iPhone: turn the volume up and check the silent switch.
+
+Latency means this is for checking how the mix sounds, not for playing in
+time against it.
+
+## The window
+
+It opens on the air: the code to scan, large and sharp, with the number of
+phones listening (and a bar showing the sound going out), the address to type
+instead, and an optional password. Behind it, out of focus, is the room the
+speaker emulation lives in. A new plugin starts here; what you last used is
+saved with the project (a project saved by an earlier version, which had no
+modes, opens in the emulation it was using).
+
+**SPEAKER EMULATION** switches to the room — phones stop until you come back,
+and reconnect by themselves when you do. The room is a desk at night: the
+speakers stand in a row on walnut under a lamp, drawn in 3D, with a pair of
+studio monitors on the far side. The picture is the control surface.
+
+- **Speaker model** — drag sideways along the desk (or press a model key
+  under the room, or ← →). The camera slides to the next speaker and the
+  sound goes with it: while you move, the two speakers either side of the
+  camera are blended by where it is, so you hear one turn into the next;
+  when it settles you hear that model alone (exactly as if picked from the
+  host's Model parameter, which follows too). Each one is modelled from the
+  real thing: frame and edge, glass with the lamp in it, buttons, speaker
+  holes; the laptop's keyboard and grilles; the wired earbuds' shells,
+  stems and cable. Its screen shows the band it can play, lit by the
+  output's spectrum.
+- **Mix** — drag up or down (or the Focus slider, or ↑ ↓): the focus pulls from the
+  speaker to the studio monitors behind it, and the lamp follows. All the way
+  to the monitors is the dry signal; their woofers move with it.
+- **Output**, **MONO** (the sound rings from the speaker's two ends draw
+  together into one) and **BYPASS** (focus and light move to the monitors).
+- **LISTEN ON PHONE** — back on the air (the phone on the desk shows the code
+  too).
+
+Drag the window's corner to resize; the size is saved with the project.
+Everything the page needs (three.js, the Barlow fonts) is built into the
+plugin, so it works offline. It is drawn by the system's web view: WebView2
+on Windows (part of Windows 10 and 11), WebKit on macOS and Linux. Without a
+web view (an old Windows without the WebView2 Runtime) the window says what
+to install; the sound works either way.
+
+- **Keys belong to the host.** After you use the mouse in the room, keyboard
+  focus goes back to the plugin window, so the space bar starts and stops
+  your DAW as usual; only the arrow keys are the room's, and on the air not
+  even those. Typing in the password field keeps the keys there.
+- **It costs nothing while idle.** The room is drawn only while something
+  moves, sound plays or a setting changes. On a slow graphics card it draws
+  at a lower resolution (and smaller shadows) to stay fluid, and goes back up
+  when it can.
+- **Keyboard and screen readers:** the room takes focus with Tab and answers
+  the arrows; the model name is announced when it changes; with *reduce
+  motion* set, the camera moves quickly and the sound rings are off.
+
+### Trying the room in a browser
+
+The same page runs outside the plugin, playing a song through a Web Audio
+sketch of the emulation (the sound is approximate — the plugin's DSP is the
+reference):
+
+```sh
+node Tools/room-demo.mjs path/to/song.mp3
+```
+
+then open the printed address on this computer, or on a phone on the same
+Wi-Fi. It opens on the room; LISTEN ON PHONE there only shows what the code
+screen looks like, marked as an example.
+
+
+## Speaker emulation
 
 Pick a device, and the plugin applies that device's approximate speaker
 coloration in real time:
@@ -48,7 +188,7 @@ Built for A/B-ing during a mix:
   one core.
 
 > **Before exporting your final mix**, bypass PhoneTesto (or remove it) if
-> it's on the master bus — like any monitoring plugin there, Emulate would
+> it's on the master bus — like any monitoring plugin there, the emulation would
 > otherwise be printed into the export. In Live mode the plugin passes audio
 > through unchanged, and it doesn't stream to phones while the DAW renders
 > an export.
@@ -57,136 +197,6 @@ This is **not** a calibrated impulse-response model — the filter/drive
 values in `Source/SpeakerProfiles.h` are hand-tuned approximations. If real
 measured impulse responses become available (device + mic + calibrated
 level), adding a convolution stage per profile is the natural next step.
-
-## The room
-
-The editor is a room at night: the speakers stand in a row on a walnut desk
-under a lamp, drawn in 3D, with a pair of studio monitors on the far side.
-The picture is the control surface.
-
-- **Speaker model** — drag sideways along the desk (or press a model key
-  under the room, or ← →). The camera slides to the next speaker and the
-  sound goes with it: while you move, the two speakers either side of the
-  camera are blended by where it is, so you hear one turn into the next;
-  when it settles you hear that model alone (exactly as if picked from the
-  host's Model parameter, which follows too). Each one is modelled from the
-  real thing: frame and edge, glass with the lamp in it, buttons, speaker
-  holes; the laptop's keyboard and grilles; the wired earbuds' shells,
-  stems and cable. Its screen shows the band it can play, lit by the
-  output's spectrum.
-- **Mix** — drag up or down (or the Focus slider, or ↑ ↓): the focus pulls from the
-  speaker to the studio monitors behind it, and the lamp follows. All the way
-  to the monitors is the dry signal; their woofers move with it.
-- **Output**, **MONO** (the sound rings from the speaker's two ends draw
-  together into one) and **BYPASS** (focus and light move to the monitors).
-- **ON AIR** (Live) — the code to scan appears on the phone in the scene and
-  on a card in the corner, with the address, the number of phones listening
-  and the password.
-
-Drag the window's corner to resize; the size is saved with the project.
-Everything the page needs (three.js, the Barlow fonts) is built into the
-plugin, so it works offline. It is drawn by the system's web view: WebView2
-on Windows (part of Windows 10 and 11), WebKit on macOS and Linux. Without a
-web view (an old Windows without the WebView2 Runtime) the window says what
-to install; the sound works either way.
-
-- **Keys belong to the host.** After you use the mouse in the room, keyboard
-  focus goes back to the plugin window, so the space bar starts and stops
-  your DAW as usual; only the arrow keys are the room's. Typing in the Live
-  password field keeps the keys there.
-- **It costs nothing while idle.** The room is drawn only while something
-  moves, sound plays or a setting changes. On a slow graphics card it draws
-  at a lower resolution (and smaller shadows) to stay fluid, and goes back up
-  when it can.
-- **Keyboard and screen readers:** the room takes focus with Tab and answers
-  the arrows; the model name is announced when it changes; with *reduce
-  motion* set, the camera moves quickly and the sound rings are off.
-
-### Trying the room in a browser
-
-The same page runs outside the plugin, playing a song through a Web Audio
-sketch of the emulation (the sound is approximate — the plugin's DSP is the
-reference):
-
-```sh
-node Tools/room-demo.mjs path/to/song.mp3
-```
-
-then open the printed address on this computer, or on a phone on the same
-Wi-Fi. ON AIR there only shows what the card looks like, marked as an
-example.
-
-
-## Live Monitor mode
-
-Insert PhoneTesto as the **last plugin on your master bus**, press **ON AIR**
-(bottom-right of the panel), and the display shows a QR code:
-
-1. A small server starts inside the plugin (port `51813`, or the next free
-   one).
-2. **Scan the QR code** with the phone's camera (or type the URL shown under
-   it). The phone must be on the **same Wi-Fi** as the computer.
-3. The player page opens in the phone's browser — no app to install. Tap
-   **LISTEN**. The page has the same look as the plugin, including a level
-   meter showing what the phone is receiving.
-
-What you get:
-
-- **Up to 32 phones at once**, each picking its own settings.
-- **Quality (per phone)**: PCM 24-bit or PCM 16-bit (lossless, default), or
-  Opus 96–320 kbps if the Wi-Fi is weak. Everything is sent at 48 kHz; a
-  host sample-rate change doesn't disconnect anyone.
-- **Two playback modes on the phone**:
-  - *Screen-off* (default): hands the stream to the phone's own media
-    player so it keeps playing in the background, with the screen locked
-    or another app open. About 1–3 s behind; 16-bit only.
-  - *Low latency*: about 0.2 s behind the DAW, with a "keep screen on"
-    option. Needs the page open and the screen on. If a slow
-    phone's browser can't keep up (a dropout), the page notices and
-    switches to a bigger buffer (about 0.35 s) for the rest of the visit,
-    instead of continuing to click.
-    The phone remembers whichever mode was picked last.
-- **Access code.** Live is never open to everyone on the network (on shared
-  or office Wi-Fi that would let anyone listen to an unreleased mix). By
-  default a random 8-character code is made each time the plugin loads; it
-  is built into the QR code, so scanning just works, and it's shown in the
-  password field for typing the address by hand. Type your own password
-  there to replace it (saved with the project). After 10 wrong attempts
-  from one address, that address is locked out for a minute.
-- **Listener count** in the plugin, and automatic reconnect on the phone if
-  the plugin restarts.
-- While Live is on, the Emulate DSP is skipped (the real phone does the
-  speaker colouring itself), so your monitors and the phones hear the same
-  clean signal. MODEL, MIX, MONO and BYPASS are dimmed because they don't
-  apply.
-- **Works over plain HTTP.** The plugin can't have an HTTPS certificate for
-  a LAN address, and browsers withhold some audio features from plain-HTTP
-  pages. The page detects this and uses fallbacks that work there: a
-  ScriptProcessor instead of an AudioWorklet for low latency, a bundled
-  WebAssembly Opus decoder instead of WebCodecs, and a silent looping video
-  instead of the Wake Lock API to keep the screen on. Nothing is loaded from
-  the internet; everything is served by the plugin.
-
-**Status of testing.** The streaming server is tested with plain socket
-clients that decode every format and check pitch and level, and the player
-page is tested in a real browser (Chromium on a phone-sized screen,
-including the screen-off mode and password flow) — see Testing. It has
-**not** been tried on a real iPhone/Safari yet, which has its own audio
-rules, so treat iOS behaviour (especially screen-off mode) as unconfirmed
-until you try it.
-
-**If the phone can't connect / hears nothing:**
-- Same Wi-Fi network for both; turn off VPN; guest or "client isolation"
-  Wi-Fi networks block device-to-device traffic.
-- **Windows**: allow your DAW (e.g. FL Studio) through Windows Defender
-  Firewall for *private* networks when prompted the first time Live is
-  switched on.
-- **macOS**: allow the DAW under System Settings → Privacy & Security →
-  Local Network, and in the firewall if it's enabled.
-- iPhone: turn the volume up and check the silent switch.
-
-Latency means this is for checking how the mix sounds, not for playing in
-time against it.
 
 ## Building
 
@@ -282,14 +292,16 @@ node Tests/browser/room_test.mjs
 - **room_test.mjs** — the editor's page in Playwright Chromium. As the
   browser demo: it loads with the bundled three.js and fonts, draws the
   room, plays a test song, a drag moves through the speakers and settles.
-  As the plugin's editor, against a stand-in for JUCE's bridge: it sends the
+  As the plugin's editor, against a stand-in for JUCE's bridge: it opens on
+  the air with the code and no emulation controls, switches to the emulation
+  and back, offers Try again when the network refused, sends the
   camera position while the user moves and ends the blend when it settles,
   hands keyboard focus back after mouse use, passes unused keys on to the
   host (space included) but keeps them while the password is typed. And the
   layout at 720×480, 1000×660 and 1600×1000 with the Live card up.
 - **Editor self-test** — the stand-alone app with
-  `PHONETESTO_EDITOR_SELFTEST=<folder>` opens its editor, and the page
-  reports what it drew (WebGL renderer, how much of the room the speaker
+  `PHONETESTO_EDITOR_SELFTEST=<folder>` opens its editor (on the air, with
+  the code to scan), and the page reports what it shows (WebGL renderer, how much of the room the speaker
   covers, picture statistics, fonts, any script error) and saves a snapshot;
   then the app quits. `node Tests/check_editor_selftest.mjs <folder>` checks
   the report. CI runs it on Windows, macOS and Linux, so the room is seen

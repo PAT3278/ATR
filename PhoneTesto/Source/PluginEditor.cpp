@@ -100,10 +100,7 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     else
     {
         // Without a web view the room can't be drawn; say what's missing instead of showing nothing.
-        unavailable.setText ("PhoneTesto draws its window with the system's web view, which isn't available here.\n\n"
-                             "On Windows, install the Microsoft Edge WebView2 Runtime (free, from microsoft.com), "
-                             "then reopen the plugin. The sound works without it.",
-                             juce::dontSendNotification);
+        unavailable.setText (unavailableText(), juce::dontSendNotification);
         unavailable.setJustificationType (juce::Justification::centred);
         unavailable.setColour (juce::Label::textColourId, juce::Colour (0xffeee7dc));
         unavailable.setFont (juce::FontOptions (16.0f));
@@ -117,6 +114,12 @@ PhoneTestoAudioProcessorEditor::PhoneTestoAudioProcessorEditor (PhoneTestoAudioP
     // to the host. The page hands keyboard focus back to this window after
     // mouse use, and JUCE passes on any key the editor doesn't take.
     setWantsKeyboardFocus (true);
+
+    // Playing on the user's own phone is what the plugin is for: opening it in
+    // Live starts sending straight away, and the first thing on screen is the
+    // code to scan.
+    if (processor.isLiveMode())
+        goLive();
 
     setResizable (true, true);
     setResizeLimits (720, 480, 1920, 1280);
@@ -208,14 +211,18 @@ void PhoneTestoAudioProcessorEditor::handleUi (const juce::var& v)
         setParameter (v["id"].toString(), (double) v["value"]);
     else if (type == "gesture")
         gesture (v["id"].toString(), (bool) v["on"]);
-    else if (type == "onAir")
+    else if (type == "mode")
     {
-        liveStartFailed = false;
-
-        if ((bool) v["on"])
-            liveStartFailed = ! processor.startLiveMonitor();
+        // Live (phones) or the speaker emulation: one at a time
+        if ((bool) v["live"])
+            goLive();
         else
-            processor.stopLiveMonitor();
+        {
+            processor.endMorph();
+            processor.setLiveMode (false);
+            processor.stopLiveMonitor(); // phones wait, and reconnect when it's back
+            liveStartFailed = false;
+        }
     }
     else if (type == "password")
         processor.setLivePassword (v["value"].toString().trim().substring (0, 32));
@@ -282,8 +289,24 @@ void PhoneTestoAudioProcessorEditor::forwardKeyToHost (const juce::var& v)
    #endif
 }
 
+void PhoneTestoAudioProcessorEditor::goLive()
+{
+    liveStartFailed = false;
+    if (! processor.isLiveMonitorRunning())
+        liveStartFailed = ! processor.startLiveMonitor();
+
+    processor.setLiveMode (true); // even if the network refused: no emulation on air
+
+    if (selfTestDir != juce::File())
+        selfTestLog (liveStartFailed ? "Live: the server didn't start" : "Live: sending on port " + juce::String (processor.getLiveMonitorPort()));
+}
+
 bool PhoneTestoAudioProcessorEditor::keyPressed (const juce::KeyPress& key)
 {
+    // On the air the room isn't in use: every key is the host's.
+    if (processor.isLiveMode())
+        return false;
+
     // The room's own keys: arrows move along the desk (model) and pull focus (mix).
     if (key == juce::KeyPress::leftKey)  { stepParameter (PhoneTestoAudioProcessor::deviceParamId, -1.0); return true; }
     if (key == juce::KeyPress::rightKey) { stepParameter (PhoneTestoAudioProcessor::deviceParamId, 1.0);  return true; }
@@ -367,6 +390,7 @@ juce::var PhoneTestoAudioProcessorEditor::makeState()
     state->setProperty ("peak", juce::Array<juce::var> { processor.getOutputPeak (0), processor.getOutputPeak (1) });
     state->setProperty ("dry", processor.getInputPeak());
     state->setProperty ("bands", spectrumBands());
+    state->setProperty ("mode", processor.isLiveMode() ? "live" : "emulate");
     if (selfTestDir != juce::File())
         state->setProperty ("selfTest", true);
 
@@ -416,8 +440,24 @@ juce::var PhoneTestoAudioProcessorEditor::makeState()
     return juce::var (state);
 }
 
+juce::String PhoneTestoAudioProcessorEditor::unavailableText() const
+{
+    juce::String text ("PhoneTesto draws its window with the system's web view, which isn't available here.\n"
+                       "On Windows, install the Microsoft Edge WebView2 Runtime (free, from microsoft.com) and reopen the plugin.");
+
+    // the main thing still works: say where phones can listen
+    const auto url = processor.getLiveMonitorUrl();
+    if (url.isNotEmpty())
+        text << "\n\nPhones on the same Wi-Fi can listen at:\n" << url
+             << "\n" << processor.getLiveListenerCount() << " listening";
+    return text;
+}
+
 void PhoneTestoAudioProcessorEditor::timerCallback()
 {
+    if (unavailable.isVisible())
+        unavailable.setText (unavailableText(), juce::dontSendNotification);
+
     // If the page stops sending positions mid-move (it was hidden, or reloaded),
     // let the sound settle on the chosen model rather than stay between two.
     if (morphOpen && juce::Time::getMillisecondCounter() - lastMorphMessage > 1000)

@@ -39,6 +39,8 @@ private:
     void timerCallback() override;
     void handleUi (const juce::var&);
     void releaseKeyboardToPlugin();
+    void goLive();
+    juce::String unavailableText() const;
     void forwardKeyToHost (const juce::var&);
     void stepParameter (const juce::String& id, double delta);
     void selfTestLog (const juce::String& line);

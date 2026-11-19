@@ -44,28 +44,35 @@
   .hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 500 12px var(--sans);
           color: var(--dim); letter-spacing: 0.04em; pointer-events: none; transition: opacity 0.6s; }
   .hint.gone { opacity: 0; }
+  body.live .hud .name, body.live .hud .spec { display: none; }
 
-  /* Live: a card with the code to scan; the phone in the scene shows it too */
-  .live { --qr: 186px; position: absolute; right: 18px; top: 64px; width: max(184px, calc(var(--qr) + 28px)); padding: 14px; border-radius: 6px;
-          background: rgba(21, 19, 17, 0.9); box-shadow: 0 12px 40px rgba(0,0,0,0.5); display: grid; gap: 10px; cursor: default;
-          max-height: calc(100% - 78px); overflow: hidden; }
-  .live h2 { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 12px var(--cond); letter-spacing: 0.2em; color: var(--air); }
-  .live h2::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--air); box-shadow: 0 0 10px var(--air); }
-  .live > * { min-width: 0; }
-  .live canvas { width: var(--qr); height: var(--qr); background: #fff; border-radius: 4px; image-rendering: pixelated; justify-self: center; }
-  .live .url { font: 500 11px/1.35 var(--sans); color: var(--dim); word-break: break-all; user-select: text; -webkit-user-select: text; }
-  .live .count { font: 600 13px var(--sans); }
-  .live label { display: grid; gap: 4px; font: 600 11px var(--cond); letter-spacing: 0.12em; color: var(--dim); }
-  .live input { width: 100%; min-width: 0; font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
-                user-select: text; -webkit-user-select: text; }
-  .live .err { font: 500 12px/1.4 var(--sans); color: var(--air); }
-  /* a short window: a smaller code (still crisp: it's drawn at twice this size) and no label over the password */
-  @media (max-height: 640px) {
-    .live { --qr: 118px; top: 58px; padding: 10px; gap: 7px; }
-    .live label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-    .live .url { font-size: 10px; }
-  }
-  @media (max-height: 520px) { .live { --qr: 96px; } .live .url { display: none; } .live .count { font-size: 12px; } }
+  /* Live, the first screen: the code to scan, large and crisp, over the room out of focus */
+  .listen { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px 18px;
+            background: radial-gradient(ellipse at 50% 48%, rgba(13, 12, 11, 0.25), rgba(13, 12, 11, 0.7)); }
+  .listen-card { --qr: clamp(140px, min(46vh, 32vw), 300px); display: flex; align-items: center; gap: 28px; max-width: 760px;
+                 padding: 24px; border-radius: 10px; background: rgba(21, 19, 17, 0.88); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); }
+  .listen canvas { width: var(--qr); height: var(--qr); flex: none; background: #fff; border-radius: 6px; image-rendering: pixelated; }
+  .listen-text { display: grid; gap: 10px; min-width: 0; max-width: 340px; }
+  .listen-text > * { min-width: 0; }
+  .onair { display: flex; align-items: center; gap: 8px; font: 700 12px var(--cond); letter-spacing: 0.2em; color: var(--air); }
+  .onair::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--air); box-shadow: 0 0 10px var(--air); }
+  .listen h1 { margin: 0; font: 600 clamp(22px, 3vw, 30px)/1.1 var(--cond); letter-spacing: 0.01em; text-wrap: balance; }
+  .listen p { margin: 0; font: 500 14px/1.45 var(--sans); color: var(--dim); }
+  .listen .count { font: 600 15px var(--sans); }
+  .listen .send { height: 4px; border-radius: 2px; background: rgba(238, 231, 220, 0.08); overflow: hidden; }
+  .listen .send i { display: block; height: 100%; width: 0; background: var(--lamp); }
+  .listen .url { font: 500 12px/1.35 var(--sans); color: var(--dim); word-break: break-all; user-select: text; -webkit-user-select: text; }
+  .listen label { display: grid; gap: 5px; font: 600 11px var(--cond); letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
+  .listen input { width: 100%; min-width: 0; font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line);
+                  border-radius: 4px; padding: 7px 9px; user-select: text; -webkit-user-select: text; }
+  .listen input::placeholder { color: var(--dim); opacity: 0.55; font-weight: 500; }
+  .listen .err { font: 500 13px/1.4 var(--sans); color: var(--air); }
+  .listen .note { font: 500 12px/1.4 var(--sans); color: var(--dim); opacity: 0.8; }
+  .retry { justify-self: start; appearance: none; border: 1px solid var(--air); border-radius: 999px; padding: 8px 14px; background: transparent;
+           color: var(--air); font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; }
+  @media (max-width: 640px) { .listen-card { flex-direction: column; text-align: center; gap: 16px; padding: 18px; } .listen-text { justify-items: center; } .listen label { width: 100%; } }
+  @media (max-height: 560px) { .listen-card { padding: 16px; gap: 20px; } .listen p { font-size: 13px; } .listen .note { display: none; } }
+  @media (max-height: 470px) { .listen .url { display: none; } }
 
   .strip { background: var(--strip); border-top: 1px solid var(--line); display: grid; gap: 12px; padding: 12px 18px 14px; }
   .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -74,11 +81,15 @@
           font: 600 13px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background 0.3s, color 0.3s; }
   .chip[aria-pressed="true"] { background: var(--ink); color: var(--room); }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-  .air { appearance: none; border: 1px solid var(--line); height: 40px; border-radius: 999px; padding: 0 18px 0 14px; background: transparent; color: var(--ink);
+  .air { appearance: none; border: 1px solid var(--air); height: 40px; border-radius: 999px; padding: 0 18px 0 14px; background: transparent; color: var(--ink);
          font: 700 13px var(--cond); letter-spacing: 0.16em; cursor: pointer; display: flex; align-items: center; gap: 9px; flex: none; }
-  .air::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #3a2a24; transition: background 0.3s, box-shadow 0.3s; }
-  .air[aria-pressed="true"] { border-color: var(--air); color: var(--air); }
-  .air[aria-pressed="true"]::before { background: var(--air); box-shadow: 0 0 10px var(--air); }
+  .air::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--air); box-shadow: 0 0 8px var(--air); }
+  .emu { appearance: none; border: 1px solid var(--line); height: 40px; border-radius: 999px; padding: 0 16px; background: transparent; color: var(--dim);
+         font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; flex: none; }
+  .emu b { color: var(--ink); font-weight: 600; margin-left: 6px; }
+  /* one mode at a time: on the air the emulation's controls aren't shown */
+  body.live .emu-only { display: none !important; }
+  body:not(.live) .live-only { display: none !important; }
   .ctl { display: grid; gap: 4px; flex: 1 1 150px; min-width: 0; }
   .ctl span { display: flex; justify-content: space-between; font: 600 11px var(--cond); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
   .ctl output { color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -110,28 +121,38 @@
     <canvas id="fx"></canvas>
     <div class="vignette"></div>
     <div class="hud"><div><div class="brand">PHONETESTO</div><div class="name" id="name" aria-live="polite">Phone 15/16 Pro</div></div><div class="spec" id="spec"></div></div>
-    <div class="hint" id="hint">Drag sideways to change speakers &#xb7; Drag up or down to pull focus</div>
-    <div class="live" id="live" role="region" aria-label="Live listening" hidden>
-      <h2 id="liveTitle">ON AIR</h2>
-      <canvas id="qr" width="372" height="372" role="img" aria-label="QR code to open the listening page on a phone"></canvas>
-      <div class="url" id="liveUrl"></div>
-      <div class="count" id="liveCount"></div>
-      <label for="pw"><span>PASSWORD</span> <input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false" aria-label="Password for phones"></label>
-      <div class="err" id="liveErr" hidden></div>
+    <div class="hint emu-only" id="hint">Drag sideways to change speakers &#xb7; Drag up or down to pull focus</div>
+    <div class="listen" id="listen" role="region" aria-labelledby="listenTitle" hidden>
+      <div class="listen-card">
+        <canvas id="qr" width="600" height="600" role="img" aria-label="QR code: open it with your phone's camera to listen"></canvas>
+        <div class="listen-text">
+          <div class="onair" id="onair">ON AIR</div>
+          <h1 id="listenTitle">Listen on your phone</h1>
+          <p id="listenHow">Scan the code with your phone's camera. The phone needs the same Wi-Fi as this computer.</p>
+          <div class="count" id="liveCount" aria-live="polite"></div>
+          <div class="send" aria-hidden="true"><i id="sendLevel"></i></div>
+          <div class="url" id="liveUrl"></div>
+          <label for="pw"><span id="pwLabel">Password (optional)</span><input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false"></label>
+          <div class="err" id="liveErr" hidden></div>
+          <button class="retry" id="retry" type="button" hidden>Try again</button>
+          <div class="note" id="liveNote">Phones get the mix as it is: no speaker emulation while on air.</div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="strip">
-    <div class="chips" id="chips" role="group" aria-label="Speaker model"></div>
+    <div class="chips emu-only" id="chips" role="group" aria-label="Speaker model"></div>
     <div class="row">
-      <div class="demo" id="demo" hidden>
+      <div class="demo emu-only" id="demo" hidden>
         <button class="play" id="play" type="button" aria-label="Play" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M3 1.5v13l11-6.5z"/></svg></button>
         <div class="song"><b id="songName">song.mp3</b><input id="file" type="file" accept="audio/*"><label for="file" id="pick">Choose a song</label></div>
       </div>
-      <button class="air" id="air" type="button" aria-pressed="false">ON AIR</button>
-      <label class="ctl" for="mix"><span>Focus <output id="mixOut">Phone 100%</output></span><input id="mix" type="range" min="0" max="100" step="0.5" value="100"></label>
+      <button class="air emu-only" id="toLive" type="button">LISTEN ON PHONE</button>
+      <label class="ctl emu-only" for="mix"><span>Focus <output id="mixOut">Phone 100%</output></span><input id="mix" type="range" min="0" max="100" step="0.5" value="100"></label>
       <label class="ctl" for="vol"><span>Output <output id="volOut">100%</output></span><input id="vol" type="range" min="0" max="100" step="0.5" value="100"></label>
-      <button class="tog" id="mono" type="button" aria-pressed="false">MONO</button>
-      <button class="tog" id="bypass" type="button" aria-pressed="false">BYPASS</button>
+      <button class="tog emu-only" id="mono" type="button" aria-pressed="false">MONO</button>
+      <button class="tog emu-only" id="bypass" type="button" aria-pressed="false">BYPASS</button>
+      <button class="emu live-only" id="toEmulate" type="button">SPEAKER EMULATION<b id="emuState">OFF</b></button>
     </div>
   </div>
 </div>
@@ -140,6 +161,16 @@
 (() => {
   const ja = /^ja/i.test(navigator.language || "");
   if (ja) document.documentElement.lang = "ja";
+  if (ja) {
+    const t = (id, text) => { document.getElementById(id).textContent = text; };
+    t("listenTitle", "\u30b9\u30de\u30db\u3067\u8074\u304f");
+    t("listenHow", "\u30b9\u30de\u30db\u306e\u30ab\u30e1\u30e9\u3067\u8aad\u307f\u53d6\u3063\u3066\u304f\u3060\u3055\u3044\u3002\u3053\u306ePC\u3068\u540c\u3058Wi-Fi\u306b\u3064\u306a\u3044\u3067\u304a\u304d\u307e\u3059\u3002");
+    t("pwLabel", "\u30d1\u30b9\u30ef\u30fc\u30c9\uff08\u4efb\u610f\uff09");
+    t("retry", "\u3082\u3046\u4e00\u5ea6");
+    t("liveNote", "\u30b9\u30de\u30db\u306b\u306f\u30df\u30c3\u30af\u30b9\u304c\u305d\u306e\u307e\u307e\u5c4a\u304d\u307e\u3059\u3002\u30aa\u30f3\u30a8\u30a2\u4e2d\u306f\u30a8\u30df\u30e5\u30ec\u30fc\u30c8\u3057\u307e\u305b\u3093\u3002");
+    t("toLive", "\u30b9\u30de\u30db\u3067\u8074\u304f");
+    document.getElementById("toEmulate").firstChild.textContent = "\u30b9\u30d4\u30fc\u30ab\u30fc\u3092\u30a8\u30df\u30e5\u30ec\u30fc\u30c8";
+  }
   if (ja) document.getElementById("hint").textContent = "\u6a2a\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u6a5f\u7a2e\u3092\u5207\u308a\u66ff\u3048\u30fb\u4e0a\u4e0b\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u30d4\u30f3\u30c8";
 
   // ---- the plugin: parameters and meters come in as "state", controls go out as "ui" ----
@@ -149,7 +180,7 @@
     // Opened outside the plugin (in a browser), the page runs against this stand-in: it
     // plays a song through a Web Audio sketch of the emulation (a song.mp3 beside the
     // page, or one the viewer chooses), so the room can be tried by ear.
-    const st = { device: 3, mix: 100, output: 100, mono: false, bypass: false, peak: [0, 0], dry: 0, bands: [],
+    const st = { mode: "emulate", device: 3, mix: 100, output: 100, mono: false, bypass: false, peak: [0, 0], dry: 0, bands: [],
                  live: { on: false, failed: false, example: false, url: "", listeners: 0, password: "", code: "", qr: "", qrSize: 0 } };
     const keys = { device: "device", mix: "mix", output: "output", monoSum: "mono", bypass: "bypass" };
     const audio = new Audio(); audio.loop = true; audio.preload = "auto"; audio.src = "song.mp3";
@@ -242,7 +273,7 @@
       handle(o) {
         if (o.type === "param") { const key = keys[o.id]; if (key) st[key] = (key === "mono" || key === "bypass") ? !!o.value : o.value; }
         if (o.type === "morph") morphPos = o.end ? null : o.pos;
-        if (o.type === "onAir") Object.assign(st.live, o.on ? example() : { on: false, example: false, qr: "", qrSize: 0 });
+        if (o.type === "mode") { st.mode = o.live ? "live" : "emulate"; Object.assign(st.live, o.live ? example() : { on: false, example: false, qr: "", qrSize: 0 }); }
         if (o.type === "password") st.live.password = o.value;
       },
       async toggle() {
@@ -704,11 +735,14 @@
   // ---- focus: the camera's focus pull IS the mix ----
   let lastBlur = "";
   function applyFocus() {
-    const near = (1 - S.mix) * 7, far = 0.6 + S.mix * 5;
-    const key = near.toFixed(1) + "/" + far.toFixed(1);
+    const live = S.mode === "live";
+    const near = live ? 7 : (1 - S.mix) * 7, far = live ? 10 : 0.6 + S.mix * 5;
+    const key = near.toFixed(1) + "/" + far.toFixed(1) + live;
     if (key === lastBlur) return; lastBlur = key;
-    const nf = near > 0.15 ? `blur(${near.toFixed(1)}px)` : "none";
-    devC.style.filter = nf; fxC.style.filter = nf; backC.style.filter = `blur(${far.toFixed(1)}px)`;
+    // on the air the room steps back behind the code, out of focus and dimmed
+    const dim = live ? " brightness(0.78)" : "";
+    const nf = near > 0.15 ? `blur(${near.toFixed(1)}px)${dim}` : "none";
+    devC.style.filter = nf; fxC.style.filter = nf; backC.style.filter = `blur(${far.toFixed(1)}px)${dim}`;
   }
 
   // ---- sound you can see: rings from the speakers in the light ----
@@ -736,9 +770,10 @@
   // ---- controls ----
   const S = { p: 3, pTarget: 3, pVel: 0, mix: 1, mixUser: 1, mono: 0, monoT: 0, out: 1, bypass: false, dragging: false,
               device: 3, sentDevice: -1, mixBusy: false, outBusy: false, level: 0, dry: 0, bands: null,
-              userMove: false, selfTest: false,
+              userMove: false, selfTest: false, mode: backend ? "live" : "emulate",
               live: { on: false, failed: false, url: "", listeners: 0, password: "", code: "", qr: "", qrSize: 0 } };
   let haveState = false;
+  document.body.classList.toggle("live", S.mode === "live");
   // read-only view for the page's tests
   window.__ptRoom = { get p() { return S.p; }, get userMove() { return S.userMove; }, get level() { return S.level; },
                       get mix() { return S.mixUser; }, get bands() { return S.bands; } };
@@ -748,7 +783,9 @@
   const nameEl = document.getElementById("name"), specEl = document.getElementById("spec");
   const mixIn = document.getElementById("mix"), volIn = document.getElementById("vol");
   const mixOut = document.getElementById("mixOut"), volOut = document.getElementById("volOut");
-  const monoB = document.getElementById("mono"), bypB = document.getElementById("bypass"), airB = document.getElementById("air");
+  const monoB = document.getElementById("mono"), bypB = document.getElementById("bypass");
+  const toLiveB = document.getElementById("toLive"), toEmulateB = document.getElementById("toEmulate"), retryB = document.getElementById("retry");
+  const listenEl = document.getElementById("listen"), sendLevel = document.getElementById("sendLevel");
   let hinted = false; function hint() { if (!hinted) { hinted = true; document.getElementById("hint").classList.add("gone"); } }
 
   // A move the user makes (drag, model key, arrow) carries the sound with the camera:
@@ -773,7 +810,10 @@
   const toggle = (id, on) => { gesture(id, true); setParam(id, on ? 1 : 0); gesture(id, false); };
   monoB.addEventListener("click", () => { S.monoT = S.monoT ? 0 : 1; monoB.setAttribute("aria-pressed", S.monoT ? "true" : "false"); toggle("monoSum", !!S.monoT); });
   bypB.addEventListener("click", () => { S.bypass = !S.bypass; bypB.setAttribute("aria-pressed", S.bypass ? "true" : "false"); toggle("bypass", S.bypass); });
-  airB.addEventListener("click", () => send({ type: "onAir", on: !S.live.on }));
+  // one mode at a time: phones (Live) or the speaker emulation
+  toLiveB.addEventListener("click", () => send({ type: "mode", live: true }));
+  toEmulateB.addEventListener("click", () => send({ type: "mode", live: false }));
+  retryB.addEventListener("click", () => send({ type: "mode", live: true }));
   const pw = document.getElementById("pw");
   pw.addEventListener("input", () => send({ type: "password", value: pw.value.trim() }));
 
@@ -781,7 +821,7 @@
   // drag up or down: pull focus between the speaker and the studio monitors (the mix)
   let drag = null;
   stage.addEventListener("pointerdown", e => {
-    if (e.target.closest && e.target.closest(".live")) return;
+    if (S.mode === "live" || (e.target.closest && e.target.closest(".listen"))) return;
     stage.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, p: S.p, m: S.mixUser, axis: null }; S.dragging = true; hint();
   });
   stage.addEventListener("pointermove", e => {
@@ -825,10 +865,10 @@
       if (!ownsKey(e) && passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
       return;
     }
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    if (S.mode !== "live" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
       pick(Math.max(0, Math.min(P.length - 1, Math.round(S.pTarget) + (e.key === "ArrowRight" ? 1 : -1)))); hint(); e.preventDefault(); return;
     }
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") { nudgeMix(e.key === "ArrowUp" ? 5 : -5); hint(); e.preventDefault(); return; }
+    if (S.mode !== "live" && (e.key === "ArrowUp" || e.key === "ArrowDown")) { nudgeMix(e.key === "ArrowUp" ? 5 : -5); hint(); e.preventDefault(); return; }
     if (passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
   });
   window.addEventListener("keyup", e => {
@@ -860,7 +900,9 @@
     if (!st) return;
     haveState = true;
     if (st.selfTest && !S.selfTest) { S.selfTest = true; wake(); }
-    if (st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || st.device !== S.device || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
+    const mode = st.mode || (st.live.on ? "live" : "emulate");
+    if (mode !== S.mode || st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || st.device !== S.device || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
+    if (mode !== S.mode) { S.mode = mode; document.body.classList.toggle("live", mode === "live"); }
     if (!S.dragging && st.device !== S.device) { S.device = st.device; S.sentDevice = st.device; S.pTarget = st.device; }
     S.device = st.device;
     if (!S.mixBusy && !(drag && drag.axis === "y")) { S.mixUser = st.mix / 100; mixIn.value = st.mix; }
@@ -873,18 +915,19 @@
     if (L.qr === undefined) { L.qr = S.live.qr; L.qrSize = S.live.qrSize; } // sent only when it changes
     if (!L.on) { L.qr = ""; L.qrSize = 0; }
     S.live = L;
-    airB.setAttribute("aria-pressed", L.on ? "true" : "false");
-    const card = document.getElementById("live");
-    card.hidden = !(L.on || L.failed);
+    listenEl.hidden = S.mode !== "live";
+    document.getElementById("onair").hidden = !L.on;
     document.getElementById("liveErr").hidden = !L.failed;
+    retryB.hidden = !L.failed;
+    sendLevel.style.width = (L.on ? Math.min(100, Math.round(S.level * 140)) : 0) + "%";
     document.getElementById("liveErr").textContent = ja ? "\u3053\u306ePC\u3067\u53d7\u4fe1\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30d5\u30a1\u30a4\u30a2\u30a6\u30a9\u30fc\u30eb\u306e\u8a2d\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002" : "Couldn't start listening on this computer. Check the firewall settings.";
     qrC.hidden = !L.on;
     document.getElementById("liveUrl").textContent = L.url;
     document.getElementById("liveCount").textContent = !L.on ? "" : L.example
       ? (ja ? "\u30d7\u30e9\u30b0\u30a4\u30f3\u3067\u306f\u3001\u540c\u3058Wi-Fi\u306e\u30b9\u30de\u30db\u3067\u3053\u306e\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u53d6\u3063\u3066\u8074\u304d\u307e\u3059" : "In the plugin, phones on the same Wi-Fi scan this code to listen")
-      : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3067\u8aad\u307f\u53d6\u3063\u3066\u518d\u751f") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Scan with a phone on the same Wi-Fi");
+      : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3092\u5f85\u3063\u3066\u3044\u307e\u3059") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Waiting for a phone");
     if (document.activeElement !== pw && pw.value !== L.password) pw.value = L.password;
-    pw.placeholder = L.code || "AUTO";
+    pw.placeholder = L.code ? (ja ? `\u81ea\u52d5: ${L.code}` : `auto: ${L.code}`) : "";
     if (L.on && L.qr && L.qr !== qrShown) {
       qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0);
       if (L.example) markExample(qx, 0, 0, qrC.width);
@@ -920,6 +963,9 @@
     const g = c.getContext("2d");
     g.fillStyle = "#0d0c0b"; g.fillRect(0, 0, c.width, c.height);
     for (const layer of [backC, devC, fxC]) g.drawImage(layer, 0, 0, c.width, c.height);
+    const qrBox = qrC.getBoundingClientRect(), stageBox = stage.getBoundingClientRect(), k = c.width / Math.max(1, W);
+    const qrShownNow = !listenEl.hidden && !qrC.hidden && qrBox.width > 0;
+    if (qrShownNow) g.drawImage(qrC, (qrBox.left - stageBox.left) * k, (qrBox.top - stageBox.top) * k, qrBox.width * k, qrBox.height * k);
     const d = g.getImageData(0, 0, c.width, c.height).data, count = d.length / 4;
     let sum = 0, sum2 = 0, lit = 0;
     for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; sum += y; sum2 += y * y; if (y > 40) lit++; }
@@ -932,7 +978,9 @@
     try { const gl = rDev.getContext(), ext = gl.getExtension("WEBGL_debug_renderer_info"); renderer = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) {}
     send({ type: "diag", kind: "rendered", webgl: renderer, fonts: document.fonts.check('600 20px "Barlow Condensed"'),
            size: [W, H, DPR], meanLuma: +mean.toFixed(1), lumaSpread: +sd.toFixed(1), litShare: +(lit / count).toFixed(3),
-           speakerCover: +(covered / 4096).toFixed(3), model: P[Math.max(0, Math.min(P.length - 1, Math.round(S.p)))].name });
+           speakerCover: +(covered / 4096).toFixed(3), model: P[Math.max(0, Math.min(P.length - 1, Math.round(S.p)))].name,
+           screen: S.mode, onAir: !!S.live.on, qr: { shown: qrShownNow, modules: S.live.qrSize || 0, px: Math.round(qrBox.width) },
+           url: S.live.url || "" });
     send({ type: "snapshot", png: c.toDataURL("image/png") });
   }
 
@@ -986,7 +1034,7 @@
     rBack.render(back, camera); rDev.render(front, camera);
     if (lastRendered && now - lastRendered < 250) adaptQuality(now - lastRendered);
     lastRendered = now;
-    if (!reduce) emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now);
+    if (!reduce && S.mode !== "live") emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now);
     drawRings(now);
     if (S.selfTest && !reported && frameNo > 30) { reported = true; selfTestReport(); }
     const near = Math.max(0, Math.min(P.length - 1, Math.round(S.p)));

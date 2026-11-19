@@ -52,6 +52,7 @@ std::unique_ptr<PhoneTestoAudioProcessor> makeProcessor (double rate, int block)
     p->setPlayConfigDetails (2, 2, rate, block);
     p->prepareToPlay (rate, block);
     setParam (*p, PhoneTestoAudioProcessor::outputParamId, 100.0f); // unity, so levels are comparable
+    p->setLiveMode (false); // these tests are about the emulation; Live is tested on its own
     return p;
 }
 
@@ -459,6 +460,52 @@ int main()
 
         b->setStateInformation ("garbage", 7);
         check (b->getLivePassword() == "pass word 123", "corrupt state blob is ignored, not applied");
+    }
+
+    std::printf ("Live first, emulation as a bonus\n");
+    {
+        // a new instance is in Live: the host hears the mix untouched, whatever model is set
+        PhoneTestoAudioProcessor fresh;
+        fresh.setPlayConfigDetails (2, 2, 48000.0, 256);
+        fresh.prepareToPlay (48000.0, 256);
+        setParam (fresh, PhoneTestoAudioProcessor::deviceParamId, 4.0f);
+        Pink pink;
+        std::vector<float> in;
+        auto gen = [&] (int ch, int) { const float v = pink.next (ch); if (ch == 0) in.push_back (v); return v; };
+        const auto out = run (fresh, 48000.0, 256, 1.0, gen);
+        const int latency = fresh.getLatencySamples();
+        float maxErr = 0.0f;
+        for (size_t i = 24000; i < out.size(); ++i)
+            maxErr = std::max (maxErr, std::abs (out[i] - in[i - (size_t) latency]));
+        char line[180];
+        std::snprintf (line, sizeof (line), "a new instance starts in Live: no emulation, the host hears the mix as it is (max error %.2e)", maxErr);
+        check (fresh.isLiveMode() && maxErr < 1.0e-6f, line);
+
+        // the mode is saved with the project
+        juce::MemoryBlock liveState, emulateState;
+        fresh.getStateInformation (liveState);
+        fresh.setLiveMode (false);
+        fresh.getStateInformation (emulateState);
+        auto b = makeProcessor (48000.0, 512);
+        b->setStateInformation (liveState.getData(), (int) liveState.getSize());
+        const bool liveBack = b->isLiveMode();
+        b->setStateInformation (emulateState.getData(), (int) emulateState.getSize());
+        check (liveBack && ! b->isLiveMode() && ! b->apvts.copyState().hasProperty ("mode"), "Live or emulation is restored with the project");
+
+        // a project saved before there were modes was emulating, and opens that way
+        std::unique_ptr<juce::XmlElement> xml (juce::AudioProcessor::getXmlFromBinary (liveState.getData(), (int) liveState.getSize()));
+        xml->removeAttribute ("mode");
+        juce::MemoryBlock oldState;
+        juce::AudioProcessor::copyXmlToBinary (*xml, oldState);
+        b->setLiveMode (true);
+        b->setStateInformation (oldState.getData(), (int) oldState.getSize());
+        check (! b->isLiveMode(), "an older project opens in emulation, as it was saved");
+
+        // going on the air turns the emulation off
+        auto c = makeProcessor (48000.0, 512);
+        const bool started = c->startLiveMonitor (0);
+        check (started && c->isLiveMode(), "starting Live turns the emulation off");
+        c->stopLiveMonitor();
     }
 
     std::printf ("Live access code\n");
