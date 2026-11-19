@@ -1398,12 +1398,15 @@
   try { Object.assign(SW.owned, JSON.parse(localStorage.getItem(OWN_KEY) || '{}') || {}); } catch (e) { /* storage blocked */ }
   const saveOwned = () => { try { localStorage.setItem(OWN_KEY, JSON.stringify(SW.owned)); } catch (e) { /* storage blocked: owned for this visit only */ } };
   const pend = (sid) => { try { if (sid) localStorage.setItem(PEND_KEY, sid); else localStorage.removeItem(PEND_KEY); } catch (e) { /* storage blocked */ } };
-  const shop = { counts: null, prices: null, at: 0, down: false, notes: [] };
+  const shop = { counts: null, prices: null, at: 0, ok: null, checkout: false, failUntil: 0, notes: [] };
   const apiCall = (path, body) => fetch(API + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
     .then((r) => r.json().catch(() => ({})).then((d) => (r.ok ? d : Promise.reject(Object.assign(new Error(d.error || 'HTTP ' + r.status), { status: r.status })))));
-  // The server's catalogue decides the price; until it has answered (or if it cannot be reached) songs.js's is shown.
-  const priceOf = (s) => (API && shop.prices ? shop.prices[s.id] || null : s.price || null);
-  const canCheckout = (s) => !!(API && !shop.down && priceOf(s));
+  // The server's catalogue decides the price. A price button is shown only once the server has answered and says it can
+  // take payments (a STRIPE_SECRET_KEY is set); before that, while it cannot be reached, and for a while after a Checkout
+  // that failed, the buttons are the songs' store links instead.
+  const priceOf = (s) => (API ? (shop.prices && shop.prices[s.id]) || null : s.price || null);
+  const canCheckout = (s) => !!(API && shop.ok && shop.checkout && Date.now() > shop.failUntil && priceOf(s));
+  const buttonsKey = () => places.map((p) => +canCheckout(p.song) + ':' + priceOf(p.song)).join();
   const isOwned = (s) => !!SW.owned[s.id];
   const fmtPlays = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'K' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');
   const playsOf = (s) => (shop.counts && Number.isFinite(shop.counts[s.id]) && (s.src || shop.counts[s.id] > 0) ? shop.counts[s.id] : null);   // a sketch's zero says nothing
@@ -1412,21 +1415,27 @@
   function loadCounts(force) {
     if (!API || (!force && Date.now() - shop.at < 30000)) return;
     shop.at = Date.now();
+    const before = buttonsKey();
     apiCall('/plays').then((d) => {
-      const before = JSON.stringify(shop.prices);
-      shop.counts = d.counts || {}; if (d.prices) shop.prices = d.prices; shop.down = false;
-      shopRefresh(JSON.stringify(shop.prices) !== before);
-    }).catch(() => { /* no counts this time; the next look asks again */ });
+      shop.counts = d.counts || {}; if (d.prices) shop.prices = d.prices; shop.ok = true; shop.checkout = d.checkout !== false;
+      shopRefresh(buttonsKey() !== before);
+    }).catch(() => { shop.ok = false; shop.at -= 20000; shopRefresh(buttonsKey() !== before); });   // store links for now; the next look after 10 s asks again
   }
   function postPlay(id) {
     if (!API) return;
     apiCall('/play', { songId: id }).then((d) => { if (Number.isFinite(d.plays)) { (shop.counts = shop.counts || {})[id] = d.plays; shopRefresh(); } }).catch(() => {});
   }
   // Back from Checkout: ?sw_paid=<session id> is only a claim until the shop server has asked Stripe about it.
-  // A failed check (offline, server down) is kept and asked again at the next visit or the next look at the store.
-  function verify(sid) {
-    if (!API || !sid) return;
+  // A failed check (offline, server down) is kept and asked again at the next visit or the next look at the store; right
+  // after Checkout (loud) it is first tried twice more within seconds, and the buyer is told it is still being checked.
+  // A payment that completes later (a convenience-store payment, a bank transfer) comes back as pending and is kept too.
+  let checking = null;
+  function verify(sid, loud, tries = 0) {
+    if (!API || !sid || (checking === sid && !tries)) return;
+    checking = sid;
     apiCall('/verify?session_id=' + encodeURIComponent(sid)).then((d) => {
+      checking = null;
+      if (d.pending) { pend(sid); if (loud) note('お支払いの完了を待っています。済みしだい、この端末でフルで聴けるようになります'); return; }
       pend(null);
       const p = d.paid && places.find((q) => q.song.id === d.songId);
       if (!p) { note('お支払いを確認できませんでした'); return; }
@@ -1434,13 +1443,19 @@
       if (SW.Audio.ctx) SW.Audio.unlock(p.song.id);
       note(`♪ ${p.song.title} — ありがとうございます。この端末ではフルで聴けます`);
       shopRefresh(true);
-    }).catch((e) => { if (e.status && e.status < 500) { pend(null); note('お支払いを確認できませんでした'); } else pend(sid); });
+    }).catch((e) => {
+      checking = null;
+      if (e.status && e.status < 500) { pend(null); note('お支払いを確認できませんでした'); return; }
+      pend(sid);
+      if (loud && tries < 2) setTimeout(() => verify(sid, true, tries + 1), 3000 * (tries + 1));
+      else if (loud) note('お支払いを確認しています… つながりしだい、もう一度確認します');
+    });
   }
   {
     const q = new URLSearchParams(location.search), sid = q.get('sw_paid'), cancel = q.get('sw_cancel');
     if (sid !== null || cancel !== null) {
       history.replaceState(null, '', location.pathname + location.hash);   // a reload must not ask again
-      if (sid) verify(sid); else note('購入をキャンセルしました');
+      if (sid) verify(sid, true); else note('購入をキャンセルしました');
     } else retryPending();
   }
   function retryPending() { let sid = null; try { sid = localStorage.getItem(PEND_KEY); } catch (e) { /* storage blocked */ } verify(sid); }
@@ -1455,7 +1470,7 @@
       location.href = d.url;
       return;
     } catch (e) {
-      shop.down = true;   // the buttons fall back to the store links until the server answers again
+      shop.failUntil = Date.now() + 120000;   // the buttons fall back to the store links for a couple of minutes
       toast(link ? '購入ページを開けませんでした。ストアのリンクからどうぞ。' : '購入ページを開けませんでした。時間をおいてお試しください。', 3800);
       shopRefresh(true);
     }
@@ -1497,11 +1512,13 @@
   }
   function trackHTML(p, i, bare) {
     const s = p.song, n = playsOf(s), sub = [s.artist || CFG.artist, s.year, p.found ? s.place : '未発見'].filter(Boolean).join(' · ');
+    const lis = !bare && (s.links || []).find((l) => l.kind !== 'buy');   // the song where it is out already (SoundCloud): a demo here is not it
     return `<div class="tr" data-tr="${i}" style="--c:${esc(p.found ? p.color : '#b3161d')}">`
       + `<button class="tr-play" type="button" data-play="${i}" aria-label="${esc(s.title)} を再生">${IC.play}${IC.pause}</button>`
       + `<div class="tr-main">${bare ? '' : `<span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span>`}`
       + `<canvas class="tr-wave" data-seek="${i}" aria-hidden="true"></canvas>`
       + `<div class="tr-foot"><span class="tr-time">${timeOf(player.info(s))}</span>${tagOf(s)}<span class="tr-plays" data-plays="${esc(s.id)}"${n == null ? ' hidden' : ''}>▶ ${n == null ? '' : fmtPlays(n)}</span>`
+      + (lis ? `<a class="tr-lis" href="${esc(lis.url)}" target="_blank" rel="noopener" title="${esc(lis.label)}" aria-label="${esc(s.title)}：${esc(lis.label)}">${IC.play}<span>LISTEN ↗</span></a>` : '')
       + `<span class="tr-buy">${buyHTML(p, i)}</span></div></div></div>`;
   }
   function drawWave(cv, p, inf) {
@@ -1550,12 +1567,13 @@
   }
   // Play counts: a play is one real listen — the song itself heard on its own (the store player, its view, or riding it)
   // for PLAY_S seconds. It counts once, and again only after it has been out of earshot for a while (a replay).
-  // Listening time is read off the song's own clock (what was actually played), so a slow frame rate cannot skew it.
+  // Listening time is read off the song's own clock (what was actually played), so a slow frame rate cannot skew it; a
+  // step of it counts when it fits the time that passed, so a seek or the next excerpt (a jump) does not, a long frame does.
   const PLAY_S = 6, listens = {};
   let countAt = 0;
   function countTick() {
     if (!API || !SW.Audio.started) return;
-    const A = SW.Audio, now = performance.now() / 1000, dt = Math.min(2, now - (countAt || now));
+    const A = SW.Audio, now = performance.now() / 1000, wall = countAt ? now - countAt : 0, dt = Math.min(2, wall);
     countAt = now;
     let ch = player.state === 'play' ? player.ch : null;
     if (!ch) { const p = viewPlace || (ride && ride.p); ch = p ? A.channels[p.idx] : null; }
@@ -1564,7 +1582,7 @@
     if (!id) return;
     const L = (listens[id] = listens[id] || { heard: 0, sent: false, idle: 0, at: null }), ct = ch.el.currentTime, d = L.at == null ? 0 : ct - L.at;
     L.idle = 0; L.at = ct;
-    if (d > 0 && d < 2) L.heard += d;   // a jump (the next excerpt, a seek) is not listening
+    if (d > 0 && d <= wall + 0.5) L.heard += d;
     if (!L.sent && L.heard >= PLAY_S) { L.sent = true; postPlay(id); }
   }
 

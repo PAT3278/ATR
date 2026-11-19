@@ -17,6 +17,9 @@
  * Its channel plays random excerpts of CONFIG.preview seconds instead, faded in and out on the gate (so the visuals,
  * which listen after the gate, go quiet with it), each from a new random point; at a place one follows another after a
  * short pause, in the store player one excerpt is one play. Sketches (no src) are stand-ins, so they always play.
+ * Each excerpt's fade is planned on the audio clock (up, held, down to 0 right at its end), so a busy main thread cannot let
+ * it run on. A server that ignores byte ranges (python's http.server) gives an element that cannot seek: that song is then
+ * read once, whole, and played from memory (Engine.file), where every point can be reached.
  */
 (function () {
   'use strict';
@@ -71,7 +74,7 @@
       this.el = null;
       this.gain = 0;
       this.last = { gain: -1, pan: 9, cutoff: -1 };
-      this.ex = null;       // the excerpt being heard: { a, b } in song seconds, st 'meta' | 'seek' | 'on' | 'out' | 'gap'
+      this.ex = null;       // the excerpt being heard: { a, b } in song seconds, st 'meta' | 'file' | 'seek' | 'on' | 'gap'
       this.lastEx = null;   // the last one, for the player to show where it was
       this.done = false;    // solo: reached the end (of the song, or of the excerpt)
     }
@@ -87,6 +90,23 @@
       if (!this.playing) return;
       this.playing = false;
       if (this.el) this.el.pause();
+      if (this.ex) this.gateTo(this.gate.gain.value, 0.02);   // hold the planned fade where it is; resuming plans it again
+    }
+
+    playEl() { const p = this.el.play(); if (p && p.catch) p.catch(() => {}); }
+
+    // Can the element jump to t? Not on a server without byte ranges: Chromium then reports nothing seekable, and a seek lands at 0.
+    canSeek(t) { const s = this.el.seekable; return s.length > 0 && s.end(s.length - 1) >= t; }
+
+    // Make t reachable, then fn: if the element cannot seek there, it switches to the whole file read into memory (shared by
+    // every channel of the song). If even that cannot be read, fn runs anyway and the seek lands where it can.
+    reach(t, fn) {
+      if (this.canSeek(t)) { fn(); return; }
+      const el = this.el;
+      this.engine.file(this.song.src).then((url) => {
+        if (el.src !== url) { el.src = url; if (this.playing) this.playEl(); }   // a new source starts paused (bought meanwhile: it plays on)
+        if (el.readyState >= 1) fn(); else el.addEventListener('loadedmetadata', fn, { once: true });
+      }, fn);
     }
 
     startSketch() {
@@ -116,7 +136,7 @@
       }
       const el = this.el;
       if (SW.isPreview(this.song)) {
-        if (this.solo && this.ex && this.ex.st !== 'gap' && this.ex.st !== 'meta') { const p = el.play(); if (p && p.catch) p.catch(() => {}); return; }   // the player resumes its excerpt
+        if (this.solo && this.ex && this.ex.st !== 'gap' && this.ex.st !== 'meta') { this.playEl(); if (this.ex.st === 'on') this.plan(el.currentTime); return; }   // the player resumes its excerpt
         this.excerpt();
         return;
       }
@@ -124,7 +144,7 @@
       this.gateTo(1, 0.05);
       if (this.solo) {   // the player: from where it was paused, or from the top
         if (this.done || el.ended) { el.currentTime = 0; this.done = false; }
-        const p = el.play(); if (p && p.catch) p.catch(() => {});
+        this.playEl();
         return;
       }
       const sync = () => {
@@ -143,38 +163,52 @@
       if (!(el.readyState >= 1 && isFinite(el.duration) && el.duration > 0)) {
         this.ex = { st: 'meta' };
         el.addEventListener('loadedmetadata', () => { if (this.playing && this.ex && this.ex.st === 'meta') this.excerpt(); }, { once: true });
+        this.gateTo(0, 0.02); this.playEl();   // started now, inside the tap (iOS plays only from one), silent behind the shut gate
         return;
       }
       const d = el.duration, len = Math.min(SW.CONFIG.preview || 20, d), room = Math.max(0, d - len), prev = this.lastEx;
       let a = 0;
       for (let i = 0; i < 8; i++) { a = Math.random() * room; if (!prev || Math.abs(a - prev.a) > len * 0.75) break; }
-      this.ex = this.lastEx = { a, b: a + len, st: 'seek' };
+      if (this.stuck) a = Math.min(room, el.currentTime);   // the file could not be read to seek in: the excerpt is wherever it is
+      const ex = (this.ex = this.lastEx = { a, b: a + len, st: 'seek' });
       this.done = false;
       this.gateTo(0, 0.02);
-      el.currentTime = a;
-      const p = el.play(); if (p && p.catch) p.catch(() => {});
       this.synced = true;
+      if (this.stuck || this.canSeek(a)) { if (!this.stuck) el.currentTime = a; this.playEl(); return; }
+      ex.st = 'file';   // no byte ranges: wait for the whole file, then draw the excerpt again
+      this.reach(a, () => { if (this.ex !== ex) return; if (!this.canSeek(a)) this.stuck = true; ex.st = 'meta'; if (this.playing) this.excerpt(); });
+    }
+
+    // The excerpt's whole fade, put on the audio clock from here: up to full, held, and down to 0 exactly when the song reaches b,
+    // so a stalled main thread cannot let it run on past the excerpt. exTick plans it again if the element's clock drifts from it.
+    plan(ct) {
+      const ex = this.ex, g = this.gate.gain, t = this.ctx.currentTime, left = Math.max(0.05, ex.b - ct), v = g.value;
+      ex.end = t + left;
+      g.cancelScheduledValues(t); g.setValueAtTime(v, t);
+      if (left > EX_OUT) { g.linearRampToValueAtTime(1, t + Math.max(0.01, Math.min(left - EX_OUT, EX_IN * (1 - v)))); g.setValueAtTime(1, t + left - EX_OUT); }
+      g.linearRampToValueAtTime(0, ex.end);
     }
 
     // Excerpt timing follows the element's own clock, so a stall while buffering only delays the fade.
     exTick() {
       const ex = this.ex, el = this.el;
       if (!ex || !el || !this.playing) return;
-      const ct = el.currentTime;
+      const ct = el.currentTime, now = this.ctx.currentTime;
       if (ex.st === 'seek') {
         if (!el.seeking && !el.paused && ct >= ex.a - 0.05 && ct < ex.b) {
           if (ct > ex.a) { ex.b = Math.min(el.duration, ex.b + ct - ex.a); ex.a = ct; }   // an mp3 seek can land a little late: the excerpt still gets its full length
-          this.gateTo(1, EX_IN); ex.st = 'on';
+          ex.st = 'on'; ex.ct = ct; this.plan(ct);
         }
-        else if (!el.seeking && Math.abs(ct - ex.a) > 1 && this.ctx.currentTime > (ex.retry || 0)) { ex.retry = this.ctx.currentTime + 0.3; el.currentTime = ex.a; }   // a server without byte ranges lets the seek land only once enough of the file is in
+        // A seek that did not take, or a play() refused outside a tap (iOS): try again, a few times a second.
+        else if (now > (ex.retry || 0) && (el.paused || (!el.seeking && Math.abs(ct - ex.a) > 1))) { ex.retry = now + 0.4; if (!this.stuck && Math.abs(ct - ex.a) > 1) el.currentTime = ex.a; this.playEl(); }
       }
-      else if (ex.st === 'on') { if (ct >= ex.b - EX_OUT) { this.gateTo(0, Math.max(0.05, ex.b - ct)); ex.st = 'out'; } }
-      else if (ex.st === 'out') {
-        if (ct >= ex.b || el.ended) {
-          el.pause(); ex.st = 'gap'; ex.until = this.ctx.currentTime + EX_GAP;
+      else if (ex.st === 'on') {
+        // Over at b, or when the element ran off the end of the track (a place's element loops, so it wraps back to 0).
+        if (ct >= ex.b - 0.03 || ct < ex.ct - 1 || el.ended) {
+          el.pause(); this.gateTo(0, 0.02); ex.st = 'gap'; ex.until = now + EX_GAP;
           if (this.solo) { this.ex = null; this.done = true; }   // in the player one excerpt is one play
-        }
-      } else if (ex.st === 'gap' && this.ctx.currentTime >= ex.until) this.excerpt();
+        } else { if (Math.abs(now + ex.b - ct - ex.end) > 0.25) this.plan(ct); ex.ct = ct; }   // stalled while buffering: the fade waits for it
+      } else if (ex.st === 'gap' && now >= ex.until) this.excerpt();
     }
 
     gateTo(v, dur) {
@@ -193,7 +227,7 @@
     audible() {
       if (!this.playing) return false;
       if (this.mode !== 'media') return true;
-      return !!this.el && !this.el.paused && this.el.readyState >= 3 && (!this.ex || this.ex.st === 'on' || this.ex.st === 'out');
+      return !!this.el && !this.el.paused && this.el.readyState >= 3 && (!this.ex || this.ex.st === 'on');
     }
 
     schedule(until) {
@@ -303,6 +337,12 @@
       if (Player.chs[id]) Player.chs[id].unlock();
     },
 
+    // The whole file in memory, for an element that cannot seek (Channel.reach): read once and shared by the song's channels.
+    file(src) {
+      const m = (this.files = this.files || {});
+      return (m[src] = m[src] || fetch(src).then((r) => (r.ok ? r.blob() : Promise.reject(new Error('HTTP ' + r.status)))).then((b) => URL.createObjectURL(b)).catch((e) => { delete m[src]; throw e; }));
+    },
+
     // A waveform this device has already worked out (see peaks), without reading the file.
     cachedPeaks(song) {
       if (!song.src) return null;
@@ -319,7 +359,7 @@
       return (memo[src] = (async () => {
         try { const c = JSON.parse(localStorage.getItem(key) || 'null'); if (Array.isArray(c) && c.length === n) return c; } catch (e) { /* storage blocked */ }
         try {
-          const buf = await (await fetch(src)).arrayBuffer();
+          const buf = await (await fetch(await ((this.files && this.files[src]) || Promise.resolve(src)).catch(() => src))).arrayBuffer();   // the copy in memory, if there is one
           const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
           const decode = (ctx, b) => new Promise((ok, ng) => { const r = ctx.decodeAudioData(b, ok, ng); if (r && r.then) r.then(ok, ng); });
           let ab = null;
@@ -389,7 +429,7 @@
       const ch = this.channel(song);
       if (SW.isPreview(song) || ch.mode !== 'media') return false;
       if (this.song !== song || this.state === 'stop') this.play(song);
-      const el = ch.el, go = () => { el.currentTime = Math.max(0, Math.min(0.999, k)) * el.duration; ch.done = false; };
+      const el = ch.el, go = () => { const t = Math.max(0, Math.min(0.999, k)) * el.duration; ch.reach(t, () => { el.currentTime = t; ch.done = false; if (ch.playing) ch.playEl(); }); };
       if (el.readyState >= 1 && isFinite(el.duration)) go(); else el.addEventListener('loadedmetadata', go, { once: true });
       return true;
     },
@@ -406,7 +446,7 @@
         return { state: on, demo: true, preview: false, t, dur: loop, len: loop, a: null, el };
       }
       const el = ch.el, dur = el && isFinite(el.duration) ? el.duration : song.length || 0, ex = ch.ex || ch.lastEx;
-      const waiting = on === 'play' && (!el || el.readyState < 3 || (ch.ex && ch.ex.st !== 'on' && ch.ex.st !== 'out'));
+      const waiting = on === 'play' && (!el || el.readyState < 3 || (ch.ex && ch.ex.st !== 'on'));
       return { state: on, demo: false, preview: pv, t: el ? el.currentTime : 0, dur, len: pv ? Math.min(len, dur || len) : dur, a: pv && ex ? ex.a : null, waiting };
     },
   };
