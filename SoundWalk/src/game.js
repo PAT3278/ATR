@@ -369,10 +369,10 @@
   const ring = SW.Ring.make(SW.SONGS);   // the expressway that loops the town (centre line only; its meshes are built once the places exist)
   // A lumpy boulder: a subdivided sphere pushed about by low-frequency noise and flattened a little, with box-projected UVs
   // for the rock photo. A handful of shapes are made once and shared.
-  const rockGeos = [];
-  function rockGeo(seed) {
-    const k = seed % 6; if (rockGeos[k]) return rockGeos[k];
-    const g = new THREE.IcosahedronGeometry(1, 3), p = g.attributes.position, r = rng(300 + k), ph = [r() * 9, r() * 9, r() * 9], uv = [];
+  const rockGeos = [], stoneGeos = [];
+  function rockGeo(seed, lo) {   // lo: a small stone of 80 faces instead of 1280, for scattering by the hundred
+    const k = seed % 6, cache = lo ? stoneGeos : rockGeos; if (cache[k]) return cache[k];
+    const g = new THREE.IcosahedronGeometry(1, lo ? 1 : 3), p = g.attributes.position, r = rng(300 + k), ph = [r() * 9, r() * 9, r() * 9], uv = [];
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
       const n = 1 + 0.22 * Math.sin(x * 2.3 + ph[0]) * Math.cos(z * 2.1 + ph[1]) + 0.12 * Math.sin(y * 3.7 + ph[2]) + 0.06 * Math.sin((x + z) * 6.1 + ph[0]);
@@ -381,7 +381,7 @@
       uv.push(...(ay > ax && ay > az ? [x * 0.5 + 0.5, z * 0.5 + 0.5] : ax > az ? [z * 0.5 + 0.5, y * 0.5 + 0.5] : [x * 0.5 + 0.5, y * 0.5 + 0.5]));
     }
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
-    return (rockGeos[k] = g);
+    return (cache[k] = g);
   }
   // ripples for every water surface: a tiling water normal map (three.js examples, MIT), sampled twice and scrolled
   const waterN = texLoader.load('tex/water_n.jpg'); waterN.wrapS = waterN.wrapT = THREE.RepeatWrapping;
@@ -403,7 +403,7 @@
       color: song.color || '#ffb428',
       toWorld: (lx, lz) => ({ x: song.x + lx * c + lz * s, z: song.z - lx * s + lz * c }),
       local: (wx, wz) => { const ax = wx - song.x, az = wz - song.z; return { x: ax * c - az * s, z: ax * s + az * c }; },
-      addCircle(lx, lz, r, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz); circles.push({ x: w.x, z: w.z, r, y0, y1 }); },
+      addCircle(lx, lz, r, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz), c = { x: w.x, z: w.z, r, y0, y1 }; circles.push(c); return c; },
       addBox(lx, lz, hx, hz, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz), b = { x: w.x, z: w.z, hx, hz, c, s, y0, y1 }; boxes.push(b); return b; },
       interact(o) { const w = p.toWorld(o.lx, o.lz), ia = { ...o, x: w.x, z: w.z, sx: w.x, sz: w.z }; interact.push(ia); return ia; },
       water(lx, lz, hx, hz) { const w = p.toWorld(lx, lz); waters.push({ x: w.x, z: w.z, hx, hz, c, s }); },
@@ -828,8 +828,10 @@
     for (let k = 0; k < pa.count; k++) { const x = pa.getX(k) + (X0 + X1) / 2, z = pa.getZ(k) + (Z0 + Z1) / 2, hh = hillAt(x, z); pa.setXYZ(k, x, hh > 0.03 ? hh : -0.35, z); rkv[k] = rk[Math.round((z - Z0) / D) * nx + Math.round((x - X0) / D)]; }
     geo.setAttribute('rk', new THREE.BufferAttribute(rkv, 1));
     geo.computeVertexNormals();
-    { const holes = places.filter((q) => q.holeAt);   // tunnel mouths: drop the faces that would hang across them (normals stay as they were, so the rest stays smooth); y is a face's lowest corner, so no sliver from the cutting up to the rock is left across a mouth
-      if (holes.length) { const ix = geo.index.array, keep = []; for (let t = 0; t < ix.length; t += 3) { let cx = 0, cy = 1e9, cz = 0; for (let k = 0; k < 3; k++) { cx += pa.getX(ix[t + k]) / 3; cy = Math.min(cy, pa.getY(ix[t + k])); cz += pa.getZ(ix[t + k]) / 3; } if (holes.some((q) => { const l = q.local(cx, cz); return q.holeAt(l.x, l.z, cy); })) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); } geo.setIndex(keep); } }
+    { const holes = places.filter((q) => q.holeAt), ix = geo.index.array, tri = new Array(9);   // tunnel mouths: drop the faces that would hang across them (normals stay as they were, so the rest stays smooth); y is a face's lowest corner, so no sliver from the cutting up to the rock is left across a mouth
+      // tri: the face's corners in the place's frame (x, y, z three times), for a place that drops whatever stands in its tunnels (OHH's canal)
+      const faceIn = (q, t, cx, cy, cz) => { const l = q.local(cx, cz); if (q.holeAt.length > 3) for (let k = 0; k < 3; k++) { const v = ix[t + k], m = q.local(pa.getX(v), pa.getZ(v)); tri[k * 3] = m.x; tri[k * 3 + 1] = pa.getY(v); tri[k * 3 + 2] = m.z; } return q.holeAt(l.x, l.z, cy, tri); };
+      if (holes.length) { const keep = []; for (let t = 0; t < ix.length; t += 3) { let cx = 0, cy = 1e9, cz = 0; for (let k = 0; k < 3; k++) { cx += pa.getX(ix[t + k]) / 3; cy = Math.min(cy, pa.getY(ix[t + k])); cz += pa.getZ(ix[t + k]) / 3; } if (holes.some((q) => faceIn(q, t, cx, cy, cz))) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); } geo.setIndex(keep); } }
     const hmat = mat('#b4c08e', { map: tex('grass', 44, 27), rough: 0.95 }, true), rockT = tex('rock', 1, 1);
     hmat.onBeforeCompile = (sh) => {   // where the relief is (attribute rk), dark volcanic rock projected from the three axes instead of the grass
       rimPatch(sh); sh.uniforms.rockMap = { value: rockT }; sh.uniforms.rockC = { value: lin('#55504c') };
@@ -837,7 +839,7 @@
       sh.fragmentShader = 'uniform sampler2D rockMap;uniform vec3 rockC;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nif(vRk>.01){vec3 bw=pow(abs(normalize(vWn)),vec3(4.));bw/=bw.x+bw.y+bw.z;vec3 rc=mapTexelToLinear(texture2D(rockMap,vWp.zy*.09)).rgb*bw.x+mapTexelToLinear(texture2D(rockMap,vWp.xz*.09)).rgb*bw.y+mapTexelToLinear(texture2D(rockMap,vWp.xy*.09)).rgb*bw.z;rc*=rockC*(1.3+.45*sin(vWp.y*1.3+vWp.x*.2));diffuseColor.rgb=mix(diffuseColor.rgb,rc,clamp(vRk,0.,1.));}');
     };
     const hm = new THREE.Mesh(geo, hmat);
-    hm.receiveShadow = true; hm.castShadow = false; scene.add(hm);
+    hm.receiveShadow = true; hm.castShadow = false; hm.name = 'hills'; scene.add(hm);
     hm.userData.ground = true; pick.push(hm); hm.updateMatrixWorld(true);   // click to walk up a slope; trails laid from here on drape over it
     // the map: the hills drawn once, in shades of green (the relief's rock in grey-brown), under everything else
     const hc = document.createElement('canvas'); hc.width = hc.height = 300; const hg = hc.getContext('2d');
@@ -846,6 +848,29 @@
   }
   // A place that lives on the hills (KEYAKI) lays its trail over them now they exist, and dresses it on groundAt.
   places.forEach((p) => p.afterHills && p.afterHills({ groundAt, layTrail, path: p.path, boxes, circles }));   // boxes / circles: every collider so far (OHH's canal lifts those standing on the hill over it out of its way)
+
+  // Scrub: the hills keep only copses of trees, so their open slopes are dotted with low bushes and stones instead
+  // (from KEYAKI's lookout, in the golden light, bare grass read as sand dunes). Low enough to be in nobody's view, they
+  // keep off only what a place marks p.scrubOut (else its p.blocks): KEYAKI's view and OHH's sea side, where no tree may
+  // stand, still get them. A few instanced draws, from an rng of their own so no tree moves.
+  {
+    const r = rng(97), bush = [[], [], []], stones = [], F = hillField;
+    const rockAt = (x, z) => { const i = Math.round((x - F.x0) / F.d), j = Math.round((z - F.z0) / F.d); return i < 0 || j < 0 || i >= F.nx || j >= F.nz ? 1 : F.rk[j * F.nx + i]; };
+    const ok = (x, z) => {
+      if (Math.abs(x) > 145 || Math.abs(z) > 145 || Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 11 || distToPath(x, z, loopPath).d < 4) return false;
+      for (const p of places) { if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false; const l = p.local(x, z); if ((p.scrubOut || p.blocks)(l.x, l.z)) return false; if (distToPath(x, z, p.path).d < (p.road ? p.road.hw + 2 : 2.6)) return false; }
+      return true;
+    };
+    for (let i = 0; i < 14000 && bush[0].length + bush[1].length + bush[2].length + stones.length < 900; i++) {
+      const x = F.x0 + r() * (F.nx - 1) * F.d, z = F.z0 + r() * (F.nz - 1) * F.d, h = hillAt(x, z), k = r(), s = r();
+      if (h < 1.5 || rockAt(x, z) > 0.3 || !ok(x, z)) continue;
+      if (k < 0.2) stones.push([x, h - 0.12, z, 0.3 + s * 0.5]); else bush[k < 0.5 ? 0 : k < 0.8 ? 1 : 2].push([x, h + 0.05, z, 0.45 + s * 0.6]);
+    }
+    const o3 = new THREE.Object3D(), put = (geo, m, list, sy) => { const im = new THREE.InstancedMesh(geo, m, list.length); list.forEach(([x, y, z, s], k) => { o3.position.set(x, y, z); o3.rotation.set(0, k * 2.4, 0); o3.scale.set(s * 1.25, s * sy, s); o3.updateMatrix(); im.setMatrixAt(k, o3.matrix); }); im.receiveShadow = true; scene.add(im); };
+    const ico = new THREE.IcosahedronGeometry(1, 0);
+    ['#5d6a40', '#6e7444', '#80784a'].forEach((c, k) => put(ico, mat(c, { flat: true, rough: 1 }), bush[k], 0.6));
+    put(rockGeo(5, true), mat('#8a8272', { map: tex('rock', 1, 1), rough: 0.95 }), stones, 0.65);
+  }
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {

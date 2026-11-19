@@ -12,6 +12,7 @@
  *   p.face       local yaw the avatar faces at the viewpoint
  *   p.pathEnd    local z where the path from the plaza ends
  *   p.blocks     (lx, lz) -> true where random trees must not grow
+ *   p.scrubOut   optional (lx, lz) -> true where the hills' low scrub must not grow (else p.blocks): it may cross a view
  *   p.ground     optional (lx, lz) -> height
  *   p.trail      optional [[lx, lz], ...]: the bends of a trail of its own from the plaza to the viewpoint
  *   p.onHill     the hills are not flattened round it or its trail (KEYAKI's trail climbs over them)
@@ -23,7 +24,9 @@
  *                bare rock); game.js keeps it under the elevated roads (the funfair's crater wall)
  *   p.bore       optional (lx, lz, y) -> the floor of a tunnel through the hills when (lx, lz, y) is down in it, else null:
  *                groundAt then ignores the hill over it (the funfair's way in, the canal's cave)
- *   p.holeAt     optional (lx, lz, y) -> true to drop the hill mesh's face there (y: its lowest corner) at a tunnel mouth
+ *   p.holeAt     optional (lx, lz, y, tri) -> true to drop the hill mesh's face there (y: its lowest corner) at a tunnel mouth;
+ *                tri: its three corners in this frame (x, y, z three times), to drop whatever would stand inside a tunnel
+ *   (a collider a place marks .keep, e.g. p.addCircle(...).keep = 1, is left alone by OHH's canal, which lifts what stands over it)
  *   p.carve      optional (lx, lz) -> 0..1 the hills and the relief are scaled by there: a cutting dug through them (OHH's canal)
  *   p.ceil       optional (lx, lz) -> the camera's ceiling under a vault
  * and uses p.addCircle / p.addBox for collisions, p.water / p.waterShape(fn) for water and p.pick for click-to-walk surfaces.
@@ -74,6 +77,7 @@
       p.face = Math.atan2(VW[0], VW[1]) - p.rot;
       p.pathEnd = 7; p.clearR = 7;
       p.blocks = (lx, lz) => { if (Math.hypot(lx, lz) < 8) return true; const [u, v] = toDeck(lx, lz); return v < 0 && v > -50 && Math.abs(u) < 7 - v * 0.95; };   // the deck's clearing, and no tall trees across the view (as wide as the view's drift)
+      p.scrubOut = (lx, lz) => Math.hypot(lx, lz) < 9;   // low scrub may grow across the view, only not on the summit
       p.map = [{ t: 'circle', x: 0, z: 0, r: 3.2, c: '#9a7a4a' }];
       p.grade = {
         top: '#86b4d9', bottom: '#ffe6ad', fog: '#efdcaa', near: 50, far: 320,   // from the summit the haze opens out
@@ -1294,7 +1298,7 @@
         vertexShader: 'varying vec3 vW;void main(){vec4 w=modelMatrix*vec4(position,1.);vW=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}',
         fragmentShader: 'uniform float t,level;uniform vec3 a,b,c,sunD;uniform sampler2D nrm;varying vec3 vW;void main(){' + E.WATER_GLSL + 'vec3 col=mix(c,b,.3+.22*(wn1.x+wn2.y));col*=.86+(wn1.z+wn2.z)*.08;col+=a*wSp*(.6+level*1.2)+b*wFr*.5;gl_FragColor=vec4(pow(col,vec3(2.2)),1.);}',
       });
-      { const geo = new THREE.ShapeGeometry(new THREE.Shape(LAGOON.map(([x, z]) => new THREE.Vector2(x, -z)))); geo.rotateX(-Math.PI / 2);
+      { const geo = new THREE.ShapeGeometry(new THREE.Shape(LAGOON.map(([x, z]) => new THREE.Vector2(x, -z)))), gp = geo.attributes.position; for (let k = 0; k < gp.count; k++) gp.setX(k, Math.max(CX1, gp.getX(k))); geo.rotateX(-Math.PI / 2);   // the arm's rounded tip ends square at the cave's far end, where the canal's own water takes over (it showed in front of the canal's portal)
         lagoonM.polygonOffset = true; lagoonM.polygonOffsetFactor = -1; lagoonM.polygonOffsetUnits = -6;   // the ground plane is only 5 cm under it: from up on the rim the depth buffer can't tell them apart
         const w = new THREE.Mesh(geo, lagoonM); w.position.y = 0.05; gw.add(w); p.pick(w); }
       // The quay: a wall of riveted plate from under the water up to the paving, a stone coping, an iron railing (not at the
@@ -1309,7 +1313,7 @@
         for (let i = 0; i < R2.length; i++) { const q = R2[i];
           const a = R2[Math.max(0, i - 1)], b = R2[Math.min(R2.length - 1, i + 1)], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, m = shoreIn(q, [(b[1] - a[1]) / l, -(b[0] - a[0]) / l]), x = q[0] + m[0] * 0.2, z = q[1] + m[1] * 0.2;
           if (gapAt(x, z)) { last = null; continue; }
-          p.addCircle(x, z, 0.42);
+          p.addCircle(x, z, 0.42).keep = 1;   // keep: OHH's canal, which lifts what stands over its cave, leaves these be (they stand on the quay)
           if (n++ % 2) continue;   // a railing post every other one
           pw(0.07, 1.05, 0.07, x, FY + 0.6, z, ironD);
           if (last) { const o = pw(Math.hypot(x - last[0], z - last[1]) + 0.05, 0.06, 0.06, (x + last[0]) / 2, FY + 1.12, (z + last[1]) / 2, ironD, false); o.rotation.y = -Math.atan2(z - last[1], x - last[0]); const o2 = pw(Math.hypot(x - last[0], z - last[1]), 0.035, 0.035, (x + last[0]) / 2, FY + 0.62, (z + last[1]) / 2, ironD, false); o2.rotation.y = o.rotation.y; }
@@ -1620,11 +1624,12 @@
       const LHX = -25, LHZ = -9.6, LHH = 12.5, lh = new THREE.Group(); lh.position.set(LHX, 0, LHZ); gw.add(lh);
       { const isl = new THREE.Mesh(E.rockGeo(3), basaltD); isl.scale.set(2.6, 1.5, 2.3); isl.position.y = 0.2; isl.castShadow = isl.receiveShadow = true; lh.add(isl); p.addCircle(LHX, LHZ, 2.5);
         const plinth = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.45, 0.8, 8), stoneM); plinth.position.y = 1.25; lh.add(plinth);
-        const top = 1.65, b0 = 1.0, b1 = 0.55;
-        for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, LHH + 0.2, 0.16), ironD), dx = sx * (b0 + b1) / 2, dz = sz * (b0 + b1) / 2; post.position.set(dx, top + LHH / 2, dz); post.rotation.set(-sz * Math.atan2(b0 - b1, LHH), 0, sx * Math.atan2(b0 - b1, LHH)); lh.add(post); }
+        const top = 1.65, b0 = 1.0, b1 = 0.55, LB = E.batch(lh);   // the lattice: posts, braces and rings, a few instanced draws
+        for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const dx = sx * (b0 + b1) / 2, dz = sz * (b0 + b1) / 2; LB.box(0.16, LHH + 0.2, 0.16, dx, top + LHH / 2, dz, ironD).rotation.set(-sz * Math.atan2(b0 - b1, LHH), 0, sx * Math.atan2(b0 - b1, LHH)); }
         for (let k = 0; k < 6; k++) { const y0 = top + (k * LHH) / 6, y1 = top + ((k + 1) * LHH) / 6, w0 = b0 - ((b0 - b1) * k) / 6, w1 = b0 - ((b0 - b1) * (k + 1)) / 6;
-          for (let f2 = 0; f2 < 4; f2++) { const ry = (f2 * Math.PI) / 2, L = Math.hypot(w0 + w1, y1 - y0); for (const sd of [-1, 1]) { const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, L, 0.06), rust), wm = (w0 + w1) / 2; br.position.set(Math.sin(ry) * wm, (y0 + y1) / 2, Math.cos(ry) * wm); br.rotation.set(0, ry, 0); br.rotateZ(sd * Math.atan2(w0 + w1, y1 - y0)); lh.add(br); } }
-          const ringB = new THREE.Mesh(new THREE.BoxGeometry(2 * w1 + 0.1, 0.1, 2 * w1 + 0.1), ironD); ringB.position.y = y1; lh.add(ringB); }
+          for (let f2 = 0; f2 < 4; f2++) { const ry = (f2 * Math.PI) / 2, L = Math.hypot(w0 + w1, y1 - y0); for (const sd of [-1, 1]) { const wm = (w0 + w1) / 2, br = LB.box(0.06, L, 0.06, Math.sin(ry) * wm, (y0 + y1) / 2, Math.cos(ry) * wm, rust, false); br.rotation.set(0, ry, 0); br.rotateZ(sd * Math.atan2(w0 + w1, y1 - y0)); } }
+          LB.box(2 * w1 + 0.1, 0.1, 2 * w1 + 0.1, 0, y1, 0, ironD); }
+        LB.flush();
         const gal = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.14, 16), ironD); gal.position.y = top + LHH + 0.1; lh.add(gal);
         const galR = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.04, 5, 24), brass); galR.rotation.x = Math.PI / 2; galR.position.y = top + LHH + 0.75; lh.add(galR);
         const room = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.2, 12), glow('#ffd28a')); room.position.y = top + LHH + 0.8; lh.add(room);
@@ -1633,7 +1638,7 @@
         const beam = new THREE.Group(); beam.position.y = top + LHH + 0.8; lh.add(beam); { const cone = new THREE.Mesh(new THREE.ConeGeometry(2.2, 26, 16, 1, true), beamM); cone.rotation.z = Math.PI / 2; cone.position.x = 13; beam.add(cone); } lh.userData.beam = beam;
         // the crane: a lattice jib off the tower at two thirds of its height, a counterweight, a hook on its line
         const jib = new THREE.Group(); jib.position.y = top + LHH * 0.66; lh.add(jib); lh.userData.jib = jib;
-        { const L = 7.5; for (const [y, z] of [[0.35, 0.3], [0.35, -0.3], [-0.25, 0]]) { const ch = new THREE.Mesh(new THREE.BoxGeometry(L, 0.08, 0.08), rust); ch.position.set(L / 2, y, z); jib.add(ch); } for (let k = 0; k < 8; k++) { const d = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.75, 0.05), ironD); d.position.set(0.5 + k * 0.95, 0.05, 0); d.rotation.z = k % 2 ? 0.7 : -0.7; jib.add(d); }
+        { const L = 7.5, JB = E.batch(jib); for (const [y, z] of [[0.35, 0.3], [0.35, -0.3], [-0.25, 0]]) JB.box(L, 0.08, 0.08, L / 2, y, z, rust); for (let k = 0; k < 8; k++) JB.box(0.05, 0.75, 0.05, 0.5 + k * 0.95, 0.05, 0, ironD, false).rotation.z = k % 2 ? 0.7 : -0.7; JB.flush();
           const cw = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 0.9), ironD); cw.position.set(-1.5, 0, 0); jib.add(cw); const tail = new THREE.Mesh(new THREE.BoxGeometry(2, 0.12, 0.12), rust); tail.position.set(-0.8, 0.3, 0); jib.add(tail);
           const line = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 4, 4), ironD); line.position.set(L - 0.3, -2.2, 0); jib.add(line); const hook = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 5, 10, Math.PI * 1.5), brass); hook.position.set(L - 0.3, -4.3, 0); jib.add(hook); const crate = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.8), E.mat('#7a5a3a', { rough: 0.9 })); crate.position.set(L - 0.3, -4.8, 0); jib.add(crate); } }
       // the geyser: a ring of rocks in the water at the north end; it breathes steam and throws up a jet on the big beats
@@ -1793,8 +1798,8 @@
         const w1 = walk(40, 76, FY + 6.4), w2 = walk(98, 117, FY + 8.4);
         if (w1 && w2) {   // a rope bridge slung across the crater's north-west corner, from the one catwalk to the other
           const A = new THREE.Vector3(w1.b.x, w1.y + 0.05, w1.b.z), B = new THREE.Vector3(w2.a.x, w2.y + 0.05, w2.a.z), N = 26, sag = 2.2, at = (t) => A.clone().lerp(B, t).add(new THREE.Vector3(0, -sag * 4 * t * (1 - t), 0)), yaw = Math.atan2(B.x - A.x, B.z - A.z), side = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), ropeM = E.mat('#b49a6e', { rough: 1 }), plankM = E.mat('#7a5a3a', { rough: 0.95 });
-          for (let k = 0; k < N; k++) { const t = (k + 0.5) / N, c = at(t), pl = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.32), plankM); pl.position.copy(c); pl.rotation.y = yaw; gw.add(pl); }
-          for (const sd of [-1, 1]) for (let k = 0; k < N; k++) { const o = side.clone().multiplyScalar(sd * 0.6), a = at(k / N).add(o).setY(at(k / N).y + 1.0), b = at((k + 1) / N).add(o).setY(at((k + 1) / N).y + 1.0); gw.add(along(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, a.distanceTo(b) + 0.02, 4), ropeM), a, b)); if (k % 2 === 0) { const f0 = at(k / N).add(o); gw.add(along(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.0, 3), ropeM), f0, a)); } } }
+          for (let k = 0; k < N; k++) { const c = at((k + 0.5) / N); pw(1.1, 0.06, 0.32, c.x, c.y, c.z, plankM).rotation.y = yaw; }   // planks and ropes go in the batch (two draws, not a hundred)
+          for (const sd of [-1, 1]) for (let k = 0; k < N; k++) { const o = side.clone().multiplyScalar(sd * 0.6), a = at(k / N).add(o).setY(at(k / N).y + 1.0), b = at((k + 1) / N).add(o).setY(at((k + 1) / N).y + 1.0); along(pw(0.05, a.distanceTo(b) + 0.02, 0.05, 0, 0, 0, ropeM, false), a, b); if (k % 2 === 0) { const f0 = at(k / N).add(o); along(pw(0.025, 1.0, 0.025, 0, 0, 0, ropeM, false), f0, a); } } }
         // posts along the brink: walking in over the top you stop before the drop
         for (let i = 0; i < nF; i++) { const [x0, z0] = FLOOR[i], n = nrm(i), x = x0 + n[0] * (DC - 0.4), z = z0 + n[1] * (DC - 0.4); p.addCircle(x, z, 0.95, Math.min(FY + 3, H(x, z) - 1.5), 1e9); }   // above the foot's boxes (up to FY + 3), or lower where the wall is low: anyone that high here is on the rock, not in the crater or its tunnel
         PW.flush();

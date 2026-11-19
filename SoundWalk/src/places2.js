@@ -784,9 +784,11 @@
       parkingArea(p, E, g, { y: H, zr: -7, depth: 6.4, half: 24, taper: 12, name: 'SHOT PA', kiosk: [9, 18], walkway: [-2.5, 2.5, 6], slotX: 6 });
       p.ground = (lx, lz, y) => {
         if (Math.abs(lx) < 2.6 && lz >= 6 && lz <= 26) { const h = (H * (26 - lz)) / 20; return y !== undefined && y < h - 2.2 ? 0 : h; }   // well under the ramp (OHH's canal runs there) you stay down
-        if (lz >= -7.2 && lz <= -0.6 && Math.abs(lx) < 24 + 12 * Math.max(0, Math.min(1, (-4.8 - lz) / 2.2))) return H;   // the lay-by and its tapers
-        if (Math.abs(lx) < 2.6 && lz > -0.6 && lz <= 6) return H;    // the walkway to the ramp
-        if (lx > 9 && lx < 18 && lz > -0.6 && lz < 3.8) return H;    // in front of the building
+        if (y === undefined || y > H - 1.4) {   // the deck is the ground only for someone up on it (or set down from above): below it (OHH's canal runs under the walkway's end) you stay down
+          if (lz >= -7.2 && lz <= -0.6 && Math.abs(lx) < 24 + 12 * Math.max(0, Math.min(1, (-4.8 - lz) / 2.2))) return H;   // the lay-by and its tapers
+          if (Math.abs(lx) < 2.6 && lz > -0.6 && lz <= 6) return H;    // the walkway to the ramp
+          if (lx > 9 && lx < 18 && lz > -0.6 && lz < 3.8) return H;    // in front of the building
+        }
         return 0;
       };
       p.addBox(-3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(-2.75, 2.7, 0.2, 3.2); p.addBox(2.75, 2.7, 0.2, 3.2);   // the walkway's sides
@@ -794,7 +796,7 @@
       // OHH's canal passes under the ramp in an open cutting: it builds a pier either side and opens the walls between them
       // below the deck (open(z0, z1), in this frame), so the ramp carries SHOT's way over it like a footbridge
       SW.Ramp = { place: p, hw: 2.5, z0: 6, z1: 26, y: (lz) => (H * (26 - lz)) / 20,
-        open(za, zb) { za = Math.max(6, za); zb = Math.min(26, zb); rampWalls.forEach((b) => (b.y0 = 1e9)); for (const sx of [-2.85, 2.85]) { if (za > 6.1) p.addBox(sx, (6 + za) / 2, 0.25, (za - 6) / 2); p.addBox(sx, (za + zb) / 2, 0.25, (zb - za) / 2, 2.4); if (zb < 25.9) p.addBox(sx, (zb + 26) / 2, 0.25, (26 - zb) / 2); } } };
+        open(za, zb) { za = Math.max(6, za); zb = Math.min(26, zb); rampWalls.forEach((b) => (b.y0 = 1e9)); for (const sx of [-2.85, 2.85]) { if (za > 6.1) p.addBox(sx, (6 + za) / 2, 0.25, (za - 6) / 2).keep = 1; p.addBox(sx, (za + zb) / 2, 0.25, (zb - za) / 2, 2.4).keep = 1; if (zb < 25.9) p.addBox(sx, (zb + 26) / 2, 0.25, (26 - zb) / 2).keep = 1; } } };   // (keep: the canal's own clearing leaves these as they are)
 
       // The expressway. In the world it is a stretch of the ring road (drawn by the game); this straight copy is
       // only shown while viewing, when the scenery streams past it.
@@ -981,9 +983,28 @@
       if (zn === 2 && Math.abs(q.u) < BW + 0.6) { const h = rampAt(lx, lz); if (h != null) return Math.max(1.7, h - 0.85); }
       return null;
     };
-    // the hills: dug away along the open cutting (its banks rise from beside the parapets), opened at the portal's mouth and over the shafts
-    const carve = (lx, lz) => { const q = near(lx, lz); if (q.i < iP - 2 || q.i > iE - 2) return 1; if (plane(iP, lx, lz)[0] < 0.6) return 1; const t = clamp((Math.abs(q.u) - BW - 1.8) / 4.2, 0, 1); return t * t * (3 - 2 * t); };
-    const holeAt = (lx, lz, y) => { if (inSq(lx, lz) >= 0) return true; const [a, c] = plane(iP, lx, lz); return a > -1.4 && a < 3 && Math.abs(c) < BW + 2 && y < CY + 2.5; };
+    // the hills: dug away along the open cutting (its banks rise from beside the parapets) right up to the face of each portal
+    // (the crater wall's rock too, which otherwise ran down into the water in front of its portal), opened at the portals' mouths and over the shafts
+    const carve = (lx, lz) => { const q = near(lx, lz); if (q.i < iP - 2 || q.i > iE + 1) return 1; if (plane(iP, lx, lz)[0] < 0.6 || plane(iE, lx, lz)[0] > -0.6) return 1; const t = clamp((Math.abs(q.u) - BW - 1.8) / 4.2, 0, 1); return t * t * (3 - 2 * t); };
+    // the air the canal needs inside the hill (the bore under its vault, the bay, the chamber, the pump room): a hill's mesh
+    // must not stand in it. OHH's hill covers the first stretch from above and the game's hills the rest, but each mesh on
+    // its own still runs on underneath the other, so whichever is the lower one would fill the bore; cuts(tri) tests a face
+    // (9 numbers: three corners x, y, z in this frame) at 15 points over it, so a face that only grazes the vault goes too.
+    const inAir = (lx, lz, y) => {
+      const [s, b] = chIn(lx, lz);
+      if (inRoom(s, b)) return y < RM.top + 0.3;
+      if (inCh(s, b)) return y < CH + 0.3;
+      const q = near(lx, lz); if (zone(q.i) !== 1) return false;
+      if (inBay(q.i, q.u)) return y < SY + 0.3;
+      return Math.abs(q.u) < BW + 0.3 && y < vaultY(Math.min(Math.abs(q.u), BW)) + 0.3;
+    };
+    const cuts = (t) => {
+      const cx = (t[0] + t[3] + t[6]) / 3, cz = (t[2] + t[5] + t[8]) / 3, [s, b] = chIn(cx, cz);
+      if (!(s > RM.s0 - 3 && s < H2 + 3 && b > BM - 3 && b < BP + 3)) { const q = near(cx, cz); if (zone(q.i) !== 1 || Math.abs(q.u) > BW + BD + 2) return false; }   // nowhere near
+      for (let i = 0; i <= 4; i++) for (let j = 0; i + j <= 4; j++) { const a = i / 4, c = j / 4, d = 1 - a - c; if (inAir(t[0] * a + t[3] * c + t[6] * d, t[2] * a + t[5] * c + t[8] * d, t[1] * a + t[4] * c + t[7] * d)) return true; }
+      return false;
+    };
+    const holeAt = (lx, lz, y, tri) => { if (inSq(lx, lz) >= 0 || (tri && cuts(tri))) return true; const [a, c] = plane(iP, lx, lz); if (a > -1.4 && a < 3 && Math.abs(c) < BW + 2 && y < CY + 2.5) return true; const [a2, c2] = plane(iE, lx, lz); return a2 > -3 && a2 < 1.4 && Math.abs(c2) < BW + 2 && y < CY + 2.5; };   // (the crater's portal faces the other way)
     const blocks = (lx, lz) => { const q = near(lx, lz); if (zone(q.i) >= 2 && Math.abs(q.u) < BW + 4) return true; const w = p.toWorld(lx, lz); return SQ.some(([x0, z0, x1, z1]) => w.x > x0 - 3 && w.x < x1 + 3 && w.z > z0 - 3 && w.z < z1 + 3); };   // no trees in the cutting or by the shafts' heads
     const noPier = (lx, lz) => { const q = near(lx, lz); return zone(q.i) === 2 && Math.abs(q.u) < BW + 3; };
 
@@ -1007,7 +1028,7 @@
         'vec3 col=vec3(.003,.006,.007)+vC*(.012+.3*fr*(.35+rp))+vC*gl*1.4;col*=exp(-max(0.,vTd-9.)*.045);gl_FragColor=vec4(col,1.);}' });
     // out in the day (the cutting, the portals, the shafts' heads): ordinary lit materials
     const ds = (m) => { const c = m.clone(); c.side = THREE.DoubleSide; c.onBeforeCompile = m.onBeforeCompile; return c; };
-    const brickO = ds(E.mat('#9a7e6a', { map: E.tex('brick', 1, 1), rough: 0.9 })), stoneO = ds(E.mat('#a8a094', { map: E.tex('concrete', 1, 1), rough: 0.9 })), paveO = ds(E.mat('#8a8075', { map: E.tex('paving', 1, 1), rough: 0.88 })), ironO = E.mat('#2c2c30', { metal: 0.6, rough: 0.45 }), stoneB = E.mat('#a8a094', { rough: 0.9 });
+    const brickO = ds(E.mat('#9a7e6a', { map: E.tex('brick', 1, 1), rough: 0.9 })), stoneO = ds(E.mat('#a8a094', { map: E.tex('concrete', 1, 1), rough: 0.9 })), paveO = ds(E.mat('#8a8075', { map: E.tex('paving', 1, 1), rough: 0.88 })), ironO = E.mat('#2c2c30', { metal: 0.6, rough: 0.45 }), stoneB = E.mat('#a8a094', { rough: 0.9 }), collarM = E.mat('#6c675b', { map: E.tex('concrete', 1, 1), rough: 0.95 });
     const OB = E.batch(g), ob = OB.box;
     // geometry with the light baked in: normals turned towards the open side (inPt(x, y, z) -> a point in the open)
     const geoOf = (pos, uv, idx) => { const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); if (idx) geo.setIndex(idx); geo.computeVertexNormals(); return geo; };
@@ -1051,7 +1072,7 @@
     // the light shafts' heads, out on the hill: a stone collar from below the grass to above it, a grating, the beam down to the water
     const beams = [], beamM = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const x = c.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.05, 'rgba(255,255,255,.7)'); gr.addColorStop(0.35, 'rgba(255,255,255,.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 4, 128); const m = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), color: new THREE.Color('#fff0d0').convertSRGBToLinear().multiplyScalar(0.08), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }); m.userData.lin = true; return m; })();
     const shaftHead = (B, cx, cz, top, bot, yaw, w) => { const yv = [Math.cos(yaw), Math.sin(yaw)], at2 = (ox, oz) => [cx + ox * yv[0] + oz * yv[1], cz - ox * yv[1] + oz * yv[0]];
-      for (const [ox, oz, ww, dd] of [[0, w / 2 + 0.35, w + 1.4, 0.7], [0, -w / 2 - 0.35, w + 1.4, 0.7], [w / 2 + 0.35, 0, 0.7, w], [-w / 2 - 0.35, 0, 0.7, w]]) { const [x, z] = at2(ox, oz); B.box(ww, top - bot, dd, x, (top + bot) / 2, z, stoneB).rotation.y = yaw; }
+      for (const [ox, oz, ww, dd] of [[0, w / 2 + 0.35, w + 1.4, 0.7], [0, -w / 2 - 0.35, w + 1.4, 0.7], [w / 2 + 0.35, 0, 0.7, w], [-w / 2 - 0.35, 0, 0.7, w]]) { const [x, z] = at2(ox, oz); B.box(ww, top - bot, dd, x, (top + bot) / 2, z, collarM).rotation.y = yaw; }
       for (let k = -2; k <= 2; k++) { const [x1, z1] = at2((k * w) / 5, 0), [x2, z2] = at2(0, (k * w) / 5); B.box(0.08, 0.1, w + 0.2, x1, top - 0.05, z1, ironO).rotation.y = yaw; B.box(w + 0.2, 0.1, 0.08, x2, top - 0.02, z2, ironO).rotation.y = yaw; }
       const bm = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.5, w * 0.62, top - 0.1, 4, 1, true), beamM); bm.position.set(cx, (top - 0.1) / 2 + 0.05, cz); bm.rotation.y = yaw + Math.PI / 4; g.add(bm); beams.push(bm); };
 
@@ -1170,10 +1191,12 @@
     { const k = iP + 4, yk = yawT(k); for (const u of [-BW - 0.25, BW + 0.25]) { const [x, z] = pt(k, u); ob(0.35, 5.8, 0.35, x, 2.6, z, ironO).rotation.y = yk; } const [xc, zc] = pt(k, 0); ob(2 * BW + 1.2, 0.5, 0.45, xc, 5.4, zc, ironO).rotation.y = yk; const [xg, zg] = pt(k, -1.2); ob(4.9, 1.7, 0.22, xg, 4.3, zg, E.mat('#7a4a30', { rough: 0.8, metal: 0.3 })).rotation.y = yk; const [xw, zw] = pt(k, BW + 0.25); const wh = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 6, 18), E.mat('#c09848', { metal: 0.85, rough: 0.3 })); wh.position.set(xw, 4.4, zw); wh.rotation.y = yk; g.add(wh); }
     // SHOT's ramp over the cutting: a pier either side of the canal, and its walls opened between them for the canal to run under
     if (RP) {
-      const rl = (lz) => { const w = RP.place.toWorld(0, lz); return W2L(w.x, w.z); };
-      let za = null, zb = null; for (let lz = RP.z0 + 0.5; lz < RP.z1 - 0.5; lz += 0.1) { const [x, z] = rl(lz), q = near(x, z); if (zone(q.i) !== 2 || Math.abs(q.u) > BW + 1.2) continue; if (za == null) za = lz; zb = lz; }
+      // the span: wherever the canal and its parapets pass under any of the ramp's width (the cutting crosses it on the slant,
+      // its north edge under the walkway's end), so neither pier stands in the water or on a parapet
+      const rl = (lz, lx = 0) => { const w = RP.place.toWorld(lx, lz); return W2L(w.x, w.z); }, top = RP.y(RP.z0);
+      let za = null, zb = null; for (let lz = RP.z0 - 6; lz < RP.z1 - 0.5; lz += 0.1) for (const lx of [-RP.hw - 0.25, 0, RP.hw + 0.25]) { const [x, z] = rl(lz, lx), q = near(x, z); if (zone(q.i) !== 2 || Math.abs(q.u) > BW + 0.65) continue; if (za == null) za = lz; zb = lz; }
       if (za != null) { za -= 0.55; zb += 0.55; const yawR = RP.place.rot - p.rot;
-        for (const lz of [za, zb]) { const [x, z] = rl(lz), h = RP.y(lz) - 0.5; ob(RP.hw * 2 + 0.4, h, 0.9, x, h / 2, z, stoneO).rotation.y = yawR; const w = RP.place.toWorld(0, lz), b = p.addBox(0, 0, RP.hw + 0.25, 0.5, -1e9, h); Object.assign(b, { x: w.x, z: w.z, c: Math.cos(RP.place.rot), s: Math.sin(RP.place.rot), cn: 1 }); }
+        for (const lz of [za, zb]) { const [x, z] = rl(lz), h = Math.min(top, RP.y(lz)) - 0.5; ob(RP.hw * 2 + 0.4, h, 0.9, x, h / 2, z, stoneO).rotation.y = yawR; const w = RP.place.toWorld(0, lz), b = p.addBox(0, 0, RP.hw + 0.25, 0.5, -1e9, h); Object.assign(b, { x: w.x, z: w.z, c: Math.cos(RP.place.rot), s: Math.sin(RP.place.rot), cn: 1 }); }   // (the north one under the walkway, up to its deck)
         RP.open(za, zb); } }
     /* ---- in the crater's cave: the towpath along its right side, to the quay ---- */
     addO(ribbon(iE, iM, () => [[3.95, TY], [KE + 0.35, TY]], 1.6), paveO, true); addO(ribbon(iE, iM, () => [[KE + 0.35, TY], [KE + 0.35, TY + 0.07], [KE, TY + 0.07], [KE, -0.8]], 2), stoneO);
@@ -1187,10 +1210,12 @@
     /* ---- once the hills exist ---- */
     const afterHills = ({ groundAt, boxes, circles }) => {
       // whatever stands on the hill over the canal (rocks, KEYAKI's boulders, a brink post over the cave) only blocks up there;
-      // in the open cutting, whatever stood on the ground where it now runs (stubs of wall by SHOT's ramp) only above it
-      const topAt = (x, z, pad) => { const l = p.local(x, z), [s, b] = chIn(l.x, l.z); if (s > -H2 - pad && s < H2 + pad && b > BM - pad && b < BP + pad) return CH + 0.6; if (s > RM.s0 - pad && s < RM.s1 + pad && b > RM.b0 - pad && b < RM.b1 + pad) return RM.top + 0.6; const q = near(l.x, l.z), zn = zone(q.i); if (zn === 1 && q.u > -BW - pad && q.u < (q.i >= IA && q.i < IB ? BW + BD : BW) + pad) return CY + 0.6; if (zn === 3 && Math.abs(q.u) < 3.5 + pad) return 6.2; if (zn === 2 && Math.abs(q.u) < BW + pad) return 2.6; return 0; };
-      for (const c of circles) { if (c.cn || (c.y1 !== undefined && c.y1 < 4.5)) continue; const top = topAt(c.x, c.z, c.r); if (top && !(c.y0 > top)) c.y0 = top; }
-      for (const b of boxes) { if (b.cn || (b.y1 !== undefined && b.y1 < 4.5)) continue; let top = 0; const cc = b.c ?? 1, ss = b.s ?? 0, st = Math.min(1, 1 / Math.max(b.hx, 0.5)); for (let a = -1; a <= 1.0001; a += st) for (const e of [-1, 0, 1]) { const ux = a * b.hx, uz = e * b.hz; top = Math.max(top, topAt(b.x + ux * cc + uz * ss, b.z - ux * ss + uz * cc, 0)); } if (top && !(b.y0 > top)) b.y0 = top; }
+      // in the open cutting, whatever stood on the ground where it now runs (stubs of wall under SHOT's walkway) only above it.
+      // In the crater only what stands over the cave itself (back from its mouth), never the quay's posts round the lagoon;
+      // and nothing a place marks keep (those posts, SHOT's ramp walls, which it opens for the canal itself).
+      const topAt = (x, z, pad) => { const l = p.local(x, z), [s, b] = chIn(l.x, l.z); if (s > -H2 - pad && s < H2 + pad && b > BM - pad && b < BP + pad) return CH + 0.6; if (s > RM.s0 - pad && s < RM.s1 + pad && b > RM.b0 - pad && b < RM.b1 + pad) return RM.top + 0.6; const q = near(l.x, l.z), zn = zone(q.i); if (zn === 1 && q.u > -BW - pad && q.u < (q.i >= IA && q.i < IB ? BW + BD : BW) + pad) return CY + 0.6; if (zn === 3 && Math.abs(q.u) < 3.5 + pad && plane(iM, l.x, l.z)[0] < -0.5) return 6.2; if (zn === 2 && Math.abs(q.u) < BW + pad) return 2.6; return 0; };
+      for (const c of circles) { if (c.cn || c.keep || (c.y1 !== undefined && c.y1 < 4.5)) continue; const top = topAt(c.x, c.z, c.r); if (top && !(c.y0 > top)) c.y0 = top; }
+      for (const b of boxes) { if (b.cn || b.keep || (b.y1 !== undefined && b.y1 < 4.5)) continue; let top = 0; const cc = b.c ?? 1, ss = b.s ?? 0, st = Math.min(1, 1 / Math.max(b.hx, 0.5)); for (let a = -1; a <= 1.0001; a += st) for (const e of [-1, 0, 1]) { const ux = a * b.hx, uz = e * b.hz; top = Math.max(top, topAt(b.x + ux * cc + uz * ss, b.z - ux * ss + uz * cc, 0)); } if (top && !(b.y0 > top)) b.y0 = top; }
       const gw = (x, z) => { const w = p.toWorld(x, z); return groundAt(w.x, w.z); }, B2 = E.batch(g);
       // the portal out of the hill and the one into the crater wall: a face of masonry across the cutting, its top following the ground behind
       const portal = (i, dir, hole, wide, depth, m, sign) => {
@@ -1205,7 +1230,9 @@
       };
       portal(iP, 1, CAN, BW + 3.2, 2.2, brickO, 'OHH CANAL  1898');
       { const W3 = CP.halfWidth + 0.5, VC = CP.vault, cave = Array.from({ length: 13 }, (_, k) => { const a = (Math.PI * k) / 12; return [-W3 * Math.cos(a), k === 0 || k === 12 ? -0.8 : 1.4 + Math.sin(a) * (VC - 1.4)]; }); portal(iE, -1, [[-W3, -0.8], ...cave.slice(1, -1), [W3, -0.8]], 7.5, 2.4, ds(E.mat('#5d554f', { map: E.tex('rock', 1, 1), rough: 0.95 })), 'TO OHH'); }
-      // the shafts' heads on the hillside: lined from under the vault up to the grass, a stone collar, a grating, the beam
+      // the shafts' heads on the hillside: lined from under the vault up to the grass, a stone collar, a grating, the beam;
+      // the collar is old weathered stone, and where the slope leaves it standing proud a heap of rocks and some scrub hide its foot
+      const heap = [], scrub = [], hr = E.rng(173);
       SQ.forEach(([x0, z0, x1, z1]) => {
         const hs = [[x0, z0], [x1, z0], [x1, z1], [x0, z1], [(x0 + x1) / 2, z0], [x1, (z0 + z1) / 2], [(x0 + x1) / 2, z1], [x0, (z0 + z1) / 2]].map(([x, z]) => groundAt(x, z)), top = Math.max(...hs) + 0.4, bot = Math.min(...hs) - 0.4, c = W2L((x0 + x1) / 2, (z0 + z1) / 2), cn = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => W2L(x, z));
         day(c[0], bot - 0.6, c[1], 0.6, 2.0);
@@ -1213,9 +1240,17 @@
           for (let j = 0; j <= NS; j++) { const t = j / NS, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t, q = near(x, z), yb2 = zone(q.i) === 1 && Math.abs(q.u) < BW ? vaultY(q.u) - 0.06 : SY; pos.push(x, yb2, z, x, bot + 0.3, z); uv.push((t * L) / 2, yb2 / 2, (t * L) / 2, (bot + 0.3) / 2); if (j < NS) idx.push(j * 2, j * 2 + 2, j * 2 + 1, j * 2 + 1, j * 2 + 2, j * 2 + 3); }   // from the vault's surface along the edge up to the collar
           add(geoOf(pos, uv, idx), brickM, () => [c[0], (SY + top) / 2, c[1]]); }
         shaftHead(B2, c[0], c[1], top, bot, -p.rot, x1 - x0);
-        const box = p.addBox(c[0], c[1], (x1 - x0) / 2 + 0.7, (z1 - z0) / 2 + 0.7, bot, 1e9); Object.assign(box, { c: 1, s: 0, cn: 1 });   // you walk round the head, not over it
+        for (let k = 0; k < 4; k++) { const [ax, az] = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]][k], [bx, bz] = [[x1, z0], [x1, z1], [x0, z1], [x0, z0]][k], nx = Math.sign(ax + bx - x0 - x1) * (k % 2 ? 1 : 0), nz = Math.sign(az + bz - z0 - z1) * (k % 2 ? 0 : 1);
+          for (let t = -0.15; t <= 1.15; t += 0.2 + hr() * 0.12) { const o = 0.9 + hr() * 0.6, x = ax + (bx - ax) * t + nx * o, z = az + (bz - az) * t + nz * o, gh = groundAt(x, z), up = top - gh, l = W2L(x, z);
+            if (up > 0.5) heap.push([l[0], gh - 0.2, l[1], 0.55 + hr() * 0.45, Math.min(1.0, up * 0.7) * (0.65 + hr() * 0.35), hr() * 6.3, (hr() - 0.5) * 0.5]); else if (hr() < 0.3) scrub.push([l[0], gh + 0.05, l[1], 0.35 + hr() * 0.35]); } }   // its foot: rocks where it stands proud, scrub elsewhere
+        for (let k = 0; k < 6; k++) { const a = hr() * 6.3, d = (x1 - x0) / 2 + 2 + hr() * 2.5, x = (x0 + x1) / 2 + Math.cos(a) * d, z = (z0 + z1) / 2 + Math.sin(a) * d, l = W2L(x, z); scrub.push([l[0], groundAt(x, z) + 0.05, l[1], 0.4 + hr() * 0.5]); }
+        const box = p.addBox(c[0], c[1], (x1 - x0) / 2 + 1.4, (z1 - z0) / 2 + 1.4, bot, 1e9); Object.assign(box, { c: 1, s: 0, cn: 1 });   // you walk round the head and its heap, not over them
         for (let y = CY; y < bot; y += 0.32) { const [x, z] = W2L((x0 + x1) / 2, z1 - 0.12); tb(0.5, 0.05, 0.05, x, y, z, -p.rot, ironM); }   // rungs up the shaft
       });
+      { const o3 = new THREE.Object3D(), rockH = new THREE.InstancedMesh(E.rockGeo(4, true), E.mat('#8e8574', { map: E.tex('rock', 1, 1), rough: 0.95 }), heap.length), bush = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), E.mat('#4f6a34', { flat: true, rough: 1 }), scrub.length);
+        heap.forEach(([x, y, z, r2, h, a, tl], k) => { o3.position.set(x, y, z); o3.rotation.set(tl, a, tl * 0.7); o3.scale.set(r2, h, r2 * 0.85); o3.updateMatrix(); rockH.setMatrixAt(k, o3.matrix); });
+        scrub.forEach(([x, y, z, r2], k) => { o3.position.set(x, y, z); o3.rotation.set(0, k, 0); o3.scale.set(r2 * 1.3, r2 * 0.75, r2 * 1.1); o3.updateMatrix(); bush.setMatrixAt(k, o3.matrix); });
+        for (const m of [rockH, bush]) { m.castShadow = m.receiveShadow = true; g.add(m); } }
       B2.flush(); flushTB(); flushQ();
     };
     const update = (t) => { waterM.uniforms.t.value = t; beams.forEach((b, k) => { b.scale.x = b.scale.z = 1 + Math.sin(t * 0.3 + k) * 0.03; }); };
@@ -1224,7 +1259,7 @@
     const map = [{ t: 'poly', x: 0, z: 0, pts: mapPts, c: 'rgba(96,140,180,.3)' }, { t: 'poly', x: 0, z: 0, pts: [ch(-H2, BM), ch(H2, BM), ch(H2, BP), ch(-H2, BP)], c: 'rgba(96,140,180,.3)' }];
     const chamberAt = (lx, lz) => { const [s, b] = chIn(lx, lz); return inCh(s, b) || inRoom(s, b); };
     const shaftHole = (lx, lz) => { const [s, b] = chIn(lx, lz); return s > SHF[0] && s < SHF[1] && b > SHF[2] && b < SHF[3]; };
-    return { floor, ceil, water, carve, holeAt, blocks, noPier, map, afterHills, update, chamberAt, shaftHole, I0, I1, C, S, at, iW, iP, iE, iM, iST, pt, near, zone };
+    return { floor, ceil, water, carve, holeAt, cuts, blocks, noPier, map, afterHills, update, chamberAt, shaftHole, I0, I1, C, S, at, iW, iP, iE, iM, iST, pt, near, zone };
   }
 
   /* ------------------------------------------------------------------ */
@@ -1281,14 +1316,14 @@
         const ni = hg.toNonIndexed(), pa = ni.attributes.position.array, keep = [];
         for (let i = 0; i < pa.length; i += 9) {
           const x = (pa[i] + pa[i + 3] + pa[i + 6]) / 3, z = -(pa[i + 1] + pa[i + 4] + pa[i + 7]) / 3, y = (pa[i + 2] + pa[i + 5] + pa[i + 8]) / 3;
-          if ((chanD(x, z) < chan.W + 1.4 && y < 7.2) || (cn && cn.shaftHole(x, z))) continue;   // and the canal chamber's grating
+          if ((chanD(x, z) < chan.W + 1.4 && y < 7.2) || (cn && (cn.shaftHole(x, z) || cn.cuts([pa[i], pa[i + 2], -pa[i + 1], pa[i + 3], pa[i + 5], -pa[i + 4], pa[i + 6], pa[i + 8], -pa[i + 7]])))) continue;   // and the canal chamber's grating, and wherever it would stand in the canal (under the game's hills, past the fork)
           for (let k = 0; k < 9; k++) keep.push(pa[i + k]);
         }
         hgeo = new THREE.BufferGeometry(); hgeo.setAttribute('position', new THREE.Float32BufferAttribute(keep, 3));
       }
       hgeo.computeVertexNormals();
       const hill = new THREE.Mesh(hgeo, E.mat('#b4c08e', { map: E.tex('grass', 16, 16), rough: 0.95 }));   // photographed grass (Poly Haven, CC0)
-      hill.rotation.x = -Math.PI / 2; hill.receiveShadow = true;
+      hill.rotation.x = -Math.PI / 2; hill.receiveShadow = true; hill.name = 'ohhHill';
       g.add(hill); p.pick(hill);
       const rockM = E.mat('#b0a696', { map: E.tex('rock', 1, 1), rough: 0.95 }), rockD = E.mat('#8a8070', { map: E.tex('rock', 1, 1), rough: 0.95 });   // photographed rock (Poly Haven, CC0)
       for (let i = 0; i < 18; i++) {
@@ -1594,6 +1629,7 @@
       p.clearR = HR + 3;
       p.core = (lx, lz) => Math.hypot(lx, lz) < HR + 4 || (lz < -6 && lz > -500 && Math.abs(lx) < 360);
       p.blocks = (lx, lz) => p.core(lx, lz) || (cn && cn.blocks(lx, lz));   // no trees in the canal's cutting either (its core alone keeps the hills off)
+      p.scrubOut = (lx, lz) => Math.hypot(lx, lz) < HR + 4 || (cn && cn.blocks(lx, lz));   // the game's hills on the sea side may carry scrub (its hill, the cutting and the shafts' heads not)
 
       let speed = 0;
       p.update = (t, dt, f, v, viewing) => {
