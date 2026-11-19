@@ -1,0 +1,80 @@
+{
+  // Terminal > Run Task... (or Ctrl+Shift+B for the build).
+  "version": "2.0.0",
+  "options": { "cwd": "${workspaceFolder}/PhoneTesto" },
+  // On Windows the commands are PowerShell, whatever the default terminal is.
+  "windows": {
+    "options": {
+      "cwd": "${workspaceFolder}/PhoneTesto",
+      "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"] }
+    }
+  },
+  "tasks": [
+    {
+      "label": "PhoneTesto: build (Release)",
+      "type": "shell",
+      "command": "cmake --preset release && cmake --build --preset release",
+      "windows": { "command": "cmake --preset release; if ($?) { cmake --build --preset release }" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$msCompile", "$gcc"]
+    },
+    {
+      "label": "PhoneTesto: build (Debug)",
+      "type": "shell",
+      "command": "cmake --preset debug && cmake --build --preset debug",
+      "windows": { "command": "cmake --preset debug; if ($?) { cmake --build --preset debug }" },
+      "group": "build",
+      "problemMatcher": ["$msCompile", "$gcc"]
+    },
+    {
+      "label": "PhoneTesto: tests (DSP + Live server)",
+      "type": "shell",
+      "command": "ctest --preset release",
+      "dependsOn": "PhoneTesto: build (Release)",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "PhoneTesto: open the stand-alone app",
+      "type": "shell",
+      "command": "./build/PhoneTesto_artefacts/Release/Standalone/PhoneTesto",
+      "windows": { "command": "Start-Process build\\PhoneTesto_artefacts\\Release\\Standalone\\PhoneTesto.exe" },
+      "osx": { "command": "open build/PhoneTesto_artefacts/Release/Standalone/PhoneTesto.app" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PhoneTesto: editor self-test (opens the window, checks what it shows)",
+      "type": "shell",
+      "command": "PHONETESTO_EDITOR_SELFTEST=build/selftest ./build/PhoneTesto_artefacts/Release/Standalone/PhoneTesto; node Tests/check_editor_selftest.mjs build/selftest",
+      "windows": { "command": "$env:PHONETESTO_EDITOR_SELFTEST='build/selftest'; Start-Process -Wait build\\PhoneTesto_artefacts\\Release\\Standalone\\PhoneTesto.exe; node Tests/check_editor_selftest.mjs build/selftest" },
+      "osx": { "command": "PHONETESTO_EDITOR_SELFTEST=build/selftest build/PhoneTesto_artefacts/Release/Standalone/PhoneTesto.app/Contents/MacOS/PhoneTesto; node Tests/check_editor_selftest.mjs build/selftest" },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "PhoneTesto: room demo in a browser",
+      "detail": "Serves the window's page with a song, for this computer or a phone on the same Wi-Fi.",
+      "type": "shell",
+      "command": "node Tools/room-demo.mjs \"${input:song}\"",
+      "problemMatcher": []
+    },
+    {
+      "label": "PhoneTesto: install the browser tests' Playwright (once)",
+      "type": "shell",
+      "command": "npm install --no-save --no-package-lock playwright@1.63.0 && npx playwright install chromium",
+      "windows": { "command": "npm install --no-save --no-package-lock playwright@1.63.0; if ($?) { npx playwright install chromium }" },
+      "problemMatcher": []
+    },
+    {
+      "label": "PhoneTesto: browser tests (room page + phone page)",
+      "type": "shell",
+      "command": "node Tests/browser/room_test.mjs build/shots && node Tests/browser/player_test.mjs build/PhoneTestoLiveDemo build/shots",
+      "windows": { "command": "node Tests/browser/room_test.mjs build/shots; if ($?) { node Tests/browser/player_test.mjs build/Release/PhoneTestoLiveDemo.exe build/shots }" },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    { "id": "song", "type": "promptString", "description": "A song to play in the demo (leave empty to choose one on the page)", "default": "" }
+  ]
+}

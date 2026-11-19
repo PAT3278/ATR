@@ -48,9 +48,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   let port = 8080, song = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--port") port = Number(args[++i]);
-    else song = path.resolve(args[i]);
+    else if (args[i].trim()) song = path.resolve(args[i].trim());
   }
-  if (song && !fs.existsSync(song)) { console.error(`No such file: ${song}`); process.exit(1); }
+  if (song && !(fs.existsSync(song) && fs.statSync(song).isFile())) { console.error(`No such file: ${song}`); process.exit(1); }
 
   createRoomServer({ song }).listen(port, "0.0.0.0", () => {
     console.log(`PhoneTesto room demo${song ? ", playing " + path.basename(song) : " (choose a song on the page)"}`);

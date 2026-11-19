@@ -1,0 +1,28 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 22, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "The build you install and play with (build/).",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "For stepping through the code in a debugger (build-debug/).",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "displayName": "Release", "configurePreset": "release", "configuration": "Release" },
+    { "name": "debug", "displayName": "Debug", "configurePreset": "debug", "configuration": "Debug" }
+  ],
+  "testPresets": [
+    { "name": "release", "displayName": "Release", "configurePreset": "release", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "debug", "displayName": "Debug", "configurePreset": "debug", "configuration": "Debug", "output": { "outputOnFailure": true } }
+  ]
+}

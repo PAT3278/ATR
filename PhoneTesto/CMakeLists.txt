@@ -185,6 +185,9 @@ function(phonetesto_link_web_view target)
     endif()
 endfunction()
 
+# `ctest` (and the test presets in CMakePresets.json) runs the two test programs.
+enable_testing()
+
 # --- Offline DSP sanity test ---------------------------------------------
 # Headless check that every speaker profile produces finite, sane-level
 # audio; runs without an audio device or GUI (see Tests/DspTest.cpp).
@@ -222,3 +225,6 @@ target_link_libraries(PhoneTestoLiveDemo
         juce::juce_core
 )
 phonetesto_link_web_view(PhoneTestoLiveDemo)
+
+add_test(NAME dsp COMMAND PhoneTestoDspTest)
+add_test(NAME live-server COMMAND PhoneTestoLiveServerTest)

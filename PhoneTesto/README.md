@@ -223,6 +223,39 @@ Distribution settings are baked in:
   Local Network usage description that macOS needs before it lets the plugin
   accept connections from phones.
 
+### Working in VS Code
+
+The repository is set up for VS Code (`.vscode/` at its root,
+`PhoneTesto/CMakePresets.json`).
+
+1. **Get the code**: `git clone -b claude/iphone-speaker-plugin-nlbmfo
+   https://github.com/PAT3278/ATR.git`, then *File → Open Folder… →* `ATR`.
+   (Cloned already? `git pull` on that branch.)
+2. **Install what it asks for**: VS Code offers the recommended extensions
+   (CMake Tools, C/C++, Claude Code). On Windows you also need **Visual
+   Studio 2022 or its Build Tools, with "Desktop development with C++"**,
+   and Git; Node.js only for the browser demo and tests.
+3. **Build**: pick the *Release* preset when asked (status bar), then
+   **Ctrl+Shift+B**. The first configure downloads JUCE, libopus and the
+   WebView2 SDK, which takes a few minutes.
+4. **Try it**: *Terminal → Run Task…*
+   - *open the stand-alone app*: the plugin as an app (it opens on the code
+     to scan).
+   - *tests (DSP + Live server)* (also `ctest --preset release`), *editor
+     self-test*, and, after *install the browser tests' Playwright (once)*,
+     *browser tests*.
+   - *room demo in a browser*: the window's page with your song, on this
+     computer or a phone on the same Wi-Fi.
+5. **In FL Studio**: add `PhoneTesto\build\PhoneTesto_artefacts\Release\VST3`
+   (and `PhoneTesto\build-debug\PhoneTesto_artefacts\Debug\VST3` for
+   debugging) to FL Studio's plugin search paths (*Options → Manage plugins*),
+   then *Find plugins*: each build is picked up there, with no copying into
+   Program Files. Close FL Studio before rebuilding; Windows locks a loaded
+   plugin.
+6. **Debug**: *Run and Debug → Stand-alone app (Debug, Windows)* or *FL Studio
+   with the plugin (Debug, Windows)* builds Debug, starts it under the
+   debugger and stops at breakpoints in the plugin's code.
+
 ### Installing the built plugin
 
 The build doesn't copy the plugin into the system plugin folder by default
@@ -340,7 +373,8 @@ Artifacts are kept for 30 days.
 ## Project layout
 
 ```
-CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps
+CMakeLists.txt             JUCE plugin target (VST3/AU/Standalone, optional AAX) + deps, tests for ctest
+CMakePresets.json          Release / Debug presets (VS Code's CMake Tools uses them)
 Resources/
   room.html                The editor: the 3D room (three.js) and its control strip
   player.html              The phone-side player page (embedded into the plugin)

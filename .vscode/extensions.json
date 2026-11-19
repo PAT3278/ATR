@@ -1,0 +1,8 @@
+{
+  // VS Code offers to install these when the folder is opened.
+  "recommendations": [
+    "ms-vscode.cmake-tools",
+    "ms-vscode.cpptools",
+    "anthropic.claude-code"
+  ]
+}

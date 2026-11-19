@@ -5,3 +5,5 @@ build/
 *.component
 *.aaxplugin
 .DS_Store
+build-debug/
+node_modules/

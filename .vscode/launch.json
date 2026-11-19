@@ -1,0 +1,52 @@
+{
+  // Run and Debug (Ctrl+Shift+D). The Debug configurations build first.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Stand-alone app (Debug, Windows)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/PhoneTesto/build-debug/PhoneTesto_artefacts/Debug/Standalone/PhoneTesto.exe",
+      "cwd": "${workspaceFolder}/PhoneTesto",
+      "console": "integratedTerminal",
+      "preLaunchTask": "PhoneTesto: build (Debug)"
+    },
+    {
+      // Add PhoneTesto/build-debug/PhoneTesto_artefacts/Debug/VST3 to FL Studio's plugin
+      // search paths once (Options > Manage plugins); then every build is picked up.
+      "name": "FL Studio with the plugin (Debug, Windows)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${input:flStudio}",
+      "cwd": "${workspaceFolder}/PhoneTesto",
+      "console": "integratedTerminal",
+      "preLaunchTask": "PhoneTesto: build (Debug)"
+    },
+    {
+      "name": "Stand-alone app (Debug, macOS)",
+      "type": "cppdbg",
+      "request": "launch",
+      "MIMode": "lldb",
+      "program": "${workspaceFolder}/PhoneTesto/build-debug/PhoneTesto_artefacts/Debug/Standalone/PhoneTesto.app/Contents/MacOS/PhoneTesto",
+      "cwd": "${workspaceFolder}/PhoneTesto",
+      "preLaunchTask": "PhoneTesto: build (Debug)"
+    },
+    {
+      "name": "Stand-alone app (Debug, Linux)",
+      "type": "cppdbg",
+      "request": "launch",
+      "MIMode": "gdb",
+      "program": "${workspaceFolder}/PhoneTesto/build-debug/PhoneTesto_artefacts/Debug/Standalone/PhoneTesto",
+      "cwd": "${workspaceFolder}/PhoneTesto",
+      "preLaunchTask": "PhoneTesto: build (Debug)"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "flStudio",
+      "type": "promptString",
+      "description": "Where FL Studio is (FL64.exe)",
+      "default": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe"
+    }
+  ]
+}

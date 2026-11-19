@@ -1,0 +1,20 @@
+{
+  // The plugin's CMake project lives in PhoneTesto/; pick Release or Debug in the status bar.
+  "cmake.sourceDirectory": "${workspaceFolder}/PhoneTesto",
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": true,
+  "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+
+  // Build output and fetched libraries (JUCE, libopus, ...) are large: keep them out of search and the file watcher.
+  "search.exclude": {
+    "PhoneTesto/build": true,
+    "PhoneTesto/build-debug": true,
+    "PhoneTesto/node_modules": true
+  },
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/build-debug/**": true,
+    "**/node_modules/**": true
+  },
+  "files.associations": { "*.mjs": "javascript" }
+}
