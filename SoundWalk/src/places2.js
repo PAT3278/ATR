@@ -781,16 +781,37 @@
      turns at each landing instead of cutting into the flight's partition. */
   function shotWay(p, E, g, H) {
     const wg = new THREE.Group(); g.add(wg);
-    const BB = E.batch(wg), bx = BB.box, rr = E.rng(7311), PI = Math.PI;
+    const rr = E.rng(7311), PI = Math.PI;
     const cvT = (w, h, draw, srgb = true) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
     const rep = (t, x, y) => { const c = t.clone(); c.needsUpdate = true; c.repeat.set(x, y); return c; };
     const add = (geo, m, x, y, z, ry = 0, sh = true) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = sh; o.receiveShadow = true; wg.add(o); return o; };
-    const inst = (geo, m, list, sh = true) => { const im = new THREE.InstancedMesh(geo, m, list.length), o = new THREE.Object3D(); list.forEach(([x, y, z, ry = 0, rx = 0], i) => { o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }); im.castShadow = sh; im.receiveShadow = true; wg.add(im); return im; };
-    const glowM = (hex, k = 1) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).convertSRGBToLinear().multiplyScalar(k) }); m.userData.lin = true; return m; };
+    const inst = (geo, m, list, sh = true) => {   // its bounds made to hold every copy, so it is culled where none of them shows (and drawn where any does)
+      const im = new THREE.InstancedMesh(geo, m, list.length), o = new THREE.Object3D(), bb = new THREE.Box3();
+      list.forEach(([x, y, z, ry = 0, rx = 0], i) => { o.position.set(x, y, z); o.rotation.set(rx, ry, 0, 'YXZ'); o.updateMatrix(); im.setMatrixAt(i, o.matrix); bb.expandByPoint(o.position); });
+      geo.computeBoundingSphere(); const sp = bb.getBoundingSphere(new THREE.Sphere()); sp.radius += geo.boundingSphere.radius; geo.boundingSphere = sp;
+      im.castShadow = sh; im.receiveShadow = true; wg.add(im); return im; };
+    // everything that stands still and needs no handle is merged per material at the end, one draw each (as the batch does for boxes)
+    // (and in stretches of 30 m along the trail, so what is behind the camera is culled), boxes included
+    const MG = new Map(), addG = (geo, m, mx, sh, z) => { const k = m.uuid + (sh ? 's' : '') + Math.floor(z / 30); if (!MG.has(k)) MG.set(k, { m, sh, list: [] }); MG.get(k).list.push((geo.index ? geo.toNonIndexed() : geo.clone()).applyMatrix4(mx)); };
+    const addM = (geo, m, x, y, z, ry = 0, sh = true, rx = 0, rz = 0) => { const o = new THREE.Object3D(); o.position.set(x, y, z); o.rotation.set(rx, ry, rz, 'YXZ'); o.updateMatrix(); addG(geo, m, o.matrix, sh, z); };
+    const boxes = [], unit = new THREE.BoxGeometry(1, 1, 1).toNonIndexed(), bx = (w, h, d, x, y, z, m, sh = true) => { const o = new THREE.Object3D(); o.position.set(x, y, z); o.scale.set(w, h, d); boxes.push({ o, m, sh }); return o; };   // set its rotation before the end
+    const flushM = () => { for (const { o, m, sh } of boxes) { o.updateMatrix(); addG(unit, m, o.matrix, sh, o.position.z); } for (const { m, sh, list } of MG.values()) { const out = new THREE.BufferGeometry(); for (const [nm, k] of [['position', 3], ['normal', 3], ['uv', 2]]) { const arrs = list.map((q) => q.attributes[nm].array), all = new Float32Array(arrs.reduce((a, b) => a + b.length, 0)); let o = 0; for (const a of arrs) { all.set(a, o); o += a.length; } out.setAttribute(nm, new THREE.BufferAttribute(all, k)); } const me = new THREE.Mesh(out, m); me.castShadow = sh; me.receiveShadow = true; wg.add(me); } };
+    const glowMs = {}, glowM = (hex, k = 1, own = false) => { if (!own && glowMs[hex + k]) return glowMs[hex + k]; const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).convertSRGBToLinear().multiplyScalar(k) }); m.userData.lin = true; if (!own) glowMs[hex + k] = m; return m; };
     const halo = (hex, s, x, y, z, o = 0.45) => { const m = new THREE.SpriteMaterial({ map: E.dot(), color: new THREE.Color(hex).convertSRGBToLinear(), transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }); m.userData.lin = true; const sp = new THREE.Sprite(m); sp.scale.set(s, s, 1); sp.position.set(x, y, z); wg.add(sp); return sp; };
-    const pool = (hex, s, x, y, z, o = 0.22) => { const m = new THREE.MeshBasicMaterial({ map: E.dot(), color: new THREE.Color(hex).convertSRGBToLinear(), transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }); m.userData.lin = true; const q = new THREE.Mesh(new THREE.PlaneGeometry(s, s), m); q.rotation.x = -PI / 2; q.position.set(x, y, z); wg.add(q); return q; };   // the light a lamp throws on the ground
+    const poolMs = {}, poolM = (hex, o) => { const m = new THREE.MeshBasicMaterial({ map: E.dot(), color: new THREE.Color(hex).convertSRGBToLinear(), transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }); m.userData.lin = true; return m; };
+    const pool = (hex, s, x, y, z, o = 0.22, own = false) => { const geo = new THREE.PlaneGeometry(s, s).rotateX(-PI / 2); if (own) return add(geo, poolM(hex, o), x, y, z, 0, false); addM(geo, poolMs[hex + o] || (poolMs[hex + o] = poolM(hex, o)), x, y, z, 0, false); return null; };   // the light a lamp throws on the ground (own: one that dims)
     // a printed plate, lit by the scene (it shows up where a lamp is) with a little of its own so it still reads at night
-    const plate = (txt, w, h, x, y, z, ry, o) => { const t = E.textTex(txt, o), m = E.mat('#ffffff', { map: t, emissiveMap: t, emissive: '#ffffff', emissiveIntensity: o.lit ?? 0.35, rough: 0.6 }, true); m.transparent = true; return add(new THREE.PlaneGeometry(w, h), m, x, y, z, ry, false); };
+    const AT = { c: document.createElement('canvas'), x: 0, y: 0, row: 0, list: [] }; AT.c.width = 2048; AT.c.height = 1024; const atx = AT.c.getContext('2d');
+    const plate = (txt, w, h, x, y, z, ry, o) => {   // painted into one atlas, so all of them together are a few draws
+      const src = E.textTex(txt, o).image, pw = src.width, ph = src.height;
+      if (AT.x + pw > AT.c.width) { AT.x = 0; AT.y += AT.row + 6; AT.row = 0; }
+      atx.drawImage(src, AT.x, AT.y); const u0 = AT.x / AT.c.width, u1 = (AT.x + pw) / AT.c.width, v0 = 1 - (AT.y + ph) / AT.c.height, v1 = 1 - AT.y / AT.c.height;
+      AT.x += pw + 6; AT.row = Math.max(AT.row, ph);
+      const geo = new THREE.PlaneGeometry(w, h), uv = geo.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) ? u1 : u0, uv.getY(k) ? v1 : v0);
+      AT.list.push([geo, x, y, z, ry, o.lit ?? 0.4]);
+    };
+    const flushPlates = () => { const t = new THREE.CanvasTexture(AT.c), ms = {}; t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+      for (const [geo, x, y, z, ry, lit] of AT.list) addM(geo, ms[lit] || (ms[lit] = (() => { const m = E.mat('#ffffff', { map: t, emissiveMap: t, emissive: '#ffffff', emissiveIntensity: lit, rough: 0.6 }, true); m.transparent = true; return m; })()), x, y, z, ry, false); };
     const JP = '"Hind","Noto Sans JP",sans-serif';
 
     // steel grating, half open: close up you see down through it, from afar it reads as a floor
@@ -798,8 +819,9 @@
     const grateM = (rx, ry) => { const m = E.mat('#8d948f', { map: rep(grate, rx, ry), rough: 0.6, metal: 0.5 }, true); m.alphaTest = 0.5; m.side = THREE.DoubleSide; return m; };
     // expanded metal for the cage and the fences: a diamond lattice, blended, so from afar it greys over what is behind
     const lattice = cvT(32, 32, (c, w, h) => { c.clearRect(0, 0, w, h); c.strokeStyle = '#e2e4e0'; c.lineWidth = 2.6; for (const o of [-32, 0, 32]) { c.beginPath(); c.moveTo(o, 0); c.lineTo(o + 32, 32); c.moveTo(o + 32, 0); c.lineTo(o, 32); c.stroke(); } });
-    const meshM = (hex, rx, ry) => { const m = E.mat(hex, { map: rep(lattice, rx, ry), rough: 0.55, metal: 0.4 }, true); m.transparent = true; m.alphaTest = 0.04; m.depthWrite = false; m.side = THREE.DoubleSide; return m; };
-    const panel = (w, h, x, y, z, ry, hex = '#7f8c86', cell = 0.14) => add(new THREE.PlaneGeometry(w, h), meshM(hex, w / cell, h / cell), x, y, z, ry, false);
+    const meshMs = {}, meshM = (hex) => meshMs[hex] || (meshMs[hex] = (() => { const m = E.mat(hex, { map: lattice, rough: 0.55, metal: 0.4 }, true); m.transparent = true; m.alphaTest = 0.04; m.depthWrite = false; m.side = THREE.DoubleSide; return m; })());
+    const cells = (geo, w, h, cell) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / cell, (uv.getY(i) * h) / cell); return geo; };
+    const panel = (w, h, x, y, z, ry, hex = '#7f8c86', cell = 0.14) => addM(cells(new THREE.PlaneGeometry(w, h), w, h, cell), meshM(hex), x, y, z, ry, false);
     // tags, sprayed: fat letters with a dark outline, a highlight, a few drips
     const tag = (txt, cols, o = {}) => cvT(512, 256, (c, w, h) => {
       c.clearRect(0, 0, w, h); c.translate(w / 2, h / 2); c.rotate(o.tilt ?? -0.08); c.font = o.font || `900 ${o.size || 132}px "Arial Black","Hind",sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
@@ -809,7 +831,7 @@
       c.lineWidth = 3; c.strokeStyle = 'rgba(255,255,255,.55)'; c.strokeText(txt, -3, 1);
       c.fillStyle = cols[1]; for (let i = 0; i < 9; i++) { const x = (rr() - 0.5) * c.measureText(txt).width * 0.9, l = 14 + rr() * 50; c.fillRect(x, 44, 3, l); c.beginPath(); c.arc(x + 1.5, 44 + l, 3, 0, 7); c.fill(); }
     }, true);
-    const decal = (t, w, h, x, y, z, ry) => { const m = E.mat('#ffffff', { map: t, rough: 0.8 }, true); m.transparent = true; m.depthWrite = false; m.polygonOffset = true; m.polygonOffsetFactor = -2; return add(new THREE.PlaneGeometry(w, h), m, x, y, z, ry, false); };
+    const decalMs = {}, decal = (t, w, h, x, y, z, ry) => { const m = decalMs[t.uuid] || (decalMs[t.uuid] = (() => { const d = E.mat('#ffffff', { map: t, rough: 0.8 }, true); d.transparent = true; d.depthWrite = false; d.polygonOffset = true; d.polygonOffsetFactor = -2; return d; })()); addM(new THREE.PlaneGeometry(w, h), m, x, y, z, ry, false); };
 
     const steel = E.mat('#56635d', { rough: 0.5, metal: 0.55 }), steelD = E.mat('#39423e', { rough: 0.55, metal: 0.5 }), yellow = E.mat('#d8b02a', { rough: 0.45, metal: 0.3 });
     const conc = E.mat('#8e8a84', { map: E.tex('concrete', 1, 1), rough: 0.9 }), concD = E.mat('#6a6762', { rough: 0.9 }), white = E.mat('#e6e4de', { rough: 0.5 });
@@ -867,31 +889,31 @@
       decal(tag('SHOT', ['#ffb43a', '#ff5a2a'], { size: 150 }), 1.55, 0.78, XO / 2 + 0.04, 1.15, ZS + 0.07, 0); }
     // the door, swung open against the cage; its frame, a lamp over it, plates
     { const fx = [-XI, -0.12]; for (const x of fx) bx(0.08, 2.3, 0.08, x, 1.15, ZS + 0.05, steel); bx(XI, 0.1, 0.1, -LC, 2.3, ZS + 0.05, steel);
-      const leaf = new THREE.Group(); leaf.position.set(-XI - 0.02, 0, ZS + 0.06); leaf.rotation.y = -PI / 2 - 0.12; wg.add(leaf);
-      for (const [w, h, x, y] of [[1.46, 0.06, 0.73, 0.08], [1.46, 0.06, 0.73, 2.12], [0.06, 2.1, 0.03, 1.1], [0.06, 2.1, 1.43, 1.1], [1.46, 0.04, 0.73, 1.1]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05), steel); b.position.set(x, y, 0); leaf.add(b); }
-      const lp = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.0), meshM('#7f8c86', 10, 14)); lp.position.set(0.73, 1.1, 0); leaf.add(lp);
+      const LA = -PI / 2 - 0.12, hx = -XI - 0.02, hz = ZS + 0.06, onLeaf = (u) => [hx + u * Math.cos(LA), hz - u * Math.sin(LA)];   // the leaf, swung about its hinge
+      for (const [bw, bh, u, y] of [[1.46, 0.06, 0.73, 0.08], [1.46, 0.06, 0.73, 2.12], [0.06, 2.1, 0.03, 1.1], [0.06, 2.1, 1.43, 1.1], [1.46, 0.04, 0.73, 1.1]]) { const [x, z] = onLeaf(u); addM(new THREE.BoxGeometry(bw, bh, 0.05), steel, x, y, z, LA); }
+      { const [x, z] = onLeaf(0.73); addM(cells(new THREE.PlaneGeometry(1.4, 2.0), 1.4, 2.0, 0.14), meshM('#7f8c86'), x, 1.1, z, LA, false); }
       p.addBox(-XI - 0.15, ZS + 0.78, 0.06, 0.74);
-      bx(0.34, 0.2, 0.14, -LC, 2.6, ZS + 0.13, steelD); bx(0.26, 0.12, 0.03, -LC, 2.56, ZS + 0.21, warmM, false); halo('#ffd49a', 1.6, -LC, 2.55, ZS + 0.32, 0.5); pool('#ffc98a', 4.5, -LC, 0.08, ZS + 1.6, 0.25);
-      plate('SHOT PA  ↑\n歩行者用階段  STAIRS', 1.5, 0.42, -LC, 2.95, ZS + 0.1, 0, { w: 512, h: 144, color: '#ffffff', bg: '#1f55b8', font: `700 52px ${JP}`, font2: `700 34px ${JP}`, lit: 0.6 });
+      bx(0.34, 0.2, 0.14, -LC, 2.6, ZS + 0.13, steelD); bx(0.26, 0.12, 0.03, -LC, 2.56, ZS + 0.21, warmM, false); halo('#ffd49a', 1.6, -LC, 2.55, ZS + 0.32, 0.5); pool('#ffc98a', 4.5, -LC, 0.08, ZS + 1.6, 0.22);
+      plate('SHOT PA  ↑\n歩行者用階段  STAIRS', 1.5, 0.42, -LC, 2.95, ZS + 0.1, 0, { w: 512, h: 144, color: '#ffffff', bg: '#1f55b8', font: `700 52px ${JP}`, font2: `700 34px ${JP}`, lit: 0.7 });
       plate('足元注意\nWATCH YOUR STEP', 0.5, 0.36, -0.06 + 0.32, 1.45, ZS + 0.1, 0, { w: 256, h: 184, color: '#141414', bg: '#f2c40c', font: `900 46px ${JP}`, font2: `700 24px ${JP}` }); }
     // landing numbers inside (where you arrive on each), with the height; the top one points across the bridge
     for (let k = 1; k <= 5; k++) {
       const L = k * RISE, north = k % 2 === 1, z = north ? ZN + 0.05 : ZS - 0.12, x = north ? -LC : LC;
-      plate(k < 5 ? String(k) : 'PA', k < 5 ? 0.46 : 0.6, 0.46, x + (north ? -0.2 : 0.2), L + 1.55, z, north ? 0 : PI, { w: 192, h: 192, color: '#f4f1e6', bg: '#1e4a36', font: `900 ${k < 5 ? 150 : 100}px ${JP}`, lit: 0.5 });
-      plate(`+${L.toFixed(1)} m`, 0.46, 0.13, x + (north ? -0.2 : 0.2), L + 1.22, z, north ? 0 : PI, { w: 192, h: 56, color: '#f4f1e6', bg: '#1e4a36', font: `700 40px ${JP}`, lit: 0.5 });
+      plate(k < 5 ? String(k) : 'PA', k < 5 ? 0.46 : 0.6, 0.46, x + (north ? -0.2 : 0.2), L + 1.55, z, north ? 0 : PI, { w: 192, h: 192, color: '#f4f1e6', bg: '#1e4a36', font: `900 ${k < 5 ? 150 : 100}px ${JP}`, lit: 0.7 });
+      plate(`+${L.toFixed(1)} m`, 0.46, 0.13, x + (north ? -0.2 : 0.2), L + 1.22, z, north ? 0 : PI, { w: 192, h: 56, color: '#f4f1e6', bg: '#1e4a36', font: `700 40px ${JP}`, lit: 0.7 });
       // a fluorescent tube over each landing, on the end wall; the light it throws on the grating
       const ly = k < 5 ? L + 2.25 : H + 2.3, lz = north ? ZN + 0.1 : ZS - 0.15;
-      const tx = north ? 0.75 : -0.3; bx(0.78, 0.07, 0.11, tx, ly, lz, white); const tb = add(new THREE.BoxGeometry(0.7, 0.035, 0.04), k === 3 ? glowM('#e4f2ff', 1.2) : tubeM, tx, ly - 0.05, lz + (north ? 0.03 : -0.03), 0, false);
-      lamps.push({ tb: k === 3 ? tb : null, h: halo('#dff0ff', 1.5, tx, ly - 0.08, lz + (north ? 0.12 : -0.12), 0.42), p: pool('#cfe6ff', 3.2, 0, L + 0.03, north ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2, 0.2), k });
+      const tx = north ? 0.75 : -0.3; bx(0.78, 0.07, 0.11, tx, ly, lz, white); const tg = new THREE.BoxGeometry(0.7, 0.035, 0.04), tb = k === 3 ? add(tg, glowM('#e4f2ff', 1.2, true), tx, ly - 0.05, lz + (north ? 0.03 : -0.03), 0, false) : (addM(tg, tubeM, tx, ly - 0.05, lz + (north ? 0.03 : -0.03), 0, false), null);
+      lamps.push({ tb, h: k === 3 || k === 5 ? halo('#dff0ff', 1.5, tx, ly - 0.08, lz + (north ? 0.12 : -0.12), 0.42) : null, p: pool('#d6ecff', 3.2, 0, L + 0.03, north ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2, 0.18, k === 3), k });
     }
     // the canopy over the top landing and the start of the bridge, and the tower's sign, seen all the way down the trail
     bx(XO * 2 + 0.5, 0.08, 3.0, 0, H + 2.62, ZN + 0.3, E.mat('#4c5552', { rough: 0.45, metal: 0.5 }));
     bx(XO * 2 + 0.2, 1.0, 0.1, 0, H + 1.95, ZS + 0.02, steelD);
-    plate('SHOT PA\n歩行者用階段  高速バスのりば', XO * 2, 0.92, 0, H + 1.95, ZS + 0.09, 0, { w: 768, h: 200, color: '#ffffff', bg: '#1f55b8', font: `700 92px ${JP}`, font2: `700 40px ${JP}`, lit: 0.8 });
+    plate('SHOT PA\n歩行者用階段  高速バスのりば', XO * 2, 0.92, 0, H + 1.95, ZS + 0.09, 0, { w: 768, h: 200, color: '#ffffff', bg: '#1f55b8', font: `700 92px ${JP}`, font2: `700 40px ${JP}`, lit: 0.7 });
     // the exit sign at the top, green and glowing, over the way out onto the bridge
     { const t = cvT(256, 96, (c, w, h) => { c.fillStyle = '#18a050'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffffff'; c.font = `700 34px ${JP}`; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('出口 → PA', 84, h / 2);
         c.fillRect(14, 14, 54, 68); c.fillStyle = '#18a050'; c.fillRect(20, 20, 42, 56); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(41, 30, 6, 0, 7); c.fill(); c.lineWidth = 6; c.strokeStyle = '#ffffff'; c.lineCap = 'round'; c.beginPath(); c.moveTo(39, 38); c.lineTo(35, 56); c.lineTo(46, 72); c.moveTo(35, 56); c.lineTo(26, 72); c.moveTo(38, 44); c.lineTo(50, 50); c.moveTo(38, 44); c.lineTo(28, 50); c.stroke(); });
-      const m = new THREE.MeshBasicMaterial({ map: t }); m.userData.lin = true; add(new THREE.PlaneGeometry(0.8, 0.3), m, BX - 0.3, H + 2.25, ZN + 0.12, 0, false); halo('#40ff90', 1.1, BX - 0.3, H + 2.25, ZN + 0.2, 0.35); }
+      const m = new THREE.MeshBasicMaterial({ map: t }); m.userData.lin = true; add(new THREE.PlaneGeometry(0.8, 0.3), m, BX - 0.3, H + 2.25, ZN + 0.12, 0, false); }
     // a cool light in the stairwell itself, flickering with the tube on the third landing
     const well = new THREE.PointLight(new THREE.Color('#d6e8ff').convertSRGBToLinear(), 1.3, 11, 1.6); well.position.set(0, 3 * RISE + 1.9, (ZN + ZS) / 2); wg.add(well);
     // tower colliders, in short pieces (never long enough to pull the camera in: the cage is see-through)
@@ -916,7 +938,7 @@
       panel(ZN - BZ0, 1.0, BX + sd * BW, H + 0.55, (BZ0 + ZN) / 2, PI / 2);
       for (let k = 0; k < 4; k++) p.addBox(BX + sd * (BW + 0.03), BZ0 + (ZN - BZ0) * (k + 0.5) / 4, 0.06, (ZN - BZ0) / 8, H - 1.4, 1e9);
     }
-    for (const z of [8.2, 11.2]) { const sx = BX + (z < 10 ? -BW : BW); bx(0.08, 0.9, 0.08, sx, H + 1.55, z, steel); bx(0.24, 0.12, 0.24, sx, H + 2.04, z, steelD); bx(0.18, 0.04, 0.18, sx, H + 1.97, z, warmM, false); halo('#ffd49a', 1.3, sx, H + 1.95, z, 0.45); pool('#ffc98a', 3.4, (sx + BX) / 2, H + 0.03, z, 0.18); }
+    for (const z of [8.2, 11.2]) { const sx = BX + (z < 10 ? -BW : BW); bx(0.08, 0.9, 0.08, sx, H + 1.55, z, steel); bx(0.24, 0.12, 0.24, sx, H + 2.04, z, steelD); bx(0.18, 0.04, 0.18, sx, H + 1.97, z, warmM, false); halo('#ffd49a', 1.3, sx, H + 1.95, z, 0.45); pool('#ffc98a', 3.4, (sx + BX) / 2, H + 0.03, z, 0.22); }
     // the walkway's end: a rail either side of where the bridge comes in, and below it a fence (no way in under the deck)
     for (const [x0, x1] of [[-2.5, BX - BW], [BE, 2.5]]) { const xc = (x0 + x1) / 2, w = x1 - x0; bx(w, 0.06, 0.06, xc, H + 1.05, BZ0, yellow, false); for (const x of [x0 + 0.05, xc, x1 - 0.05]) bx(0.06, 1.05, 0.06, x, H + 0.52, BZ0, steel); panel(w, 0.95, xc, H + 0.5, BZ0, 0); p.addBox(xc, BZ0, w / 2 + 0.05, 0.07, H - 1.4, 1e9); }
     for (const sd of [-1, 1]) { panel(2.6, 2.3, sd * 1.3, 1.2, BZ0 + 0.12, 0, '#4f6a58', 0.1); bx(0.08, 2.4, 0.08, sd * 2.6, 1.2, BZ0 + 0.12, steelD); p.addBox(sd * 1.38, BZ0 + 0.12, 1.36, 0.08, -1e9, H - 2); }
@@ -932,14 +954,16 @@
       bx(GX * 2 + 0.3, 0.14, 0.14, 0, 3.25, GZ, steel);
       bx(3.6, 0.95, 0.08, 0, 3.85, GZ, steelD);
       plate('SHOT PA\n歩行者通路  PEDESTRIAN WAY', 3.5, 0.88, 0, 3.85, GZ + 0.05, 0, { w: 768, h: 192, color: '#ffffff', bg: '#1f55b8', font: `700 92px ${JP}`, font2: `700 40px ${JP}`, lit: 0.7 });
-      bx(1.2, 0.05, 0.1, 0, 4.4, GZ + 0.25, steelD); bx(1.1, 0.03, 0.05, 0, 4.37, GZ + 0.27, tubeM, false); halo('#dff0ff', 1.6, 0, 4.36, GZ + 0.4, 0.35);
-      pool('#cfe6ff', 6, 0, 0.07, GZ + 0.6, 0.12); }
+      bx(1.2, 0.05, 0.1, 0, 4.4, GZ + 0.25, steelD); bx(1.1, 0.03, 0.05, 0, 4.37, GZ + 0.27, tubeM, false);
+      pool('#d6ecff', 6, 0, 0.07, GZ + 0.6, 0.18); }
     // vending machines facing down the trail (their glow is the first thing you see of the forecourt), a can bin, a bench
     { const VZ = 20.1, fronts = [['#f2f6ff', '#2457c5'], ['#fff4ea', '#d23a2a']];
-      fronts.forEach(([lit, body], k) => { const x = -3.3 - k * 1.08; bx(1.0, 1.85, 0.75, x, 0.93, VZ, E.mat(body, { rough: 0.4, metal: 0.2 })); bx(0.86, 1.05, 0.03, x, 1.2, VZ + 0.38, glowM(lit, 0.95), false); bx(0.86, 0.14, 0.03, x, 1.83, VZ + 0.38, glowM(body, 1.2), false);
-        for (let i = 0; i < 6; i++) bx(0.09, 0.2, 0.02, x - 0.33 + i * 0.13, 1.48 - (i % 2) * 0.33, VZ + 0.4, E.mat(['#c83a2a', '#2a7ac8', '#e8c040', '#3aa058', '#f0f0f0', '#7a3ab0'][(i + k * 2) % 6], { rough: 0.4 }), false);
+      const drinks = cvT(128, 160, (c, w, h) => { c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h); const cols = ['#c83a2a', '#2a7ac8', '#e8c040', '#3aa058', '#8a5a3a', '#7a3ab0', '#f08a2a', '#4ab0c8'];
+        for (let r = 0; r < 3; r++) for (let i = 0; i < 6; i++) { const x = 8 + i * 19.5, y = 10 + r * 50; c.fillStyle = cols[(i * 3 + r * 5) % cols.length]; c.fillRect(x, y, 13, 30); c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(x + 2, y + 3, 3, 22); c.fillStyle = '#d23a2a'; c.fillRect(x + 3, y + 36, 7, 5); } });
+      const drinkM = new THREE.MeshBasicMaterial({ map: drinks, color: new THREE.Color('#ffffff').convertSRGBToLinear().multiplyScalar(0.95) }); drinkM.userData.lin = true;
+      fronts.forEach(([lit, body], k) => { const x = -3.3 - k * 1.08; bx(1.0, 1.85, 0.75, x, 0.93, VZ, E.mat(body, { rough: 0.4, metal: 0.2 })); bx(0.86, 1.05, 0.03, x, 1.2, VZ + 0.38, drinkM, false); bx(0.86, 0.14, 0.03, x, 1.83, VZ + 0.38, glowM(body, 1.2), false);
         bx(0.6, 0.12, 0.08, x, 0.3, VZ + 0.36, steelD); halo(lit, 2.4, x, 1.2, VZ + 0.6, 0.32); });
-      pool('#e8f0ff', 5, -3.85, 0.08, VZ + 1.6, 0.3);
+      pool('#d6ecff', 5, -3.85, 0.08, VZ + 1.6, 0.18);
       p.addBox(-3.84, VZ, 1.1, 0.4);
       bx(0.5, 0.9, 0.42, -4.95, 0.45, VZ + 0.05, E.mat('#2f7a4a', { rough: 0.6 })); plate('空きかん\nCANS', 0.36, 0.22, -4.95, 0.65, VZ + 0.27, 0, { w: 192, h: 116, color: '#ffffff', font: `700 44px ${JP}`, font2: `700 30px ${JP}` }); p.addCircle(-4.95, VZ + 0.05, 0.32);
       E.bench(wg, -5.6, 22.9, PI / 2, 0); p.addBox(-5.6, 22.9, 0.35, 1.05); }
@@ -987,7 +1011,7 @@
         if (h > 0.3) p.addBox(CX - 0.1, z, 0.12, 0.55);   // the wall and its fence, in metre lengths
       }
       const fgeo = new THREE.BufferGeometry(); fgeo.setAttribute('position', new THREE.Float32BufferAttribute(fp, 3)); fgeo.setAttribute('uv', new THREE.Float32BufferAttribute(fu, 2)); fgeo.setIndex(fi); fgeo.computeVertexNormals();
-      wg.add(new THREE.Mesh(fgeo, meshM('#3f7a4c', 1, 1)));
+      wg.add(new THREE.Mesh(fgeo, meshM('#3f7a4c')));
       // drain holes every couple of metres, each with its rust-dark streak; tags along the wall
       const streak = cvT(32, 128, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(30,24,16,.75)'); gr.addColorStop(1, 'rgba(30,24,16,0)'); c.fillStyle = gr; c.fillRect(6, 0, 20, h); });
       const drains = []; for (let z = CZ0 + 3; z < CZ1 - 2; z += 2.4) if (wallH(z) > 1.0) { drains.push([CX + 0.06, 0.55, z, 0, PI / 2]); decal(streak, 0.16, 0.5, CX + 0.012, 0.28, z, PI / 2); }
@@ -999,32 +1023,32 @@
     /* ---- a little fox shrine in the trees, facing the trail ---- */
     { const SZ = 34.5, red = E.mat('#c23a22', { rough: 0.6 }), black = E.mat('#1c1a18', { rough: 0.6 }), stone = E.mat('#9c978c', { map: E.tex('rock', 0.5, 0.5), rough: 0.95 }), wood = E.mat('#5a3a26', { rough: 0.8 });
       // the torii
-      for (const dz of [-0.75, 0.75]) { add(new THREE.CylinderGeometry(0.085, 0.1, 2.1, 10), red, -2.95, 1.05, SZ + dz); add(new THREE.CylinderGeometry(0.11, 0.11, 0.18, 10), black, -2.95, 0.09, SZ + dz); p.addCircle(-2.95, SZ + dz, 0.14); }
+      for (const dz of [-0.75, 0.75]) { addM(new THREE.CylinderGeometry(0.085, 0.1, 2.1, 10), red, -2.95, 1.05, SZ + dz); addM(new THREE.CylinderGeometry(0.11, 0.11, 0.18, 10), black, -2.95, 0.09, SZ + dz); p.addCircle(-2.95, SZ + dz, 0.14); }
       bx(0.16, 0.12, 2.0, -2.95, 2.1, SZ, red); bx(0.22, 0.07, 2.2, -2.95, 2.19, SZ, black); bx(0.09, 0.09, 1.8, -2.95, 1.72, SZ, red); bx(0.05, 0.3, 0.2, -2.92, 1.92, SZ, black);
       // stepping stones, two lit lanterns, two foxes in red bibs, the shrine on its stone base with a rope across it
       for (const x of [-3.6, -4.3, -5.0, -5.7]) bx(0.48, 0.06, 0.62, x, 0.03, SZ + (rr() - 0.5) * 0.08, stone);
       for (const dz of [-0.95, 0.95]) {
-        const x = -4.4, z = SZ + dz; bx(0.42, 0.12, 0.42, x, 0.06, z, stone); add(new THREE.CylinderGeometry(0.08, 0.11, 0.62, 8), stone, x, 0.43, z); bx(0.34, 0.08, 0.34, x, 0.78, z, stone);
+        const x = -4.4, z = SZ + dz; bx(0.42, 0.12, 0.42, x, 0.06, z, stone); addM(new THREE.CylinderGeometry(0.08, 0.11, 0.62, 8), stone, x, 0.43, z); bx(0.34, 0.08, 0.34, x, 0.78, z, stone);
         bx(0.26, 0.24, 0.26, x, 0.94, z, stone); bx(0.18, 0.14, 0.27, x, 0.95, z, warmM, false); bx(0.27, 0.14, 0.18, x, 0.95, z, warmM, false);
-        add(new THREE.ConeGeometry(0.3, 0.2, 4), stone, x, 1.16, z, PI / 4); add(new THREE.SphereGeometry(0.05, 8, 6), stone, x, 1.29, z);
-        halo('#ffc070', 0.9, x, 0.95, z, 0.5); p.addCircle(x, z, 0.24);
+        addM(new THREE.ConeGeometry(0.3, 0.2, 4), stone, x, 1.16, z, PI / 4); addM(new THREE.SphereGeometry(0.05, 8, 6), stone, x, 1.29, z);
+        p.addCircle(x, z, 0.24);
         const fx = -5.65, fz = SZ + dz * 0.62; bx(0.34, 0.5, 0.34, fx, 0.25, fz, stone);
-        add(new THREE.CylinderGeometry(0.09, 0.14, 0.4, 8), white, fx, 0.7, fz); add(new THREE.SphereGeometry(0.095, 10, 8), white, fx + 0.02, 0.95, fz);
-        add(new THREE.ConeGeometry(0.05, 0.14, 6), white, fx + 0.11, 0.93, fz, 0).rotation.z = -PI / 2;
-        for (const e of [-0.05, 0.05]) add(new THREE.ConeGeometry(0.03, 0.1, 5), white, fx, 1.07, fz + e);
-        add(new THREE.CylinderGeometry(0.12, 0.15, 0.12, 10, 1, true), red, fx, 0.82, fz); p.addCircle(fx, fz, 0.24);
+        addM(new THREE.CylinderGeometry(0.09, 0.14, 0.4, 8), white, fx, 0.7, fz); addM(new THREE.SphereGeometry(0.095, 10, 8), white, fx + 0.02, 0.95, fz);
+        addM(new THREE.ConeGeometry(0.05, 0.14, 6), white, fx + 0.11, 0.93, fz, 0, true, 0, -PI / 2);
+        for (const e of [-0.05, 0.05]) addM(new THREE.ConeGeometry(0.03, 0.1, 5), white, fx, 1.07, fz + e);
+        addM(new THREE.CylinderGeometry(0.12, 0.15, 0.12, 10, 1, true), red, fx, 0.82, fz); p.addCircle(fx, fz, 0.24);
       }
       const HX = -6.8; bx(1.1, 0.5, 1.0, HX, 0.25, SZ, stone); bx(0.72, 0.62, 0.66, HX, 0.81, SZ, wood);
       for (const sd of [-1, 1]) bx(0.6, 0.05, 0.98, HX + sd * 0.25, 1.24, SZ, E.mat('#4a7a6a', { rough: 0.6, metal: 0.3 })).rotation.z = -sd * 0.62;
       bx(0.03, 0.4, 0.44, HX + 0.37, 0.82, SZ, E.mat('#2a1a10', { rough: 0.7 })); bx(0.02, 0.36, 0.4, HX + 0.385, 0.82, SZ, glowM('#ffb060', 0.35), false);
-      add(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), E.mat('#d8c890', { rough: 0.9 }), HX + 0.42, 1.12, SZ, 0).rotation.x = PI / 2;
+      addM(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), E.mat('#d8c890', { rough: 0.9 }), HX + 0.42, 1.12, SZ, 0, true, PI / 2);
       for (const dz of [-0.25, 0, 0.25]) bx(0.01, 0.16, 0.06, HX + 0.43, 0.98, SZ + dz, white, false);
       bx(0.3, 0.22, 0.24, HX + 0.62, 0.11, SZ, wood);
       p.addBox(HX, SZ, 0.6, 0.55);
       // red banners up the approach
       const nob = cvT(64, 320, (c, w, h) => { c.fillStyle = '#c8281c'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffffff'; c.font = `700 34px ${JP}`; c.textAlign = 'center'; c.textBaseline = 'middle'; [...'正一位稲荷大明神'].forEach((ch, i) => c.fillText(ch, w / 2, 26 + i * 36)); });
       const nm = E.mat('#ffffff', { map: nob, rough: 0.8 }, true); nm.side = THREE.DoubleSide;
-      for (const [x, z] of [[-3.5, SZ - 1.55], [-3.5, SZ + 1.55], [-5.0, SZ - 1.45], [-5.0, SZ + 1.45]]) { add(new THREE.CylinderGeometry(0.02, 0.02, 2.5, 5), E.mat('#3a3a3a'), x, 1.25, z); add(new THREE.PlaneGeometry(0.36, 1.8), nm, x, 1.4, z + (z < SZ ? 0.2 : -0.2), PI / 2, false); p.addCircle(x, z, 0.06); } }
+      for (const [x, z] of [[-3.5, SZ - 1.55], [-3.5, SZ + 1.55], [-5.0, SZ - 1.45], [-5.0, SZ + 1.45]]) { addM(new THREE.CylinderGeometry(0.02, 0.02, 2.5, 5), E.mat('#3a3a3a'), x, 1.25, z); addM(new THREE.PlaneGeometry(0.36, 1.8), nm, x, 1.4, z + (z < SZ ? 0.2 : -0.2), PI / 2, false); p.addCircle(x, z, 0.06); } }
 
     /* ---- utility poles along the trail: wires overhead, a small lamp each, plates counting down the metres ---- */
     { const PX = -2.75, PZ = [78, 64, 51, 38, 27.6], pole = E.mat('#a29f97', { map: E.tex('concrete', 0.3, 2), rough: 0.9 });
@@ -1034,13 +1058,13 @@
         bx(1.6, 0.1, 0.1, PX, 7.9, z, steelD); bx(0.7, 0.08, 0.08, PX + 0.2, 6.85, z, steelD);
         for (const dx of [-0.7, 0, 0.7]) ins.push([PX + dx, 8.0, z]);
         bx(0.9, 0.06, 0.06, PX + 0.45, 5.35, z, steelD).rotation.z = 0.12; bx(0.42, 0.11, 0.2, PX + 0.98, 5.4, z, white);
-        const tb = i === 1 ? add(new THREE.BoxGeometry(0.36, 0.02, 0.14), glowM('#e4f2ff', 1.2), PX + 0.98, 5.34, z, 0, false) : (bx(0.36, 0.02, 0.14, PX + 0.98, 5.34, z, tubeM, false), null);
-        lamps.push({ tb, h: halo('#dff0ff', 1.4, PX + 0.98, 5.3, z, 0.4), p: pool('#d6ecff', 5, PX + 1.2, 0.07, z, 0.16), pole: i });
+        const tb = i === 1 ? add(new THREE.BoxGeometry(0.36, 0.02, 0.14), glowM('#e4f2ff', 1.2, true), PX + 0.98, 5.34, z, 0, false) : (bx(0.36, 0.02, 0.14, PX + 0.98, 5.34, z, tubeM, false), null);
+        lamps.push({ tb, h: halo('#dff0ff', 1.4, PX + 0.98, 5.3, z, 0.4), p: pool('#d6ecff', 5, PX + 1.2, 0.07, z, 0.18, i === 1), pole: i });
         plate(`SHOT\n${12 + i}`, 0.18, 0.3, PX, 2.1, z + 0.17, 0, { w: 112, h: 186, color: '#1a1a1c', bg: '#f0eee6', font: `700 40px ${JP}` });
-        if (i % 2 === 0) { const m = E.mat('#ffffff', { map: tiger, rough: 0.6 }); m.map.repeat.set(1, 2); add(new THREE.CylinderGeometry(0.19, 0.2, 1.8, 10, 1, true), m, PX, 0.9, z); }
+        if (i % 2 === 0) { const m = E.mat('#ffffff', { map: tiger, rough: 0.6 }); m.map.repeat.set(1, 2); addM(new THREE.CylinderGeometry(0.19, 0.2, 1.8, 10, 1, true), m, PX, 0.9, z); }
         p.addCircle(PX, z, 0.2);
         const dist = Math.round((z - ZS) / 5) * 5;
-        if (i < 3) plate(`SHOT PA  ↑  ${dist} m\n歩行者通路`, 0.9, 0.46, PX + 0.12, 2.85, z + 0.22, 0.25, { w: 384, h: 196, color: '#ffffff', bg: '#1f55b8', font: `700 58px ${JP}`, font2: `700 38px ${JP}`, lit: 0.5 });
+        if (i < 3) plate(`SHOT PA  ↑  ${dist} m\n歩行者通路`, 0.9, 0.46, PX + 0.12, 2.85, z + 0.22, 0.25, { w: 384, h: 196, color: '#ffffff', bg: '#1f55b8', font: `700 58px ${JP}`, font2: `700 38px ${JP}`, lit: 0.7 });
       });
       inst(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 8), white, ins, false);
       // the wires: two crossed ribbons each, so they show from any side; the last span drops to the tower
@@ -1052,7 +1076,7 @@
       const wgeo = new THREE.BufferGeometry(); wgeo.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wgeo.setIndex(wi); wgeo.computeVertexNormals();
       const wm = E.mat('#1a1a1c', { rough: 0.6 }, true); wm.side = THREE.DoubleSide; wg.add(new THREE.Mesh(wgeo, wm)); }
 
-    BB.flush();
+    flushPlates(); flushM();
     const ROUTE = [[0, 26.4], [-0.2, 25], [-0.45, 23.6, 1], [-0.7, 22.2, 1], [-LC, 20.8, 1], [-LC, 19.3, 1], [-LC, 13.75, 1], [LC, 13.75, 1], [LC, 17.65, 1], [-LC, 17.65, 1], [-LC, 13.75, 1], [LC, 13.75, 1], [LC, 17.65, 1], [-LC, 17.65, 1], [-LC, 13.75, 1], [-0.5, 13.2, 1], [-0.4, 12], [-0.35, 10.5], [-0.3, 9], [-0.25, 7.5], [-0.15, 6], [0, 4.5], [0, 3], [0, 1.5], [0, 0]];   // the last nine are the bridge and walkway: a warp to the place lands at the top of the stairs
     return {
       group: wg, route: ROUTE,
