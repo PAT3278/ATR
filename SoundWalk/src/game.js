@@ -697,6 +697,7 @@
   const HALL = { W: 9, D: 12, H: 7, K: 3, TOP: 1.3 };   // K: the table's scale; TOP: the cloth's height, kept low so you see over the rails
   const hallAt = (() => {
     const { W, D } = HALL, CAP = 3, R1 = 38;
+    const hyp = (a, b) => Math.sqrt(a * a + b * b);   // Math.hypot is several times slower, and this runs half a million times
     const raster = (X0, Z0, size, G) => {   // how far each cell of a square is from anything in the way (CAP at most); returns a lookup
       const n = Math.round(size / G), free = new Float32Array(n * n).fill(CAP), at = (i, o) => o + (i + 0.5) * G;
       const near = (x, z, r) => x > X0 - r - CAP && x < X0 + size + r + CAP && z > Z0 - r - CAP && z < Z0 + size + r + CAP;
@@ -704,30 +705,39 @@
         const i0 = Math.max(0, Math.floor((x0 - CAP - X0) / G)), i1 = Math.min(n - 1, Math.floor((x1 + CAP - X0) / G)), j0 = Math.max(0, Math.floor((z0 - CAP - Z0) / G)), j1 = Math.min(n - 1, Math.floor((z1 + CAP - Z0) / G));
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const d = f(at(i, X0), at(j, Z0)); if (d < free[j * n + i]) free[j * n + i] = d; }
       };
-      const seg = (a, b, hw) => { if (!near((a.x + b.x) / 2, (a.z + b.z) / 2, hw + Math.hypot(b.x - a.x, b.z - a.z))) return; const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1e-9; paint(Math.min(a.x, b.x) - hw, Math.min(a.z, b.z) - hw, Math.max(a.x, b.x) + hw, Math.max(a.z, b.z) + hw, (x, z) => { const t = clamp(((x - a.x) * dx + (z - a.z) * dz) / L2, 0, 1); return Math.hypot(x - a.x - t * dx, z - a.z - t * dz) - hw; }); };
+      const seg = (a, b, hw) => { if (!near((a.x + b.x) / 2, (a.z + b.z) / 2, hw + hyp(b.x - a.x, b.z - a.z))) return; const dx = b.x - a.x, dz = b.z - a.z, L2 = dx * dx + dz * dz || 1e-9; paint(Math.min(a.x, b.x) - hw, Math.min(a.z, b.z) - hw, Math.max(a.x, b.x) + hw, Math.max(a.z, b.z) + hw, (x, z) => { const t = clamp(((x - a.x) * dx + (z - a.z) * dz) / L2, 0, 1); return hyp(x - a.x - t * dx, z - a.z - t * dz) - hw; }); };
       for (const p of places) p.path.forEach((q, k, a) => { if (k) seg(a[k - 1], q, p.road ? p.road.hw : 2.2); });
       loopPath.forEach((q, k, a) => { if (k) seg(a[k - 1], q, 2.2); });
       for (const r of ring.roads) for (let k = 0; k < r.N; k++) { const q = { x: r.X[k], z: r.Z[k] }; seg(q, q, r.HW[k] + 1.5); }   // the deck and its walls, overhead or not
       for (const c of circles) seg(c, c, c.r);
-      for (const b of boxes) { const e = Math.hypot(b.hx, b.hz), c = b.c ?? 1, s = b.s ?? 0; if (near(b.x, b.z, e)) paint(b.x - e, b.z - e, b.x + e, b.z + e, (x, z) => { const dx = x - b.x, dz = z - b.z; return Math.hypot(Math.max(0, Math.abs(dx * c - dz * s) - b.hx), Math.max(0, Math.abs(dx * s + dz * c) - b.hz)); }); }
+      for (const b of boxes) { const e = hyp(b.hx, b.hz), c = b.c ?? 1, s = b.s ?? 0; if (near(b.x, b.z, e)) paint(b.x - e, b.z - e, b.x + e, b.z + e, (x, z) => { const dx = x - b.x, dz = z - b.z; return hyp(Math.max(0, Math.abs(dx * c - dz * s) - b.hx), Math.max(0, Math.abs(dx * s + dz * c) - b.hz)); }); }
       for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        const k = j * n + i, x = at(i, X0), z = at(j, Z0); free[k] = Math.min(free[k], Math.hypot(x, z) - PLAZA_R - 0.6);
+        const k = j * n + i, x = at(i, X0), z = at(j, Z0); free[k] = Math.min(free[k], hyp(x, z) - PLAZA_R - 0.6);
         if (free[k] > 0 && places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) free[k] = -1;
       }
       return (x, z) => { const i = Math.round((x - X0) / G - 0.5), j = Math.round((z - Z0) / G - 0.5); return i < 0 || j < 0 || i >= n || j >= n ? -1e9 : free[j * n + i]; };
     };
-    let look = raster(-R1, -R1, 2 * R1, 0.5), step = 0.25, best = { m: -1e9 };
+    let look = raster(-R1, -R1, 2 * R1, 0.5), us, vs, best = { m: -1e9 };
+    const grid = (step) => { us = []; vs = []; for (let u = -W / 2; u <= W / 2 + 1e-6; u += step) us.push(u); for (let v = -D / 2; v <= D / 2 + 1e-6; v += step) vs.push(v); };
     const tryAt = (a, R0, dy) => {   // a: bearing in degrees, R0: distance out, dy: turn off facing the fountain
       const ux = Math.sin((a * Math.PI) / 180), uz = Math.cos((a * Math.PI) / 180), yaw = Math.atan2(-ux, -uz) + dy, c = Math.cos(yaw), s = Math.sin(yaw), x0 = ux * R0, z0 = uz * R0; let m = CAP;
-      for (let u = -W / 2; u <= W / 2 + 1e-6 && m > best.m; u += step) for (let v = -D / 2; v <= D / 2 + 1e-6 && m > best.m; v += step) m = Math.min(m, look(x0 + u * c + v * s, z0 - u * s + v * c));
+      const at = (u, v) => { m = Math.min(m, look(x0 + u * c + v * s, z0 - u * s + v * c)); return m > best.m; };
+      // the walls first: the least room is nearly always there, so most spots are thrown out after a few looks; only a spot
+      // that beats the best so far has its whole floor looked at (for anything standing wholly inside it)
+      const nu = us.length - 1, nv = vs.length - 1;
+      for (let i = 0; i <= nu && m > best.m; i++) at(us[i], vs[0]) && at(us[i], vs[nv]);
+      for (let j = 0; j <= nv && m > best.m; j++) at(us[0], vs[j]) && at(us[nu], vs[j]);
+      for (let i = 1; i < nu && m > best.m; i++) for (let j = 1; j < nv && m > best.m; j++) at(us[i], vs[j]);
       if (m > best.m) best = { m, x: x0, z: z0, yaw, ux, uz, a, R0, dy };
     };
+    grid(0.5);   // the first pass looks at the footprint on the raster's own half-metre spacing
     for (let a = 0; a < 360; a += 2) for (let R0 = PLAZA_R + 1 + D / 2; R0 < R1 - D / 2; R0 += 0.5) for (let k = -4; k <= 4; k++) tryAt(a, R0, k * 0.1);
-    const b0 = best; look = raster(b0.x - 10, b0.z - 10, 20, 0.2); step = 0.2; best = { m: -1e9 };   // then a finer look round the best, on a finer grid
+    const b0 = best; look = raster(b0.x - 10, b0.z - 10, 20, 0.2); grid(0.2); best = { m: -1e9 };   // then a finer look round the best, on a finer grid
     for (let a = -8; a <= 8; a++) for (let r = -8; r <= 8; r++) for (let k = -4; k <= 4; k++) tryAt(b0.a + a / 4, b0.R0 + r / 8, b0.dy + k / 40);
     const c = Math.cos(best.yaw), s = Math.sin(best.yaw);
     best.local = (x, z) => { const dx = x - best.x, dz = z - best.z; return { x: dx * c - dz * s, z: dx * s + dz * c }; };
     best.near = (x, z, m) => { const l = best.local(x, z); return Math.abs(l.x) < W / 2 + m && Math.abs(l.z) < D / 2 + m; };   // for keeping trees and piers out
+    if (best.m < 0.1) console.warn(`pool hall: only ${best.m.toFixed(2)} m to spare round it at (${best.x.toFixed(1)}, ${best.z.toFixed(1)}): something moved in; make HALL smaller`);   // below 0 it overlaps
     return best;
   })();
   {
@@ -776,8 +786,10 @@
     const meshes = state.balls.map((b) => { const m = new THREE.Mesh(ballGeo, new THREE.MeshStandardMaterial({ map: ballTex(b.n), roughness: 0.18, metalness: 0 })); m.material.userData.lin = true; m.castShadow = true; TG.add(m); return m; });
     for (const [px2, pz, pr] of PS.POCK) { const pk = new THREE.Mesh(new THREE.CircleGeometry(pr * 0.95, 18), mat('#070707', { rough: 1 })); pk.rotation.x = -Math.PI / 2; pk.position.set(px2, TOP + 0.002, pz); TG.add(pk); }
     const IX = W / 2 - 0.65, IZ = D / 2 - 0.65;   // how far in from the walls a camera may go
-    hallAt.table = { S, G: TG, K, TOP, state, meshes, inside: (lx, lz) => Math.abs(TX + K * lz) < IX && Math.abs(TZ - K * lx) < IZ };   // inside: a table-local point, kept off the walls
-    hallAt.syncBalls = () => { state.balls.forEach((b, i) => { const m = meshes[i]; if (b.in) { if (b.dropT === undefined) b.dropT = 0; m.visible = b.dropT < 0.6; m.position.set(b.px, TOP + PS.R - b.dropT * 0.25, b.pz); return; } b.dropT = undefined; m.visible = true; m.position.set(b.x, TOP + PS.R, b.z); }); };
+    hallAt.table = { S, G: TG, K, TOP, state, meshes, inside: (lx, lz) => Math.abs(TX + K * lz) < IX && Math.abs(TZ - K * lx) < IZ,   // inside: a table-local point, kept off the walls
+      rack() { this.state = PS.rack(); meshes.forEach((m) => m.quaternion.identity()); hallAt.syncBalls(); },   // a fresh rack is a new state object: everything reads table.state, never a copy of it
+      walls: [(TZ - D / 2 + 0.3) / K, (TZ + D / 2 - 0.3) / K, (-W / 2 + 0.3 - TX) / K, (W / 2 - 0.3 - TX) / K] };   // the hall's inner faces in table units (x0, x1, z0, z1), for the cue
+    hallAt.syncBalls = () => { hallAt.table.state.balls.forEach((b, i) => { const m = meshes[i]; if (b.in) { if (b.dropT === undefined) b.dropT = 0; m.visible = b.dropT < 0.6; m.position.set(b.px, TOP + PS.R - b.dropT * 0.25, b.pz); return; } b.dropT = undefined; m.visible = true; m.position.set(b.x, TOP + PS.R, b.z); }); };
     hallAt.syncBalls();
     for (const z of [-1.2, -0.8]) { const cueS = put(new THREE.CylinderGeometry(0.012 * K, 0.02 * K, 1.45 * K, 8), mat('#c9a06a', { rough: 0.5 }), -W / 2 + 0.45, 0.725 * K, z); cueS.rotation.z = 0.035; }   // two of its cues stood against the wall
     // the lamp over it: a long green shade glowing underneath, hung from the roof on two rods
@@ -785,8 +797,7 @@
     put(new THREE.BoxGeometry(1.6, 0.18, 0.5), mat('#1f5a40', { rough: 0.5 }), 0, 2.25, 0, TG); put(new THREE.BoxGeometry(1.5, 0.04, 0.42), lampM, 0, 2.15, 0, TG);
     const lampTop = TW + (2.34 - TOP) * K;
     for (const sd of [-1, 1]) put(new THREE.CylinderGeometry(0.03, 0.03, H - lampTop, 6), trim, TX, (H + lampTop) / 2, TZ + sd * 0.6 * K);
-    const tl = new THREE.PointLight(lin('#ffe2b0'), 1.8, 7 * K, 1.6); tl.position.set(TX, TW + (2.0 - TOP) * K, TZ); S.add(tl);
-    const fill = new THREE.PointLight(lin('#ffcf9a'), 0.5, 12, 1.8); fill.position.set(0, SF - 0.4, D / 2 - 1.5); S.add(fill);   // and a little light by the door
+    const tl = new THREE.PointLight(lin('#ffe2b0'), 1.8, 7 * K, 1.6); tl.position.set(TX, TW + (2.0 - TOP) * K, TZ); S.add(tl);   // the hall's one light: every light costs every lit surface in the world
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(W - 1.2, 1.1), new THREE.MeshBasicMaterial({ map: textTex('POOL · BILLIARDS', { w: 1024, h: 140, font: '700 74px "Hind",sans-serif', color: '#c8ffe0', glow: '#4fff9a' }), transparent: true, depthWrite: false }));
     sign.position.set(0, (H + SF) / 2 + 0.1, D / 2 + 0.03); S.add(sign);
     scene.add(S);
@@ -794,14 +805,18 @@
     const addB = (lx, lz, hx, hz, o) => { const w = wpt(lx, lz), b = { x: w.x, z: w.z, hx, hz, c, s: sn, ...o }; boxes.push(b); return b; };
     addB(0, -D / 2 + 0.15, W / 2, 0.2); addB(-W / 2 + 0.15, 0, 0.2, D / 2); addB(W / 2 - 0.15, 0, 0.2, D / 2);
     addB(-(1.4 + W / 2) / 2, D / 2, (W / 2 - 1.4) / 2, 0.15); addB((1.4 + W / 2) / 2, D / 2, (W / 2 - 1.4) / 2, 0.15);   // the shopfront, with the door between
+    addB(-W / 2 + 0.45, -1.0, 0.16, 0.3, { noCam: true });   // the feet of the cues against the wall
     const tb = addB(TX, TZ, 0.79 * K, 1.39 * K, { noCam: true });   // the table stops you, but the camera may pass over it...
     lids.push({ ...tb, y: TW + 0.1 * K + 0.4 });   // ...keeping above its rails
     const at = wpt(0, D / 2 - 1.0);   // just inside the door, at the head of the table
     interact.push({ kind: 'pool', x: at.x, z: at.z, sx: at.x, sz: at.z, r: 3, mark: 2.6 });
     rooms.push({ x: hallAt.x, z: hallAt.z, c, s: sn, hx: W / 2, hz: D / 2, y: H });
     hallAt.door = wpt(0, D / 2 + 1.5);
-    const dw = wpt(0, D / 2 + 0.2), dl = Math.hypot(dw.x, dw.z), rim = { x: (dw.x / dl) * (PLAZA_R - 0.3), z: (dw.z / dl) * (PLAZA_R - 0.3) };   // a short walk over from the plaza
-    layTrail([rim, { x: (rim.x + dw.x) / 2, z: (rim.z + dw.z) / 2 }, dw], { w: 1.5 });
+    // a short walk over from the plaza, straight out of the door along the hall's own axis (so walking up it takes you in
+    // square to the door) until it meets the plaza's rim
+    const dw = wpt(0, D / 2 + 0.2), ox = sn, oz = c, pb = dw.x * ox + dw.z * oz, pr = PLAZA_R - 0.3, pt = -pb - Math.sqrt(Math.max(0, pb * pb - (dw.x * dw.x + dw.z * dw.z - pr * pr)));
+    const rim = { x: dw.x + ox * pt, z: dw.z + oz * pt };
+    layTrail([dw, { x: (rim.x + dw.x) / 2, z: (rim.z + dw.z) / 2 }, rim], { w: 1.5 });
   }
 
   /* ================= ring road ================= */
@@ -1655,17 +1670,17 @@
   function startPool() {
     const T = hallAt.table; if (!T || !PSIM) return;
     mode = 'pool'; keys.clear(); auto = null; document.body.classList.add('busy'); $('#prompt').hidden = true; lastFocus = undefined;
-    if (T.state.balls.every((b) => !b.n || b.in)) { T.state = PSIM.rack(); }
+    if (T.state.balls.every((b) => !b.n || b.in)) T.rack();
     if (!T.aimG) {   // the aim line, a ghost ball where it meets, and the cue
       const lm = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }); lm.userData.lin = true;
       const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(12), 3));
       T.aimLine = new THREE.LineSegments(lg, lm); T.G.add(T.aimLine);
       T.ghost = new THREE.Mesh(new THREE.RingGeometry(PSIM.R * 0.85, PSIM.R, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })); T.ghost.rotation.x = -Math.PI / 2; T.G.add(T.ghost);
       T.aimG = new THREE.Group(); T.G.add(T.aimG);
-      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.014, 1.45, 10), mat('#b98a56', { rough: 0.45 })); stick.rotation.z = Math.PI / 2; stick.position.x = -0.725; stick.castShadow = true;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.007, 1.45, 10), mat('#b98a56', { rough: 0.45 })); stick.rotation.z = Math.PI / 2; stick.position.x = -0.725; stick.castShadow = true;
       const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0072, 0.0072, 0.02, 8), mat('#3a6ab0', { rough: 0.6 })); tip.rotation.z = Math.PI / 2; tip.position.x = -0.005;
       const butt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.0145, 0.4, 10), mat('#2a1610', { rough: 0.4 })); butt.rotation.z = Math.PI / 2; butt.position.x = -1.25;
-      T.cuePivot = new THREE.Group(); T.cuePivot.add(stick, tip, butt); T.cuePivot.rotation.z = -0.07; T.aimG.add(T.cuePivot);
+      T.cuePivot = new THREE.Group(); T.cuePivot.add(stick, tip, butt); T.aimG.add(T.cuePivot);   // the shaft's top turns to -x: thick at the butt
     }
     const c = T.state.balls[0];
     pool = { aim: Math.atan2(-c.z, PSIM.FOOT - c.x), hold: false, holdT: 0, power: 0, moving: false, shots: T.state.shotsSoFar || 0, keyAim: 0, drag: null, camP: camera.position.clone(), camL: camLook.clone(), last: performance.now(), done: false };
@@ -1683,7 +1698,7 @@
   }
   function poolHold(on) {
     if (!pool) return;
-    if (on) { if (pool.done) { hallAt.table.state = PSIM.rack(); pool.done = false; pool.shots = 0; poolHud(''); return; } if (!pool.moving) { pool.hold = true; pool.holdT = 0; } return; }
+    if (on) { if (pool.done) { hallAt.table.rack(); pool.done = false; pool.shots = 0; pool.aim = 0; poolHud(''); return; } if (!pool.moving) { pool.hold = true; pool.holdT = 0; } return; }
     if (!pool.hold) return;
     const T = hallAt.table, c = T.state.balls[0], sp = 0.35 + pool.power * 3.9;
     c.vx = Math.cos(pool.aim) * sp; c.vz = Math.sin(pool.aim) * sp; pool.shots++; pool.moving = true; pool.hold = false; pool.power = 0; poolHud('');
@@ -1699,7 +1714,8 @@
     } else {                     // down behind the cue ball, looking along the shot; near a wall it comes in and climbs, to stay inside
       pd.set(Math.cos(pool.aim), 0, Math.sin(pool.aim));
       let b = 1.05; while (b > 0.25 && !T.inside(c.x - pd.x * b, c.z - pd.z * b)) b -= 0.05;
-      pv.set(c.x - pd.x * b, T.TOP + 0.42 + (1.05 - b) * 0.6, c.z - pd.z * b); T.G.localToWorld(pv);
+      const overCue = T.TOP + PSIM.R + (pool.lift || 0) + Math.max(0, b - PSIM.R - 0.02) * Math.tan(pool.tilt || 0.07) + 0.14;   // above the cue when its butt is jacked up
+      pv.set(c.x - pd.x * b, Math.max(T.TOP + 0.42 + (1.05 - b) * 0.6, overCue), c.z - pd.z * b); T.G.localToWorld(pv);
       pl.set(c.x + pd.x * 0.9, T.TOP - 0.02, c.z + pd.z * 0.9); T.G.localToWorld(pl);
     }
     const k = 1 - Math.exp(-dt * 6); pool.camP.lerp(pv, k); pool.camL.lerp(pl, k);
@@ -1731,7 +1747,16 @@
       a.setXYZ(0, c.x, y, c.z); a.setXYZ(1, ex, y, ez);
       if (h.b) { const nx = h.b.x - ex, nz = h.b.z - ez, nl = Math.hypot(nx, nz) || 1; a.setXYZ(2, h.b.x, y, h.b.z); a.setXYZ(3, h.b.x + (nx / nl) * 0.3, y, h.b.z + (nz / nl) * 0.3); } else { a.setXYZ(2, 0, -9, 0); a.setXYZ(3, 0, -9, 0); }
       a.needsUpdate = true; T.ghost.position.set(ex, T.TOP + 0.003, ez);
-      T.aimG.position.set(c.x, y, c.z); T.aimG.rotation.y = -pool.aim; T.cuePivot.position.x = -(PSIM.R + 0.02 + pool.power * 0.22);
+      // the cue: three times as long as a real one, so it is tipped up just enough to pass over the cushion and the rail behind
+      // the ball (steeply when the ball is near them, as a player jacks the butt up), drawn back along its own line, and
+      // shortened when the hall's wall is nearer than its butt would reach. poolCam keeps above it.
+      const o0 = PSIM.R + 0.02, back = (x0, x1, z0, z1) => Math.min(dx < -1e-6 ? (x1 - c.x) / -dx : dx > 1e-6 ? (c.x - x0) / dx : 9, dz < -1e-6 ? (z1 - c.z) / -dz : dz > 1e-6 ? (c.z - z0) / dz : 9);   // how far behind the ball to a box's side
+      const tr = back(-1.25, 1.25, -0.65, 0.65) - o0, tc = back(-PSIM.L / 2, PSIM.L / 2, -PSIM.W / 2, PSIM.W / 2) - o0;   // from the tip to the rail's and the cushion's inner edges
+      const tilt = Math.min(0.85, Math.max(0.07, Math.atan2(0.995 - y, Math.max(0.01, tr)), Math.atan2(0.935 - y, Math.max(0.01, tc))));   // over the rails' tops (0.98) and the cushions' (0.92)
+      const ta = Math.tan(tilt), lift = Math.max(0, 0.995 - y - Math.max(0, tr) * ta, 0.935 - y - Math.max(0, tc) * ta);   // a ball frozen on the cushion: the tip rides up over it
+      const pull = pool.power * 0.22, cs = Math.cos(tilt); pool.tilt = tilt; pool.lift = lift;
+      T.aimG.position.set(c.x, y, c.z); T.aimG.rotation.y = -pool.aim; T.cuePivot.rotation.z = -tilt; T.cuePivot.position.set(-(o0 + pull * cs), lift + pull * Math.sin(tilt), 0);
+      T.cuePivot.scale.x = clamp((back(...T.walls) - 0.04 - o0 - pull * cs) / (1.45 * cs), 0.3, 1);
     }
   }
   $('#miShoot').addEventListener('pointerdown', (e) => { if (mode === 'pool') { e.preventDefault(); poolHold(true); } else if (mode === 'ride') { e.preventDefault(); teaPress(); } });
@@ -2322,14 +2347,24 @@
       let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * cd, cy = ty + Math.sin(camPitch) * cd, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * cd, ahead = 0;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
       else if (!drv) {   // on foot: a wall between you and the camera pulls the camera in front of it (inside a shop it stays inside)
-        let k = camBlock(tx, tz, cx, cz, ty), inRoom = false;
+        const inside = (r, x, z) => { const dx = x - r.x, dz = z - r.z; return Math.abs(dx * r.c - dz * r.s) < r.hx && Math.abs(dx * r.s + dz * r.c) < r.hz; };
+        for (const r of rooms) if (inside(r, P.x, P.z)) {   // in a room the over-the-shoulder offset may not carry the camera's pivot into the wall beside you (camBlock lets a camera that starts in a wall be)
+          const ex = tx - r.x, ez = tz - r.z, u = ex * r.c - ez * r.s, v = ex * r.s + ez * r.c, du = clamp(u, 0.35 - r.hx, r.hx - 0.35) - u, dv = clamp(v, 0.35 - r.hz, r.hz - 0.35) - v;
+          const mx = du * r.c + dv * r.s, mz = -du * r.s + dv * r.c; tx += mx; tz += mz; cx += mx; cz += mz;
+        }
+        let k = camBlock(tx, tz, cx, cz, ty), inRoom = null;
         for (const r of rooms) {   // inside a shop the camera stays inside it, even when the line runs out through the door
+          if (!inside(r, P.x, P.z)) continue;   // (whether you are in it, not where the shoulder offset points)
           const L = (x, z) => { const dx = x - r.x, dz = z - r.z; return [dx * r.c - dz * r.s, dx * r.s + dz * r.c]; }, [u0, v0] = L(tx, tz), [u1, v1] = L(cx, cz), hx = r.hx - 0.35, hz = r.hz - 0.35;
-          if (Math.abs(u0) > r.hx || Math.abs(v0) > r.hz) continue;
-          inRoom = true; let te = 1; for (const [p0, d, h] of [[u0, u1 - u0, hx], [v0, v1 - v0, hz]]) if (Math.abs(d) > 1e-9) te = Math.min(te, Math.max(0, ((d > 0 ? h : -h) - p0) / d));
+          inRoom = { r, u0, v0 }; let te = 1; for (const [p0, d, h] of [[u0, u1 - u0, hx], [v0, v1 - v0, hz]]) if (Math.abs(d) > 1e-9) te = Math.min(te, Math.max(0, ((d > 0 ? h : -h) - p0) / d));
           k = Math.min(k, te + 0.35 / Math.max(1, cd));
         }
-        if (k < 1) { const c2 = Math.max(0.6, cd * k - 0.35); cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * c2; cy = ty + Math.sin(camPitch) * (inRoom ? cd - (cd - c2) * 0.2 : c2); cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * c2; if (inRoom) ahead = Math.min(2.4, (cd - c2) * 0.6); }   // indoors, squeezed: it keeps up high and looks past you (over the pool table's rails)
+        if (k < 1) { const c2 = Math.max(inRoom ? 0.05 : 0.6, cd * k - 0.35); cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * c2; cy = ty + Math.sin(camPitch) * (inRoom ? cd - (cd - c2) * 0.2 : c2); cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * c2; if (inRoom) ahead = Math.min(2.4, (cd - c2) * 0.6); }   // indoors, squeezed: it keeps up high and looks past you (over the pool table's rails), and may come right in over you rather than out through a wall
+        if (ahead > 0) {   // ...but not into the wall in front of you: the point it looks at stays a metre clear of the room's walls
+          const { r, u0, v0 } = inRoom, sy = -Math.sin(camYaw), sz = -Math.cos(camYaw), du = sy * r.c - sz * r.s, dv = sy * r.s + sz * r.c; let te = 9;
+          for (const [p0, d, h] of [[u0, du, r.hx - 0.35], [v0, dv, r.hz - 0.35]]) if (Math.abs(d) > 1e-9) te = Math.min(te, ((d > 0 ? h : -h) - p0) / d);
+          ahead = Math.min(ahead, Math.max(0, te - 1));
+        }
         for (const r of rooms) { const dx = tx - r.x, dz = tz - r.z, u = dx * r.c - dz * r.s, v = dx * r.s + dz * r.c; if (Math.abs(u) < r.hx && Math.abs(v) < r.hz) cy = Math.min(cy, r.y - 0.35); }   // and under its roof
         for (const l of lids) { const dx = cx - l.x, dz = cz - l.z; if (Math.abs(dx * l.c - dz * l.s) < l.hx && Math.abs(dx * l.s + dz * l.c) < l.hz) cy = Math.max(cy, l.y); }   // over the pool table, not through it
       }
@@ -2548,5 +2583,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
