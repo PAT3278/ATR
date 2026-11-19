@@ -817,11 +817,18 @@
     // The broadleaf's cell holds only its crown, from the fork up. Its leaning, curving trunk is a 3D stem traced from the
     // model (centre and radius up to the fork), and its two cards stand where the model was baked from (45 and 135 degrees)
     // and pass through the fork, so the limbs on the cards grow out of the top of the stem from every side.
-    // In card units (1 = the cell's height = 4.63 m of the model): FORK is the fork above the stem's foot; STEM is x, y, z, radius.
-    const FORK = [0.041, 0.3067, 0.0389], STEM = [[0, -0.0043, 0, 0.0177], [0.0006, 0.0216, -0.0006, 0.0171], [0.0045, 0.054, -0.0048, 0.0166], [0.0078, 0.0972, -0.006, 0.0164], [0.0155, 0.1404, -0.0009, 0.0168], [0.0186, 0.1836, 0.008, 0.0153], [0.0231, 0.2268, 0.0138, 0.0145], [0.032, 0.27, 0.0276, 0.0147], [0.041, 0.3067, 0.0389, 0.0173], [0.0423, 0.324, 0.0443, 0.0184], [0.044, 0.34, 0.05, 0.005]];
+    // In card units (1 = the cell's height = 4.63 m of the model): FORK is the fork above the stem's foot; STEM is x, y, z, radius
+    // (five rings are enough for its gentle bends). It ends at the fork: on the pictures the trunk already parts there into
+    // the main limb and a smaller one, so anything higher would poke up between them.
+    const FORK = [0.041, 0.3067, 0.0389], STEM = [[0, -0.0043, 0, 0.0177], [0.0155, 0.1404, -0.0009, 0.0168], [0.0231, 0.2268, 0.0138, 0.0145], [0.032, 0.27, 0.0276, 0.0147], [...FORK, 0.0173]];
+    const CN = [0, 0.85, 0.53];   // the cards' normal: lit like a crown, from above, whichever way you look
     const atlas = texLoader.load('tex/trees.png'); atlas.encoding = THREE.sRGBEncoding; atlas.anisotropy = 4;
     const treeM = new THREE.MeshStandardMaterial({ map: atlas, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95, metalness: 0 });
     treeM.userData.lin = true; treeM.onBeforeCompile = rimPatch;
+    // The broadleaf's cards keep that normal on their back faces too (a double-sided card would turn it to point down there), so
+    // the picture's trunk is lit the same from every side, and so is the top of the 3D stem that meets it.
+    const broadM = treeM.clone(); broadM.userData.lin = true;
+    broadM.onBeforeCompile = (sh) => { rimPatch(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n\tnormal *= faceDirection;'); };
     const depthM = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: atlas, alphaTest: 0.5, side: THREE.DoubleSide });
     const cardGeo = (k) => {
       const pos = [], uv = [], nor = [], idx = [], o = k === BROAD ? FORK : [0, 0, 0];
@@ -829,7 +836,7 @@
         const w = 0.25 * SPAN[k], u0 = U0[k] / UNITS, u1 = (U0[k] + SPAN[k]) / UNITS, vb = v ? 0 : 0.5, vt = vb + 0.5;   // the card is the whole cell (1:2; the broadleaf's 1:1); the tree (the broadleaf's crown) stands on its bottom edge, trunk (fork) on the centre line
         const cx = Math.cos(a) * w, cz = Math.sin(a) * w, b = pos.length / 3, P = [[-cx, 0, -cz], [cx, 0, cz], [cx, 1, cz], [-cx, 1, -cz]];
         P.forEach((p) => pos.push(p[0] + o[0], p[1] + o[1], p[2] + o[2])); uv.push(u0, vb, u1, vb, u1, vt, u0, vt);
-        for (let i = 0; i < 4; i++) nor.push(0, 0.85, 0.53);   // lit like a crown, from above, whichever way you look
+        for (let i = 0; i < 4; i++) nor.push(...CN);
         idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
       });
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx);
@@ -844,31 +851,42 @@
     // The conifers' crowns are lifted off the ground on a bare trunk, so the lowest branches start above head height and
     // you can see through the woods between the trunks. The broadleaf already has its own clear trunk up to where it forks.
     const trunks = [], trunkGeo = new THREE.CylinderGeometry(0.55, 1, 1, 7, 1, true).translate(0, 0.5, 0), barkM = mat('#6b5f52', { map: tex('bark', 1, 3), rough: 0.95 });
-    const stemGeo = (() => {   // the broadleaf's trunk: rings of 7 along STEM, kept level (it leans only a little)
+    // The stem must look like the trunk on the pictures where the two meet: the same grey bark (this colour times the reddish
+    // bark photo averages the picture's trunk at the fork, rgb 80,76,62), the same tint per tree, and the same light. Its normals
+    // turn from round to the cards' own over its top third, and it does not shadow itself there: its shadow is cast from a
+    // little further from the sun, so its far side is lit like the picture above it while it still shades the ground and others.
+    const stemM = mat('#c8e9f2', { map: tex('bark', 1, 3), rough: 0.95 });
+    const stemDepthM = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    stemDepthM.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tmvPosition.z -= 0.12 * length(instanceMatrix[0].xyz) * smoothstep(0.15, 0.22, position.y);\n\tgl_Position = projectionMatrix * mvPosition;'); };
+    const stemGeo = (() => {   // the broadleaf's trunk: rings of 7 along STEM, kept level (it leans only a little), shut by a flat lid
       const pos = [], uv = [], nor = [], idx = [], N = 7; let len = 0;
       STEM.forEach(([x, y, z, rad], i) => {
         if (i) len += Math.hypot(x - STEM[i - 1][0], y - STEM[i - 1][1], z - STEM[i - 1][2]);
-        for (let j = 0; j <= N; j++) { const a = (j / N) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); pos.push(x + c * rad, y, z + sn * rad); nor.push(c, 0, sn); uv.push(j / N, len * 1.5); }
+        const k = smooth(0.19, FORK[1], y);
+        for (let j = 0; j <= N; j++) { const a = (j / N) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a), n = [c * (1 - k) + CN[0] * k, CN[1] * k, sn * (1 - k) + CN[2] * k], nl = Math.hypot(...n); pos.push(x + c * rad, y, z + sn * rad); nor.push(n[0] / nl, n[1] / nl, n[2] / nl); uv.push(j / N, len * 1.5); }
         if (i) for (let j = 0; j < N; j++) { const a = (i - 1) * (N + 1) + j, b = a + N + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
       });
+      const T = (STEM.length - 1) * (N + 1), [x, y, z] = STEM[STEM.length - 1]; pos.push(x, y, z); nor.push(...CN); uv.push(0.5, len * 1.5);
+      for (let j = 0; j < N; j++) idx.push(T + N + 1, T + j + 1, T + j);
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx);
       return g;
     })();
     kinds.forEach((list, k) => {
       if (!list.length) return;
-      const broad = k === BROAD, im = new THREE.InstancedMesh(cardGeo(k), treeM, list.length), stems = broad ? new THREE.InstancedMesh(stemGeo, barkM, list.length) : null;
-      list.forEach(([x, z, s], j) => {
+      const broad = k === BROAD, im = new THREE.InstancedMesh(cardGeo(k), broad ? broadM : treeM, list.length), stems = broad ? new THREE.InstancedMesh(stemGeo, stemM, list.length) : null;
+      list.forEach(([x, z, s0], j) => {
+        const s = broad ? Math.min(s0, 1.3) : s0;   // a broadleaf is a 4.6 m sapling blown up: past ~20 m its leaves look too big
         const ht = (9 + r() * 7) * s, h = ht / ((broad ? FORK[1] : 0) + Math.max(...ASPECT[k].map((a) => Math.min(1, (0.5 * SPAN[k]) / a))));   // so the tree itself, not its card, is 8-14 m
         const lift = broad ? -0.25 : Math.max(2.8, ht * 0.26) * (0.9 + r() * 0.25);   // bare trunk below the first branches (the broadleaf's foot sunk a little, for slopes)
         q.setFromAxisAngle(up, r() * (broad ? 6.28 : Math.PI)); ps.set(x, lift + hillAt(x, z), z); sc.set(h, h, h);
         if (!broad) trunks.push([x, z, lift + ht * 0.45, (0.13 + r() * 0.06) * s]);
         im.setMatrixAt(j, m4.compose(ps, q, sc)); im.setColorAt(j, col.copy(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85 + r() * 0.3));
-        if (stems) stems.setMatrixAt(j, m4);
+        if (stems) { stems.setMatrixAt(j, m4); stems.setColorAt(j, col); }
         circles.push({ x, z, r: 0.3 * s });
       });
       im.castShadow = im.receiveShadow = true; im.customDepthMaterial = depthM;
       scene.add(im);
-      if (stems) { stems.castShadow = stems.receiveShadow = true; scene.add(stems); }
+      if (stems) { stems.castShadow = stems.receiveShadow = true; stems.customDepthMaterial = stemDepthM; scene.add(stems); }
     });
     {
       const tm = new THREE.InstancedMesh(trunkGeo, barkM, trunks.length);
