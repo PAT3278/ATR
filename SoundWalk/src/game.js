@@ -324,7 +324,7 @@
 
   const pick = [];
   const circles = [], boxes = [], waters = [], rooms = [];   // rooms: small buildings you can walk into (the camera stays under their roof)
-  function isWater(x, z) { for (const b of waters) { const dx = x - b.x, dz = z - b.z, ux = dx * b.c - dz * b.s, uz = dx * b.s + dz * b.c; if (Math.abs(ux) < b.hx && Math.abs(uz) < b.hz) return true; } return false; }
+  function isWater(x, z) { for (const b of waters) { if (b.fn) { if (b.fn(x, z)) return true; continue; } const dx = x - b.x, dz = z - b.z, ux = dx * b.c - dz * b.s, uz = dx * b.s + dz * b.c; if (Math.abs(ux) < b.hx && Math.abs(uz) < b.hz) return true; } return false; }   // b.fn: water of any shape (the funfair's lagoon)
   const interact = [];
 
   const ground = plane(720, 720, mat('#ffffff', { map: tex('grass', 144, 144), rough: 1 }, true));
@@ -407,6 +407,7 @@
       addBox(lx, lz, hx, hz, y0 = -1e9, y1 = 1e9) { const w = p.toWorld(lx, lz), b = { x: w.x, z: w.z, hx, hz, c, s, y0, y1 }; boxes.push(b); return b; },
       interact(o) { const w = p.toWorld(o.lx, o.lz), ia = { ...o, x: w.x, z: w.z, sx: w.x, sz: w.z }; interact.push(ia); return ia; },
       water(lx, lz, hx, hz) { const w = p.toWorld(lx, lz); waters.push({ x: w.x, z: w.z, hx, hz, c, s }); },
+      waterShape(fn) { waters.push({ fn: (x, z) => { const l = p.local(x, z); return fn(l.x, l.z); } }); },   // fn(lx, lz) -> true over its water
       pick(m) { m.userData.ground = true; pick.push(m); },
       info(lx, lz, r, mark, lines) { const w = p.toWorld(lx, lz); interact.push({ kind: 'info', x: w.x, z: w.z, sx: w.x, sz: w.z, r, mark, lines }); },
     };
@@ -449,6 +450,7 @@
   }
   function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
     let h = hillAt(x, z);
+    if (y !== undefined) for (const p of places) if (p.bore) { const l = p.local(x, z), b = p.bore(l.x, l.z, y); if (b != null) { h = b; break; } }   // down in a tunnel through the hills: its floor, not the hill over it
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
     return h;
   }
@@ -766,45 +768,78 @@
   // path (the paths pass through in cuttings), at the ring road and its ramps, at the plaza and the loop, and round
   // every other place, so nothing that stands on flat ground ends up buried. A place that lives on the hills (p.onHill:
   // KEYAKI's trail climbs over them) keeps them; one with an edge (p.rim, the funfair) has them come right up to it.
+  // A place can add relief of its own (p.relief: the crater wall round the funfair). That rock is not cut back from the
+  // roads the way the hills are: the elevated roads fly over it, so it only keeps under each deck (4.5 m below it,
+  // rising 1.6 m per metre out from the deck's edge); paths to places on its floor come in through its own tunnels
+  // (p.bore), any other path runs in a narrow gorge along it, the rock rising sheer from the path's edge. It is drawn in dark rock instead of grass.
   {
     const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair
     const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top
-    const X0 = -164, X1 = 40, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz);
+    const X0 = -164, X1 = 92, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz), rk = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
-    others.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
+    places.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
     const dirs = [[0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dirs.push([Math.cos(a) * 7, Math.sin(a) * 7], [Math.cos(a) * 14, Math.sin(a) * 14]); }
+    const reliefs = places.filter((q) => q.relief), RO = { rock: 0 };
+    const inside = (p, q) => { if (!p.rim) return false; const l = p.local(q.vpW.x, q.vpW.z); return p.rim(l.x, l.z) < 0; };   // its viewpoint is on p's floor: its path comes in by p's tunnel
+    const decks = ring.roads.filter((r) => r.X && r.N).map((r) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < r.N; i++) { x0 = Math.min(x0, r.X[i]); x1 = Math.max(x1, r.X[i]); z0 = Math.min(z0, r.Z[i]); z1 = Math.max(z1, r.Z[i]); } return { r, x0: x0 - 30, x1: x1 + 30, z0: z0 - 30, z1: z1 + 30 }; });
+    const deckCap = (x, z) => {   // how high rock may stand here and still clear every elevated road
+      let cap = 1e9;
+      for (const { r, x0, x1, z0, z1 } of decks) {
+        if (x < x0 || x > x1 || z < z0 || z > z1) continue;
+        for (let i = 0; i < r.N; i += 2) { const dx = r.X[i] - x, dz = r.Z[i] - z; if (Math.abs(dx) > 28 || Math.abs(dz) > 28) continue; cap = Math.min(cap, r.Y[i] - 4.5 + Math.max(0, Math.hypot(dx, dz) - r.HW[i] - 1.5) * 1.6); }
+      }
+      return cap;
+    };
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
       const x = X0 + i * D, z = Z0 + j * D;
       let H = 0, M = 0; for (const [bx, bz, bh, br] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) H += bh * Math.exp(-q * 1.6); }
       for (const [bx, bz, bh, br] of PEAKS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) M += bh * Math.exp(-q * 1.6); }
-      if (H + M < 0.05) continue;
-      H = (16 * (1 - Math.exp(-H / 16)) + 24 * (1 - Math.exp(-M / 24))) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
-      let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d) * smooth(9, 21, ring.dist(x, z));
-      m *= smooth(8, 18, Math.hypot(x - shopAt.x, z - shopAt.z)) * smooth(8, 18, Math.hypot(x - hallAt.x, z - hallAt.z));
-      for (const p of places) { if (m <= 0) break; if (p.onHill) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
-      for (const p of others) {
-        if (m <= 0) break;
-        if (p.onHill || Math.hypot(x - p.x, z - p.z) > 140) continue;
-        if (p.rim) { const l = p.local(x, z); m *= smooth(1.5, 7, p.rim(l.x, l.z)); continue; }   // the hills rise from its edge (from 1.5 m out, so no slope reaches in over it): its own ground stays flat
-        m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z));
-        const core = coreOf(p); let hit = 1;
-        for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
-        m *= hit;
+      let R = 0, Rk = 0, own = null; for (const p of reliefs) { const l = p.local(x, z), v = p.relief(l.x, l.z, RO); if (v > R) { R = v; Rk = RO.rock; own = p; } }
+      if (H + M < 0.05 && R <= 0) continue;
+      if (H + M >= 0.05) {
+        H = (16 * (1 - Math.exp(-H / 16)) + 24 * (1 - Math.exp(-M / 24))) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
+        let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d) * smooth(9, 21, ring.dist(x, z));
+        m *= smooth(8, 18, Math.hypot(x - shopAt.x, z - shopAt.z)) * smooth(8, 18, Math.hypot(x - hallAt.x, z - hallAt.z));
+        for (const p of places) { if (m <= 0) break; if (p.onHill) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
+        for (const p of others) {
+          if (m <= 0) break;
+          if (p.onHill || Math.hypot(x - p.x, z - p.z) > 140) continue;
+          if (p.rim) { const l = p.local(x, z); m *= smooth(1.5, 7, p.rim(l.x, l.z)); continue; }   // the hills rise from its edge (from 1.5 m out, so no slope reaches in over it): its own ground stays flat
+          m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z));
+          const core = coreOf(p); let hit = 1;
+          for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
+          m *= hit;
+        }
+        H *= m;
+      } else H = 0;
+      if (R > 0) {   // the relief: kept clear of the plaza, the loop, other places and their paths (a narrow gorge), and below the decks
+        let m = smooth(PLAZA_R + 16, PLAZA_R + 26, Math.hypot(x, z)) * smooth(4, 8, distToPath(x, z, loopPath).d);
+        for (const p of places) { if (m <= 0) break; if (p === own || p.onHill || inside(own, p)) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 0.4, hw + 1.4, distToPath(x, z, p.path).d); const l = p.local(x, z); if (coreOf(p)(l.x, l.z)) m = 0; }
+        R = Math.min(R * m, Math.max(0, deckCap(x, z)));
       }
-      h[j * nx + i] = H * m;
+      h[j * nx + i] = Math.max(H, R); rk[j * nx + i] = R > H ? Rk : 0;
     }
-    hillField = { x0: X0, z0: Z0, d: D, nx, nz, h };
+    hillField = { x0: X0, z0: Z0, d: D, nx, nz, h, rk };
     // the mesh: one grid over the whole field, its flat parts tucked just under the ground
     const geo = new THREE.PlaneGeometry(X1 - X0, Z1 - Z0, nx - 1, nz - 1); geo.rotateX(-Math.PI / 2);
-    const pa = geo.attributes.position;
-    for (let k = 0; k < pa.count; k++) { const x = pa.getX(k) + (X0 + X1) / 2, z = pa.getZ(k) + (Z0 + Z1) / 2, hh = hillAt(x, z); pa.setXYZ(k, x, hh > 0.03 ? hh : -0.35, z); }
+    const pa = geo.attributes.position, rkv = new Float32Array(pa.count);
+    for (let k = 0; k < pa.count; k++) { const x = pa.getX(k) + (X0 + X1) / 2, z = pa.getZ(k) + (Z0 + Z1) / 2, hh = hillAt(x, z); pa.setXYZ(k, x, hh > 0.03 ? hh : -0.35, z); rkv[k] = rk[Math.round((z - Z0) / D) * nx + Math.round((x - X0) / D)]; }
+    geo.setAttribute('rk', new THREE.BufferAttribute(rkv, 1));
     geo.computeVertexNormals();
-    const hm = new THREE.Mesh(geo, mat('#b4c08e', { map: tex('grass', 44, 27), rough: 0.95 }));
+    { const holes = places.filter((q) => q.holeAt);   // tunnel mouths: drop the faces that would hang across them (normals stay as they were, so the rest stays smooth); y is a face's lowest corner, so no sliver from the cutting up to the rock is left across a mouth
+      if (holes.length) { const ix = geo.index.array, keep = []; for (let t = 0; t < ix.length; t += 3) { let cx = 0, cy = 1e9, cz = 0; for (let k = 0; k < 3; k++) { cx += pa.getX(ix[t + k]) / 3; cy = Math.min(cy, pa.getY(ix[t + k])); cz += pa.getZ(ix[t + k]) / 3; } if (holes.some((q) => { const l = q.local(cx, cz); return q.holeAt(l.x, l.z, cy); })) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); } geo.setIndex(keep); } }
+    const hmat = mat('#b4c08e', { map: tex('grass', 44, 27), rough: 0.95 }, true), rockT = tex('rock', 1, 1);
+    hmat.onBeforeCompile = (sh) => {   // where the relief is (attribute rk), dark volcanic rock projected from the three axes instead of the grass
+      rimPatch(sh); sh.uniforms.rockMap = { value: rockT }; sh.uniforms.rockC = { value: lin('#55504c') };
+      sh.vertexShader = 'attribute float rk;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRk=rk;vWp=(modelMatrix*vec4(transformed,1.)).xyz;vWn=normalize(mat3(modelMatrix)*objectNormal);');
+      sh.fragmentShader = 'uniform sampler2D rockMap;uniform vec3 rockC;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nif(vRk>.01){vec3 bw=pow(abs(normalize(vWn)),vec3(4.));bw/=bw.x+bw.y+bw.z;vec3 rc=mapTexelToLinear(texture2D(rockMap,vWp.zy*.09)).rgb*bw.x+mapTexelToLinear(texture2D(rockMap,vWp.xz*.09)).rgb*bw.y+mapTexelToLinear(texture2D(rockMap,vWp.xy*.09)).rgb*bw.z;rc*=rockC*(1.3+.45*sin(vWp.y*1.3+vWp.x*.2));diffuseColor.rgb=mix(diffuseColor.rgb,rc,clamp(vRk,0.,1.));}');
+    };
+    const hm = new THREE.Mesh(geo, hmat);
     hm.receiveShadow = true; hm.castShadow = false; scene.add(hm);
     hm.userData.ground = true; pick.push(hm); hm.updateMatrixWorld(true);   // click to walk up a slope; trails laid from here on drape over it
-    // the map: the hills drawn once, in shades of green, under everything else
+    // the map: the hills drawn once, in shades of green (the relief's rock in grey-brown), under everything else
     const hc = document.createElement('canvas'); hc.width = hc.height = 300; const hg = hc.getContext('2d');
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const v = h[j * nx + i]; if (v < 0.6) continue; hg.fillStyle = `rgba(${70 + v * 3},${92 + v * 4},${58 + v * 2},${Math.min(0.85, 0.25 + v / 14)})`; hg.fillRect(X0 + i * D + 150 - D / 2, Z0 + j * D + 150 - D / 2, D + 0.4, D + 0.4); }
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const v = h[j * nx + i], q = rk[j * nx + i]; if (v < 0.6) continue; hg.fillStyle = q > 0.5 ? `rgba(${58 + v * 3},${52 + v * 2.6},${48 + v * 2.2},${Math.min(0.9, 0.35 + v / 12)})` : `rgba(${70 + v * 3},${92 + v * 4},${58 + v * 2},${Math.min(0.85, 0.25 + v / 14)})`; hg.fillRect(X0 + i * D + 150 - D / 2, Z0 + j * D + 150 - D / 2, D + 0.4, D + 0.4); }
     hillField.mapCanvas = hc;
   }
   // A place that lives on the hills (KEYAKI) lays its trail over them now they exist, and dresses it on groundAt.
@@ -823,7 +858,8 @@
       return true;
     };
     const woods = (x, z) => places.some((p) => p.onHill && distToPath(x, z, p.path).d < 26);   // ...but a trail over them climbs through woods
-    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z) && !(hillAt(x, z) > 1.5 && r() < (woods(x, z) ? 0.3 : 0.85))) spots.push([x, z, 0.8 + r() * 0.7]); }   // the hills keep only copses: open grass between
+    const rockAt = (x, z) => { const F = hillField, i = Math.round((x - F.x0) / F.d), j = Math.round((z - F.z0) / F.d); return i < 0 || j < 0 || i >= F.nx || j >= F.nz ? 0 : F.rk[j * F.nx + i]; };
+    for (let i = 0; i < 9000 && spots.length < 1500; i++) { const x = (r() - 0.5) * 290, z = (r() - 0.5) * 290; if (ok(x, z) && rockAt(x, z) < 0.7 && !(hillAt(x, z) > 1.5 && r() < (woods(x, z) ? 0.3 : rockAt(x, z) > 0.4 ? 0.96 : 0.85))) spots.push([x, z, 0.8 + r() * 0.7]); }   // the hills keep only copses: open grass between
     for (let i = 0; i < 240; i++) { const t = (i / 240) * 4, sd = Math.floor(t), f = (t % 1) * 304 - 152; const x = sd === 0 ? f : sd === 1 ? 152 : sd === 2 ? -f : -152, z = sd === 0 ? -152 : sd === 1 ? f : sd === 2 ? 152 : -f; if (places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); })) continue; spots.push([x + (r() - 0.5) * 4, z + (r() - 0.5) * 4, 1 + r() * 0.8]); }
     // Each tree is two crossed cards cut from photographed young firs and pines (Poly Haven, CC0), baked into one
     // atlas (tex/trees.png): 6 trees across, a front view on the top row and a side view below. One draw per tree.
@@ -1989,6 +2025,7 @@
         g.translate(cx, cz); g.rotate(-p.rot);
         g.fillStyle = sh.c;
         if (sh.t === 'rect') g.fillRect((-sh.w / 2) * MAP_S, (-sh.h / 2) * MAP_S, sh.w * MAP_S, sh.h * MAP_S);
+        else if (sh.t === 'poly') { g.beginPath(); sh.pts.forEach(([a, b], i) => g[i ? 'lineTo' : 'moveTo']((a - sh.x) * MAP_S, (b - sh.z) * MAP_S)); g.closePath(); g.fill(); }   // local points round (x, z)
         else { g.beginPath(); g.arc(0, 0, sh.r * MAP_S, 0, 7); g.fill(); }
         g.restore();
       });
