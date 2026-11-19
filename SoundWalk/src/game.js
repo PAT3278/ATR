@@ -576,7 +576,14 @@
     return new THREE.LatheGeometry(pts, seg, gap / 2, Math.PI * 2 - gap);
   });
   const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact, uvs, jewel, studio: studioTex };
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag };
+  // A deck you can walk under (a parking area, its walkway, a ramp) is the ground only for someone already up at its level,
+  // within a step of it (DECK_STEP, the height from which a deck's rails stop you too), or being set down from above (no y).
+  // Anyone lower is underneath and stays on the floor: a p.ground that returns a deck height asks onDeck(h, y) first, or
+  // walking under it lifts you onto it. Where the floor comes up closer under a deck than you could stand, the place walls
+  // that strip off for those below (see parkingArea in places2.js) rather than letting them walk in with their head in it.
+  const DECK_STEP = 1.2, HEADROOM = 2.4;
+  const onDeck = (h, y) => y === undefined || y > h - DECK_STEP;
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag, onDeck, DECK_STEP, HEADROOM };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -635,7 +642,7 @@
     const a = H[j * n + i], b = H[(j + 1) * n + i], c = H[(j + 1) * n + i + 1], d = H[j * n + i + 1];
     return u + v <= 1 ? a + (d - a) * u + (b - a) * v : c + (b - c) * (1 - u) + (d - c) * (1 - v);
   }
-  function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
+  function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room, a deck above a street): pass the walker's current height; without it you get the top
     let h = hillAt(x, z);
     if (y !== undefined) for (const p of places) if (p.bore) { const l = p.local(x, z), b = p.bore(l.x, l.z, y); if (b != null) { h = b; break; } }   // down in a tunnel through the hills: its floor, not the hill over it
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
@@ -1247,7 +1254,7 @@
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.1, 48), additive(p.color, 0.6));
     ring.rotation.x = -Math.PI / 2; ring.position.set(vp.x, gy + 0.08, vp.z);
     scene.add(beam, ring);
-    const ia = { kind: 'view', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6 };
+    const ia = { kind: 'view', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6, y0: gy - DECK_STEP, y1: gy + 2.5 };   // only at the viewpoint's level: SHOT's is up on a walkway you can also walk under
     beam.userData.ia = ring.userData.ia = ia;
     pick.push(ring, beam);
     interact.push(ia);
@@ -1499,26 +1506,34 @@
 
   /* ================= state ================= */
   const KEY = 'soundwalk-v1';
-  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false };
+  const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false, jy: 0 };
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
-  function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
+  function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; P.jy = P.y; } }   // jy: where you took off (see update)
   let camYaw = Math.PI, camPitch = 0.2, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
-  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (!s) return;
       places.forEach((p) => { p.found = (s.found || []).includes(p.song.id); });
-      if (Number.isFinite(s.x) && Number.isFinite(s.z) && Math.abs(s.x) < 143 && Math.abs(s.z) < 143) { P.x = s.x; P.z = s.z; }
+      if (Number.isFinite(s.x) && Number.isFinite(s.z) && canBe(s.x, s.z)) { P.x = s.x; P.z = s.z; P.y = groundAt(P.x, P.z, Number.isFinite(s.y) ? s.y : undefined); }   // back on the deck or under it, as you were
       if (Number.isFinite(s.yaw)) camYaw = s.yaw;
     } catch (e) { /* ignore */ }
   }
 
   /* ================= collisions ================= */
   const PR = 0.35;
+  // The land ends at |x|, |z| = 145. Past it you go on only afloat, or where a place says its shore runs on (p.shore: OHH's
+  // beaches reach out beyond that edge, south past the port town), as far as the edge of the world. A step that would
+  // take you anywhere else slides along the edge instead.
+  const LAND = 145, WORLD = 330;
+  const canBe = (x, z) => (Math.abs(x) <= LAND && Math.abs(z) <= LAND) || (Math.abs(x) <= WORLD && Math.abs(z) <= WORLD && (isWater(x, z) || places.some((q) => { if (!q.shore) return false; const l = q.local(x, z); return q.shore(l.x, l.z); })));
   function collide(p) {
-    { const lim = isWater(p.x, p.z) ? 330 : 145; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // out at sea you can go further, to the edge of the world
+    if (!canBe(p.x, p.z)) {
+      if (p !== P && canBe(p.x, P.z)) p.z = P.z; else if (p !== P && canBe(P.x, p.z)) p.x = P.x; else if (p !== P && canBe(P.x, P.z)) { p.x = P.x; p.z = P.z; }
+      else { const lim = isWater(p.x, p.z) ? WORLD : LAND; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // set down somewhere it cannot be: back onto the land
+    }
     for (const c of circles) {
       if (P.y < c.y0 || P.y > c.y1) continue;
       const dx = p.x - c.x, dz = p.z - c.z, rr = c.r + PR;
@@ -2328,7 +2343,7 @@
     for (const h of hits) {
       const ia = h.object.userData.ia;
       if (ia) {
-        if (Math.hypot(ia.x - P.x, ia.z - P.z) < ia.r) { faceTo(ia); act(ia); return; }
+        if (Math.hypot(ia.x - P.x, ia.z - P.z) < ia.r && level(ia)) { faceTo(ia); act(ia); return; }
         if (ia.place) routeTo(ia.place, ia); else auto = { pts: [{ x: ia.sx, z: ia.sz }], i: 0, then: ia };
         return;
       }
@@ -2372,6 +2387,7 @@
   function pressA() { if (mode === 'hoop') { hoopShoot(); return; } if (mode === 'dialog') { advance(); return; } if (mode === 'walk') { if (focus) act(focus); else if (!drv) jump(); } }
   $('#btnB').addEventListener('pointerdown', (e) => { e.preventDefault(); dashOn = !dashOn; $('#btnB').classList.toggle('on', dashOn); });
   function faceTo(ia) { P.face = Math.atan2(ia.x - P.x, ia.z - P.z); }
+  function level(ia) { return (ia.y0 === undefined || P.y >= ia.y0) && (ia.y1 === undefined || P.y <= ia.y1); }   // at its height too: a thing on a deck is not yours from under it
   function act(ia) {
     auto = null; keys.clear();
     if (ia.kind === 'view') { if (ia.place.ride) startRide(ia.place); else enterView(ia.place); return; }
@@ -2567,9 +2583,10 @@
     });
     ring.pas.forEach((pa) => { const [x, y] = toMap(...Object.values(pa.f.toWorld(10, -10))); g.save(); g.translate(x, y); g.fillStyle = '#e8e2d0'; g.strokeStyle = '#141412'; g.lineWidth = 2;
       g.beginPath(); g.rect(-9, -5, 18, 8); g.rect(-5, -10, 10, 5); g.fill(); g.stroke(); g.fillStyle = '#141412'; g.beginPath(); g.arc(-5, 4, 3, 0, 7); g.arc(5, 4, 3, 0, 7); g.fill(); g.restore(); });
-    const [px, py] = toMap((at || P).x, (at || P).z);
+    let [px, py] = toMap((at || P).x, (at || P).z); const off = Math.min(px, py) < 12 || Math.max(px, py) > W - 12;   // out past the map's 150 m (OHH's far beaches): kept at its edge, drawn hollow
+    px = clamp(px, 12, W - 12); py = clamp(py, 12, W - 12);
     g.save(); g.translate(px, py); g.rotate(at ? 0 : -P.face + Math.PI); if (at) g.scale(1.6, 1.6);
-    g.fillStyle = '#e8e2d0'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill();
+    g.fillStyle = g.strokeStyle = '#e8e2d0'; g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); if (off) g.stroke(); else g.fill();
     g.restore();
   }
   function openMap() {
@@ -2585,7 +2602,7 @@
     setTimeout(() => {
       if (drv) { endDrive(null); camBlend = 1; }   // no camera glide from the road: the fade covers the jump
       const q = p.path[Math.max(0, p.path.length - 9)];
-      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z); P.v = 0; auto = null;
+      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z, 0); P.v = 0; P.air = false; auto = null;   // a path runs on the ground: where it passes under a deck you land under it, not up on it
       P.face = Math.atan2(p.vx - q.x, p.vz - q.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face); camYaw = P.face + Math.PI;
       regionKey = ''; updateRegion(true); save();
       f.classList.remove('on'); mode = 'walk';
@@ -2650,7 +2667,7 @@
       // Behind the wheel the car radio picks up whichever song you are driving past: by direction, not distance.
       const radio = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
       const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), radio * 0.85);
-      p.dwell = (d < 4.5 || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);
+      p.dwell = ((d < 4.5 && P.y > p.vy - DECK_STEP) || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);   // lingering at the viewpoint, not under it
       const prox = 0.4 * pp * pp;
       p.gain = Math.max(prox + (1 - prox) * ease(p.dwell) * pp, radio * 0.5);
       p.pp = pp;
@@ -2709,7 +2726,7 @@
         const lastPt = auto.i === auto.pts.length - 1;
         if (d < (lastPt ? 0.3 : 1.2 + P.v * 0.25)) {   // faster means a wider turn, so count a waypoint as reached from further out
           if (!lastPt) auto.i++;
-          else { const th = auto.then; auto = null; if (th) { faceTo(th); act(th); } }
+          else { const th = auto.then; auto = null; if (th && level(th)) { faceTo(th); act(th); } }
         } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : top; }
       }
       if (sp > 0) {
@@ -2725,7 +2742,7 @@
         const moved = Math.hypot(P.x - ox, P.z - oz);
         if (auto && moved < P.v * dt * 0.2) {
           auto.stuck = (auto.stuck || 0) + dt;
-          if (auto.stuck > 0.5) { const th = auto.then; auto = null; if (th && Math.hypot(th.x - P.x, th.z - P.z) < th.r + 1) { faceTo(th); act(th); } }
+          if (auto.stuck > 0.5) { const th = auto.then; auto = null; if (th && Math.hypot(th.x - P.x, th.z - P.z) < th.r + 1 && level(th)) { faceTo(th); act(th); } }
         } else if (auto) auto.stuck = 0;
         if (moved < P.v * dt * 0.4) P.v *= 0.8;
         let df = Math.atan2(P.hx, P.hz) - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 12);
@@ -2739,7 +2756,7 @@
       const fx = Math.sin(P.face), fz = Math.cos(P.face);
       for (const ia of interact) {
         const dx = ia.x - P.x, dz = ia.z - P.z, d = Math.hypot(dx, dz);
-        if (d > ia.r || ia.off || (ia.y0 !== undefined && P.y < ia.y0) || (ia.y1 !== undefined && P.y > ia.y1)) continue;
+        if (d > ia.r || ia.off || !level(ia)) continue;
         const dot = (dx * fx + dz * fz) / (d || 1);
         if (dot < 0.15 && d > 1.4) continue;
         const sc = d - dot;
@@ -2749,10 +2766,17 @@
       P.speed += (0 - P.speed) * Math.min(1, dt * 10); P.v = 0; P.lean = 0; boost += (0 - boost) * Math.min(1, dt * 4);
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
-    const gh = groundAt(P.x, P.z, P.y);
+    // In the air you land only on what was within reach of where you took off (a deck up to two steps above it), and never
+    // on one you jump at from underneath, however high the jump: a deck you are under is your ceiling (head stops below it).
+    const gh = groundAt(P.x, P.z, P.air ? Math.min(P.y, P.jy + DECK_STEP) : P.y);
     if (drv) { /* the car sets the height */ }
     else if (ride) rideTick(dt);   // the ride sets it
-    else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
+    else if (P.air) {
+      const top = groundAt(P.x, P.z), under = top > gh && !onDeck(top, P.y);
+      P.vy -= 24 * dt; P.y += P.vy * dt;
+      if (under && P.y > Math.max(gh, top - HEADROOM)) { P.y = Math.max(gh, top - HEADROOM); P.vy = Math.min(P.vy, 0); }
+      if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; }
+    }
     else { P.y += (gh - P.y) * Math.min(1, dt * 14); if (hillAt(P.x, P.z) > 0.05) P.y = clamp(P.y, gh - 0.06, gh + 0.12); }   // the easing that softens a kerb would lag a long slope, sinking the feet into it going up
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;

@@ -13,7 +13,9 @@
  *   p.pathEnd    local z where the path from the plaza ends
  *   p.blocks     (lx, lz) -> true where random trees must not grow
  *   p.scrubOut   optional (lx, lz) -> true where the hills' low scrub must not grow (else p.blocks): it may cross a view
- *   p.ground     optional (lx, lz) -> height
+ *   p.ground     optional (lx, lz, y) -> height; y is the walker's height (undefined: from above). A deck someone can
+ *                walk under returns its height only when E.onDeck(deckY, y), so nobody underneath is lifted onto it
+ *   p.shore      optional (lx, lz) -> true where the land runs on past the world's land edge (|x|, |z| > 145)
  *   p.trail      optional [[lx, lz], ...]: the bends of a trail of its own from the plaza to the viewpoint
  *   p.onHill     the hills are not flattened round it or its trail (KEYAKI's trail climbs over them)
  *   p.afterHills optional ({ groundAt, layTrail, path, boxes, circles }): build what has to stand on the hills, once they
@@ -29,7 +31,8 @@
  *   (a collider a place marks .keep, e.g. p.addCircle(...).keep = 1, is left alone by OHH's canal, which lifts what stands over it)
  *   p.carve      optional (lx, lz) -> 0..1 the hills and the relief are scaled by there: a cutting dug through them (OHH's canal)
  *   p.ceil       optional (lx, lz) -> the camera's ceiling under a vault
- * and uses p.addCircle / p.addBox for collisions, p.water / p.waterShape(fn) for water and p.pick for click-to-walk surfaces.
+ * and uses p.addCircle / p.addBox for collisions (a box can be turned further: set its c, s to the cosine and sine
+ * of p.rot plus the thing's own yaw), p.water / p.waterShape(fn) for water and p.pick for click-to-walk surfaces.
  */
 (function () {
   'use strict';
@@ -353,6 +356,14 @@
         const emb = new THREE.Mesh(new THREE.BoxGeometry(5, 3.6, z0 - z1), embM); emb.position.set(BX, 1.8, (z0 + z1) / 2); emb.castShadow = true; g.add(emb);
         p.addBox(BX, (z0 + z1) / 2, 2.55, (z0 - z1) / 2);
       }
+      // Past the world's land edge the meadow south of OHH's beach runs on to the embankment's last stretch (p.shore: the
+      // strip on its sea side, as long as it is): you walk it from the sand up to the embankment, and where the embankment
+      // ends a post-and-rail fence runs from it out into the sea, so the land stops at something you can see.
+      p.shore = (lx, lz) => lx > BX + 2.5 && lx < BX + 80 && lz >= RZ - 137 && lz <= -75;
+      { const FB = E.batch(g), fb = FB.box, fm = E.mat('#6b5b48', { rough: 0.9 }), fz = RZ - 137, x0 = BX + 2.5, x1 = BX + 29.5;   // the sea is ~27 m out from the embankment here
+        for (let x = x0 + 0.1; x < x1 + 0.1; x += 2.2) fb(0.14, 1.5, 0.14, x, 0.4, fz, fm);   // posts, their feet in the ground (or the water)
+        for (const y of [0.5, 0.98]) fb(x1 - x0, 0.1, 0.05, (x0 + x1) / 2, y, fz + 0.09, fm);
+        FB.flush(); p.addBox((x0 + x1) / 2, fz, (x1 - x0) / 2, 0.12); }
       for (const [z0, z1] of [[-38.5, -49.5], [-69, -75]]) {
         const gd = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.8, z0 - z1 + 0.6), steel); gd.position.set(BX, 3.2, (z0 + z1) / 2); gd.castShadow = true; g.add(gd);
         for (const sx of [-2.05, 2.05]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.0, z0 - z1 + 0.6), steel); rl.position.set(BX + sx, 4.1, (z0 + z1) / 2); g.add(rl); }
@@ -736,8 +747,10 @@
             const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(3.4, w - 0.8), 0.72), sm); const [sx, sz] = at(0, fz + 0.04); sg.position.set(sx, 3.5, sz); sg.rotation.y = yaw; g.add(sg);
             if (kind === 'beach') { box(w, 0.2, 3.2, 0, 0.1, d / 2 + 1.6, wood); for (const sd of [-1, 1]) box(0.12, 2.6, 0.12, sd * (w / 2 - 0.3), 1.3, d / 2 + 3.0, wood); box(w, 0.1, 3.4, 0, 2.6, d / 2 + 1.6, AWN[Math.floor(pr() * AWN.length)]); }   // a wooden deck under a canopy
           } else box(1.0, 2.1, 0.08, w > 5.4 ? -w / 4 : w / 4 - 0.3, 1.05, fz, wood, false);   // the front door
-          if (yaw === 0 || yaw === Math.PI) p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05);
-          else for (let k = -1; k <= 1; k++) { const [cx, cz] = at(k * (w / 3), 0); p.addCircle(cx, cz, Math.max(w / 3, d / 2) * 0.95); }
+          // its walls, turned with it (a box turned by the place's and the building's angle together): no wider than it is, so the
+          // gaps between the beach houses stay open from the promenade to the car park behind
+          { const bb = p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05); bb.c = Math.cos(p.rot + yaw); bb.s = Math.sin(p.rot + yaw); }
+          if (kind === 'beach') for (const sd of [-1, 1]) { const [cx, cz] = at(sd * (w / 2 - 0.3), d / 2 + 3.0); p.addCircle(cx, cz, 0.12); }   // the canopy's posts
           city.push(1); port.feet.push({ x, z, w, d, yaw });
           return true;
         };
@@ -772,7 +785,7 @@
         // under the ring road: a car park between the piers (painted bays, parked cars), the length of the coast
         { const [cx, cz] = atST(27, 21); flat(38, 13, cx, cz, walkM(12, 4), 0.045, SEA_YAW);
           const cars = []; for (let t = 9; t < 45; t += 2.6) for (const s of [17.5, 25]) { const [bx, bz] = atST(t, s); if (pierPts.some(([px, pz]) => Math.hypot(px - bx, pz - bz) < 2.4)) continue; const [lx0, lz0] = atST(t - 1.3, s); flat(0.1, 5, lx0, lz0, lineM, 0.055, SEA_YAW); if (SW.Cars && pr() < 0.45) cars.push([bx, bz, s]); }
-          cars.slice(0, 9).forEach(([bx, bz, s], i) => { const car = SW.Cars.make(E, i + 3); car.position.set(bx, 0.03, bz); car.rotation.y = SEA_YAW + (s > 20 ? Math.PI : 0); g.add(car); p.addCircle(bx, bz, 1.4); }); }
+          cars.slice(0, 9).forEach(([bx, bz, s], i) => { const car = SW.Cars.make(E, i + 3); car.position.set(bx, 0.03, bz); car.rotation.y = SEA_YAW + (s > 20 ? Math.PI : 0); g.add(car); const cb = p.addBox(bx, bz, 0.95, 2.2); cb.c = Math.cos(p.rot + SEA_YAW); cb.s = Math.sin(p.rot + SEA_YAW); }); }   // each car's own outline, turned with it
         // the promenade along the top of the beach, and beach houses facing the sea
         { const [cx, cz] = atST(24, 3.5); flat(36, 4, cx, cz, walkM(12, 1.4), 0.07, SEA_YAW);
           for (let t = 8; t < 40;) { const w = 6 + pr() * 3, tc = t + w / 2; t += w + 1.8; const [bx, bz] = atST(tc, 10.5);
