@@ -15,7 +15,8 @@
  *   p.ground     optional (lx, lz) -> height
  *   p.trail      optional [[lx, lz], ...]: the bends of a trail of its own from the plaza to the viewpoint
  *   p.onHill     the hills are not flattened round it or its trail (KEYAKI's trail climbs over them)
- *   p.afterHills optional ({ groundAt, layTrail, path }): build what has to stand on the hills, once they exist
+ *   p.afterHills optional ({ groundAt, layTrail, path, boxes, circles }): build what has to stand on the hills, once they
+ *                exist (boxes / circles: every collider so far, for a place that tunnels under others' things)
  *   p.rim        optional (lx, lz) -> metres outside its grounds: the hills rise right from that edge (the funfair)
  *   p.lookout    its view looks out over the world: the other places are not hidden while it is viewed
  *   p.relief     optional (lx, lz, out) -> metres of rock of its own laid into the hill field (out.rock: 0..1 how much is
@@ -23,6 +24,7 @@
  *   p.bore       optional (lx, lz, y) -> the floor of a tunnel through the hills when (lx, lz, y) is down in it, else null:
  *                groundAt then ignores the hill over it (the funfair's way in, the canal's cave)
  *   p.holeAt     optional (lx, lz, y) -> true to drop the hill mesh's face there (y: its lowest corner) at a tunnel mouth
+ *   p.carve      optional (lx, lz) -> 0..1 the hills and the relief are scaled by there: a cutting dug through them (OHH's canal)
  *   p.ceil       optional (lx, lz) -> the camera's ceiling under a vault
  * and uses p.addCircle / p.addBox for collisions, p.water / p.waterShape(fn) for water and p.pick for click-to-walk surfaces.
  */
@@ -63,8 +65,8 @@
       p.trail = TW.map(([x, z]) => { const l = p.local(x, z); return [l.x, l.z]; }).concat([fromDeck(0, DD + 2.8), [0, 0]]);   // the last few metres straight up the deck's steps
       p.onHill = true; p.lookout = true;   // its view looks out over the other places, so they stay drawn
       let deckY = 0, nStep = 0, gAt = () => 0;
-      p.ground = (lx, lz) => {
-        if (!deckY) return 0;
+      p.ground = (lx, lz, y) => {
+        if (!deckY || (y !== undefined && y < deckY - 6)) return 0;   // OHH's canal runs deep under the summit
         const [u, v] = toDeck(lx, lz);
         if (Math.abs(u) < DW && Math.abs(v) < DD) return deckY;
         const k = Math.ceil((v - DD) / TREAD); return Math.abs(u) < 1.1 && v > DD && k <= nStep ? deckY - k * RISE : 0;
@@ -1199,8 +1201,8 @@
       const FB = FLOOR.reduce((o, [x, z]) => [Math.min(o[0], x), Math.max(o[1], x), Math.min(o[2], z), Math.max(o[3], z)], [1e9, -1e9, 1e9, -1e9]), NI = { i: 0 };
       const floorD = (lx, lz, o) => { if (lx < FB[0] - 40 || lx > FB[1] + 40 || lz < FB[2] - 40 || lz > FB[3] + 40) return 40; const d = polyD(FLOOR, lx, lz, o); return inPoly(FLOOR, lx, lz) ? -d : d; };   // metres outside the floor (negative inside)
       // The lagoon, in the ring the coaster runs round, with an arm out west into the cave the canal comes through.
-      const CZ0 = -17, CWH = 3.4, CX0 = -37.6, CX1 = -44;   // the canal: its centre line, half its width, where the cliff is, where the cave ends for now
-      const LAGOON = crLoop([[-12.4, -5.5], [-15, -4], [-21, -3.8], [-27, -5.5], [-30.5, -9.5], [-32, CZ0 + CWH], [-36, CZ0 + CWH], [CX1 - 0.6, CZ0 + CWH], [CX1 - 0.6, CZ0 - CWH], [-36, CZ0 - CWH], [-32, CZ0 - CWH], [-30.5, -24], [-27, -27], [-21, -27.8], [-15.5, -26.5], [-12.6, -23], [-12, -17], [-12, -11]], 8);
+      const CZ0 = -17, CWH = 3.4, CX0 = -37.6, CX1 = -44;   // the canal: its centre line, half its width, where the cliff is, where the cave comes out of the crater wall
+      const LAGOON = crLoop([[-12.4, -5.5], [-15, -4], [-21, -3.8], [-27, -5.5], [-30.5, -9.5], [-32, CZ0 + CWH], [-35.4, CZ0 + CWH], [-37.4, CZ0 + 1.25], [CX1 - 0.6, CZ0 + 1.25], [CX1 - 0.6, CZ0 - CWH], [-36, CZ0 - CWH], [-32, CZ0 - CWH], [-30.5, -24], [-27, -27], [-21, -27.8], [-15.5, -26.5], [-12.6, -23], [-12, -17], [-12, -11]], 8);   // in the cave the arm keeps to its -z side: OHH's canal brings a towpath in along the +z side, level with the quay
       const SLIP = { z0: -9.6, z1: -6.6, x0: -15.6, x1: -12.2 };   // a slipway from the east quay's edge down into the water
       const PIER = { x0: -18.6, x1: -11.6, z0: -16.2, z1: -13.8 };   // the iron pier the submarine is moored to
       const inLagoon = (lx, lz) => lx > -46 && lx < -11 && lz > -29 && lz < -2.5 && inPoly(LAGOON, lx, lz);
@@ -1355,21 +1357,18 @@
         };
         gate(TZ0, -1, FY, 'CRATER FUNFAIR'); gate(TZ1, 1, 0, 'CRATER FUNFAIR'); }
 
-      // The canal's cave in the west cliff: a lit iron sluice frame at its mouth (the gate wound up out of the way), a short
-      // vaulted bore, and for now an iron gate shut across it where the tunnel to OHH is still to come (SW.Caldera.portal).
+      // The canal's cave in the west cliff: a lit iron sluice frame at its mouth (the gate wound up out of the way) and a short
+      // vaulted bore through the crater wall; at its far end OHH's old canal comes in (places2.js aqueduct, from SW.Caldera.portal),
+      // its towpath along the +z side to the quay.
       const caveX = (SH[0][0] + SH[SH.length - 1][0]) / 2;   // where the cliff foot crosses the canal
       { const W3 = CWH + 0.5, len = caveX - CX1, xs = Array.from({ length: 9 }, (_, i) => caveX + 0.3 - ((len + 0.3) * i) / 8), VC = 5.6;
         gw.add(ribbon(xs.map((x) => [x, CZ0]), (i, q) => Array.from({ length: 13 }, (_, k) => { const a = (Math.PI * k) / 12, sz = Math.cos(a) * W3; return [q[0], k === 0 || k === 12 ? -0.6 : 1.4 + Math.sin(a) * (VC - 1.4), CZ0 + sz]; }), (() => { const m = E.mat('#5a524c', { map: E.tex('rock', 2, 1), rough: 0.95 }, true); m.side = THREE.DoubleSide; return m; })()));
-        { const bw = new THREE.Mesh(new THREE.PlaneGeometry(2 * W3, VC + 1), E.mat('#1c1916', { rough: 1 })); bw.rotation.y = Math.PI / 2; bw.position.set(CX1 - 0.5, VC / 2 - 0.4, CZ0); gw.add(bw); }
-        const shut = new THREE.Group(); shut.position.set(CX1 + 0.25, 0, CZ0); gw.add(shut);   // the gate across the far end
-        { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.25, 4.4, 2 * CWH), iron); pl.position.y = 1.9; shut.add(pl); for (let k = 0; k < 4; k++) { const rb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 2 * CWH), ironD); rb.position.y = 0.4 + k * 1.1; shut.add(rb); } const wh = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 6, 18), brass); wh.position.set(0.25, 2.4, 0); wh.rotation.y = Math.PI / 2; shut.add(wh); }
-        const shutBox = p.addBox(CX1 + 0.1, CZ0, 0.5, CWH + 0.4);
         for (const sd of [-1, 1]) p.addBox((caveX + CX1) / 2, CZ0 + sd * (W3 + 0.3), (caveX - CX1) / 2 + 0.3, 0.4);
-        for (let x = caveX - 1.2; x > CX1 + 0.6; x -= 2.2) for (const sd of [-1, 1]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.12), lampM); l.position.set(x, 2.6, CZ0 + sd * (W3 - 0.3)); gw.add(l); }
+        for (let x = caveX - 1.2; x > CX1 + 0.6; x -= 2.2) for (const sd of [-1, 1]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.12), lampM); l.position.set(x, sd > 0 ? 3.0 : 2.6, CZ0 + sd * (W3 - (sd > 0 ? 0.42 : 0.3))); gw.add(l); }   // over the towpath, above head height
         const cl = new THREE.PointLight(new THREE.Color('#ffa860').convertSRGBToLinear(), 1.3, 14, 1.6); cl.position.set((caveX + CX1) / 2, 3.2, CZ0); gw.add(cl);
         // the sluice frame: two riveted columns in guides, a girder with the winding gear, the gate wound up under it, lamps
         const fx = caveX + 0.35, fz = (sd) => CZ0 + sd * (W3 + 0.35);
-        for (const sd of [-1, 1]) { pw(0.9, 8.6, 0.9, fx, 3.7, fz(sd), iron); pw(0.3, 7.6, 0.3, fx + 0.35, 3.4, fz(sd) - sd * 0.5, ironD); pw(2.8, 9.4, 2.6, fx - 1.2, 4.2, fz(sd) + sd * 1.6, basaltD); p.addCircle(fx, fz(sd), 0.7); }
+        for (const sd of [-1, 1]) { pw(0.9, 8.6, 0.9, fx, 3.7, fz(sd), iron); pw(0.3, 7.6, 0.3, fx + 0.35, 3.4, fz(sd) - sd * 0.5, ironD); pw(2.8, 9.4, 2.6, fx - 1.2, 4.2, fz(sd) + sd * 1.6, basaltD); p.addCircle(fx, fz(sd), 0.5); }   // (just the column: the towpath squeezes past it)
         pw(1.0, 1.0, 2 * W3 + 1.6, fx, 7.9, CZ0, iron); pw(2.6, 2.8, 2 * W3 + 5.6, fx - 1.4, 9.4, CZ0, basaltD);
         pw(0.3, 1.6, 2 * CWH + 0.2, fx + 0.1, 6.5, CZ0, iron); for (let k = 0; k < 3; k++) pw(0.36, 0.12, 2 * CWH + 0.3, fx + 0.1, 5.9 + k * 0.6, CZ0, ironD);
         for (const sd of [-1, 1]) { const gr = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.12, 6, 20), brass); gr.position.set(fx + 0.6, 7.9, CZ0 + sd * 1.6); gr.rotation.y = Math.PI / 2; gw.add(gr); const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.5, 10), copper); hub.rotation.z = Math.PI / 2; hub.position.set(fx + 0.6, 7.9, CZ0 + sd * 1.6); gw.add(hub);
@@ -1377,8 +1376,8 @@
         for (let k = 0; k < 9; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), lampM); b.position.set(fx + 0.55, 7.35, CZ0 - CWH + (k * 2 * CWH) / 8); gw.add(b); }
         const pl2 = new THREE.PointLight(new THREE.Color('#ffb070').convertSRGBToLinear(), 1.1, 18, 1.8); pl2.position.set(fx + 2.5, 5.5, CZ0); gw.add(pl2);
         const W = p.toWorld(caveX, CZ0), Wend = p.toWorld(CX1, CZ0), dw = p.toWorld(caveX - 1, CZ0);
-        SW.Caldera = {   // world coordinates, for the canal tunnel to OHH that will come out here (the next step)
-          portal: { x: W.x, z: W.z, waterY: 0.05, dir: { x: dw.x - W.x, z: dw.z - W.z }, yaw: Math.atan2(dw.x - W.x, dw.z - W.z), halfWidth: CWH, vault: VC, end: { x: Wend.x, z: Wend.z }, shut, shutBox, place: p, local: { x: caveX, z: CZ0, endX: CX1 } },
+        SW.Caldera = {   // world coordinates: OHH's canal (places2.js aqueduct) runs on from the cave's far end along its line
+          portal: { x: W.x, z: W.z, waterY: 0.05, dir: { x: dw.x - W.x, z: dw.z - W.z }, yaw: Math.atan2(dw.x - W.x, dw.z - W.z), halfWidth: CWH, vault: VC, end: { x: Wend.x, z: Wend.z }, place: p, local: { x: caveX, z: CZ0, endX: CX1 } },
           lagoon: { x: p.toWorld(-21, -16).x, z: p.toWorld(-21, -16).z, waterY: 0.05, quayY: FY, isWater: (x, z) => { const l = p.local(x, z); return wet(l.x, l.z); }, outline: LAGOON.map(([x, z]) => p.toWorld(x, z)) },
           floorY: FY, rim: (x, z) => { const l = p.local(x, z); return floorD(l.x, l.z); },
         }; }

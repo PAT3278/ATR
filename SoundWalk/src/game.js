@@ -774,12 +774,12 @@
   // (p.bore), any other path runs in a narrow gorge along it, the rock rising sheer from the path's edge. It is drawn in dark rock instead of grass.
   {
     const BLOBS = [[-126, -58, 11, 15], [-124, -86, 14, 17], [-116, -116, 12, 18], [-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: west of the ring road, north of OHH, then north-east towards the funfair
-    const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top
+    const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7], [-69, -58, 8, 10], [-87, -45, 3, 6], [-33, -88, 9, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top; the last three keep OHH's canal buried (a saddle west of the mountain, a knoll north of OHH, the mountain's foot by SHOT's way)
     const X0 = -164, X1 = 92, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz), rk = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
     places.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
     const dirs = [[0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dirs.push([Math.cos(a) * 7, Math.sin(a) * 7], [Math.cos(a) * 14, Math.sin(a) * 14]); }
-    const reliefs = places.filter((q) => q.relief), RO = { rock: 0 };
+    const reliefs = places.filter((q) => q.relief), RO = { rock: 0 }, carvers = places.filter((q) => q.carve);   // carve: a cutting a place digs through the hills and the rock alike (OHH's canal where it runs in the open)
     const inside = (p, q) => { if (!p.rim) return false; const l = p.local(q.vpW.x, q.vpW.z); return p.rim(l.x, l.z) < 0; };   // its viewpoint is on p's floor: its path comes in by p's tunnel
     const decks = ring.roads.filter((r) => r.X && r.N).map((r) => { let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (let i = 0; i < r.N; i++) { x0 = Math.min(x0, r.X[i]); x1 = Math.max(x1, r.X[i]); z0 = Math.min(z0, r.Z[i]); z1 = Math.max(z1, r.Z[i]); } return { r, x0: x0 - 30, x1: x1 + 30, z0: z0 - 30, z1: z1 + 30 }; });
     const deckCap = (x, z) => {   // how high rock may stand here and still clear every elevated road
@@ -810,11 +810,13 @@
           for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
           m *= hit;
         }
+        for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
         H *= m;
       } else H = 0;
       if (R > 0) {   // the relief: kept clear of the plaza, the loop, other places and their paths (a narrow gorge), and below the decks
         let m = smooth(PLAZA_R + 16, PLAZA_R + 26, Math.hypot(x, z)) * smooth(4, 8, distToPath(x, z, loopPath).d);
         for (const p of places) { if (m <= 0) break; if (p === own || p.onHill || inside(own, p)) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 0.4, hw + 1.4, distToPath(x, z, p.path).d); const l = p.local(x, z); if (coreOf(p)(l.x, l.z)) m = 0; }
+        for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
         R = Math.min(R * m, Math.max(0, deckCap(x, z)));
       }
       h[j * nx + i] = Math.max(H, R); rk[j * nx + i] = R > H ? Rk : 0;
@@ -843,7 +845,7 @@
     hillField.mapCanvas = hc;
   }
   // A place that lives on the hills (KEYAKI) lays its trail over them now they exist, and dresses it on groundAt.
-  places.forEach((p) => p.afterHills && p.afterHills({ groundAt, layTrail, path: p.path }));
+  places.forEach((p) => p.afterHills && p.afterHills({ groundAt, layTrail, path: p.path, boxes, circles }));   // boxes / circles: every collider so far (OHH's canal lifts those standing on the hill over it out of its way)
 
   // Trees: everywhere that isn't a path, the plaza or a place.
   {
@@ -896,7 +898,7 @@
         q.setFromAxisAngle(up, r() * Math.PI); ps.set(x, lift + hillAt(x, z), z); sc.set(h, h, h);
         trunks.push([x, z, lift + ht * 0.45, (0.13 + r() * 0.06) * s]);
         im.setMatrixAt(j, m4.compose(ps, q, sc)); im.setColorAt(j, col.copy(tints[Math.floor(r() * tints.length)]).multiplyScalar(0.85 + r() * 0.3));
-        circles.push({ x, z, r: 0.3 * s });
+        circles.push({ x, z, r: 0.3 * s, y0: hillAt(x, z) - 1.5 });   // the trunk stands on the hill: it doesn't reach down into a tunnel under it
       });
       im.castShadow = im.receiveShadow = true; im.customDepthMaterial = depthM;
       scene.add(im);
