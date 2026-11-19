@@ -12,6 +12,8 @@
   const IC = {
     cart: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.5 11h10L20 7H6.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>',
     play: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8V4z"/></svg>',
+    pause: '<svg class="ic i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h3.5v16H7zM13.5 4H17v16h-3.5z"/></svg>',
+    check: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>',
   };
   const TOUCH = matchMedia('(hover: none)').matches;
 
@@ -1388,26 +1390,195 @@
     shop: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12H6.2L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg>',
     store: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3a9 9 0 019 9"/></svg>',
   };
-  // The record store: every song, with its price and where to buy it. The same list is the phone's STORE app and the
-  // counter of the record shop on the plaza. Songs you have not found yet are on sale too; the list just says so.
+  /* ================= the shop: purchases, previews, play counts ================= */
+  // Songs bought here are kept per device, and only once the shop server (CFG.api, the NS HACK site) has asked Stripe
+  // whether the Checkout Session was paid. Without CFG.api nothing here talks to a server: the buy buttons open each
+  // song's store link and no play counts are shown. Which songs are previews is SW.isPreview (audio.js).
+  const API = CFG.api ? String(CFG.api).replace(/\/+$/, '') : null, OWN_KEY = 'soundwalk-owned', PEND_KEY = 'soundwalk-pending';
+  try { Object.assign(SW.owned, JSON.parse(localStorage.getItem(OWN_KEY) || '{}') || {}); } catch (e) { /* storage blocked */ }
+  const saveOwned = () => { try { localStorage.setItem(OWN_KEY, JSON.stringify(SW.owned)); } catch (e) { /* storage blocked: owned for this visit only */ } };
+  const pend = (sid) => { try { if (sid) localStorage.setItem(PEND_KEY, sid); else localStorage.removeItem(PEND_KEY); } catch (e) { /* storage blocked */ } };
+  const shop = { counts: null, prices: null, at: 0, down: false, notes: [] };
+  const apiCall = (path, body) => fetch(API + path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
+    .then((r) => r.json().catch(() => ({})).then((d) => (r.ok ? d : Promise.reject(Object.assign(new Error(d.error || 'HTTP ' + r.status), { status: r.status })))));
+  // The server's catalogue decides the price; until it has answered (or if it cannot be reached) songs.js's is shown.
+  const priceOf = (s) => (API && shop.prices ? shop.prices[s.id] || null : s.price || null);
+  const canCheckout = (s) => !!(API && !shop.down && priceOf(s));
+  const isOwned = (s) => !!SW.owned[s.id];
+  const fmtPlays = (n) => (n < 1000 ? String(n) : n < 1e6 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'K' : (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M');
+  const playsOf = (s) => (shop.counts && Number.isFinite(shop.counts[s.id]) && (s.src || shop.counts[s.id] > 0) ? shop.counts[s.id] : null);   // a sketch's zero says nothing
+  // Messages from the shop wait for the title screen to go.
+  function note(msg) { if (mode === 'load' || mode === 'title') shop.notes.push(msg); else toast(msg, 4600); }
+  function loadCounts(force) {
+    if (!API || (!force && Date.now() - shop.at < 30000)) return;
+    shop.at = Date.now();
+    apiCall('/plays').then((d) => {
+      const before = JSON.stringify(shop.prices);
+      shop.counts = d.counts || {}; if (d.prices) shop.prices = d.prices; shop.down = false;
+      shopRefresh(JSON.stringify(shop.prices) !== before);
+    }).catch(() => { /* no counts this time; the next look asks again */ });
+  }
+  function postPlay(id) {
+    if (!API) return;
+    apiCall('/play', { songId: id }).then((d) => { if (Number.isFinite(d.plays)) { (shop.counts = shop.counts || {})[id] = d.plays; shopRefresh(); } }).catch(() => {});
+  }
+  // Back from Checkout: ?sw_paid=<session id> is only a claim until the shop server has asked Stripe about it.
+  // A failed check (offline, server down) is kept and asked again at the next visit or the next look at the store.
+  function verify(sid) {
+    if (!API || !sid) return;
+    apiCall('/verify?session_id=' + encodeURIComponent(sid)).then((d) => {
+      pend(null);
+      const p = d.paid && places.find((q) => q.song.id === d.songId);
+      if (!p) { note('お支払いを確認できませんでした'); return; }
+      SW.owned[p.song.id] = { sid, at: Date.now() }; saveOwned();
+      if (SW.Audio.ctx) SW.Audio.unlock(p.song.id);
+      note(`♪ ${p.song.title} — ありがとうございます。この端末ではフルで聴けます`);
+      shopRefresh(true);
+    }).catch((e) => { if (e.status && e.status < 500) { pend(null); note('お支払いを確認できませんでした'); } else pend(sid); });
+  }
+  {
+    const q = new URLSearchParams(location.search), sid = q.get('sw_paid'), cancel = q.get('sw_cancel');
+    if (sid !== null || cancel !== null) {
+      history.replaceState(null, '', location.pathname + location.hash);   // a reload must not ask again
+      if (sid) verify(sid); else note('購入をキャンセルしました');
+    } else retryPending();
+  }
+  function retryPending() { let sid = null; try { sid = localStorage.getItem(PEND_KEY); } catch (e) { /* storage blocked */ } verify(sid); }
+  async function buy(p, btn) {
+    const s = p.song, link = (s.links || []).find((l) => l.kind === 'buy');
+    if (!canCheckout(s)) { if (link) window.open(link.url, '_blank', 'noopener'); return; }
+    btn.disabled = true; const label = btn.innerHTML; btn.textContent = '…';
+    try {
+      const d = await apiCall('/checkout', { songId: s.id, returnUrl: location.origin + location.pathname });
+      if (!d.url) throw new Error('no checkout url');
+      save(); SW.Audio.player.stop();   // Checkout replaces this page; it comes back to the same spot
+      location.href = d.url;
+      return;
+    } catch (e) {
+      shop.down = true;   // the buttons fall back to the store links until the server answers again
+      toast(link ? '購入ページを開けませんでした。ストアのリンクからどうぞ。' : '購入ページを開けませんでした。時間をおいてお試しください。', 3800);
+      shopRefresh(true);
+    }
+    btn.disabled = false; btn.innerHTML = label;
+  }
+  // The main button for a song: owned, a direct sale through the shop server, the store link, or not yet.
+  function buyHTML(p, i) {
+    const s = p.song, link = (s.links || []).find((l) => l.kind === 'buy');
+    if (isOwned(s)) return `<button class="btn owned" type="button" disabled aria-label="${esc(s.title)} は購入済み">${IC.check}<span>OWNED</span></button>`;
+    if (canCheckout(s)) return `<button class="btn primary" type="button" data-buy="${i}" aria-label="${esc(s.title)} を ${yen(priceOf(s))} で買う">${IC.cart}<span>${yen(priceOf(s))}</span></button>`;
+    if (link) return `<a class="btn primary" href="${esc(link.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(link.label)}">${IC.cart}<span>BUY ↗</span></a>`;
+    return '<button class="btn" type="button" disabled aria-label="準備中">SOON</button>';
+  }
+  // What kind of listen it is: a preview of the unreleased, the full song, or the stand-in sketch.
+  function tagOf(s) {
+    if (!s.src) return '<span class="tr-tag">DEMO</span>';
+    if (SW.isPreview(s)) return `<span class="tr-tag pv">PREVIEW ${CFG.preview || 20}s</span>`;
+    return '<span class="tr-tag">FULL</span>';
+  }
+
+  // The store player (SoundCloud-like): play / pause, the waveform with the playhead (a preview lights the stretch of the
+  // song it is playing), time, plays, and the buy button. The waveform is the real one once the file has been read on
+  // this device, a stand-in until then; it is the same row in the phone's STORE and MUSIC and at the shop's counter.
+  const player = SW.Audio.player, waves = {};
+  function waveOf(s) {
+    if (waves[s.id]) return waves[s.id];
+    const real = SW.Audio.cachedPeaks(s);
+    if (real) return (waves[s.id] = { pk: real, real: true });
+    let h = 2166136261; for (const ch of s.id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const r = rng(h), n = 120; let v = 0.55;
+    return (waves[s.id] = { real: false, pk: Array.from({ length: n }, (_, i) => { v = clamp(v + (r() - 0.5) * 0.3, 0.25, 1); return Math.max(0.06, v * (0.55 + 0.45 * r()) * Math.min(1, (i + 1) / 6, (n - i) / 8)); }) });
+  }
+  const mmss = (x) => { x = Math.max(0, Math.floor(x || 0)); return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`; };
+  function timeOf(inf) {
+    if (inf.demo) return mmss(inf.el);   // a sketch loops: just how long it has been on
+    if (inf.a != null && inf.state !== 'stop') return `${mmss(clamp(inf.t - inf.a, 0, inf.len))} / ${mmss(inf.len)}`;
+    if (inf.preview) return `0:00 / ${mmss(inf.len)}`;
+    return `${mmss(inf.state === 'stop' ? 0 : inf.t)} / ${inf.dur ? mmss(inf.dur) : '-:--'}`;
+  }
+  function trackHTML(p, i, bare) {
+    const s = p.song, n = playsOf(s), sub = [s.artist || CFG.artist, s.year, p.found ? s.place : '未発見'].filter(Boolean).join(' · ');
+    return `<div class="tr" data-tr="${i}" style="--c:${esc(p.found ? p.color : '#b3161d')}">`
+      + `<button class="tr-play" type="button" data-play="${i}" aria-label="${esc(s.title)} を再生">${IC.play}${IC.pause}</button>`
+      + `<div class="tr-main">${bare ? '' : `<span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span>`}`
+      + `<canvas class="tr-wave" data-seek="${i}" aria-hidden="true"></canvas>`
+      + `<div class="tr-foot"><span class="tr-time">${timeOf(player.info(s))}</span>${tagOf(s)}<span class="tr-plays" data-plays="${esc(s.id)}"${n == null ? ' hidden' : ''}>▶ ${n == null ? '' : fmtPlays(n)}</span>`
+      + `<span class="tr-buy">${buyHTML(p, i)}</span></div></div></div>`;
+  }
+  function drawWave(cv, p, inf) {
+    const dpr = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const g = cv.getContext('2d'), w = waveOf(p.song), n = w.pk.length, bw = W / n, base = H * 0.74;
+    const dur = inf.dur || 0, head = inf.state !== 'stop' && dur ? clamp(inf.t / dur, 0, 1) : 0;
+    const a = inf.a != null && dur ? inf.a / dur : null, b = a != null ? (inf.a + inf.len) / dur : null;
+    const col = getComputedStyle(cv.closest('.tr')).getPropertyValue('--c').trim() || '#b3161d';
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+    if (a != null) { g.fillStyle = 'rgba(224,178,90,.12)'; g.fillRect(a * W, 0, (b - a) * W, H); }   // the excerpt's stretch
+    for (let k = 0; k < n; k++) {
+      const x = k * bw, u = (k + 0.5) / n, h = Math.max(1.5, w.pk[k] * base * (w.real ? 1 : 0.8));
+      const lit = inf.state !== 'stop' && u <= head && (a == null || u >= a);
+      g.globalAlpha = lit ? 1 : a != null && u >= a && u <= b ? 0.62 : inf.preview && a == null ? 0.3 : 0.42;
+      g.fillStyle = lit ? col : '#d8d2c0';
+      g.fillRect(x + bw * 0.18, base - h, Math.max(1, bw * 0.64), h);
+      g.globalAlpha *= 0.35; g.fillRect(x + bw * 0.18, base + 1, Math.max(1, bw * 0.64), h * 0.3);   // the reflection
+    }
+    g.globalAlpha = 1;
+    if (inf.state !== 'stop' && dur) { g.fillStyle = '#d8d2c0'; g.fillRect(Math.round(head * W) - 0.5, 0, 1, H); }
+  }
+  // Each frame while the phone or the counter is open: only rows whose state moved are redrawn.
+  let plT = 0;
+  function playerUI(dt) {
+    if ((plT -= dt) > 0) return;
+    plT = 1 / 20;
+    for (const el of phScreen.querySelectorAll('[data-tr]')) {
+      const p = places[+el.dataset.tr], inf = player.info(p.song), cv = el.querySelector('.tr-wave');
+      const on = inf.state === 'play';
+      if (el.classList.contains('on') !== on) { el.classList.toggle('on', on); el.querySelector('.tr-play').setAttribute('aria-label', `${p.song.title} を${on ? '一時停止' : '再生'}`); }
+      el.classList.toggle('wait', !!inf.waiting);
+      const tx = timeOf(inf), tEl = el.querySelector('.tr-time'); if (tEl.textContent !== tx) tEl.textContent = tx;
+      const key = `${inf.state}${(inf.t || 0).toFixed(2)}${inf.a}${cv.clientWidth}${waveOf(p.song).real}`;
+      if (cv.dataset.k !== key) { cv.dataset.k = key; drawWave(cv, p, inf); }
+    }
+  }
+  function wantWave(s) { if (s.src && !waveOf(s).real) SW.Audio.peaks(s).then((pk) => { if (pk) { waves[s.id] = { pk, real: true }; plT = 0; } }); }
+  function playTrack(p) { player.toggle(p.song); wantWave(p.song); }
+  // The counts, prices and owned marks changed: update what is on screen (the whole list only when a button changes).
+  function shopRefresh(buttons) {
+    if (buttons && mode === 'phone' && (phView === 'store' || phView === 'song')) phRender(true);
+    else for (const el of document.querySelectorAll('[data-plays]')) { const p = places.find((q) => q.song.id === el.dataset.plays), n = p ? playsOf(p.song) : null; el.hidden = n == null; if (n != null) el.textContent = '▶ ' + fmtPlays(n); }
+    if (viewPlace) viewInfo(viewPlace, buttons);
+  }
+  // Play counts: a play is one real listen — the song itself heard on its own (the store player, its view, or riding it)
+  // for PLAY_S seconds. It counts once, and again only after it has been out of earshot for a while (a replay).
+  // Listening time is read off the song's own clock (what was actually played), so a slow frame rate cannot skew it.
+  const PLAY_S = 6, listens = {};
+  let countAt = 0;
+  function countTick() {
+    if (!API || !SW.Audio.started) return;
+    const A = SW.Audio, now = performance.now() / 1000, dt = Math.min(2, now - (countAt || now));
+    countAt = now;
+    let ch = player.state === 'play' ? player.ch : null;
+    if (!ch) { const p = viewPlace || (ride && ride.p); ch = p ? A.channels[p.idx] : null; }
+    const id = ch && ch.mode === 'media' && ch.audible() && !A.muted && A.ctx.state === 'running' ? ch.song.id : null;
+    for (const k in listens) if (k !== id) { const L = listens[k]; L.at = null; if ((L.idle += dt) > 30) delete listens[k]; }
+    if (!id) return;
+    const L = (listens[id] = listens[id] || { heard: 0, sent: false, idle: 0, at: null }), ct = ch.el.currentTime, d = L.at == null ? 0 : ct - L.at;
+    L.idle = 0; L.at = ct;
+    if (d > 0 && d < 2) L.heard += d;   // a jump (the next excerpt, a seek) is not listening
+    if (!L.sent && L.heard >= PLAY_S) { L.sent = true; postPlay(id); }
+  }
+
+  // The record store: every song as a player row, with its price and where to buy it. The same list is the phone's STORE
+  // app and the counter of the record shop on the plaza. Songs you have not found yet are on sale too; the list just says so.
   function storeHTML() {
-    const STORE = CFG.store || { name: 'RECORDS' }, rows = places.map((p, i) => {
-      if (p.song.store === false) return '';
-      const s = p.song, buy = (s.links || []).find((l) => l.kind === 'buy'), listen = (s.links || []).find((l) => l.kind !== 'buy');
-      const pay = CFG.checkoutEndpoint && s.price
-        ? `<button class="btn primary" type="button" data-buy="${i}" aria-label="${esc(s.title)} を ${yen(s.price)} で買う">${IC.cart}<span>${yen(s.price)}</span></button>`
-        : buy ? `<a class="btn primary" href="${esc(buy.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(buy.label)}">${IC.cart}<span>BUY ↗</span></a>`
-          : '<button class="btn" type="button" disabled aria-label="準備中">SOON</button>';
-      const lis = listen ? `<a class="btn" href="${esc(listen.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(listen.label)}">${IC.play}</a>` : '';
-      const sub = [s.year, p.found ? s.place : '未発見', s.price && !CFG.checkoutEndpoint ? yen(s.price) : ''].filter(Boolean).join(' · ');
-      return `<div class="st-row"><span class="dot" style="background:${esc(p.found ? p.color : '#55524a')}"></span><span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span><span class="st-acts">${lis}${pay}</span></div>`;
-    }).join('');
+    const STORE = CFG.store || { name: 'RECORDS' }, rows = places.map((p, i) => (p.song.store === false ? '' : trackHTML(p, i))).join('');
     return `<h3 class="ph-h">${esc(STORE.name)}</h3><p class="ph-sub">${places.filter((p) => p.song.store !== false).length} SONGS · DIGITAL</p>${rows}`;
   }
   let phView = 'home', phSong = null;
   const phScreen = $('#phScreen');
-  function phRender() {
-    const d = new Date();
+  function phRender(keep) {
+    const d = new Date(), was = keep && document.activeElement && phScreen.contains(document.activeElement) ? document.activeElement : null;
+    const wasSel = was && ['data-play', 'data-buy', 'data-go', 'data-song', 'data-warp'].map((a) => (was.hasAttribute(a) ? `[${a}="${was.getAttribute(a)}"]` : '')).find(Boolean);
     $('#phClock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     $('#phCount').textContent = `♪ ${places.filter((p) => p.found).length}/${places.length}`;
     let h = '';
@@ -1421,8 +1592,8 @@
         ? `<button class="ph-row" type="button" data-song="${i}"><span class="dot" style="background:${esc(p.color)}"></span><span class="nm">${esc(p.song.title)}<small>${esc(p.song.artist || CFG.artist)}</small></span></button>`
         : '<button class="ph-row" type="button" disabled><span class="dot" style="background:#55524a"></span><span class="nm">？</span></button>').join('');
     } else if (phView === 'song' && phSong) {
-      const s = phSong.song, links = (s.links || []).map((l) => `<a class="btn${l.kind === 'buy' ? ' primary' : ''}" href="${esc(l.url)}" target="_blank" rel="noopener" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>BUY ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
-      h = `<h3 class="ph-h">MUSIC</h3><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc([(s.artist || CFG.artist), s.year].filter(Boolean).join(' · '))}</p><div class="ph-acts">${links}<button class="btn" type="button" data-warp="1">${PHI.map}<span>GO</span></button></div>`;
+      const s = phSong.song, links = (s.links || []).filter((l) => l.kind !== 'buy' || canCheckout(s) || isOwned(s)).map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>STORE ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
+      h = `<h3 class="ph-h">MUSIC</h3><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc([(s.artist || CFG.artist), s.year].filter(Boolean).join(' · '))}</p>${trackHTML(phSong, phSong.idx, true)}<div class="ph-acts">${links}<button class="btn" type="button" data-warp="1">${PHI.map}<span>GO</span></button></div>`;
     } else if (phView === 'store') {
       h = storeHTML();
     } else if (phView === 'live') {
@@ -1431,9 +1602,12 @@
       let host = CFG.shop.url; try { host = new URL(CFG.shop.url).host; } catch (e) { /* keep */ }
       h = `<h3 class="ph-h">SHOP</h3><p class="ph-big">${esc(CFG.shop.name || host)}</p><p class="ph-sub">${esc(host)}</p><div class="ph-acts"><a class="btn primary" href="${esc(CFG.shop.url)}" target="_blank" rel="noopener">GO ↗</a></div>`;
     }
+    const top = phScreen.scrollTop;
     phScreen.innerHTML = h;
-    const first = phScreen.querySelector('button:not([disabled]), a');
+    if (keep) phScreen.scrollTop = top;
+    const first = (wasSel && phScreen.querySelector(wasSel)) || phScreen.querySelector('button:not([disabled]), a');
     (first || $('#phClose')).focus({ preventScroll: true });
+    plT = 0; playerUI(0);
   }
   function openPhone(view, counter) {
     if (mode !== 'walk') return;
@@ -1441,11 +1615,13 @@
     document.body.classList.add('busy'); if (!counter) avatar.setPhone(true);
     $('#phone').classList.toggle('counter', !!counter);   // at the shop's counter the store opens as a big catalogue, not on the phone
     $('#phone').hidden = false; phRender();
+    loadCounts(); retryPending();
   }
   const openStore = () => openPhone('store', true);
   function closePhone() {
     if (mode !== 'phone') return;
     mode = 'walk'; $('#phone').hidden = true; $('#phone').classList.remove('counter'); document.body.classList.remove('busy'); avatar.setPhone(false);
+    player.stop();   // the store player is a listening booth: the places take over again
     cv.focus({ preventScroll: true });
   }
   function phoneBack() { if (phView === 'home' || $('#phone').classList.contains('counter')) closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
@@ -1460,9 +1636,15 @@
     if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); }
   }
   phScreen.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-go], [data-song], [data-warp], [data-buy]');
+    const b = e.target.closest('[data-go], [data-song], [data-warp], [data-buy], [data-play], [data-seek]');
     if (!b) return;
-    if (b.dataset.buy !== undefined) { checkout(places[+b.dataset.buy].song, b); return; }
+    if (b.dataset.buy !== undefined) { buy(places[+b.dataset.buy], b); return; }
+    if (b.dataset.play !== undefined) { playTrack(places[+b.dataset.play]); plT = 0; return; }
+    if (b.dataset.seek !== undefined) {   // a full song jumps there; a preview just plays (its excerpt is chosen for you)
+      const p = places[+b.dataset.seek], r = b.getBoundingClientRect();
+      if (player.seek(p.song, (e.clientX - r.left) / r.width)) wantWave(p.song); else if (player.song !== p.song || player.state !== 'play') playTrack(p);
+      plT = 0; return;
+    }
     if (b.dataset.go === 'map') { closePhone(); openMap(); }
     else if (b.dataset.go) { phView = b.dataset.go; phRender(); }
     else if (b.dataset.song !== undefined) { phSong = places[+b.dataset.song]; phView = 'song'; phRender(); }
@@ -1901,29 +2083,29 @@
     $('#vPlace').textContent = s.place;
     $('#vTitle').textContent = s.title;
     $('#vMeta').textContent = [(s.artist || CFG.artist) + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
-    const acts = $('#vActions');
-    acts.innerHTML = '';
-    const canCheckout = !!(CFG.checkoutEndpoint && s.price);
-    if (canCheckout) {
-      const b = document.createElement('button');
-      b.className = 'btn primary'; b.type = 'button'; b.innerHTML = `${IC.cart}<span>${yen(s.price)}</span>`;
-      b.addEventListener('click', () => checkout(s, b));
-      acts.appendChild(b);
-    }
-    (s.links || []).forEach((l, i) => {
-      const a = document.createElement('a');
-      a.className = 'btn' + (!canCheckout && l.kind === 'buy' && i === 0 ? ' primary' : '');
-      a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
-      a.innerHTML = l.kind === 'buy' ? `${IC.cart}<span>BUY ↗</span>` : `${IC.play}<span>LISTEN ↗</span>`; a.title = l.label; a.setAttribute('aria-label', l.label);
-      acts.appendChild(a);
-    });
-    if (!acts.children.length) { const n = document.createElement('button'); n.className = 'btn'; n.type = 'button'; n.disabled = true; n.innerHTML = `${IC.cart}<span>SOON</span>`; n.setAttribute('aria-label', '購入ページは準備中'); acts.appendChild(n); }
+    viewInfo(p, true);
     const ch = SW.Audio.channels[p.idx];
     $('#vSketch').hidden = !(ch && ch.mode === 'sketch');
     $('#view').hidden = false;
     $('#prompt').hidden = true; lastFocus = undefined;
-    setTimeout(() => { const f = acts.querySelector('.btn'); if (f && !TOUCH) f.focus({ preventScroll: true }); }, 900);
+    loadCounts();
+    setTimeout(() => { const f = $('#vActions').querySelector('.btn:not([disabled])'); if (f && !TOUCH && mode === 'view') f.focus({ preventScroll: true }); }, 900);
   }
+  // The card's line about the listen (a preview, or bought) and its play count, and its buttons: the main one as in the
+  // store, then the song's other links (the store link stays as a second way to buy when the sale is direct).
+  function viewInfo(p, buttons) {
+    const s = p.song, n = playsOf(s), bits = [];
+    if (s.src && SW.isPreview(s)) bits.push(`PREVIEW ${CFG.preview || 20}s`);
+    else if (s.src && isOwned(s) && SW.access(s) === 'preview') bits.push('OWNED · FULL');
+    if (n != null) bits.push('▶ ' + fmtPlays(n));
+    $('#vInfo').textContent = bits.join(' · '); $('#vInfo').hidden = !bits.length;
+    if (!buttons) return;
+    let main = buyHTML(p, p.idx);
+    const links = (s.links || []).filter((l) => l.kind !== 'buy' || !main.includes(esc(l.url)));
+    if (links.length && main.includes('準備中')) main = '';   // "soon" only when there is nothing else to offer
+    $('#vActions').innerHTML = main + links.map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(l.label)}" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>STORE ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
+  }
+  $('#vActions').addEventListener('click', (e) => { const b = e.target.closest('[data-buy]'); if (b) buy(places[+b.dataset.buy], b); });
   function exitView() {
     if (mode !== 'view') return;
     snapCam(); camBlendDur = RM ? 0.01 : 0.9;
@@ -1934,27 +2116,6 @@
     cv.focus({ preventScroll: true });
   }
   $('#backBtn').addEventListener('click', () => (mode === 'ride' ? endRide() : exitView()));
-
-  async function checkout(s, btn) {
-    btn.disabled = true;
-    const label = btn.innerHTML;
-    btn.textContent = '…';
-    try {
-      const res = await fetch(CFG.checkoutEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ name: `${s.title} — ${CFG.artist} (Digital)`, price: s.price, quantity: 1 }] }) });
-      const data = await res.json();
-      if (data.url) { location.href = data.url; return; }
-      if (data.sessionId && CFG.stripePublishableKey) {
-        if (!window.Stripe) await new Promise((ok, ng) => { const sc = document.createElement('script'); sc.src = 'https://js.stripe.com/v3/'; sc.onload = ok; sc.onerror = ng; document.head.appendChild(sc); });
-        await window.Stripe(CFG.stripePublishableKey).redirectToCheckout({ sessionId: data.sessionId });
-        return;
-      }
-      throw new Error('no checkout url');
-    } catch (e) {
-      toast('購入ページを開けませんでした。ストアのリンクからお試しください。', 3600);
-    } finally {
-      btn.disabled = false; btn.innerHTML = label;
-    }
-  }
 
   /* ================= map ================= */
   const mapCv = $('#mapCanvas'), mg = mapCv.getContext('2d');
@@ -2384,6 +2545,8 @@
     mode = 'walk';
     updateRegion(false);
     cv.focus({ preventScroll: true });
+    loadCounts(true);
+    if (shop.notes.length) setTimeout(() => toast(shop.notes.splice(0).join(' / '), 5200), 1400);   // e.g. back from Checkout
   }
   $('#startBtn').addEventListener('click', start);
 
@@ -2459,6 +2622,8 @@
     update(dt);
     if (hoop) hoopTick(dt);
     if (pool) poolTick(dt);
+    if (mode === 'phone') playerUI(dt);
+    countTick();
     if (camHold) camHold(camera);   // debug: a test can fly the camera
     post.uniforms.time.value = t; skyU.time.value = t;
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
@@ -2484,5 +2649,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();

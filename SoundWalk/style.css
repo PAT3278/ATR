@@ -215,20 +215,38 @@ body.viewing #bars i { height: 10vh; }
   .card { animation: none; }
 }
 
-/* ---------- record store (phone app, and the shop counter) ---------- */
-.st-row { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; background: #1b1a18; border: 1px solid var(--line); border-radius: 3px; font-family: var(--f-head); font-size: 15px; letter-spacing: .04em; }
-.st-row .dot { width: 10px; height: 10px; flex: none; transform: rotate(45deg); }
-.st-row .nm { display: flex; flex-direction: column; min-width: 0; flex: 1; overflow-wrap: anywhere; }
-.st-row .nm small { color: var(--dim); font-size: 11px; letter-spacing: .06em; }
-.st-acts { display: flex; gap: 6px; flex: none; }
-.st-acts .btn { font-size: 13px; padding: 7px 10px 5px; letter-spacing: .08em; }
-.st-acts .btn .ic { width: 16px; height: 16px; }
+/* ---------- record store (phone app, and the shop counter): a player row per song ---------- */
+.tr { display: flex; align-items: flex-start; gap: 10px; padding: 10px 10px 9px; background: #1b1a18; border: 1px solid var(--line); border-radius: 3px; font-family: var(--f-head); }
+.tr.on { border-color: var(--c, var(--red)); box-shadow: inset 2px 0 0 var(--c, var(--red)); }
+.tr-play { flex: none; width: 38px; height: 38px; margin-top: 1px; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: #151412; color: var(--bone); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+.tr-play .ic { width: 15px; height: 15px; fill: currentColor; stroke: none; }
+.tr-play .i-pause, .tr.on .tr-play .ic:first-child { display: none; }
+.tr.on .tr-play .i-pause { display: block; }
+.tr.on .tr-play { background: var(--red-deep); border-color: var(--red); }
+.tr.wait .tr-play .i-pause { animation: blink 1s steps(2) infinite; }
+.tr-play:hover, .tr-play:focus-visible { background: var(--bone); color: #0a0a09; outline: none; }
+.tr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.tr .nm { display: flex; flex-direction: column; min-width: 0; font-size: 15px; letter-spacing: .04em; overflow-wrap: anywhere; }
+.tr .nm small { color: var(--dim); font-size: 11px; letter-spacing: .06em; }
+.tr-wave { display: block; width: 100%; height: 30px; cursor: pointer; }
+.tr-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 11px; letter-spacing: .06em; color: var(--dim); }
+.tr-time { color: var(--bone); font-variant-numeric: tabular-nums; }
+.tr-tag { padding: 2px 5px 0; border: 1px solid var(--line); font-size: 9px; letter-spacing: .16em; line-height: 1.3; }
+.tr-tag.pv { color: #e0b25a; border-color: rgba(224, 178, 90, .55); }
+.tr-buy { margin-left: auto; display: flex; }
+.tr-buy .btn { font-size: 13px; padding: 7px 10px 5px; letter-spacing: .08em; }
+.tr-buy .btn .ic, .acts .btn .ic { width: 16px; height: 16px; }
+.btn.owned[disabled] { opacity: 1; color: var(--green); border-color: rgba(134, 181, 58, .55); }
+.c-info { margin: 6px 0 0; font-family: var(--f-head); font-size: 12px; letter-spacing: .14em; color: #e0b25a; }
 #phone.counter { border-radius: 6px; right: 50%; bottom: auto; top: 50%; transform: translate(50%, -50%); width: min(560px, calc(100% - 32px)); height: min(600px, calc(100% - 48px)); animation: none; border-left: 3px solid var(--red); }
 #phone.counter .ph-top { visibility: hidden; height: 6px; padding: 0; }
 #phone.counter .ph-screen { padding: 18px; gap: 10px; }
 #phone.counter .ph-h { font-size: 15px; }
-#phone.counter .st-row { padding: 10px 10px 10px 14px; font-size: 17px; }
-@media (max-width: 420px) { .st-row { flex-wrap: wrap; } .st-acts { width: 100%; justify-content: flex-end; } }
+#phone.counter .tr { padding: 12px 12px 10px 12px; gap: 14px; }
+#phone.counter .tr .nm { font-size: 17px; }
+#phone.counter .tr-play { width: 46px; height: 46px; }
+#phone.counter .tr-wave { height: 38px; }
+.ph-screen > .tr:not(:has(.nm)) { margin-top: 6px; }
 
 /* ---------- mini-games ---------- */
 #mgame { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 22px); top: 50%; transform: translateY(-50%); z-index: 6; width: 150px; padding: 14px 14px 12px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--red); box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, .6); font-family: var(--f-head); display: flex; flex-direction: column; gap: 10px; align-items: stretch; }

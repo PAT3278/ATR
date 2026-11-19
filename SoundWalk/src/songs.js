@@ -8,18 +8,18 @@
  *   - src        the real audio file. Leave null to play the built-in generative sketch instead.
  *                Put files in ../audio/ and serve the folder over http (see README) — e.g. 'audio/keyaki.mp3'.
  *   - sketch     which generative sketch plays while src is null (same names as scene)
- *   - links      buttons on the view card. kind 'buy' is highlighted.
- *   - price      yen. Used only when CONFIG.checkoutEndpoint is set (direct sale via Stripe Checkout).
+ *   - links      buttons on the view card. kind 'buy' is highlighted, and is where the buy button goes when there is no shop server.
+ *   - price      yen, shown on the buy button. With CONFIG.api set the shop server's catalogue has the final say (it sends its prices).
+ *   - access     'preview' | 'full' (default CONFIG.access). Only matters for a real file (src):
+ *                preview — until it is bought on this device, the song is only ever heard as random excerpts of CONFIG.preview
+ *                          seconds, a different stretch each time, faded in and out: at its place on the map and in the store player alike.
+ *                full    — plays through for free, like SoundCloud. The buy button is still there.
  */
 window.SW = window.SW || {};
 
 SW.CONFIG = {
   title: 'SOUND WALK',
   artist: 'NS HACK',
-  // Direct sales through Stripe Checkout. Leave null to use only the store links on each song.
-  // When this page is served from the NS HACK site, point it at that site's endpoint:
-  //   checkoutEndpoint: '/api/stripe/checkout'
-  // The endpoint receives { items: [{ name, price, quantity }] } and should answer { url } (or { sessionId }).
   // Next show, shown in the live house beside the riverside (TAMA EXPRESSION). Edit here when it changes.
   live: { date: '12.26', place: 'TOKYO' },
   // Where the train at the station above the live house takes you: another site, opened after a "go there?" prompt.
@@ -27,8 +27,12 @@ SW.CONFIG = {
   shop: { name: 'CLOSET QUEST', url: 'https://claude.ai/artifact/Nb3fetixjJJ4mQEfbmMq58' },
   // The record shop on the plaza and the phone's STORE app sell atr's releases. A song with store: false is left out.
   store: { name: 'ATR RECORDS' },
-  checkoutEndpoint: null,
-  stripePublishableKey: null, // only needed if the endpoint answers { sessionId } instead of { url }
+  // The shop server: the NS HACK site's SOUND WALK API (Stripe Checkout, the purchase check, play counts), e.g.
+  //   api: 'https://nshack.example.com/api/soundwalk'
+  // Leave null and the buy buttons open each song's store link (kind 'buy') instead, and no play counts are shown.
+  api: null,
+  access: 'preview',   // for songs without their own access (see the top of this file)
+  preview: 20,         // seconds in each preview excerpt
 };
 
 SW.SONGS = [
@@ -43,6 +47,7 @@ SW.SONGS = [
     scene: 'keyaki',
     sketch: 'keyaki',
     src: null,
+    access: 'full',   // out on the stores already: free to hear in full
     color: '#b6e07a',
     price: 250,
     links: [
@@ -60,6 +65,7 @@ SW.SONGS = [
     scene: 'tama',
     sketch: 'tama',
     src: null,
+    access: 'full',   // out on the stores already: free to hear in full
     color: '#ffb36b',
     price: 250,
     links: [
@@ -77,6 +83,7 @@ SW.SONGS = [
     scene: 'flip',
     sketch: 'flip',
     src: null,
+    access: 'full',   // out on the stores already: free to hear in full
     color: '#a77bff',   // violet (was pink)
     price: 250,
     links: [
@@ -97,6 +104,7 @@ SW.SONGS = [
     scene: 'park',
     sketch: 'stereotype',
     src: null,
+    access: 'preview',   // unreleased: heard in excerpts until bought
     color: '#e8b23a',
     links: [],
   },
@@ -112,6 +120,7 @@ SW.SONGS = [
     scene: 'parkwheel',
     sketch: 'flash',
     src: null,
+    access: 'preview',   // unreleased: heard in excerpts until bought
     color: '#6cc0e8',
     links: [],
   },
@@ -127,6 +136,7 @@ SW.SONGS = [
     scene: 'flash',
     sketch: 'flash',
     src: null,
+    access: 'full',   // already public on SoundCloud: free to hear in full
     color: '#8fd3ff',
     price: 200,
     links: [
@@ -145,6 +155,7 @@ SW.SONGS = [
     scene: 'field',
     sketch: 'flip',
     src: 'audio/field.mp3',
+    access: 'preview',   // unreleased: heard in excerpts until bought
     // Who has the verse, by time in the track (seconds). The two figures on the brownstone stoops follow this.
     length: 125.2,
     parts: [{ at: 0, who: 'stvn' }, { at: 40, who: 'vas' }, { at: 67, who: 'stvn' }, { at: 95, who: 'vas' }],
@@ -164,6 +175,7 @@ SW.SONGS = [
     scene: 'shot',
     sketch: 'shot',
     src: 'audio/shot.mp3',
+    access: 'preview',   // unreleased: heard in excerpts until bought
     color: '#ffa53a',
     price: 250,
     links: [],
@@ -180,6 +192,7 @@ SW.SONGS = [
     scene: 'ohh',
     sketch: 'ohh',
     src: 'audio/ohh.mp3',
+    access: 'preview',   // unreleased: heard in excerpts until bought
     color: '#5fd0ff',
     price: 250,
     links: [],
