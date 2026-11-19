@@ -778,7 +778,7 @@
         for (let k = 0; k < dirs.length; k++) { const l = p.local(x + dirs[k][0], z + dirs[k][1]); if (core(l.x, l.z)) { hit = Math.min(hit, k === 0 ? 0 : k % 2 ? 0.3 : 0.8); if (!hit) break; } }
         m *= hit;
       }
-      h[j * nx + i] = H * m;
+      h[j * nx + i] = H * m * (ohh && ohh.hillMask && m > 0 ? ((l) => ohh.hillMask(l.x, l.z))(ohh.local(x, z)) : 1);   // OHH's coast: the hills come down behind its beaches, never over the sand, the harbour or the sea
     }
     hillField = { x0: X0, z0: Z0, d: D, nx, nz, h };
     // the mesh: one grid over the whole field, its flat parts tucked just under the ground
@@ -2227,7 +2227,8 @@
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
       const f = p.f || SILENT;
-      if (v > 0.001 || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
+      const awake = v > 0.001 || (p.wake && ((l) => p.wake(l.x, l.z))(p.local(P.x, P.z)));   // a place whose life reaches further than its light (OHH's beaches) keeps moving while you are out there
+      if (awake || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
       p.group.visible = !viewPlace || viewPlace === p || camBlend < 1;
       const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
