@@ -1253,7 +1253,7 @@
         // Midtown: screens pulse with their bands, the ticker runs, cabs drive, people walk, the lights change, steam rises
         mid.screens.forEach((s2) => { const v = 0.55 + band(f, s2.k * 3 % 24, 24) * 0.8 + Math.sin(t * 1.3 + s2.seed) * 0.08; s2.m.color.setRGB(v, v, v); });
         if (mid.ticker) mid.ticker.offset.x = (t * 0.035) % 1;
-        mid.cabs.forEach((c) => { const nearRb = (() => { const f = c.s / cabLoop.L; return f > 0.35 && f < 0.65; })(); c.s = (c.s + c.v * (nearRb ? 0.6 : 1) * dt) % cabLoop.L;   // slower round the roundabout
+        mid.cabs.forEach((c) => { const nearRb = (() => { const f = c.s / cabLoop.L; return f > 0.35 && f < 0.65; })(); c.s = (((c.s + c.v * (nearRb ? 0.6 : 1) * dt) % cabLoop.L) + cabLoop.L) % cabLoop.L; if (!(c.s >= 0)) c.s = 0;   // slower round the roundabout; always on the loop, whatever dt was
           const u = (c.s / cabLoop.L) * cabLoop.n, i = Math.min(cabLoop.n - 1, Math.floor(u)), a = cabLoop.P[i], b2 = cabLoop.P[i + 1], k = u - i;
           c.c.position.set(a.x + (b2.x - a.x) * k, 0.03, a.z + (b2.z - a.z) * k);
           const want = Math.atan2(b2.x - a.x, b2.z - a.z), d = Math.atan2(Math.sin(want - c.yaw), Math.cos(want - c.yaw)); c.yaw = Math.abs(d) > 2.5 ? want : c.yaw + d * Math.min(1, dt * 8); c.c.rotation.y = c.yaw; });
