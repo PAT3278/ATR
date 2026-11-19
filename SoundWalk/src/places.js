@@ -12,8 +12,11 @@
  *   p.face       local yaw the avatar faces at the viewpoint
  *   p.pathEnd    local z where the path from the plaza ends
  *   p.blocks     (lx, lz) -> true where random trees must not grow
- *   p.ground     optional (lx, lz) -> height
- * and uses p.addCircle / p.addBox for collisions and p.pick for click-to-walk surfaces.
+ *   p.ground     optional (lx, lz, y) -> height; y is the walker's height (undefined: from above). A deck someone can
+ *                walk under returns its height only when E.onDeck(deckY, y), so nobody underneath is lifted onto it
+ *   p.shore      optional (lx, lz) -> true where the land runs on past the world's land edge (|x|, |z| > 145)
+ * and uses p.addCircle / p.addBox for collisions (a box can be turned further: set its c, s to the cosine and sine
+ * of p.rot plus the thing's own yaw) and p.pick for click-to-walk surfaces.
  */
 (function () {
   'use strict';
@@ -517,8 +520,10 @@
             const sg = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(3.4, w - 0.8), 0.72), sm); const [sx, sz] = at(0, fz + 0.04); sg.position.set(sx, 3.5, sz); sg.rotation.y = yaw; g.add(sg);
             if (kind === 'beach') { box(w, 0.2, 3.2, 0, 0.1, d / 2 + 1.6, wood); for (const sd of [-1, 1]) box(0.12, 2.6, 0.12, sd * (w / 2 - 0.3), 1.3, d / 2 + 3.0, wood); box(w, 0.1, 3.4, 0, 2.6, d / 2 + 1.6, AWN[Math.floor(pr() * AWN.length)]); }   // a wooden deck under a canopy
           } else box(1.0, 2.1, 0.08, w > 5.4 ? -w / 4 : w / 4 - 0.3, 1.05, fz, wood, false);   // the front door
-          if (yaw === 0 || yaw === Math.PI) p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05);
-          else for (let k = -1; k <= 1; k++) { const [cx, cz] = at(k * (w / 3), 0); p.addCircle(cx, cz, Math.max(w / 3, d / 2) * 0.95); }
+          // its walls, turned with it (a box turned by the place's and the building's angle together): no wider than it is, so the
+          // gaps between the beach houses stay open from the promenade to the car park behind
+          { const bb = p.addBox(x, z, w / 2 + 0.05, d / 2 + 0.05); bb.c = Math.cos(p.rot + yaw); bb.s = Math.sin(p.rot + yaw); }
+          if (kind === 'beach') for (const sd of [-1, 1]) { const [cx, cz] = at(sd * (w / 2 - 0.3), d / 2 + 3.0); p.addCircle(cx, cz, 0.12); }   // the canopy's posts
           city.push(1); port.feet.push({ x, z, w, d, yaw });
           return true;
         };
@@ -553,7 +558,7 @@
         // under the ring road: a car park between the piers (painted bays, parked cars), the length of the coast
         { const [cx, cz] = atST(27, 21); flat(38, 13, cx, cz, walkM(12, 4), 0.045, SEA_YAW);
           const cars = []; for (let t = 9; t < 45; t += 2.6) for (const s of [17.5, 25]) { const [bx, bz] = atST(t, s); if (pierPts.some(([px, pz]) => Math.hypot(px - bx, pz - bz) < 2.4)) continue; const [lx0, lz0] = atST(t - 1.3, s); flat(0.1, 5, lx0, lz0, lineM, 0.055, SEA_YAW); if (SW.Cars && pr() < 0.45) cars.push([bx, bz, s]); }
-          cars.slice(0, 9).forEach(([bx, bz, s], i) => { const car = SW.Cars.make(E, i + 3); car.position.set(bx, 0.03, bz); car.rotation.y = SEA_YAW + (s > 20 ? Math.PI : 0); g.add(car); p.addCircle(bx, bz, 1.4); }); }
+          cars.slice(0, 9).forEach(([bx, bz, s], i) => { const car = SW.Cars.make(E, i + 3); car.position.set(bx, 0.03, bz); car.rotation.y = SEA_YAW + (s > 20 ? Math.PI : 0); g.add(car); const cb = p.addBox(bx, bz, 0.95, 2.2); cb.c = Math.cos(p.rot + SEA_YAW); cb.s = Math.sin(p.rot + SEA_YAW); }); }   // each car's own outline, turned with it
         // the promenade along the top of the beach, and beach houses facing the sea
         { const [cx, cz] = atST(24, 3.5); flat(36, 4, cx, cz, walkM(12, 1.4), 0.07, SEA_YAW);
           for (let t = 8; t < 40;) { const w = 6 + pr() * 3, tc = t + w / 2; t += w + 1.8; const [bx, bz] = atST(tc, 10.5);

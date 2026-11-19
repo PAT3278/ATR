@@ -389,7 +389,14 @@
   const WATER_GLSL = 'vec3 wn1=texture2D(nrm,vW.xz*.05+vec2(t*.012,t*.008)).rgb*2.-1.;vec3 wn2=texture2D(nrm,vW.xz*.11-vec2(t*.01,-t*.014)).rgb*2.-1.;' +
     'vec3 wN=normalize(vec3((wn1.x+wn2.x)*.32,1.,(wn1.y+wn2.y)*.32));vec3 wV=normalize(cameraPosition-vW);' +
     'float wSp=pow(max(dot(reflect(-wV,wN),sunD),0.),70.);float wFr=pow(1.-max(dot(wN,wV),0.),4.);';
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL };
+  // A deck you can walk under (a parking area, its walkway, a ramp) is the ground only for someone already up at its level,
+  // within a step of it (DECK_STEP, the height from which a deck's rails stop you too), or being set down from above (no y).
+  // Anyone lower is underneath and stays on the floor: a p.ground that returns a deck height asks onDeck(h, y) first, or
+  // walking under it lifts you onto it. Where the floor comes up closer under a deck than you could stand, the place walls
+  // that strip off for those below (see parkingArea in places2.js) rather than letting them walk in with their head in it.
+  const DECK_STEP = 1.2, HEADROOM = 2.4;
+  const onDeck = (h, y) => y === undefined || y > h - DECK_STEP;
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, onDeck, DECK_STEP, HEADROOM };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -446,7 +453,7 @@
     const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, H = F.h, n = F.nx;
     return (H[j * n + i] * (1 - u) + H[j * n + i + 1] * u) * (1 - v) + (H[(j + 1) * n + i] * (1 - u) + H[(j + 1) * n + i + 1] * u) * v;
   }
-  function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room): pass the walker's current height
+  function groundAt(x, z, y) {   // y lets a place have two walkable levels (a platform above a room, a deck above a street): pass the walker's current height; without it you get the top
     let h = hillAt(x, z);
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
     return h;
@@ -1123,21 +1130,29 @@
   function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; } }
   let camYaw = Math.PI, camPitch = 0.2, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
-  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (!s) return;
       places.forEach((p) => { p.found = (s.found || []).includes(p.song.id); });
-      if (Number.isFinite(s.x) && Number.isFinite(s.z) && Math.abs(s.x) < 143 && Math.abs(s.z) < 143) { P.x = s.x; P.z = s.z; }
+      if (Number.isFinite(s.x) && Number.isFinite(s.z) && canBe(s.x, s.z)) { P.x = s.x; P.z = s.z; P.y = groundAt(P.x, P.z, Number.isFinite(s.y) ? s.y : undefined); }   // back on the deck or under it, as you were
       if (Number.isFinite(s.yaw)) camYaw = s.yaw;
     } catch (e) { /* ignore */ }
   }
 
   /* ================= collisions ================= */
   const PR = 0.35;
+  // The land ends at |x|, |z| = 145. Past it you go on only afloat, or where a place says its shore runs on (p.shore: OHH's
+  // beaches reach out beyond that edge, south past the port town), as far as the edge of the world. A step that would
+  // take you anywhere else slides along the edge instead.
+  const LAND = 145, WORLD = 330;
+  const canBe = (x, z) => (Math.abs(x) <= LAND && Math.abs(z) <= LAND) || (Math.abs(x) <= WORLD && Math.abs(z) <= WORLD && (isWater(x, z) || places.some((q) => { if (!q.shore) return false; const l = q.local(x, z); return q.shore(l.x, l.z); })));
   function collide(p) {
-    { const lim = isWater(p.x, p.z) ? 330 : 145; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // out at sea you can go further, to the edge of the world
+    if (!canBe(p.x, p.z)) {
+      if (p !== P && canBe(p.x, P.z)) p.z = P.z; else if (p !== P && canBe(P.x, p.z)) p.x = P.x; else if (p !== P && canBe(P.x, P.z)) { p.x = P.x; p.z = P.z; }
+      else { const lim = isWater(p.x, p.z) ? WORLD : LAND; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // set down somewhere it cannot be: back onto the land
+    }
     for (const c of circles) {
       if (P.y < c.y0 || P.y > c.y1) continue;
       const dx = p.x - c.x, dz = p.z - c.z, rr = c.r + PR;
@@ -2012,7 +2027,7 @@
     setTimeout(() => {
       if (drv) { endDrive(null); camBlend = 1; }   // no camera glide from the road: the fade covers the jump
       const q = p.path[Math.max(0, p.path.length - 9)];
-      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z); P.v = 0; auto = null;
+      P.x = q.x; P.z = q.z; P.y = groundAt(q.x, q.z, 0); P.v = 0; P.air = false; auto = null;   // a path runs on the ground: where it passes under a deck you land under it, not up on it
       P.face = Math.atan2(p.vx - q.x, p.vz - q.z); P.hx = Math.sin(P.face); P.hz = Math.cos(P.face); camYaw = P.face + Math.PI;
       regionKey = ''; updateRegion(true); save();
       f.classList.remove('on'); mode = 'walk';
