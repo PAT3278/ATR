@@ -2117,6 +2117,10 @@
   /* ================= update ================= */
   const tmpV = new THREE.Vector3(), tmpL = new THREE.Vector3(), tmpU = new THREE.Vector3(), fwd = new THREE.Vector3();
   let lastKmh = -1;
+  // In a stairwell (p.stairs: SHOT's stair tower) you go on foot: no board, no jumping (the flight above would be in your
+  // head), and your feet stay on the treads instead of easing after them. A path's points marked tight (its flights) are
+  // walked at a walking pace and reached exactly, so the auto-walk turns at each landing.
+  const stairAt = (x, z) => places.some((q) => { if (!q.stairs) return false; const l = q.local(x, z); return q.stairs(l.x, l.z); });
   function update(dt) {
     padV = pad();
     if (drv) driveUpdate(dt, mode !== 'walk');
@@ -2124,7 +2128,7 @@
       const iv = inputVec();
       let mx = 0, mz = 0, sp = 0;
       // Hold run (or auto-travel a long way) to hop on the board: speed builds up, turns get wider.
-      const want = running || dashOn || padRun || (auto && auto.pts.length - auto.i > 5);
+      const want = (running || dashOn || padRun || (auto && auto.pts.length - auto.i > 5 && !auto.pts[auto.i].tight)) && !stairAt(P.x, P.z);
       boost += ((want && (iv.m > 0.05 || auto) ? 1 : 0) - boost) * Math.min(1, dt * 2.2);
       const top = 7.5 + 9.5 * boost;
       if (iv.m > 0.05) {
@@ -2134,10 +2138,10 @@
       } else if (auto) {
         const tg = auto.pts[auto.i], dx = tg.x - P.x, dz = tg.z - P.z, d = Math.hypot(dx, dz);
         const lastPt = auto.i === auto.pts.length - 1;
-        if (d < (lastPt ? 0.3 : 1.2 + P.v * 0.25)) {   // faster means a wider turn, so count a waypoint as reached from further out
+        if (d < (lastPt ? 0.3 : tg.tight ? 0.4 : 1.2 + P.v * 0.25)) {   // faster means a wider turn, so count a waypoint as reached from further out
           if (!lastPt) auto.i++;
           else { const th = auto.then; auto = null; if (th) { faceTo(th); act(th); } }
-        } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : top; }
+        } else { mx = dx / d; mz = dz / d; sp = lastPt ? Math.min(top, d * 5 + 1) : tg.tight ? Math.min(top, 3.6) : top; }
       }
       if (sp > 0) {
         const tr = Math.min(1, dt * (14 - 9.5 * boost));
@@ -2177,6 +2181,7 @@
       if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
     const gh = groundAt(P.x, P.z, P.y);
+    if (!drv && !ride && stairAt(P.x, P.z)) { P.air = false; P.vy = 0; P.y = gh; boost = 0; }   // on the stairs (see stairAt)
     if (drv) { /* the car sets the height */ }
     else if (ride) rideTick(dt);   // the ride sets it
     else if (P.air) { P.vy -= 24 * dt; P.y += P.vy * dt; if (P.vy <= 0 && P.y <= gh) { P.y = gh; P.air = false; } }
