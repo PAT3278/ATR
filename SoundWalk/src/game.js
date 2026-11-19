@@ -55,7 +55,7 @@
     g.putImageData(img, 0, 0);
   }
   const rgb = (hex) => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
-  const TEXSIZE = { grass: 512, path: 256, slate: 512, trail: 256 };
+  const TEXSIZE = { grass: 512, path: 256, slate: 512, trail: 256, camo: 256 };
   const TEXDRAW = {
     grass(g, S, r) {
       paintGround(g, S, ['#353f27', '#56603a', '#857a4f', '#57483a'].map(rgb), { dry: [0.5, 0.72], dirt: [0.6, 0.72] });
@@ -127,6 +127,23 @@
       for (let i = 0; i < 90; i++) { const x = r() * S, y = r() * S, q = 1 + r() * 3; g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x + 1, y + 1, q, q * 0.8, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${125 + r() * 45},${118 + r() * 40},${104 + r() * 34})`; g.beginPath(); g.ellipse(x, y, q, q * 0.8, r() * 3, 0, 7); g.fill(); }
     },
     asphalt(g, S, r) { g.fillStyle = '#2b2831'; g.fillRect(0, 0, S, S); speckle(g, S, S, r, 3000, 0.07); g.strokeStyle = D(0.4); for (let i = 0; i < 4; i++) { g.beginPath(); let x = r() * S, y = r() * S; g.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - 0.5) * 40; y += (r() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); } },
+    // Clothes. Both are painted in greys and tinted by the material colour, so one tile gives every colourway:
+    // camo in four tones (tonal camo, the expensive streetwear kind), denim with a diagonal twill and worn fades.
+    camo(g, S) {
+      const img = g.createImageData(S, S), d = img.data;
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const u = x / S, v = y / S, i = (y * S + x) * 4;
+        const k = fbm(u, v, 3, 501, 3) > 0.53 ? (fbm(u, v, 4, 733, 3) > 0.56 ? 3 : 1) : fbm(u, v, 3, 911, 3) > 0.58 ? 2 : 0;   // blobs over blobs, each tone its own noise
+        d[i] = d[i + 1] = d[i + 2] = [235, 168, 104, 52][k]; d[i + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+    },
+    denim(g, S, r) {
+      g.fillStyle = '#d4d4d4'; g.fillRect(0, 0, S, S);
+      for (let i = -S; i < S; i += 2) { g.strokeStyle = i % 4 ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.12)'; g.lineWidth = 1; g.beginPath(); g.moveTo(i, 0); g.lineTo(i + S, S); g.stroke(); }   // twill
+      for (let i = 0; i < 26; i++) { const x = r() * S, w = 2 + r() * 7; g.fillStyle = `rgba(255,255,255,${0.04 + r() * 0.07})`; g.fillRect(x, 0, w, S); }   // fades down the leg
+      speckle(g, S, S, r, 900, 0.06);
+    },
     checker(g, S) { const h = S / 2; g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, S, S); g.fillStyle = '#bdbdbd'; g.fillRect(0, 0, h, h); g.fillRect(h, h, h, h); },
     windows(g, S, r) { g.fillStyle = '#000'; g.fillRect(0, 0, S, S); const n = 4, w = S / n; const cols = ['#ffd27a', '#ffe9b8', '#9ff3ff', '#ff8ad8', '#ffd27a']; for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { if (r() < 0.45) continue; g.fillStyle = cols[Math.floor(r() * cols.length)]; g.globalAlpha = 0.5 + r() * 0.5; g.fillRect(x * w + w * 0.2, y * w + w * 0.25, w * 0.6, w * 0.45); } g.globalAlpha = 1; },
   };
@@ -389,7 +406,143 @@
   const WATER_GLSL = 'vec3 wn1=texture2D(nrm,vW.xz*.05+vec2(t*.012,t*.008)).rgb*2.-1.;vec3 wn2=texture2D(nrm,vW.xz*.11-vec2(t*.01,-t*.014)).rgb*2.-1.;' +
     'vec3 wN=normalize(vec3((wn1.x+wn2.x)*.32,1.,(wn1.y+wn2.y)*.32));vec3 wV=normalize(cameraPosition-vW);' +
     'float wSp=pow(max(dot(reflect(-wV,wN),sunD),0.),70.);float wFr=pow(1.-max(dot(wN,wV),0.),4.);';
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL };
+
+  /* ================= streetwear kit ================= */
+  // The swag-era rap look (around 2009-14) that the player and the crowds wear: dreadlocks, braids and twists, flat-brim
+  // fitteds, shutter shades, chunky gold chains with an iced piece, puffers, stacked skinny denim and loud high-tops.
+  // A style, not anybody's likeness: no faces, tattoos or logos. Pieces are shared geometries, cached by their
+  // measurements, in the frame of the bone they hang on (a head: centre at the origin, face towards +z).
+  const kitCache = {}, kc = (key, f) => kitCache[key] || (kitCache[key] = f());
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const M4 = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => new THREE.Matrix4().compose(V3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V3(sx, sy, sz));
+  function mergeGeos(list) {   // [[geometry, matrix?], ...] -> one non-indexed geometry
+    const gs = list.map(([g, m]) => { const n = g.index ? g.toNonIndexed() : g.clone(); if (m) n.applyMatrix4(m); return n; });
+    const out = new THREE.BufferGeometry();
+    for (const k of gs.every((g) => g.attributes.uv) ? ['position', 'normal', 'uv'] : ['position', 'normal']) {
+      const sz = gs[0].attributes[k].itemSize, arr = new Float32Array(gs.reduce((s, g) => s + g.attributes[k].count * sz, 0)); let o = 0;
+      for (const g of gs) { const n = g.attributes[k].count * sz; arr.set(g.attributes[k].array.subarray(0, n), o); o += n; }
+      out.setAttribute(k, new THREE.BufferAttribute(arr, sz));
+    }
+    gs.forEach((g) => g.dispose()); return out;
+  }
+  // A dressed figure is a hundred small parts; merge each bone's leaf meshes per material, so it draws in a handful of calls
+  // and every pose still works (only meshes with no children of their own are merged; userData.keep opts one out).
+  function compact(root) {
+    const nodes = []; root.traverse((o) => nodes.push(o));
+    for (const n of nodes) {
+      const by = new Map();
+      for (const c of n.children) if (c.isMesh && !c.isInstancedMesh && !c.children.length && c.visible && !c.userData.keep && !Array.isArray(c.material)) { if (!by.has(c.material)) by.set(c.material, []); by.get(c.material).push(c); }
+      for (const [m, list] of by) if (list.length > 1) {
+        const o = new THREE.Mesh(mergeGeos(list.map((c) => { c.updateMatrix(); return [c.geometry, c.matrix]; })), m);
+        o.castShadow = list.some((c) => c.castShadow); o.receiveShadow = list.some((c) => c.receiveShadow); list.forEach((c) => n.remove(c)); n.add(o);
+      }
+    }
+    return root;
+  }
+  // Locs on a head of radius R. Under a cap they start at the rim (o.cap = its elevation in radians); bare, all over the
+  // scalp. Each runs out over the skull and hangs, longest down the back (o.drape tips them back over the shoulders);
+  // o.len / o.n / o.th / o.out make long dreads,
+  // thin box braids or short twists that stick out. o.front adds locks either side of the face; o.seg / o.rad thin out the
+  // mesh for a crowd. Returns the hair, the
+  // dyed ends (o.tips of them) and gold cuffs (o.cuffs of them) as three geometries.
+  function locs(R, o = {}) {
+    return kc('locs' + R + JSON.stringify(o), () => {
+      const r = rng(o.seed || 7), n = o.n || 30, th = o.th || R * 0.09, hair = [], tips = [], cuffs = [];
+      const one = (a, e, L, out) => {
+        const sa = Math.sin(a), ca = Math.cos(a), h0 = R * Math.cos(e), y0 = R * Math.sin(e), bulge = o.cap !== undefined ? 1.09 : 1.1 + 0.12 * Math.sin(e);
+        const c = new THREE.QuadraticBezierCurve3(V3(sa * h0, y0, ca * h0), V3(sa * R * bulge, y0 + 0.012, ca * R * bulge), V3(sa * (R * 1.06 + out), y0 - L, ca * (R * 1.06 + out) - L * (o.drape ?? 0.1)));
+        const t = th * (0.85 + r() * 0.3); hair.push([new THREE.TubeGeometry(c, o.seg || 6, t, o.rad || 5)]);
+        if (r() < (o.tips || 0)) tips.push([new THREE.TubeGeometry(new THREE.CatmullRomCurve3([0.7, 0.8, 0.9, 1].map((k) => c.getPoint(k))), 3, t * 1.12, o.rad || 5)]);
+        if (r() < (o.cuffs || 0)) { const k = 0.3 + r() * 0.3, p = c.getPoint(k), q = new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), c.getTangent(k)); cuffs.push([new THREE.TorusGeometry(t * 1.15, t * 0.45, 4, 8), new THREE.Matrix4().compose(p, q, V3(1, 1, 1))]); }
+      };
+      for (let i = 0; i < n; i++) {
+        const a = 0.62 + ((i + r() * 0.8) / n) * (Math.PI * 2 - 1.24), back = (1 - Math.cos(a)) / 2;   // round the sides and back: the face stays clear
+        one(a, o.cap !== undefined ? o.cap + (r() - 0.5) * 0.1 : 0.1 + r() * 1.2, (o.len || 0.3) * (0.55 + 0.45 * back) * (0.85 + r() * 0.3), (o.out ?? 0.03) * (0.5 + r()));
+      }
+      for (let i = 0; i < (o.front || 0); i++) for (const sd of [-1, 1]) one(sd * (0.5 + i * 0.16 + r() * 0.05), o.cap !== undefined ? o.cap : 0.5, (o.len || 0.3) * 0.62, 0.004);
+      return { hair: mergeGeos(hair), tips: tips.length ? mergeGeos(tips) : null, cuffs: cuffs.length ? mergeGeos(cuffs) : null };
+    });
+  }
+  // Cornrows: tight rows from the hairline over the top to the nape.
+  const cornrows = (R, n = 7) => kc('rows' + R + n, () => mergeGeos(Array.from({ length: n }, (_, k) => {
+    const x = (k / (n - 1) - 0.5) * 1.45 * R, rr = Math.sqrt(R * R - x * x) * 1.02, pts = [];
+    for (let j = 0; j <= 10; j++) { const b = 0.42 + (j / 10) * (Math.PI - 0.12); pts.push(V3(x, rr * Math.sin(b), rr * Math.cos(b))); }
+    return [new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, R * 0.06, 5)];
+  })));
+  // A fitted / snapback, origin at the centre of its rim (radius a, the crown h tall): a structured crown with its top button,
+  // a dead-flat brim, the green underbrim, the round sticker left on the brim, and the strap at the back.
+  const capGeos = (a, h) => kc('cap' + a + h, () => {
+    const crown = new THREE.LatheGeometry([[1, 0], [0.99, 0.33], [0.95, 0.58], [0.86, 0.77], [0.68, 0.9], [0.38, 0.98], [0, 1]].map(([r, y]) => new THREE.Vector2(r * a, y * h)), 22); crown.scale(1, 1, 1.08);
+    const brim = new THREE.CylinderGeometry(a * 0.95, a * 0.95, 0.008, 24); brim.scale(1, 1, 0.78); brim.translate(0, 0.003, a * 0.97);
+    const under = new THREE.CircleGeometry(a * 0.945, 24); under.rotateX(Math.PI / 2); under.scale(1, 1, 0.78); under.translate(0, -0.0012, a * 0.97);
+    return { crown: mergeGeos([[crown], [new THREE.SphereGeometry(a * 0.11, 8, 6), M4(0, h, 0, 0, 0, 0, 1, 0.5, 1)]]), brim, under,
+      sticker: new THREE.CylinderGeometry(a * 0.14, a * 0.14, 0.002, 14).translate(a * 0.32, 0.0075, a * 1.45), strap: new THREE.BoxGeometry(a * 0.6, 0.014, 0.01).translate(0, 0.016, -a * 1.075) };
+  });
+  // A ski mask: the whole head, an open slot for the eyes.
+  const maskGeo = (R) => kc('mask' + R, () => { const r = R * 1.05; return mergeGeos([[new THREE.SphereGeometry(r, 16, 7, 0, Math.PI * 2, 0, 1.38)], [new THREE.SphereGeometry(r, 16, 6, 0, Math.PI * 2, 1.68, 1.25)], [new THREE.SphereGeometry(r, 12, 2, Math.PI / 2 + 0.62, Math.PI * 2 - 1.24, 1.38, 0.3)], [new THREE.SphereGeometry(r * 0.3, 8, 6), M4(0, r * 0.97, 0, 0, 0, 0, 1, 0.6, 1)]]); });
+  // A bandana: tied round the head with the knot and tails at the back, or (o.face) over nose and mouth.
+  const bandanaGeo = (R, face) => kc('band' + R + face, () => face
+    ? mergeGeos([[new THREE.CylinderGeometry(R * 1.04, R * 1.1, R * 0.6, 16, 1, true), M4(0, -R * 0.38, 0)], [new THREE.ConeGeometry(R * 0.5, R * 0.55, 3), M4(0, -R * 0.82, R * 0.86, Math.PI, 0, 0, 1, 1, 0.25)], [new THREE.SphereGeometry(R * 0.13, 6, 5), M4(0, -R * 0.25, -R * 1.08)]])
+    : mergeGeos([[new THREE.CylinderGeometry(R * 1.04, R * 1.06, R * 0.38, 16, 1, true), M4(0, R * 0.42, 0, -0.18)], [new THREE.SphereGeometry(R * 0.14, 6, 5), M4(0, R * 0.3, -R * 1.08)], [new THREE.BoxGeometry(R * 0.16, R * 0.6, R * 0.04), M4(-R * 0.08, 0, -R * 1.1, 0.15, 0, 0.25)], [new THREE.BoxGeometry(R * 0.16, R * 0.5, R * 0.04), M4(R * 0.1, 0.03 * R, -R * 1.1, 0.15, 0, -0.3)]]));
+  // Glasses for a head of radius R: 'shutter' shades (a frame with horizontal slats over each eye) or 'dark' designer
+  // shades (frame + separate lenses). Returns { frame, lens }.
+  const shadesGeo = (R, kind) => kc('sh' + R + kind, () => {
+    const s = R / 0.115, frame = [], lens = [], B = (to, w, h, d, x, y, z, ry = 0) => to.push([new THREE.BoxGeometry(w * s, h * s, d * s), M4(x * s, y * s, z * s, 0, ry, 0)]);
+    for (const sd of [-1, 1]) {
+      const x = sd * 0.047, ry = sd * 0.16;
+      B(frame, 0.1, 0.011, 0.012, sd * 0.05, 0.04, 0.114, ry);                                   // brow bar
+      B(frame, 0.006, 0.008, 0.11, sd * 0.096, 0.034, 0.055);                                     // arm back to the ear
+      if (kind === 'shutter') {
+        B(frame, 0.086, 0.008, 0.01, x, -0.016, 0.112, ry); B(frame, 0.008, 0.06, 0.01, sd * 0.091, 0.012, 0.106, ry);   // lower rim, outer edge
+        for (let k = 0; k < 4; k++) B(frame, 0.082, 0.0045, 0.008, x, -0.005 + k * 0.0105, 0.113, ry);                    // the shutters
+      } else { B(lens, 0.08, 0.05, 0.006, x, 0.012, 0.111, ry); B(frame, 0.008, 0.05, 0.01, sd * 0.09, 0.016, 0.105, ry); }
+    }
+    B(frame, 0.014, 0.012, 0.01, 0, 0.03, 0.118);                                                 // bridge
+    return { frame: mergeGeos(frame), lens: lens.length ? mergeGeos(lens) : null };
+  });
+  // A necklace round the neck and down the chest, in a bone's frame: neck at height yn with radius rn, chest front at zc,
+  // hanging `drop`. With o.links it is real interlocked links (Cuban: flattened and twisted to lie on the chest), else a
+  // heavy rope. o.pend (radius) hangs an iced medallion: { chain, bezel, ice }. o.lo: fewer facets, for a crowd.
+  const chainGeo = (o) => kc('chain' + JSON.stringify(o), () => {
+    const { yn, rn, zc, drop, w = rn * 0.95, th = 0.006 } = o;
+    const curve = new THREE.CatmullRomCurve3([V3(0, yn + 0.012, -rn), V3(rn, yn + 0.006, -rn * 0.15), V3(w, yn - drop * 0.32, zc * 0.93), V3(w * 0.55, yn - drop * 0.8, zc + 0.006), V3(0, yn - drop, zc + 0.01), V3(-w * 0.55, yn - drop * 0.8, zc + 0.006), V3(-w, yn - drop * 0.32, zc * 0.93), V3(-rn, yn + 0.006, -rn * 0.15)], true, 'centripetal');
+    let chain;
+    if (o.links) {
+      const N = Math.round(curve.getLength() / (th * 2.4)), link = new THREE.TorusGeometry(th * 1.25, th * 0.5, o.lo ? 3 : 4, o.lo ? 5 : 10), parts = [];
+      for (let k = 0; k < N; k++) {
+        const u = k / N, p = curve.getPointAt(u), X = curve.getTangentAt(u), out = V3(p.x, 0, p.z).normalize(), Z0 = out.sub(X.clone().multiplyScalar(out.dot(X))).normalize(), B = X.clone().cross(Z0), tw = k % 2 ? 0.7 : -0.7;
+        const Z = Z0.clone().multiplyScalar(Math.cos(tw)).addScaledVector(B, Math.sin(tw)), Y = Z.clone().cross(X);
+        parts.push([link, new THREE.Matrix4().makeBasis(X, Y, Z).setPosition(p).multiply(new THREE.Matrix4().makeScale(1.35, 1, 0.75))]);
+      }
+      chain = mergeGeos(parts);
+    } else chain = new THREE.TubeGeometry(curve, o.lo ? 36 : 64, th, o.lo ? 5 : 6, true);
+    if (!o.pend) return { chain };
+    const r = o.pend, y = yn - drop - r - th * 1.5, z = zc + 0.014;
+    return { chain: mergeGeos([[chain], [new THREE.TorusGeometry(th * 1.3, th * 0.5, 4, 10), M4(0, yn - drop - th * 0.8, zc + 0.01)]]), bezel: new THREE.TorusGeometry(r, r * 0.16, 6, 24).translate(0, y, z),
+      ice: new THREE.IcosahedronGeometry(r * 0.92, 1).scale(1, 1, 0.32).translate(0, y, z) };
+  });
+  // High-tops for a foot whose sole sits at y = 0 under the ankle (toe to +z): the base upper, overlays (toe and heel),
+  // the tall collar with the outsole in the same colour, and white midsole and laces. Loud colourways come from mixing them.
+  const hightopGeo = (w, len) => kc('ht' + w + len, () => {
+    const cz = 0.04, B = (bw, h, d, x, y, z, rx = 0) => [new THREE.BoxGeometry(bw, h, d), M4(x, y, cz + z, rx)];
+    return {
+      base: mergeGeos([B(w, 0.07, len * 0.62, 0, 0.07, -len * 0.19), B(w * 0.94, 0.05, len * 0.42, 0, 0.09, len * 0.14, 0.32)]),   // quarter, the vamp sloping down to the toe cap
+      accent: mergeGeos([B(w + 0.008, 0.032, len + 0.004, 0, 0.05, 0), [new THREE.SphereGeometry(w * 0.53, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), M4(0, 0.034, cz + len * 0.5 - w * 0.5, 0, 0, 0, 1, 0.8, 1)], B(w + 0.008, 0.08, 0.06, 0, 0.08, -len / 2 + 0.028)]),   // mudguard, toe cap, heel counter
+      collar: mergeGeos([[new THREE.CylinderGeometry(w * 0.56, w * 0.62, 0.12, 12), M4(0, 0.15, -0.012)], B(w + 0.012, 0.01, len + 0.014, 0, 0.005, 0)]),   // the high collar; the outsole matches it
+      white: mergeGeos([B(w + 0.014, 0.032, len + 0.018, 0, 0.026, 0), ...[0, 1, 2, 3].map((k) => B(w * 0.62, 0.009, 0.014, 0, 0.122 - k * 0.0095, 0.03 + k * 0.03, 0.32))]),   // midsole, laces
+    };
+  });
+  // Skinny jeans stacked on the shoe: three uneven folds of denim bunched at the ankle (r = the leg there).
+  const stackGeo = (r, h) => kc('stack' + r + h, () => mergeGeos([0, 1, 2].map((k) => { const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(new THREE.Vector2(r * (1 + 0.1 * Math.sin(t * Math.PI)), t * h * 0.42)); } return [new THREE.LatheGeometry(pts, 12), M4(0, k * h * 0.29, 0, [0.14, -0.1, 0.06][k], 0, [-0.08, 0.12, -0.04][k])]; })));
+  // A quilted puffer body (lathe with a roll every `h / rolls`), wider than the man inside it; `gap` leaves the front open.
+  const pufferGeo = (rt, rb, h, rolls, gap = 0, y0 = 0, seg = 22) => kc('puf' + [rt, rb, h, rolls, gap, y0, seg], () => {
+    const pts = [new THREE.Vector2(rb * 0.92, y0 - 0.01)], N = rolls * 6;
+    for (let i = 0; i <= N; i++) { const t = i / N; pts.push(new THREE.Vector2((rb + (rt - rb) * t) * (1 + 0.075 * Math.pow(Math.abs(Math.sin(Math.PI * t * rolls)), 0.7)), y0 + t * h)); }
+    pts.push(new THREE.Vector2(rt * 0.75, y0 + h + 0.035), new THREE.Vector2(rt * 0.45, y0 + h + 0.05));
+    return new THREE.LatheGeometry(pts, seg, gap / 2, Math.PI * 2 - gap);
+  });
+  const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact };
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -892,26 +1045,28 @@
   /* ================= avatar ================= */
   function makeAvatar() {
     const A = new THREE.Group(), body = new THREE.Group(); A.add(body);
-    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = gloss('#23262b', { rough: 0.5, metal: 0.15, env: 0.45 }), pants = mat('#1c1e22', { rough: 0.8 }), shoeM = gloss('#d9dde2', { rough: 0.35, env: 0.5 }), hair = mat('#22160f', { rough: 0.55 }), phone = mat('#1b1b20', { rough: 0.4, metal: 0.3 }), cup = mat('#8c1c1c', { rough: 0.4 });   // techwear: a technical shell with a sheen, matte trousers, sleek trainers
+    // Dressed in the swag-era rap style of the streetwear kit above: a tonal camo full-zip hoodie over a white tee, a Cuban
+    // link and a rope chain with an iced medallion, a designer belt, black skinny denim stacked on white / patent / red
+    // high-tops, a flat-brim fitted in the shoes' red, dreads under it, white shutter shades. Expensive, loud, no logos.
+    const skin = mat('#e1b18c', { rough: 0.65 }), hoodie = mat('#a3b27a', { map: tex('camo', 1.6, 1.6), rough: 0.8 }), pants = mat('#33456e', { map: tex('denim', 2, 3), rough: 0.85 });
     const cyl = (rt, rb, h, m, seg = 12) => new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), m);
     const hips = new THREE.Group(); hips.position.y = 0.95; body.add(hips);
-    const legs = [-1, 1].map((sd) => {
+    const legs = [-1, 1].map((sd) => {   // skinny: close to the leg all the way down
       const pivot = new THREE.Group(); pivot.position.x = sd * 0.095; hips.add(pivot);
-      const thigh = cyl(0.088, 0.07, 0.47, pants); thigh.position.y = -0.235; pivot.add(thigh);
+      const thigh = cyl(0.082, 0.064, 0.47, pants); thigh.position.y = -0.235; pivot.add(thigh);
       const knee = new THREE.Group(); knee.position.y = -0.47; pivot.add(knee);
-      const shin = cyl(0.068, 0.054, 0.44, pants); shin.position.y = -0.22; knee.add(shin);
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.26), shoeM); shoe.position.set(0, -0.46, 0.04); knee.add(shoe);
+      const shin = cyl(0.062, 0.05, 0.44, pants); shin.position.y = -0.22; knee.add(shin);
       return { pivot, knee };
     });
-    const pelvis = cyl(0.165, 0.16, 0.16, pants); pelvis.scale.z = 0.7; hips.add(pelvis);
-    const torso = cyl(0.2, 0.17, 0.58, hoodie); torso.position.y = 0.33; torso.scale.z = 0.66; hips.add(torso);
+    const pelvis = cyl(0.172, 0.165, 0.2, pants); pelvis.position.y = 0.03; pelvis.scale.z = 0.7; hips.add(pelvis);
+    const torso = cyl(0.2, 0.18, 0.52, hoodie); torso.position.y = 0.36; torso.scale.z = 0.66; hips.add(torso);   // the hoodie stops at the waist so the belt shows
     const sh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), hoodie); sh.scale.set(1, 0.35, 0.66); sh.position.y = 0.61; hips.add(sh);
     const hood = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 6, 14), hoodie); hood.rotation.x = Math.PI / 2; hood.position.set(0, 0.66, -0.04); hips.add(hood);
     const arms = [-1, 1].map((sd) => {
       const pivot = new THREE.Group(); pivot.position.set(sd * 0.245, 0.56, 0); hips.add(pivot);
-      const upper = cyl(0.06, 0.054, 0.3, hoodie); upper.position.y = -0.15; pivot.add(upper);
+      const upper = cyl(0.062, 0.056, 0.3, hoodie); upper.position.y = -0.15; pivot.add(upper);
       const elbow = new THREE.Group(); elbow.position.y = -0.3; pivot.add(elbow);
-      const lower = cyl(0.054, 0.046, 0.27, hoodie); lower.position.y = -0.135; elbow.add(lower);
+      const lower = cyl(0.056, 0.05, 0.25, hoodie); lower.position.y = -0.125; elbow.add(lower);
       const hand = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), skin); hand.position.y = -0.3; elbow.add(hand);
       pivot.rotation.z = sd * 0.08;
       return { pivot, elbow };
@@ -919,53 +1074,46 @@
     const neck = cyl(0.05, 0.055, 0.1, skin); neck.position.y = 0.68; hips.add(neck);
     const head = new THREE.Group(); head.position.y = 0.82; hips.add(head);
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.112, 18, 14), skin); skull.scale.set(0.95, 1.12, 1.02); head.add(skull);
-    const hr = new THREE.Mesh(new THREE.SphereGeometry(0.12, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair); hr.scale.set(0.98, 1.08, 1.06); hr.position.set(0, 0.012, -0.006); hr.rotation.x = -0.25; head.add(hr);
     for (const sd of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 4), mat('#111111')); e.position.set(sd * 0.04, 0.01, 0.1); head.add(e); }
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.128, 0.014, 6, 18, Math.PI), phone); band.position.y = 0.02; head.add(band);
-    for (const sd of [-1, 1]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 14), phone); c.rotation.z = Math.PI / 2; c.position.set(sd * 0.125, -0.005, 0); head.add(c); }
-    // Detail on the same skeleton (so every pose and ride still works): a proper hoodie (hood, pocket, drawstrings,
-    // ribbed cuffs and hem), cargo trousers, chunky trainers, a face, fuller hair, padded headphones.
-    { const hoodD = mat('#1a1c20', { rough: 0.7 }), rib = mat('#14161a', { rough: 0.8 }), pantD = mat('#2a2d33', { rough: 0.9 }), white = mat('#f2f4f6', { rough: 0.5 }), lace = mat('#c9c2b2', { rough: 0.7 }), skinD = mat('#c99673', { rough: 0.7 }), brow = mat('#1a110b', { rough: 0.8 }), pad = mat('#1d1d22', { rough: 0.5 });
-      const add = (par, geo, m, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); par.add(o); return o; };
+    { const S = swag, rib = mat('#4c553a', { rough: 0.9 }), white = mat('#f4f3ee', { rough: 0.7 }), skinD = mat('#c99673', { rough: 0.7 }), brow = mat('#1a110b', { rough: 0.8 }), hair = mat('#1b130e', { rough: 0.75 });
+      const gold = gloss('#e2b64a', { rough: 0.16, metal: 1, env: 1.3 }), ice = gloss('#eef6ff', { rough: 0.05, metal: 1, env: 1.6 }), leather = gloss('#111113', { rough: 0.35, env: 0.4 });
+      const red = gloss('#c3161f', { rough: 0.45, env: 0.35 }), patent = gloss('#0b0b0d', { rough: 0.12, metal: 0.1, env: 0.55 }), kicksW = gloss('#f3f1ec', { rough: 0.5, env: 0.3 });
+      ice.flatShading = true; ice.emissive.copy(lin('#56606c'));   // diamonds: faceted, catching the light
+      const add = (par, geo, m, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { if (!geo) return null; const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); par.add(o); return o; };
       const sph = (r, a = 12, b = 9) => new THREE.SphereGeometry(r, a, b), cg = (rt, rb, h, n = 10) => new THREE.CylinderGeometry(rt, rb, h, n);
-      // hoodie
-      add(hips, sph(0.15, 12, 8), hoodie, 0, 0.64, -0.12, 0, 0, 0, 1.05, 0.8, 0.62);                         // the hood, lying on the back
-      add(hips, new THREE.BoxGeometry(0.22, 0.12, 0.03), hoodD, 0, 0.18, 0.115);                              // kangaroo pocket
-      for (const sd of [-1, 1]) { add(hips, cg(0.006, 0.006, 0.17, 5), rib, sd * 0.04, 0.53, 0.13); add(hips, sph(0.012, 6, 5), white, sd * 0.04, 0.44, 0.13); }   // drawstrings
-      add(hips, cg(0.172, 0.166, 0.05, 14), rib, 0, 0.05, 0, 0, 0, 0, 1, 1, 0.68);   // hem rib
-      arms.forEach(({ elbow }) => { add(elbow, cg(0.05, 0.05, 0.05), rib, 0, -0.25, 0); });           // cuffs
-      // trousers: belt, cargo pockets, a little stack at the ankle
-      add(hips, cg(0.168, 0.168, 0.035, 14), brow, 0, 0.07, 0, 0, 0, 0, 1, 1, 0.71);
-      legs.forEach(({ pivot, knee }, k) => { const sd = k ? 1 : -1; add(pivot, new THREE.BoxGeometry(0.03, 0.13, 0.11), pantD, sd * 0.085, -0.27, 0.0); add(knee, cg(0.072, 0.074, 0.05), pants, 0, -0.4, 0); });
-      // trainers: white sole, toe cap, laces, heel tab (on top of the old shoe)
-      legs.forEach(({ knee }) => { add(knee, new THREE.BoxGeometry(0.125, 0.045, 0.29), white, 0, -0.488, 0.045); add(knee, sph(0.06, 10, 6), shoeM, 0, -0.445, 0.14, 0, 0, 0, 1, 0.6, 0.9); add(knee, new THREE.BoxGeometry(0.06, 0.012, 0.1), lace, 0, -0.405, 0.06); add(knee, new THREE.BoxGeometry(0.05, 0.05, 0.02), white, 0, -0.43, -0.09); });
-      // face: brows, nose, ears, mouth, jaw shadow
+      // hoodie: hood, hem and cuff ribs, pocket, a gold zip, the white tee's neck showing
+      add(hips, sph(0.15, 12, 8), hoodie, 0, 0.6, -0.125, 0, 0, 0, 1, 0.62, 0.48);   // hood down, under the dreads
+      add(hips, cg(0.186, 0.182, 0.04, 16), rib, 0, 0.115, 0, 0, 0, 0, 1, 1, 0.68);
+      add(hips, new THREE.BoxGeometry(0.24, 0.11, 0.025), hoodie, 0, 0.2, 0.118);
+      arms.forEach(({ elbow }) => add(elbow, cg(0.054, 0.052, 0.045), rib, 0, -0.235, 0));
+      add(hips, new THREE.BoxGeometry(0.011, 0.38, 0.006), gold, 0, 0.32, 0.129, -0.025); add(hips, new THREE.BoxGeometry(0.018, 0.03, 0.008), gold, 0, 0.5, 0.134);
+      add(hips, new THREE.TorusGeometry(0.07, 0.012, 6, 16), white, 0, 0.645, 0.01, Math.PI / 2 + 0.25);
+      // the belt: black leather, a polished gold plate buckle
+      add(hips, cg(0.176, 0.176, 0.034, 18), leather, 0, 0.083, 0, 0, 0, 0, 1, 1, 0.72); add(hips, new THREE.BoxGeometry(0.07, 0.045, 0.01), gold, 0, 0.083, 0.13, -0.2);
+      // jewellery: a short Cuban link, a longer rope with an iced medallion, an iced watch
+      add(hips, S.chainGeo({ yn: 0.665, rn: 0.105, zc: 0.13, drop: 0.17, w: 0.1, th: 0.0075, links: 1 }).chain, gold);
+      { const c = S.chainGeo({ yn: 0.67, rn: 0.11, zc: 0.13, drop: 0.28, w: 0.105, th: 0.0042, pend: 0.032 }); add(hips, c.chain, gold); add(hips, c.bezel, gold); add(hips, c.ice, ice); }
+      add(arms[1].elbow, new THREE.TorusGeometry(0.048, 0.01, 6, 16), gold, 0, -0.268, 0, Math.PI / 2); add(arms[1].elbow, cg(0.022, 0.022, 0.012, 14), ice, 0.048, -0.268, 0, 0, 0, Math.PI / 2);
+      // jeans: back pockets, and the stack bunched on the shoe collar
+      for (const sd of [-1, 1]) add(hips, new THREE.BoxGeometry(0.075, 0.085, 0.01), pants, sd * 0.075, 0, -0.116, 0.1, sd * 0.25);
+      legs.forEach(({ knee }) => { add(knee, S.stackGeo(0.056, 0.09), pants, 0, -0.335, 0.004); });
+      // high-tops: white leather, black patent overlays, red collar and outsole
+      { const ht = S.hightopGeo(0.11, 0.27); legs.forEach(({ knee }) => { add(knee, ht.base, kicksW, 0, -0.51); add(knee, ht.accent, patent, 0, -0.51); add(knee, ht.collar, red, 0, -0.51); add(knee, ht.white, white, 0, -0.51); }); }
+      // face: brows, nose, ears, mouth, jaw
       for (const sd of [-1, 1]) { add(head, new THREE.BoxGeometry(0.04, 0.009, 0.012), brow, sd * 0.042, 0.04, 0.104, 0, 0, -sd * 0.12); add(head, sph(0.026, 6, 5), skin, sd * 0.108, -0.005, -0.01, 0, 0, 0, 0.45, 1, 0.75); }
       add(head, new THREE.ConeGeometry(0.018, 0.05, 5), skinD, 0, -0.015, 0.118, 1.3);
       add(head, new THREE.BoxGeometry(0.04, 0.007, 0.01), skinD, 0, -0.058, 0.103);
       add(head, sph(0.09, 12, 8), skin, 0, -0.06, 0.02, 0, 0, 0, 0.95, 0.75, 0.95);
-      // fuller hair: a fringe and some volume at the back
-      add(head, sph(0.07, 10, 7), hair, 0, 0.075, 0.07, 0, 0, 0, 1.3, 0.55, 0.7); add(head, sph(0.09, 10, 7), hair, 0, 0.03, -0.07, 0, 0, 0, 1.15, 1.0, 0.8);
-      // headphones: padded band and thicker cups with cushions
-      add(head, new THREE.TorusGeometry(0.128, 0.022, 6, 18, Math.PI), pad, 0, 0.02, 0, 0, 0, 0, 1, 1, 0.9);
-      for (const sd of [-1, 1]) add(head, cg(0.054, 0.054, 0.03, 14), pad, sd * 0.108, -0.005, 0, 0, 0, Math.PI / 2);
-      // the futuristic layer, kept sparing so it reads as expensive, not as a toy: one cool accent colour, used as thin
-      // light lines (piping, a sole strip, the rim of the visor and the cups), a chest harness with a buckle, a high collar
-      const glow = basic('#7fe9ff'), strap = gloss('#0e0f12', { rough: 0.3, metal: 0.4, env: 0.6 }), metalM = gloss('#b8bec6', { rough: 0.25, metal: 0.9, env: 0.9 }), visorM = gloss('#0a0c10', { rough: 0.08, metal: 0.6, env: 1.2 });
-      add(hips, new THREE.TorusGeometry(0.115, 0.04, 6, 16), hoodD, 0, 0.64, 0.0, Math.PI / 2, 0, 0, 1, 1, 0.85);   // high collar
-      for (const sd of [-1, 1]) { const st = add(hips, new THREE.BoxGeometry(0.035, 0.5, 0.012), strap, sd * 0.07, 0.36, 0.142, 0, 0, sd * 0.42); st.scale.z = 1; }   // harness straps across the chest
-      add(hips, new THREE.BoxGeometry(0.06, 0.045, 0.02), metalM, 0, 0.36, 0.15);                              // buckle
-      add(hips, new THREE.BoxGeometry(0.34, 0.03, 0.012), strap, 0, 0.12, 0.14);                              // waist strap
-      arms.forEach(({ pivot, elbow }, k) => { const sd = k ? 1 : -1; add(pivot, new THREE.BoxGeometry(0.008, 0.26, 0.01), glow, sd * 0.06, -0.15, 0); add(elbow, new THREE.BoxGeometry(0.008, 0.2, 0.01), glow, sd * 0.05, -0.12, 0); });   // piping down the outside of each sleeve
-      legs.forEach(({ pivot, knee }, k) => { const sd = k ? 1 : -1; add(pivot, new THREE.BoxGeometry(0.008, 0.36, 0.01), glow, sd * 0.088, -0.24, 0); add(knee, new THREE.BoxGeometry(0.13, 0.008, 0.29), glow, 0, -0.468, 0.045); });   // leg piping, sole light strip
-      add(head, new THREE.TorusGeometry(0.118, 0.016, 5, 20, Math.PI * 0.62), visorM, 0, 0.012, 0, 0, Math.PI * 0.69, 0, 1, 0.9, 1.04);   // a wrap-round visor
-      add(head, new THREE.TorusGeometry(0.119, 0.003, 4, 20, Math.PI * 0.62), glow, 0, -0.004, 0, 0, Math.PI * 0.69, 0, 1, 1, 1.05);
-      for (const sd of [-1, 1]) add(head, new THREE.TorusGeometry(0.04, 0.004, 4, 16), glow, sd * 0.125, -0.005, 0, 0, Math.PI / 2, 0);
+      add(head, new THREE.SphereGeometry(0.117, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), hair, 0, 0.012, -0.006, -0.25, 0, 0, 0.98, 1.08, 1.06);   // hair under the cap
+      // dreads from under the cap, a few dyed at the ends and a few with gold cuffs, two locks either side of the face
+      { const L = S.locs(0.112, { cap: 0.2, n: 34, len: 0.34, out: 0.03, drape: 0.2, tips: 0.3, cuffs: 0.18, front: 2, seed: 21 }); add(head, L.hair, hair); add(head, L.tips, mat('#b8894a', { rough: 0.7 })); add(head, L.cuffs, gold); }
+      // the fitted: red, flat brim turned a touch to the side, green underbrim, sticker still on
+      { const c = S.capGeos(0.104, 0.105), cap = new THREE.Group(); cap.position.set(0, 0.045, 0.004); cap.rotation.set(-0.16, 0.22, 0); head.add(cap);
+        add(cap, c.crown, red); add(cap, c.brim, red); add(cap, c.under, mat('#2f6b3a', { rough: 0.8 })); add(cap, c.sticker, gloss('#d8d4c4', { rough: 0.2, metal: 1, env: 1.2 })); add(cap, c.strap, leather); }
+      add(head, S.shadesGeo(0.115, 'shutter').frame, gloss('#f6f6f2', { rough: 0.3, env: 0.4 }), 0, -0.006, 0.002);
     }
     A.traverse((m) => { if (m.isMesh) m.castShadow = true; });
-    { const tm = new THREE.MeshBasicMaterial({ color: lin('#2a2420') }); tm.userData.lin = true;
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.012, 5, 24), tm); band.rotation.x = Math.PI / 2; band.scale.y = 0.68; band.position.y = 0.2; hips.add(band);
-      legs.forEach((l) => { const sole = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.02, 0.265), tm); sole.position.set(0, -0.505, 0.04); l.knee.add(sole); }); }
+    swag.compact(body);
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.45, 20), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }));
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.02; A.add(blob);
     // Rides: a different one at random every time you hop on.
