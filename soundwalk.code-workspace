@@ -1,0 +1,95 @@
+{
+  // Open this file in VS Code (File > Open Workspace from File). It expects the NS HACK site cloned next to this repo:
+  //   <parent>/ATR      (this repo: the game)
+  //   <parent>/nshack   (the shop API: Stripe Checkout, purchase check, play counts)
+  "folders": [
+    { "name": "ATR", "path": "." },
+    { "name": "nshack", "path": "../nshack" }
+  ],
+  "settings": {
+    "files.exclude": { "**/node_modules": true, "**/.next": true },
+    "search.exclude": { "**/node_modules": true, "**/.next": true, "**/tex/**": true, "**/audio/**": true }
+  },
+  "extensions": {
+    "recommendations": ["anthropic.claude-code", "stripe.vscode-stripe", "dbaeumer.vscode-eslint"]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "SoundWalk: serve",
+        "detail": "The game on http://localhost:8000 (a server with byte ranges, so previews seek straight away)",
+        "type": "shell",
+        "command": "npx --yes serve@14 -l 8000 SoundWalk",
+        "options": { "cwd": "${workspaceFolder:ATR}" },
+        "isBackground": true,
+        "problemMatcher": { "owner": "serve", "pattern": { "regexp": "^x^" }, "background": { "activesBegin": ".", "beginsPattern": ".", "endsPattern": "Accepting connections|Serving!" } }
+      },
+      {
+        "label": "nshack: dev",
+        "detail": "The shop API on http://localhost:3000 (reads nshack/.env.local)",
+        "type": "shell",
+        "command": "npm run dev",
+        "options": { "cwd": "${workspaceFolder:nshack}" },
+        "isBackground": true,
+        "problemMatcher": { "owner": "next", "pattern": { "regexp": "^x^" }, "background": { "activesBegin": ".", "beginsPattern": ".", "endsPattern": "Ready in|ready started|Local:" } }
+      },
+      {
+        "label": "Stripe: listen",
+        "detail": "Forwards Stripe's test-mode events to the local site (run `stripe login` once first)",
+        "type": "shell",
+        "command": "stripe listen --forward-to localhost:3000/api/stripe/webhook",
+        "isBackground": true,
+        "problemMatcher": { "owner": "stripe", "pattern": { "regexp": "^x^" }, "background": { "activesBegin": ".", "beginsPattern": ".", "endsPattern": "Ready!" } }
+      },
+      {
+        "label": "Dev: game + shop",
+        "detail": "The game, the shop API and the Stripe forwarder together",
+        "dependsOn": ["SoundWalk: serve", "nshack: dev", "Stripe: listen"],
+        "dependsOrder": "parallel",
+        "problemMatcher": []
+      },
+      {
+        "label": "SoundWalk: test",
+        "detail": "Smoke test in a real browser: loads, walks, opens the map, views a place, desktop and phone; screenshots in SoundWalk/tests/out",
+        "type": "shell",
+        "command": "npm test",
+        "options": { "cwd": "${workspaceFolder:ATR}/SoundWalk" },
+        "group": { "kind": "test", "isDefault": true },
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Play SoundWalk",
+        "detail": "Just the game; breakpoints in SoundWalk/src work",
+        "type": "chrome",
+        "request": "launch",
+        "url": "http://localhost:8000/?api=off",
+        "webRoot": "${workspaceFolder:ATR}/SoundWalk",
+        "preLaunchTask": "SoundWalk: serve"
+      },
+      {
+        "name": "Play SoundWalk + shop (Stripe test mode)",
+        "detail": "The game talking to the local shop API: buy with test card 4242 4242 4242 4242",
+        "type": "chrome",
+        "request": "launch",
+        "url": "http://localhost:8000/?api=http://localhost:3000/api/soundwalk",
+        "webRoot": "${workspaceFolder:ATR}/SoundWalk",
+        "preLaunchTask": "Dev: game + shop"
+      },
+      {
+        "name": "Play SoundWalk on a phone-sized window",
+        "type": "chrome",
+        "request": "launch",
+        "url": "http://localhost:8000/?api=off",
+        "webRoot": "${workspaceFolder:ATR}/SoundWalk",
+        "runtimeArgs": ["--window-size=420,900"],
+        "preLaunchTask": "SoundWalk: serve"
+      }
+    ]
+  }
+}

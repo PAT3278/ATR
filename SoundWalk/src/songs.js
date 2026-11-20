@@ -34,6 +34,17 @@ SW.CONFIG = {
   access: 'preview',   // for songs without their own access (see the top of this file)
   preview: 20,         // seconds in each preview excerpt
 };
+// Local development: a page served from this computer can point the shop at a local server with ?api=..., e.g.
+//   http://localhost:8000/?api=http://localhost:3000/api/soundwalk
+// It is remembered on this computer (so it survives the trip to Stripe Checkout and back); ?api=off forgets it.
+// Only on localhost, so a shared link can never send buyers to someone else's checkout.
+try {
+  if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
+    const K = 'soundwalk-dev-api', q = new URLSearchParams(location.search).get('api');
+    if (q === 'off') localStorage.removeItem(K); else if (q) localStorage.setItem(K, q.replace(/\/+$/, ''));
+    const v = localStorage.getItem(K); if (v) SW.CONFIG.api = v;
+  }
+} catch (e) { /* no location or storage */ }
 
 SW.SONGS = [
   {
