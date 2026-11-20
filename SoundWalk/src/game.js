@@ -1501,7 +1501,7 @@
   const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false, jy: 0 };
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
   function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; P.jy = P.y; } }   // jy: where you took off (see update)
-  let camYaw = Math.PI, camPitch = 0.2, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
+  let camYaw = Math.PI, camPitch = 0.2, lookT = -9, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
   function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
   function load() {
@@ -2297,8 +2297,8 @@
     if (mode !== 'walk') return;
     const k = KEYMAP[e.code];
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
-    if (e.code === 'KeyQ') camYaw += 0.2;
-    else if (e.code === 'KeyE') camYaw -= 0.2;
+    if (e.code === 'KeyQ') { camYaw += 0.2; lookT = t; }
+    else if (e.code === 'KeyE') { camYaw -= 0.2; lookT = t; }
     else if (e.code === 'Space') { e.preventDefault(); if (drv) keys.add('brake'); else if (!e.repeat) jump(); }
     else if (!e.repeat && (e.code === 'KeyZ' || e.key === 'Enter')) { e.preventDefault(); if (focus) act(focus); }
     else if (e.key === 'Escape' || e.code === 'KeyX' || e.code === 'KeyM') { e.preventDefault(); if (!e.repeat) openMap(); }
@@ -2321,7 +2321,7 @@
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
     if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 6) drag.moved = true;
-    if (drag.moved) { if (ride && ride.st !== 'walk') { ride.lookYaw -= dx * 0.006; ride.lookPitch = clamp(ride.lookPitch + dy * 0.004, -0.9, 1.1); } else { camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, 0.04, 0.85); } }
+    if (drag.moved) { if (ride && ride.st !== 'walk') { ride.lookYaw -= dx * 0.006; ride.lookPitch = clamp(ride.lookPitch + dy * 0.004, -0.9, 1.1); } else { camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, 0.04, 0.85); lookT = t; } }
   });
   cv.addEventListener('pointerup', (e) => { if (pool && pool.drag && pool.drag.id === e.pointerId) { pool.drag = null; return; } if (!drag || drag.id !== e.pointerId) return; const was = drag; drag = null; if (!was.moved && mode === 'walk') tap(e.clientX, e.clientY); });
   cv.addEventListener('pointercancel', () => (drag = null));
@@ -2372,7 +2372,7 @@
     padRun = !!(pressed[7] || pressed[5] || pressed[2]); padBrake = !!(pressed[6] || pressed[4]); padGas = !!pressed[7]; padFast = !!(pressed[5] || pressed[2]);
     if (mode === 'ride' && down(1)) endRide();
     if (mode === 'ride' && ride && ride.st !== 'walk') { ride.lookYaw -= dz(gp.axes[2] || 0) * 0.04; ride.lookPitch = clamp(ride.lookPitch + dz(gp.axes[3] || 0) * 0.02, -0.9, 1.1); if (down(0)) teaPress(); }
-    else if (mode === 'walk' || mode === 'ride') { camYaw -= dz(gp.axes[2] || 0) * 0.04; camPitch = clamp(camPitch + dz(gp.axes[3] || 0) * 0.02, 0.04, 0.85); }
+    else if (mode === 'walk' || mode === 'ride') { const ax = dz(gp.axes[2] || 0), ay = dz(gp.axes[3] || 0); camYaw -= ax * 0.04; camPitch = clamp(camPitch + ay * 0.02, 0.04, 0.85); if (ax || ay) lookT = t; }
     return { x: dz(gp.axes[0]), y: dz(gp.axes[1]) };
   }
 
@@ -2857,7 +2857,19 @@
         if (!drag) { camYaw += wrapA(drv.yaw + Math.PI - camYaw) * Math.min(1, dt * (2.5 + Math.abs(drv.v) * 0.1)); camPitch += (0.19 - camPitch) * Math.min(1, dt * 2); }
         cd = 6.4 + Math.abs(drv.v) * 0.04; ty = P.y + 1.3 + (drv.hit > 0.4 && !RM ? Math.sin(t * 55) * 0.05 * drv.hit : 0);
       }
-      else { const sh = 0.62 * (1 - boost * 0.6); tx += Math.cos(camYaw) * sh; tz -= Math.sin(camYaw) * sh; }
+      else {
+        // Walking: the camera drifts round behind you the way you are heading, like a camera operator following on foot.
+        // It waits a moment after you turn the view by hand, swings faster the faster you go, follows fully when you walk away
+        // from it, only a little when you walk across the screen (so A / D still circles you slowly) and not at all when you
+        // walk towards it (S turns you round to face the camera instead of spinning it).
+        if (mode === 'walk' && !drag && !viewPlace && !pool && !hoop && P.v > 0.4) {
+          const away = Math.cos(wrapA(P.face + Math.PI - camYaw)), hand = smooth(0.8, 2.2, t - lookT);
+          const k = (auto ? 1 : clamp(away + 0.3, 0, 1)) * hand * smooth(0.4, 4, P.v) * (1.1 + boost * 1.4);
+          camYaw += wrapA(P.face + Math.PI - camYaw) * Math.min(1, dt * k);
+          camPitch += (0.2 + boost * 0.02 - camPitch) * Math.min(1, dt * 0.6 * hand * smooth(0.4, 4, P.v));   // and settles back to its usual height
+        }
+        const sh = 0.62 * (1 - boost * 0.6); tx += Math.cos(camYaw) * sh; tz -= Math.sin(camYaw) * sh;
+      }
       let cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * cd, cy = ty + Math.sin(camPitch) * cd, cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * cd, ahead = 0;
       if (mode === 'title') { cx = Math.sin(camYaw) * 26; cz = Math.cos(camYaw) * 26; cy = 9; tx = 0; ty = 2; tz = 0; }
       else if (!drv) {   // on foot: a wall between you and the camera pulls the camera in front of it (inside a shop it stays inside)
