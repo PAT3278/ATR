@@ -1017,12 +1017,16 @@
       // narrower blocks, and opens into a station forecourt: a roundabout the cabs drive round to head back up the
       // avenue, a taxi rank, a bus stop and a canopy in front of the terminal that closes the view.
       const AV0 = -33, AV2 = -70, RC = [0, -82], RI = 4.5, RO = 10.5, TF = -97, ext = new THREE.Group(), extFeet = [], extSlabs = [], termClock = [];
-      // the cabs' loop: down the southbound lane, round the roundabout (keeping the island on the left), back up
-      const cabLoop = (() => { const pts = [[2.2, 18], [2.2, -40], [2.2, -62], [2.8, -70.5]]; const R = (RI + RO) / 2;
+      // The cabs' loop, closed: from the roundabout in front of the plaza's fountain down the southbound lane, round the
+      // station's roundabout (keeping the island on the left), back up the avenue and round the fountain's roundabout again.
+      const FC = [0, 32], FI = 3.6, FO = 9;   // the fountain's roundabout: centre (on the road, just short of the plaza), island and outer radius
+      const cabLoop = (() => { const pts = [[2.8, FC[1] - FO - 0.6], [2.2, 18], [2.2, -40], [2.2, -62], [2.8, -70.5]]; const R = (RI + RO) / 2, Rf = (FI + FO) / 2;
         for (let a = 0.55; a < Math.PI * 2 - 0.5; a += 0.25) pts.push([RC[0] + Math.sin(a) * R, RC[1] + Math.cos(a) * R]);
-        pts.push([-2.8, -70.5], [-2.2, -62], [-2.2, -40], [-2.2, 18]);
-        const c = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal'), L = c.getLength(), n = Math.round(L / 0.5), P = c.getSpacedPoints(n);
-        return { L, n, P }; })();
+        pts.push([-2.8, -70.5], [-2.2, -62], [-2.2, -40], [-2.2, 18], [-2.8, FC[1] - FO - 0.6]);
+        for (let a = 0.6; a < Math.PI * 2 - 0.55; a += 0.25) pts.push([FC[0] - Math.sin(a) * Rf, FC[1] - Math.cos(a) * Rf]);   // the same way round, turned to face it
+        const c = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)), true, 'centripetal'), L = c.getLength(), n = Math.round(L / 0.5), P = c.getSpacedPoints(n);
+        const slow = P.map((q) => (Math.hypot(q.x - RC[0], q.z - RC[1]) < RO + 2 || Math.hypot(q.x - FC[0], q.z - FC[1]) < FO + 2 ? 0.6 : 1));   // slower round either roundabout
+        return { L, n, P, slow }; })();
       {
         const xr = E.rng(5151), MB = E.batch(ext), mb = MB.box;
         const asph = E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 }), asphR = E.mat('#27242e', { map: E.tex('asphalt', 3, 3), rough: 0.9 });
@@ -1116,6 +1120,28 @@
         allSlabs.push(...extSlabs); ext.add(slabMesh(extSlabs));
       }
       g.add(ext);
+      // The roundabout in front of the plaza's fountain, where the avenue (the paved road the game lays along the path) meets
+      // the plaza: the cabs come up the avenue, go round it and head back down. A planted island with a lamp and a sign.
+      {
+        const fr = new THREE.Group(), FB = E.batch(fr), fb = FB.box, whiteM = E.mat('#d9d4de'), ry = 0.085;
+        const ring = new THREE.Mesh(new THREE.RingGeometry(FI, FO, 56, 1), E.mat('#2a2830', { map: E.tex('asphalt', 3, 3), rough: 0.88 })); ring.rotation.x = -Math.PI / 2; ring.position.set(FC[0], ry, FC[1]); ring.receiveShadow = true; fr.add(ring); p.pick(ring);
+        for (const r0 of [FI + 0.25, FO - 0.25]) { const e = new THREE.Mesh(new THREE.RingGeometry(r0 - 0.07, r0 + 0.07, 64, 1), whiteM); e.rotation.x = -Math.PI / 2; e.position.set(FC[0], ry + 0.005, FC[1]); fr.add(e); }
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) { const d = E.plane(0.12, 1.1, whiteM); d.position.set(FC[0] + Math.sin(a) * ((FI + FO) / 2), ry + 0.006, FC[1] + Math.cos(a) * ((FI + FO) / 2)); d.rotation.y = a + Math.PI / 2; fr.add(d); }   // the dashed lane line
+        for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) { const st = E.plane(0.6, 1.4, whiteM); st.position.set(sd * (1.1 + k * 1.0), ry + 0.006, FC[1] - FO - 1.4); fr.add(st); }   // give-way blocks where the avenue joins
+        const isl = new THREE.Mesh(new THREE.CylinderGeometry(FI, FI, 0.3, 40), E.mat('#9a948a', { rough: 0.9 })); isl.position.set(FC[0], 0.15, FC[1]); fr.add(isl);
+        const grass = new THREE.Mesh(new THREE.CircleGeometry(FI - 0.35, 40), E.mat('#5a7a44', { map: E.tex('grass', 2, 2), rough: 0.95 })); grass.rotation.x = -Math.PI / 2; grass.position.set(FC[0], 0.31, FC[1]); fr.add(grass);
+        p.addCircle(FC[0], FC[1], FI);
+        const bed = E.mat('#3f6a34', { flat: true }), blooms = ['#e8c43a', '#d8d2e8', '#c84a6a'].map((c) => E.mat(c, { flat: true }));
+        for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2, sh = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), bed); sh.position.set(FC[0] + Math.sin(a) * 2.5, 0.55, FC[1] + Math.cos(a) * 2.5); sh.scale.y = 0.6; fr.add(sh);
+          const fl = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), blooms[k % 3]); fl.position.set(FC[0] + Math.sin(a + 0.35) * 2.6, 0.5, FC[1] + Math.cos(a + 0.35) * 2.6); fr.add(fl); }
+        const pole = E.mat('#2a2d32', { metal: 0.5 });
+        fb(0.16, 4.4, 0.16, FC[0], 2.5, FC[1], pole); fb(1.6, 0.1, 0.1, FC[0], 4.6, FC[1], pole);   // a double street lamp in the middle
+        const lampM = E.basic('#ffe2a8'); for (const sd of [-1, 1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), lampM); b.position.set(FC[0] + sd * 0.8, 4.45, FC[1]); fr.add(b); }
+        { const sm = new THREE.MeshBasicMaterial({ map: E.textTex('FLIP DA HOODS  ⟳', { w: 512, h: 96, color: '#f4f1e6', font: '700 50px "Hind",sans-serif', bg: '#3a1f6a' }), side: THREE.DoubleSide }); sm.userData.lin = true;
+          fb(0.1, 1.6, 0.1, FC[0] - 1.1, 1.1, FC[1] - 1.6, pole); fb(0.1, 1.6, 0.1, FC[0] + 1.1, 1.1, FC[1] - 1.6, pole);
+          const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.48), sm); sg.position.set(FC[0], 1.75, FC[1] - 1.6); fr.add(sg); }
+        FB.flush(); g.add(fr);
+      }
       const inSlab = (lx, lz) => { let top = 0; for (const s of allSlabs) { const c = Math.cos(s.rot || 0), sn = Math.sin(s.rot || 0), dx = lx - s.cx, dz = lz - s.cz, ax = dx * c - dz * sn, az = dx * sn + dz * c; if (Math.abs(ax) <= s.hx && Math.abs(az) <= s.hz) top = Math.max(top, s.top); } return top; };
       p.ground = (lx, lz) => (Math.abs(lx) < 80 && lz > -120 && lz < 70 ? inSlab(lx, lz) : 0);   // step up onto the pavement
       const nearWalk = (lx, lz) => walks.some(([ax, az, bx2, bz]) => { const vx = bx2 - ax, vz = bz - az, t = Math.max(0, Math.min(1, ((lx - ax) * vx + (lz - az) * vz) / (vx * vx + vz * vz))); return Math.hypot(lx - ax - vx * t, lz - az - vz * t) < 2.2; });
@@ -1167,7 +1193,7 @@
         const cab = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : new THREE.Group(); c.traverse((o) => { if (o.isMesh && o.name === 'paint') { o.material = o.material.clone(); o.material.color.set('#f2c21a').convertSRGBToLinear(); } });
           const sign = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 0.25), E.basic('#fff4d0')); sign.position.set(0, (c.userData.hgt || 1.4) + 0.12, -0.1); c.add(sign); return c; };
         for (const [x, z0, z1] of [[-5.1, -64, 14], [5.1, -64, 14]]) for (let z = z0 + 3; z < z1; z += 7 + mr() * 6) { if (Math.abs(z - CZ) < 8 || mr() < 0.35) continue; const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, z); c.rotation.y = x < 0 ? 0 : Math.PI; g.add(c); p.addBox(x, z, 1.0, 2.4); }
-        for (let k = 0; k < 4; k++) { const c = cab(Math.floor(mr() * 7)); g.add(c); mid.cabs.push({ c, s: (k / 4) * cabLoop.L, v: 8, yaw: 0 }); }   // running the avenue and round the station's roundabout
+        for (let k = 0; k < 6; k++) { const c = cab(Math.floor(mr() * 7)); g.add(c); mid.cabs.push({ c, s: (k / 6) * cabLoop.L, v: 8, yaw: 0 }); }   // running the avenue between the two roundabouts
         // crowds on the sidewalks
         const NP = 110, bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), headG = new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0);
         const pb = new THREE.InstancedMesh(bodyG, E.mat('#ffffff', { rough: 0.7 }), NP), ph = new THREE.InstancedMesh(headG, E.mat('#ffffff', { rough: 0.6 }), NP);
@@ -1234,12 +1260,13 @@
       p.face = Math.PI;
       p.pathEnd = 18;
       p.clearR = 14;
+      p.wake = (lx, lz) => Math.hypot(lx - FC[0], lz - FC[1]) < 85;   // the cabs keep going round the fountain's roundabout while it is in sight
       p.road = { hw: 5 };   // the avenue carries on to the fountain as a paved road (drawn by the game along the path)
       const onAvenue = (lx, lz) => Math.abs(lx) < 33 && lz <= -40 && lz > -116;   // the far stretch of the avenue and its blocks
       p.core = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz);   // the block itself; the outskirts are negotiable
       p.noPier = (lx, lz) => Math.abs(lx) < 7.5 && lz < -30;   // the ring road steps over the avenue
       p.reach = (lx, lz) => (Math.abs(lx) < 20 && lz < -20 && lz > -112 ? 8 : null);   // down the avenue you are still in the city: its night and its traffic
-      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz) || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
+      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz) || Math.hypot(lx - FC[0], lz - FC[1]) < FO + 3 || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;
       const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), upV = new THREE.Vector3(0, 1, 0);
@@ -1253,7 +1280,7 @@
         // Midtown: screens pulse with their bands, the ticker runs, cabs drive, people walk, the lights change, steam rises
         mid.screens.forEach((s2) => { const v = 0.55 + band(f, s2.k * 3 % 24, 24) * 0.8 + Math.sin(t * 1.3 + s2.seed) * 0.08; s2.m.color.setRGB(v, v, v); });
         if (mid.ticker) mid.ticker.offset.x = (t * 0.035) % 1;
-        mid.cabs.forEach((c) => { const nearRb = (() => { const f = c.s / cabLoop.L; return f > 0.35 && f < 0.65; })(); c.s = (((c.s + c.v * (nearRb ? 0.6 : 1) * dt) % cabLoop.L) + cabLoop.L) % cabLoop.L; if (!(c.s >= 0)) c.s = 0;   // slower round the roundabout; always on the loop, whatever dt was
+        mid.cabs.forEach((c) => { const sl = cabLoop.slow[Math.min(cabLoop.n, Math.floor((c.s / cabLoop.L) * cabLoop.n))] || 1; c.s = (((c.s + c.v * sl * dt) % cabLoop.L) + cabLoop.L) % cabLoop.L; if (!(c.s >= 0)) c.s = 0;   // slower round the roundabouts; always on the loop, whatever dt was
           const u = (c.s / cabLoop.L) * cabLoop.n, i = Math.min(cabLoop.n - 1, Math.floor(u)), a = cabLoop.P[i], b2 = cabLoop.P[i + 1], k = u - i;
           c.c.position.set(a.x + (b2.x - a.x) * k, 0.03, a.z + (b2.z - a.z) * k);
           const want = Math.atan2(b2.x - a.x, b2.z - a.z), d = Math.atan2(Math.sin(want - c.yaw), Math.cos(want - c.yaw)); c.yaw = Math.abs(d) > 2.5 ? want : c.yaw + d * Math.min(1, dt * 8); c.c.rotation.y = c.yaw; });
