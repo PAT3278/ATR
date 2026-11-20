@@ -297,7 +297,7 @@
       const ctx = (this.ctx = new AC({ latencyHint: 'playback' }));
       SW.Kit.init(ctx);
       this.master = ctx.createGain();
-      this.master.gain.value = this.volume;
+      this.master.gain.value = this.muted ? 0 : this.volume;   // muted before the start (?mute=1) stays muted
       const lim = ctx.createDynamicsCompressor();
       lim.threshold.value = -8;
       lim.knee.value = 6;

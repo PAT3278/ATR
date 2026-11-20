@@ -18,6 +18,11 @@
    - `cd ../../nshack && npm install && cp .env.example .env.local`、`.env.local` に Stripe の**テスト用**キーを書く
    - Stripe CLI を入れて `stripe login`（Webhook を手元に転送するため）
 
+## すぐ試運転（ミュートで開く）
+
+- `SoundWalk\play.cmd` をダブルクリック（または `npm run play`）。サーバーを立ててブラウザでゲームを開きます。音は消えた状態で始まり、右上のスピーカーで戻せます（URL の `?mute=1`）。サーバーは裏で動き続けるので、2回目からはすぐ開きます。止めるときは `npm run stop`。音ありで開くなら `npm run play -- --sound`。
+- コードを直したら、開いているタブで再読み込み（Ctrl+R）。
+- 動きのカクつきを測るなら `npm run perf`（窓が開いて約30秒自動で歩き、fps と、50ms・100ms を超えて止まったフレームの数と場所を出します）。
 ## 遊ぶ・デバッグする（F5）
 
 左の「実行とデバッグ」から選んで F5:

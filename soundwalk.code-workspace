@@ -68,7 +68,7 @@
         "detail": "Just the game; breakpoints in SoundWalk/src work",
         "type": "chrome",
         "request": "launch",
-        "url": "http://localhost:8000/?api=off",
+        "url": "http://localhost:8000/?api=off&mute=1",
         "webRoot": "${workspaceFolder:ATR}/SoundWalk",
         "preLaunchTask": "SoundWalk: serve"
       },
@@ -77,7 +77,7 @@
         "detail": "The game talking to the local shop API: buy with test card 4242 4242 4242 4242",
         "type": "chrome",
         "request": "launch",
-        "url": "http://localhost:8000/?api=http://localhost:3000/api/soundwalk",
+        "url": "http://localhost:8000/?api=http://localhost:3000/api/soundwalk&mute=1",
         "webRoot": "${workspaceFolder:ATR}/SoundWalk",
         "preLaunchTask": "Dev: game + shop"
       },
@@ -85,7 +85,7 @@
         "name": "Play SoundWalk on a phone-sized window",
         "type": "chrome",
         "request": "launch",
-        "url": "http://localhost:8000/?api=off",
+        "url": "http://localhost:8000/?api=off&mute=1",
         "webRoot": "${workspaceFolder:ATR}/SoundWalk",
         "runtimeArgs": ["--window-size=420,900"],
         "preLaunchTask": "SoundWalk: serve"

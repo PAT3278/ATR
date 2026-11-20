@@ -1501,6 +1501,7 @@
   const P = { x: 0, z: -7.5, y: 0, face: 0, speed: 0, v: 0, hx: 0, hz: 1, lean: 0, vy: 0, air: false, jy: 0 };
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
   function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; P.jy = P.y; } }   // jy: where you took off (see update)
+  let camPull = null, camFloor = null;   // the camera's eased distance when a wall pulls it in, and its eased floor
   let camYaw = Math.PI, camPitch = 0.2, lookT = -9, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
   const camDist = 4.7;
   function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
@@ -2641,6 +2642,8 @@
     else if (best) routeTo(best);
     else auto = { pts: [{ x, z }], i: 0 };
   });
+  // ?mute=1 (the test-play launcher, npm run play) starts with the sound off; the speaker button turns it back on
+  try { const mq = new URLSearchParams(location.search).get('mute'); if (mq !== null && mq !== '0' && mq !== 'false') { SW.Audio.muted = true; $('#soundBtn').setAttribute('aria-pressed', 'true'); } } catch (e) { /* no location */ }
   $('#soundBtn').addEventListener('click', () => {
     const m = !SW.Audio.muted;
     SW.Audio.setMuted(m);
@@ -2885,6 +2888,11 @@
           inRoom = { r, u0, v0 }; let te = 1; for (const [p0, d, h] of [[u0, u1 - u0, hx], [v0, v1 - v0, hz]]) if (Math.abs(d) > 1e-9) te = Math.min(te, Math.max(0, ((d > 0 ? h : -h) - p0) / d));
           k = Math.min(k, te + 0.35 / Math.max(1, cd));
         }
+        if (!inRoom) {   // outdoors the distance a wall pulls the camera in to is eased back out (in at once, so no wall ever hides you), not snapped back as the corner passes
+          const want = k < 1 ? Math.max(0.6, cd * k - 0.35) : cd;
+          camPull = camPull == null || want < camPull ? want : camPull + (want - camPull) * Math.min(1, dt * 2.5);
+          if (camPull < cd - 0.01) k = (camPull + 0.35) / cd - 1e-6; else k = 1;
+        } else camPull = null;
         if (k < 1) { const c2 = Math.max(inRoom ? 0.05 : 0.6, cd * k - 0.35); cx = tx + Math.sin(camYaw) * Math.cos(camPitch) * c2; cy = ty + Math.sin(camPitch) * (inRoom ? cd - (cd - c2) * 0.2 : c2); cz = tz + Math.cos(camYaw) * Math.cos(camPitch) * c2; if (inRoom) ahead = Math.min(2.4, (cd - c2) * 0.6); }   // indoors, squeezed: it keeps up high and looks past you (over the pool table's rails), and may come right in over you rather than out through a wall
         if (ahead > 0) {   // ...but not into the wall in front of you: the point it looks at stays a metre clear of the room's walls
           const { r, u0, v0 } = inRoom, sy = -Math.sin(camYaw), sz = -Math.cos(camYaw), du = sy * r.c - sz * r.s, dv = sy * r.s + sz * r.c; let te = 9;
@@ -2894,7 +2902,10 @@
         for (const r of rooms) { const dx = tx - r.x, dz = tz - r.z, u = dx * r.c - dz * r.s, v = dx * r.s + dz * r.c; if (Math.abs(u) < r.hx && Math.abs(v) < r.hz) cy = Math.min(cy, r.y - 0.35); }   // and under its roof
         for (const l of lids) { const dx = cx - l.x, dz = cz - l.z; if (Math.abs(dx * l.c - dz * l.s) < l.hx && Math.abs(dx * l.s + dz * l.c) < l.hz) cy = Math.max(cy, l.y); }   // over the pool table, not through it
       }
-      cx = clamp(cx, -345, 345); cz = clamp(cz, -345, 345); cy = Math.min(40, Math.max(groundAt(cx, cz, P.y) + 0.5, cy));
+      else camPull = null;
+      cx = clamp(cx, -345, 345); cz = clamp(cz, -345, 345);
+      { const fl = groundAt(cx, cz, P.y) + 0.5; camFloor = camFloor == null || fl > camFloor || mode === 'title' ? fl : camFloor + (fl - camFloor) * Math.min(1, dt * 6); }   // over a kerb or a deck edge the camera's floor rises at once but sinks back gently
+      cy = Math.min(40, Math.max(camFloor, cy));
       for (const q of places) if (q.ceil && P.y < 3) { const l = q.local(cx, cz), lp = q.local(P.x, P.z), c = q.ceil(l.x, l.z) ?? q.ceil(lp.x, lp.z); if (c != null) cy = Math.min(cy, c); }   // under a roof (a tunnel): keep below it   // P.y: the camera follows you into a tunnel or onto an upper floor
       tmpV.set(cx, cy, cz); tmpL.set(tx - Math.sin(camYaw) * ahead, ty - 0.1 - ahead * 0.25, tz - Math.cos(camYaw) * ahead); tmpU.set(0, 1, 0);
     }
@@ -2912,8 +2923,8 @@
       const ct = SW.Audio.ctx.currentTime, GEARS = [0, 9, 18, 28, 40, 62]; let gi = 0; while (gi < 4 && dv >= GEARS[gi + 1]) gi++;
       const rpm = 0.3 + 0.7 * clamp((dv - GEARS[gi]) / (GEARS[gi + 1] - GEARS[gi]), 0, 1);
       wind.g.gain.setTargetAtTime(0.012 + 0.03 * spd * spd, ct, 0.15); wind.f.frequency.setTargetAtTime(300 + 500 * clamp(dv / 58, 0, 1), ct, 0.15);
-      wind.hg.gain.setTargetAtTime(0.03 + 0.03 * rpm, ct, 0.1); wind.o1.frequency.setTargetAtTime(44 + 62 * rpm, ct, 0.07); wind.o2.frequency.setTargetAtTime(66 + 93 * rpm, ct, 0.07);
-    } else if (wind) { const ct = SW.Audio.ctx.currentTime; wind.g.gain.setTargetAtTime(0.035 * spd * spd, ct, 0.15); wind.f.frequency.setTargetAtTime(380 + 500 * spd, ct, 0.15); wind.hg.gain.setTargetAtTime(0.05 * Math.min(1, boost * 1.4) * (0.4 + 0.6 * spd), ct, 0.12); wind.o1.frequency.setTargetAtTime(82 + 58 * spd, ct, 0.2); wind.o2.frequency.setTargetAtTime(123.5 + 87 * spd, ct, 0.2); }
+      wind.hg.gain.setTargetAtTime(0.015 + 0.015 * rpm, ct, 0.1); wind.o1.frequency.setTargetAtTime(44 + 62 * rpm, ct, 0.07); wind.o2.frequency.setTargetAtTime(66 + 93 * rpm, ct, 0.07);
+    } else if (wind) { const ct = SW.Audio.ctx.currentTime, w = smooth(0.35, 1, spd); wind.g.gain.setTargetAtTime(0.01 * w * w, ct, 0.4); wind.f.frequency.setTargetAtTime(220 + 180 * spd, ct, 0.4); wind.hg.gain.setTargetAtTime(0, ct, 0.1); }   // on foot and on a board: no hum, only a faint, low rush of air at full speed
     camera.position.copy(tmpV); camera.up.copy(tmpU); camera.lookAt(tmpL); camLook.copy(tmpL);
     sky.position.copy(camera.position); stars.position.copy(camera.position);
     planet.position.set(camera.position.x - 260, camera.position.y + 250, camera.position.z - 380);
@@ -2994,7 +3005,7 @@
     SW.Audio.init();
     SW.Audio.resume();
     { const ctx = SW.Audio.ctx, n = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-      n.buffer = SW.Kit.noiseBuf; n.loop = true; f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 0.6; g.gain.value = 0;
+      n.buffer = SW.Kit.noiseBuf; n.loop = true; f.type = 'lowpass'; f.frequency.value = 250; f.Q.value = 0.3; g.gain.value = 0;
       n.connect(f).connect(g).connect(SW.Audio.master); n.start();
       // the ride's own voice: a soft two-note hum that rises with speed, with a slow wobble
       const hg = ctx.createGain(), lp = ctx.createBiquadFilter(), o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), lfo = ctx.createOscillator(), lg = ctx.createGain();
@@ -3079,6 +3090,32 @@
     return best;
   }
   let last = performance.now(), camHold = null;
+  // No stalls when a place comes into or goes out of view. three.js builds every material's shader for one number of
+  // lights, and rebuilds all of them (a few hundred: a stall of a third of a second or more on a laptop GPU) whenever that
+  // number changes, as it did each time a place's group was shown or hidden with its lamps in it. So every lamp a place
+  // owns is stood in for by a stand-in kept at the scene's root, always counted: it takes the lamp's place, colour and
+  // brightness each frame, and goes dark (instead of away) while the lamp or anything it hangs from is hidden.
+  // The place's own lamp stays where it was for its code to drive, but is never drawn (its visible always reads false).
+  const pins = [];
+  {
+    const holder = new THREE.Group(); holder.name = 'lamp stand-ins'; scene.add(holder);
+    const own = []; scene.traverse((o) => { if (o.isPointLight && o.parent && o.parent !== scene) own.push(o); });
+    for (const L of own) {
+      const c = new THREE.PointLight(L.color, 0, L.distance, L.decay); holder.add(c);
+      const s = { L, c, on: L.visible !== false }; pins.push(s);
+      Object.defineProperty(L, 'visible', { configurable: true, get: () => false, set: (v) => { s.on = !!v; } });
+    }
+  }
+  function syncPins() {
+    for (const s of pins) {
+      const { L, c } = s; let on = s.on; for (let q = L.parent; on && q; q = q.parent) if (!q.visible) on = false;
+      c.intensity = on ? L.intensity : 0;
+      if (on) { c.color.copy(L.color); c.distance = L.distance; c.decay = L.decay; L.getWorldPosition(c.position); }
+    }
+  }
+  // ...and every shader is built while the loading screen is up, not the first time its thing comes into view
+  try { syncPins(); renderer.setRenderTarget(rt); renderer.compile(scene, camera); renderer.setRenderTarget(null); } catch (e) { console.warn('shader warm-up skipped', e); }
+
   function loop(now) {
     const dt = clamp((now - last) / 1000, 0, 0.05);   // the first frame's stamp can predate the clock read after a long build: never run time backwards (FLIP's cabs index off their loop)
     last = now; t += dt;
@@ -3090,6 +3127,7 @@
     countTick();
     if (camHold) camHold(camera);   // debug: a test can fly the camera
     post.uniforms.time.value = t; skyU.time.value = t;
+    syncPins();
     renderer.setRenderTarget(rt); renderer.render(scene, camera);
     renderer.setRenderTarget(null); renderer.render(postScene, postCam);
     if (mode === 'walk') drawMini();
