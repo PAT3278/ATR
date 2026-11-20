@@ -2860,11 +2860,11 @@
       else {
         // Walking: the camera drifts round behind you the way you are heading, like a camera operator following on foot.
         // It waits a moment after you turn the view by hand, swings faster the faster you go, follows fully when you walk away
-        // from it, only a little when you walk across the screen (so A / D still circles you slowly) and not at all when you
+        // from it, a good deal when you walk across the screen too (A / D swings the view round with you) and not at all when you
         // walk towards it (S turns you round to face the camera instead of spinning it).
         if (mode === 'walk' && !drag && !viewPlace && !pool && !hoop && P.v > 0.4) {
           const away = Math.cos(wrapA(P.face + Math.PI - camYaw)), hand = smooth(0.8, 2.2, t - lookT);
-          const k = (auto ? 1 : clamp(away + 0.3, 0, 1)) * hand * smooth(0.4, 4, P.v) * (1.1 + boost * 1.4);
+          const k = (auto ? 1 : clamp(away + 0.75, 0, 1)) * hand * smooth(0.4, 3, P.v) * (2.2 + boost * 1.8);
           camYaw += wrapA(P.face + Math.PI - camYaw) * Math.min(1, dt * k);
           camPitch += (0.2 + boost * 0.02 - camPitch) * Math.min(1, dt * 0.6 * hand * smooth(0.4, 4, P.v));   // and settles back to its usual height
         }
