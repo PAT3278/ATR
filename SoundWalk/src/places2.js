@@ -185,20 +185,10 @@
       const GO_IN = 61, COME_OUT = 119;                                     // walk in before the 1:07 verse, come back out before the loop
       const CUTAWAYS = [];   // the office is on hold for now: the view stays on the two performers. (Cuts to the firefight were [[18, 23], [35, 40], [52, 57], [84, 89], [104, 109]].)
       {
-        const cr = E.rng(212), X = 6.6; var neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false, streetLife = null;
+        const cr = E.rng(212), X = 6.6; var mapP = (v) => v, neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false, streetLife = null;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
-        const fig = (jacket, cap) => {
-          const f = new THREE.Group(), skin = E.mat('#8a5a3c'), jm = E.mat(jacket, { rough: 0.8 }), pm = E.mat('#1d1f26');
-          for (const sx of [-0.1, 0.1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.9, 8), pm); l.position.set(sx, 0.45, 0); f.add(l); }
-          const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.62, 10), jm); torso.position.y = 1.2; torso.scale.z = 0.7; f.add(torso);
-          const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 10), skin); head.position.y = 1.68; f.add(head);
-          const hat = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 8, 0, 6.3, 0, 1.6), E.mat(cap)); hat.position.y = 1.7; f.add(hat);
-          const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.27, 1.45, 0); const a = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.56, 8), jm); a.position.y = -0.28; piv.add(a); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), skin); hd.position.y = -0.6; piv.add(hd); f.add(piv); return piv; });
-          const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.02, 0.2, 8), ironM); mic.position.y = -0.68; arms[1].add(mic);
-          f.traverse((m) => { if (m.isMesh) m.castShadow = true; });
-          return { f, arms, torso, head };
-        };
+        const figR = E.rng(6060), fig = () => { const d = E.npc.dress(figR); return { f: d.f, arms: d.arms, torso: d.torso, head: d.head }; };   // the neighbours: everyday clothes from the shared decks (E.npc)
         // The two performers, modelled in detail. stvn: red puffer with a hood, cuffed beanie, chain. vas: white track jacket with a stripe, blue cap, lighter jeans.
         // Same handles as fig() (f, arms, torso, head), so the performance code drives both.
         const figPro = (o) => {
@@ -264,42 +254,49 @@
           f.traverse((m) => { if (m.isMesh) m.castShadow = true; });
           return { f, arms, torso, head };
         };
-        for (let i = 0; i < 4; i++) {
+        // The performers' two brownstones stand in the row across the street (houses 2 and 3 of it, which it leaves out). They are
+        // built as they always were, facing -x at X, inside PG: a group turned half round about the middle of the street
+        // (MX, MZ), which carries them, their stoops, doors, windows and the performers over to face this way. Everything
+        // the performance code does stays in their own frame; the camera's shots are turned back with them (mapP).
+        const MX = (X - 14) / 2, MZ = 27.4, PG = new THREE.Group(); PG.position.set(2 * MX, 0, 2 * MZ); PG.rotation.y = Math.PI; g.add(PG);
+        const PB = E.batch(PG), pbx = PB.box, addBoxM = (x, z, hx, hz) => p.addBox(2 * MX - x, 2 * MZ - z, hx, hz);
+        mapP = (v) => [2 * MX - v[0], v[1], 2 * MZ - v[2]];
+        for (const i of [1, 2]) {   // only the two houses with a performer: built facing -x as before, in PG, which turns them to face this way across the street
           const z0 = 17 + i * 6.2, H = 10.4 + (i % 2) * 0.9, wall = E.mat(['#b07a62', '#c0705c', '#a07060', '#c08a6a'][i], { map: E.tex('brick', 2, 3), rough: 0.9 }), dz = z0 - 1.6;
-          bx(8, H, 6.1, X + 4, H / 2, z0, wall);
-          bx(0.7, 0.5, 6.3, X - 0.15, H - 0.1, z0, trimM); bx(0.3, 0.25, 6.2, X - 0.05, H - 0.75, z0, trimM, false);        // cornice
-          bx(0.3, 0.18, 6.2, X - 0.05, 4.75, z0, trimM, false);                                                             // string course
-          const win = (y, z, h = 1.7) => { bx(0.06, h, 0.95, X - 0.03, y, z, cr() < 0.45 ? winLit : winDark, false); bx(0.16, 0.2, 1.2, X - 0.06, y + h / 2 + 0.14, z, trimM, false); bx(0.2, 0.1, 1.15, X - 0.08, y - h / 2 - 0.05, z, trimM, false); };
+          pbx(8, H, 6.1, X + 4, H / 2, z0, wall);
+          pbx(0.7, 0.5, 6.3, X - 0.15, H - 0.1, z0, trimM); pbx(0.3, 0.25, 6.2, X - 0.05, H - 0.75, z0, trimM, false);        // cornice
+          pbx(0.3, 0.18, 6.2, X - 0.05, 4.75, z0, trimM, false);                                                             // string course
+          const win = (y, z, h = 1.7) => { pbx(0.06, h, 0.95, X - 0.03, y, z, cr() < 0.45 ? winLit : winDark, false); pbx(0.16, 0.2, 1.2, X - 0.06, y + h / 2 + 0.14, z, trimM, false); pbx(0.2, 0.1, 1.15, X - 0.08, y - h / 2 - 0.05, z, trimM, false); };
           win(3.25, z0 + 0.35, 1.9); win(3.25, z0 + 2.0, 1.9); win(0.95, z0 + 1.2, 0.9);
           const star = i === 1 || i === 2;                                                                                 // the two houses with a performer
           for (const y of [6.3, 8.6]) for (const z of [-1.85, 0, 1.85]) if (!(star && y === 6.3 && z === 0)) win(y, z0 + z);
           let sash = null, hinge = null;
           if (star) {
             // the window they lean out of: a lit room behind a sash that slides up
-            bx(0.03, 1.7, 0.95, X - 0.012, 6.3, z0, new THREE.MeshBasicMaterial({ color: '#c98a4a' }), false);
-            sash = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 0.95), winDark); sash.position.set(X - 0.045, 6.3, z0); g.add(sash);   // a real mesh: it slides
-            bx(0.16, 0.2, 1.2, X - 0.06, 7.29, z0, trimM, false); bx(0.24, 0.1, 1.15, X - 0.1, 5.4, z0, trimM, false);
+            pbx(0.03, 1.7, 0.95, X - 0.012, 6.3, z0, new THREE.MeshBasicMaterial({ color: '#c98a4a' }), false);
+            sash = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 0.95), winDark); sash.position.set(X - 0.045, 6.3, z0); PG.add(sash);   // a real mesh: it slides
+            pbx(0.16, 0.2, 1.2, X - 0.06, 7.29, z0, trimM, false); pbx(0.24, 0.1, 1.15, X - 0.1, 5.4, z0, trimM, false);
             // the door swings out on its hinge; behind it the hallway is dark
-            bx(0.03, 2.4, 1.15, X - 0.012, 3.0, dz, new THREE.MeshBasicMaterial({ color: '#070606' }), false);
-            hinge = new THREE.Group(); hinge.position.set(X - 0.05, 3.0, dz - 0.575); g.add(hinge);
+            pbx(0.03, 2.4, 1.15, X - 0.012, 3.0, dz, new THREE.MeshBasicMaterial({ color: '#070606' }), false);
+            hinge = new THREE.Group(); hinge.position.set(X - 0.05, 3.0, dz - 0.575); PG.add(hinge);
             const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.07, 2.4, 1.15), doorM); leaf.position.z = 0.575; hinge.add(leaf);
-          } else bx(0.08, 2.4, 1.15, X - 0.04, 3.0, dz, doorM, false);
-          bx(0.3, 0.3, 1.6, X - 0.1, 4.35, dz, trimM, false);                                                              // door hood
-          bx(0.1, 0.22, 0.14, X - 0.08, 3.4, dz + 0.85, winLit, false);                                                     // door lamp
-          for (let k = 0; k < 8; k++) bx(0.37, 0.225 * (k + 1), 1.75, X - 2.9 + k * 0.36, 0.1125 * (k + 1), dz, stepM);    // stoop
+          } else pbx(0.08, 2.4, 1.15, X - 0.04, 3.0, dz, doorM, false);
+          pbx(0.3, 0.3, 1.6, X - 0.1, 4.35, dz, trimM, false);                                                              // door hood
+          pbx(0.1, 0.22, 0.14, X - 0.08, 3.4, dz + 0.85, winLit, false);                                                     // door lamp
+          for (let k = 0; k < 8; k++) pbx(0.37, 0.225 * (k + 1), 1.75, X - 2.9 + k * 0.36, 0.1125 * (k + 1), dz, stepM);    // stoop
           for (const sd of [-1, 1]) {
-            const rz = dz + sd * 0.95, rail = bx(3.45, 0.05, 0.05, X - 1.5, 1.85, rz, ironM, false); rail.rotation.z = 0.556;
-            for (let k = 0; k < 7; k++) bx(0.03, 0.9, 0.03, X - 2.9 + k * 0.46, 0.5 + k * 0.288, rz, ironM, false);
-            bx(0.12, 1.15, 0.12, X - 3.1, 0.58, rz, ironM, false);
+            const rz = dz + sd * 0.95, rail = pbx(3.45, 0.05, 0.05, X - 1.5, 1.85, rz, ironM, false); rail.rotation.z = 0.556;
+            for (let k = 0; k < 7; k++) pbx(0.03, 0.9, 0.03, X - 2.9 + k * 0.46, 0.5 + k * 0.288, rz, ironM, false);
+            pbx(0.12, 1.15, 0.12, X - 3.1, 0.58, rz, ironM, false);
           }
-          for (let k = 0; k < 9; k++) bx(0.03, 0.8, 0.03, X - 3.1, 0.4, z0 + 0.1 + k * 0.34, ironM, false);                 // area railing
-          bx(0.04, 0.04, 3.0, X - 3.1, 0.8, z0 + 1.5, ironM, false);
-          p.addBox(X + 4, z0, 4.05, 3.1); p.addBox(X - 1.5, dz, 1.6, 1.0); p.addBox(X - 3.1, z0 + 1.5, 0.15, 1.55);
+          for (let k = 0; k < 9; k++) pbx(0.03, 0.8, 0.03, X - 3.1, 0.4, z0 + 0.1 + k * 0.34, ironM, false);                 // area railing
+          pbx(0.04, 0.04, 3.0, X - 3.1, 0.8, z0 + 1.5, ironM, false);
+          addBoxM(X + 4, z0, 4.05, 3.1); addBoxM(X - 1.5, dz, 1.6, 1.0); addBoxM(X - 3.1, z0 + 1.5, 0.15, 1.55);
           if (i === 1 || i === 2) {
             const m = figPro(i === 1
               ? { puffer: true, chain: true, beard: true, beanie: true, skin: '#8a5a3c', skinD: '#6f452c', jacket: '#b3161d', jacketD: '#8c1016', trim: '#141416', hat: '#141416', pants: '#23262e', shoe: '#e6e2d6' }
               : { skin: '#b07a52', skinD: '#8f5f3d', jacket: '#dcd6c4', jacketD: '#c4bda9', trim: '#16181c', hat: '#2a4a8a', pants: '#4a5d78', shoe: '#17181c' });
-            const w = new THREE.Group(); w.add(m.f); g.add(w);
+            const w = new THREE.Group(); w.add(m.f); PG.add(w);
             perf.push({ ...m, w, sash, hinge, X, dz, z0, zo: i === 1 ? 0.25 : -0.25, yaw: i === 1 ? 0.3 : -0.3, s: i * 2.1, name: i === 1 ? 'stvn' : 'vas', off: i === 1 ? 0 : 9.4, amp: 0.3, up: 0 });   // red jacket = stvn, white jacket = vas
           }
         }
@@ -307,13 +304,12 @@
         // A New York deli on the corner, at the end of the row: brick, a lit storefront full of shelves, a green awning,
         // a backlit sign, a neon OPEN, flowers and fruit out front.
         {
-          const zc = 42.0, H = 8.2, sign = (txt, o, w, h) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), (() => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, o), transparent: true }); m.userData.lin = true; return m; })());
+          const zc = 38.25, H = 8.2, sign = (txt, o, w, h) => new THREE.Mesh(new THREE.PlaneGeometry(w, h), (() => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(txt, o), transparent: true }); m.userData.lin = true; return m; })());
           const brick = E.mat('#6e4434', { map: E.tex('brick', 2, 3), rough: 0.9 }), awnM = E.mat('#1d5a34', { rough: 0.8 }), dark = E.mat('#141416', { rough: 0.6 });
           const shopGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe6b0').convertSRGBToLinear().multiplyScalar(0.9) }); shopGlow.userData.lin = true;
           const doorGlow = new THREE.MeshBasicMaterial({ color: new THREE.Color('#d8f0ff').convertSRGBToLinear().multiplyScalar(0.8) }); doorGlow.userData.lin = true;
-          bx(8, H, 6.1, X + 4, H / 2, zc, brick);
-          bx(0.7, 0.45, 6.3, X - 0.15, H - 0.1, zc, trimM); bx(0.3, 0.2, 6.2, X - 0.05, 4.6, zc, trimM, false);
-          for (const z of [-1.6, 1.6]) { bx(0.06, 1.6, 1.0, X - 0.03, 6.2, zc + z, cr() < 0.5 ? winLit : winDark, false); bx(0.18, 0.1, 1.2, X - 0.08, 5.35, zc + z, trimM, false); }
+          void brick;   // (the shop is in the ground floor of the apartment house's wing: its wall, windows and cornice are the house's)
+          bx(0.3, 0.2, 6.6, X - 0.05, 4.1, zc, trimM, false);                                                                 // a band over the shopfront
           // storefront: a lit window, shelves of tins and bottles silhouetted in it, a glass door
           bx(0.05, 2.5, 3.9, X - 0.03, 1.55, zc - 0.75, shopGlow, false);
           const tins = ['#c8202a', '#e8c020', '#2a62c8', '#f4f1e6', '#1f8a3a', '#d86a20', '#8a2ab8'].map((c) => E.mat(c, { rough: 0.5 }));
@@ -348,12 +344,12 @@
           // light from the shop spilling across the pavement
           const pool = new THREE.Mesh(new THREE.PlaneGeometry(5, 7), new THREE.MeshBasicMaterial({ map: E.dot(), color: new THREE.Color('#ffd08a').convertSRGBToLinear(), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
           pool.material.userData.lin = true; pool.rotation.x = -Math.PI / 2; pool.position.set(X - 2.2, 0.06, zc); g.add(pool);
-          p.addBox(X + 4, zc, 4.05, 3.1); p.addBox(X - 0.75, zc, 0.4, 3.0); p.addBox(X - 2.9, zc + 3.6, 0.3, 0.3); p.addBox(X - 2.9, zc - 3.5, 0.3, 0.3);
+          p.addBox(X - 0.75, zc, 0.4, 3.0); p.addBox(X - 2.9, zc + 3.6, 0.3, 0.3); p.addBox(X - 2.9, zc - 3.5, 0.3, 0.3);
           neonM = neon.material;
         }
-        const box2 = bx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
+        const box2 = pbx(0.6, 0.36, 0.28, X - 2.9 + 1 * 0.36, 0.45 + 0.18, 17 + 2 * 6.2 - 1.6 + 0.5, E.mat('#1a1a1d', { metal: 0.4 }));                               // boombox on a step
         box2.rotation.y = 0.3;
-        BB.flush();
+        BB.flush(); PB.flush();
 
         // The neighbourhood between here and FLIP DA HOODS: streets of rowhouses like these across the way, then taller
         // brick apartment blocks the nearer you get to FLIP's towers. Anything that would land on FLIP, a path or another
@@ -410,7 +406,7 @@
           // with a ball, someone walking a dog. The houses across the street face this row, stoop to stoop.
           const ZA = 8.8, ZB = 60, CURB_E = 1.6, CURB_W = -7.4, FRONT_W = -14;
           for (let k = 0; k < 8; k++) {   // the row across the street (part of this place now, not negotiable spill)
-            const zc = 13 + k * 6.2, ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, draw = rowhouse(-22, FRONT_W, 1, zc, ha); draw();
+            const zc = 13 + k * 6.2, ha = 10.4 + (k % 2) * 0.9 + nr() * 0.6, draw = rowhouse(-22, FRONT_W, 1, zc, ha); if (k !== 2 && k !== 3) draw();   // 2 and 3: the performers' houses (PG)
             // its back is a real back: sash windows on every floor, a back door, and a fire escape zigzagging down
             for (let y = 1.6; y < ha - 1.2; y += 2.3) for (const dz of [-1.85, 0, 1.85]) { nb(0.06, 1.5, 0.9, -22.03, y + 0.6, zc + dz, nr() < 0.35 ? winLit : winDark, false); nb(0.14, 0.12, 1.1, -22.06, y - 0.2, zc + dz, trimM, false); nb(0.12, 0.16, 1.1, -22.06, y + 1.42, zc + dz, trimM, false); }
             nb(0.08, 2.2, 1.1, -22.04, 1.1, zc - 1.85, doorM, false);
@@ -427,7 +423,7 @@
           // street trees in pits along both kerbs
           const leafM = [E.mat('#4f6f3a', { rough: 0.9, flat: true }), E.mat('#5d7a40', { rough: 0.9, flat: true })], barkM = E.mat('#4a3a2c', { rough: 0.9 });
           for (const [x, z0] of [[CURB_E + 1.0, 12], [CURB_W - 1.0, 15]]) for (let z = z0; z < ZB - 2; z += 9.5) {
-            if (x > 0 && z > 20 && z < 34) continue;   // keep the view of the two stoops clear
+            if (x < 0 && z > 20 && z < 37) continue;   // keep the view of the two stoops clear
             nb(1.3, 0.04, 1.3, x, 0.17, z, E.mat('#3a3026', { rough: 1 }), false);
             const tk = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.18, 4.2, 7), barkM); tk.position.set(x, 2.1, z); tk.castShadow = true; g.add(tk);
             for (let c = 0; c < 4; c++) { const lf = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3 + nr() * 0.6, 0), leafM[c % 2]); lf.position.set(x + (nr() - 0.5) * 1.6, 4.6 + nr() * 1.4, z + (nr() - 0.5) * 1.6); lf.castShadow = true; g.add(lf); }
@@ -436,7 +432,7 @@
           // cars parked nose to tail along both kerbs (the street runs one way: they all point the same way)
           if (SW.Cars) for (const [x, side] of [[CURB_E - 1.2, 1], [CURB_W + 1.2, -1]]) for (let z = ZA + 3.5, k = 0; z < ZB - 3; k++) {
             const car = SW.Cars.make(E, Math.floor(nr() * 7)), len = car.userData.len || 4.5;
-            if (side > 0 && z + len / 2 > 19 && z - len / 2 < 35) { z = 35 + len / 2; continue; }
+            if (side < 0 && z + len / 2 > 21 && z - len / 2 < 37) { z = 37 + len / 2; continue; }
             car.position.set(x, 0.04, z + len / 2); car.rotation.y = Math.PI; g.add(car);
             p.addBox(x, z + len / 2, (car.userData.wid || 1.8) / 2 + 0.1, len / 2 + 0.1);
             z += len + 1.2 + nr() * 2.5;
@@ -461,10 +457,10 @@
           shopFront(13 + 1 * 6.2, 'BARBER SHOP', '#9ff3ff', true); shopFront(13 + 6 * 6.2, 'LAUNDROMAT  24H', '#cfe6ff', false);
           // the neighbours: on their stoops, chatting on the sidewalk, kids with a ball, someone with a dog
           const folk = [['#2a2c30', '#141416'], ['#7a2f2a', '#2a4a8a'], ['#3a5a40', '#141416'], ['#c9c2b0', '#6a3a2a'], ['#4a6a8a', '#d9b24a'], ['#8a6a3a', '#141416'], ['#2f4a5a', '#c9c2b0']];
-          const person = (x, z, ry, k, sit, s = 1) => { const m = fig(folk[k % folk.length][0], folk[k % folk.length][1]); m.f.position.set(x, sit ? sit : 0.16, z); m.f.rotation.y = ry; m.f.scale.setScalar(s); if (sit) { m.f.scale.y = s * 0.78; } g.add(m.f); neighbours.push({ m, k, base: m.f.position.y }); p.addCircle(x, z, 0.35 * s); return m; };
+          const person = (x, z, ry, k, sit, s = 1) => { const m = fig(); m.f.position.set(x, sit ? sit : 0.16, z); m.f.rotation.y = ry; m.f.scale.setScalar(s); if (sit) { m.f.scale.y = s * 0.78; } g.add(m.f); neighbours.push({ m, k, base: m.f.position.y }); p.addCircle(x, z, 0.35 * s); return m; };
           const neighbours = [];
-          person(FRONT_W + 2.0, 13 + 3 * 6.2 - 1.6, Math.PI / 2, 0, 0.9); person(FRONT_W + 1.6, 13 + 3 * 6.2 - 1.2, Math.PI / 2, 1, 0.68);    // two on a stoop across the way
-          person(X - 2.6, 13 + 0 * 6.2 - 1.6, -Math.PI / 2, 2, 0.6);                                                                       // one on a stoop at the end of this row
+          person(FRONT_W + 2.0, 13 + 5 * 6.2 - 1.6, Math.PI / 2, 0, 0.9); person(FRONT_W + 1.6, 13 + 5 * 6.2 - 1.2, Math.PI / 2, 1, 0.68);    // two on a stoop across the way
+          person(FRONT_W + 2.6, 13 + 7 * 6.2 - 1.6, Math.PI / 2, 2, 0.6);                                                                  // one on a stoop at the far end of the row
           person(CURB_W - 1.6, 46, 0.4, 3); person(CURB_W - 2.4, 46.9, -2.5, 4);                                                          // chatting on the sidewalk
           person(CURB_E + 1.8, 45, Math.PI, 5);                                                                                            // walking the dog
           { const dog = new THREE.Group(), dm = E.mat('#6a4a30', { rough: 0.8 }); const b = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.7), dm); b.position.y = 0.42; dog.add(b); const hd = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.26), dm); hd.position.set(0, 0.6, -0.42); dog.add(hd); for (const [lx, lz] of [[-0.1, -0.25], [0.1, -0.25], [-0.1, 0.25], [0.1, 0.25]]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.3, 0.07), dm); l.position.set(lx, 0.15, lz); dog.add(l); } dog.position.set(CURB_E + 1.9, 0.16, 43.6); g.add(dog); }
@@ -474,18 +470,22 @@
           p.ground = ((g0) => (lx, lz, y) => Math.max(onWalk(lx, lz) ? 0.16 : 0, g0 ? g0(lx, lz, y) : 0))(p.ground);
         }
       }
-      // The courts behind the row: a basketball court boxed in by brick, New York projects style. It runs along under the
-      // expressway; two tall brick project towers stand over it on the far side, with a raised walk in front of them and
-      // wide concrete steps down to the court that double as bleachers; the backs of the brownstones close the near end,
-      // and you come in through a gate in the chain-link from the alley between the row and the office.
-      // Built in its own frame (u across the court, v along it), turned to lie along the expressway.
-      const CO = { x: 36.6, z: 16 }, toL = (u, v) => [CO.x - v, CO.z + u];   // court frame -> this place's frame
-      const CT = { x: 0, z: 0, W: 15.2, L: 28.6 }, TER = { x0: 12, x1: 18.5, z0: -15.5, z1: 15.5, y: 1.5 }, STEP0 = 9.4;
-      const inCourts = (lx, lz) => lx > 19 && lx < 54 && lz > 5 && lz < 48;
+      // The apartment house: six storeys of brick round three sides of a courtyard that opens onto the street, the way the
+      // walk-up blocks stand on Harlem's side streets (two wings running back from the pavement and a spine across the back).
+      // In the courtyard, behind a chain-link fence with a gate off the pavement, a basketball court: its free-throw lines
+      // are where the game's free-throw challenge is played. The deli has the ground floor of the north wing.
+      // (It keeps to the ground the old row and its courts stood on: NO JOBB's place begins some 13 m past its north wing.)
+      const UX0 = 6.6, UX1 = 34, UZ0 = 8.5, UZ1 = 42, WG = 7.5, SPN = 9, FLOORS = 6, UH = FLOORS * 2.75;   // its extent, the wings' depth along the street, the spine's depth
+      // A half court: its baseline and hoop by the spine, the half-court line towards the street. The court's frame is
+      // turned so that its v runs from the street towards the spine (this place's +x) and u along the street (-z).
+      const CO = { x: UX1 - SPN - 1.4 - 14.3, z: (UZ0 + UZ1) / 2 }, toL = (u, v) => [CO.x + v, CO.z - u];
+      const CT = { x: 0, z: 0, W: 15.2, L: 28.6 };
+      const inCourts = (lx, lz) => lx > UX0 - 0.5 && lx < UX1 + 1 && lz > UZ0 - 0.5 && lz < UZ1 + 0.5;
       {
-        const cg = new THREE.Group(); cg.position.set(CO.x, 0, CO.z); cg.rotation.y = -Math.PI / 2; g.add(cg);
+        const cg = new THREE.Group(); cg.position.set(CO.x, 0, CO.z); cg.rotation.y = Math.PI / 2; g.add(cg);
+        const hg = new THREE.Group(); g.add(hg); const HB = E.batch(hg), hb = HB.box;   // the house itself, in this place's own frame
         const addB = (u, v, hu, hv, y0, y1) => { const [x, z] = toL(u, v); p.addBox(x, z, hv, hu, y0, y1); }, addC = (u, v, r0) => { const [x, z] = toL(u, v); p.addCircle(x, z, r0); };
-        const CB = E.batch(cg), cb = CB.box, cr2 = E.rng(5150), FB = E.batch(g);
+        const CB = E.batch(cg), cb = CB.box, cr2 = E.rng(5150);
         const ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 });
         const canvas = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; return t; };
         // the court surface: worn green with brick-red keys and white lines, on a dark asphalt apron
@@ -509,11 +509,13 @@
           for (let i = 0; i < 2600; i++) { c.fillStyle = `rgba(${cr2() < 0.5 ? '0,0,0' : '255,255,255'},${0.03 + cr2() * 0.06})`; c.fillRect(cr2() * w, cr2() * h, 1 + cr2() * 3, 1 + cr2() * 3); }   // wear
           c.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 0; i < 6; i++) { c.beginPath(); c.ellipse(cr2() * w, cr2() * h, 20 + cr2() * 40, 10 + cr2() * 20, cr2() * 3, 0, 7); c.fill(); }
         });
-        const court = E.plane(PW, PL, E.mat('#ffffff', { map: courtTex, rough: 0.75 })); court.position.set(CT.x, 0.05, CT.z); cg.add(court); p.pick(court);
+        courtTex.repeat.set(1, 0.5);   // only the half by the spine (the +v half of the drawing)
+        const court = E.plane(PW, PL / 2, E.mat('#ffffff', { map: courtTex, rough: 0.75 })); court.position.set(CT.x, 0.05, CT.z + PL / 4); cg.add(court); p.pick(court);
+        { const v0 = UX0 - CO.x, v1 = UX1 - SPN - CO.x, yard = E.plane(UZ1 - UZ0 - 2 * WG, v1 - v0, E.mat('#3a3a3c', { map: E.tex('asphalt', 3, 3), rough: 0.9 })); yard.position.set(0, 0.045, (v0 + v1) / 2); cg.add(yard); p.pick(yard); }   // the courtyard's asphalt round the court
         // the hoops: a steel post behind each baseline, an arm out to a fan-shaped steel backboard, an orange rim and a chain net
         const steel = E.mat('#3d4a44', { metal: 0.6, rough: 0.45 }), white = E.mat('#e9e6dc', { rough: 0.6 }), rimM = E.mat('#d0561e', { metal: 0.4, rough: 0.4 });
         const chainM = new THREE.LineBasicMaterial({ color: new THREE.Color('#b9bcc0').convertSRGBToLinear() }); chainM.userData.lin = true;
-        for (const sd of [-1, 1]) {
+        for (const sd of [1]) {
           const bz = CT.z + sd * CT.L / 2, pz = bz + sd * 1.1, fz = bz - sd * 1.2, h = new THREE.Group(); cg.add(h);
           cb(0.2, 3.6, 0.2, CT.x, 1.8, pz, steel); cb(0.16, 0.16, Math.abs(pz - fz) + 0.1, CT.x, 3.5, (pz + fz) / 2, steel);
           const fan = new THREE.Mesh(new THREE.CircleGeometry(0.95, 20, 0, Math.PI), steel); fan.position.set(CT.x, 2.95, fz); fan.rotation.y = sd > 0 ? Math.PI : 0; fan.castShadow = true; h.add(fan);
@@ -527,10 +529,10 @@
           addC(CT.x, pz, 0.3);
         }
         // where to stand for free throws, and where the rims are (in the world), for the game's free-throw challenge
-        p.freeThrow = [-1, 1].map((sd) => { const bz = CT.z + sd * CT.L / 2, rim = toL(CT.x, bz - sd * 1.58), spot = toL(CT.x, bz - sd * 5.8), rw = p.toWorld(rim[0], rim[1]), sw = p.toWorld(spot[0], spot[1]); return { rim: { x: rw.x, y: 3.05, z: rw.z }, spot: { x: sw.x, z: sw.z } }; });
+        p.freeThrow = [1].map((sd) => { const bz = CT.z + sd * CT.L / 2, rim = toL(CT.x, bz - sd * 1.58), spot = toL(CT.x, bz - sd * 5.8), rw = p.toWorld(rim[0], rim[1]), sw = p.toWorld(spot[0], spot[1]); return { rim: { x: rw.x, y: 3.05, z: rw.z }, spot: { x: sw.x, z: sw.z } }; });
         // a ball left by the free-throw line
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), E.mat('#c8602a', { rough: 0.7 })); ball.position.set(CT.x + 1.4, 0.17, CT.z - CT.L / 2 + 6.2); ball.castShadow = true; cg.add(ball);
-        // chain-link: on the brownstone side, at the expressway end, and along the open end with a gate in it
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), E.mat('#c8602a', { rough: 0.7 })); ball.position.set(CT.x + 1.4, 0.17, CT.z + CT.L / 2 - 6.2); ball.castShadow = true; cg.add(ball);
+        // chain-link along the street side of the court, with a gate in the middle; the house closes the other three sides
         const linkTex = canvas(64, 64, (c) => { c.clearRect(0, 0, 64, 64); c.strokeStyle = '#c7cbcf'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, 32); c.lineTo(32, 0); c.lineTo(64, 32); c.lineTo(32, 64); c.closePath(); c.stroke(); });
         linkTex.wrapS = linkTex.wrapT = THREE.RepeatWrapping;
         const FH = 3.6, fence = (x0, z0, x1, z1) => {
@@ -542,20 +544,14 @@
           const top = cb(len, 0.06, 0.06, (x0 + x1) / 2, FH + 0.05, (z0 + z1) / 2, steel, false); top.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
           addB((x0 + x1) / 2, (z0 + z1) / 2, Math.abs(x1 - x0) / 2 + 0.08, Math.abs(z1 - z0) / 2 + 0.08);
         };
-        const fx0 = CT.x - PW / 2, fx1 = STEP0, fz0 = CT.z - PL / 2, fz1 = CT.z + PL / 2;
-        fence(fx0, fz0, fx0, fz1); fence(fx0, fz0, fx1, fz0);
-        const GX = CT.x - 4.4;                                                                   // the gate, off to one side of the hoop, facing the alley
-        fence(fx0, fz1, GX - 1.3, fz1); fence(GX + 1.3, fz1, fx1, fz1);
-        cb(0.12, FH + 0.4, 0.12, GX - 1.3, (FH + 0.4) / 2, fz1, steel); cb(0.12, FH + 0.4, 0.12, GX + 1.3, (FH + 0.4) / 2, fz1, steel); cb(2.72, 0.1, 0.1, GX, FH + 0.4, fz1, steel);
-        // the steps (bleachers) and the raised walk in front of the towers
-        const conc = E.mat('#8d8a83', { map: E.tex('concrete', 2, 2), rough: 0.9 }), concD = E.mat('#6f6c66', { map: E.tex('concrete', 2, 2), rough: 0.95 });
-        const NS = 6, SW_ = (TER.x0 - STEP0) / NS;
-        for (let k = 0; k < NS; k++) { const hgt = (TER.y * (k + 1)) / NS; cb(SW_ * (NS - k), hgt, TER.z1 - TER.z0, STEP0 + SW_ * k + (SW_ * (NS - k)) / 2, hgt / 2, (TER.z0 + TER.z1) / 2, k % 2 ? conc : concD); }
-        cb(TER.x1 - TER.x0, TER.y, TER.z1 - TER.z0, (TER.x0 + TER.x1) / 2, TER.y / 2, (TER.z0 + TER.z1) / 2, conc);
-        for (const z of [TER.z0, TER.z1]) { cb(TER.x1 - STEP0, 1.0, 0.18, (STEP0 + TER.x1) / 2, TER.y + 0.5, z, steel, false); for (let k = 0; k < 3; k++) addB(STEP0 + ((TER.x1 - STEP0) * (k + 0.5)) / 3, z, (TER.x1 - STEP0) / 6, 0.12); }   // railings at the open ends of the walk: solid, so nobody is lifted onto it through them from the side
-        for (let k = 0; k < 10; k++) addB(TER.x1 + 0.05, TER.z0 + ((TER.z1 - TER.z0) * (k + 0.5)) / 10, 0.1, (TER.z1 - TER.z0) / 20, -1e9, TER.y - E.DECK_STEP);   // nor up its back face where the towers leave gaps, from ground more than a step below it (in short boxes, which never pull the camera in)
-        for (let k = 0; k < 4; k++) { const z = TER.z0 + 4 + k * 8; cb(0.5, 0.45, 2.2, TER.x1 - 1.2, TER.y + 0.22, z, E.mat('#3a3f3a', { rough: 0.6 })); }   // benches
-        // the project towers: plain brick slabs, rows of small windows, a water tank on the roof
+        const YW = (UZ1 - UZ0 - 2 * WG) / 2 - 0.05, FZ = UX0 + 1.0 - CO.x, fx0 = -PW / 2, fz0 = -1.2, fz1 = CT.z + PL / 2 - 0.3;   // the fence across the courtyard's mouth, a metre in from the pavement
+        fence(-YW, FZ, -1.3, FZ); fence(1.3, FZ, YW, FZ);
+        cb(0.12, FH + 0.4, 0.12, -1.3, (FH + 0.4) / 2, FZ, steel); cb(0.12, FH + 0.4, 0.12, 1.3, (FH + 0.4) / 2, FZ, steel); cb(2.72, 0.1, 0.1, 0, FH + 0.4, FZ, steel);
+        // court lights on the corners of the court
+        const headM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#eef6ff').convertSRGBToLinear().multiplyScalar(1.6) }); headM.userData.lin = true;
+        for (const [x, z] of [[fx0 + 0.3, fz0], [fx0 + 0.3, fz1], [-fx0 - 0.3, fz0], [-fx0 - 0.3, fz1]]) { cb(0.14, 7.5, 0.14, x, 3.75, z, steel); cb(0.4, 0.22, 0.7, x + (x < CT.x ? 0.3 : -0.3), 7.5, z + (z < CT.z ? 0.35 : -0.35), headM, false); addC(x, z, 0.15); }
+        const cl = new THREE.PointLight(new THREE.Color('#dfeaff').convertSRGBToLinear(), 1.6, 34, 1.4); cl.position.set(CT.x, 8, CT.z); cg.add(cl);
+        // the house: brick with rows of windows (lit after dark), a cornice, a water tank on the roof
         const projTex = (lit) => canvas(512, 256, (c, w, h) => {
           c.fillStyle = lit ? '#000' : '#7b4434'; c.fillRect(0, 0, w, h);
           if (!lit) for (let y = 0; y < h; y += 4) { c.fillStyle = `rgba(0,0,0,${0.08 + cr2() * 0.1})`; c.fillRect(0, y, w, 1); for (let x = (y / 4) % 2 ? 0 : 6; x < w; x += 12) c.fillRect(x, y, 1, 4); }
@@ -566,53 +562,39 @@
             c.fillStyle = '#e8e4da'; c.fillRect(x, y, ww, hh); c.fillStyle = on ? '#3a3226' : '#14171b'; c.fillRect(x + 2, y + 2, ww - 4, hh - 4); c.fillStyle = '#e8e4da'; c.fillRect(x, y + hh / 2 - 1, ww, 2);
           }
         });
-        const tower = (x, z, w, d, floors) => {
-          const H = floors * 2.75, base = projTex(false), glow = projTex(true);
-          for (const t of [base, glow]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(w, d) / 25.6, floors / 4); }
+        const concD = E.mat('#6f6c66', { map: E.tex('concrete', 2, 2), rough: 0.95 });
+        const block = (x0, x1, z0, z1) => {   // in this place's frame
+          const w = x1 - x0, d = z1 - z0, base = projTex(false), glow = projTex(true);
+          for (const t of [base, glow]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(Math.max(w, d) / 25.6, FLOORS / 4); }
           const m = E.mat('#ffffff', { map: base, emissiveMap: glow, emissive: '#ffffff', emissiveIntensity: 0.9, rough: 0.9 });
-          const b = new THREE.Mesh(new THREE.BoxGeometry(w, H, d), m); b.position.set(x, H / 2, z); b.castShadow = b.receiveShadow = true; cg.add(b);
-          cb(w + 0.3, 0.4, d + 0.3, x, H + 0.2, z, concD);                                                          // parapet
-          cb(w * 0.3, 2.6, d * 0.3, x - w * 0.2, H + 1.3, z, E.mat('#6e3a2c', { rough: 0.9 }));                       // stair bulkhead
-          const wt = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 14), E.mat('#5a4636', { rough: 0.95 })); wt.position.set(x + w * 0.2, H + 3.2, z); wt.castShadow = true; cg.add(wt);
-          const roof = new THREE.Mesh(new THREE.ConeGeometry(1.55, 1.0, 14), E.mat('#3a2c22')); roof.position.set(x + w * 0.2, H + 5.0, z); cg.add(roof);
-          for (const [a, c2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cb(0.12, 1.9, 0.12, x + w * 0.2 + a * 1.0, H + 0.95, z + c2 * 1.0, steel, false);
-          addB(x, z, w / 2 + 0.05, d / 2 + 0.05);
-          return { H };
+          const b = new THREE.Mesh(new THREE.BoxGeometry(w, UH, d), m); b.position.set((x0 + x1) / 2, UH / 2, (z0 + z1) / 2); b.castShadow = b.receiveShadow = true; hg.add(b);
+          hb(w + 0.5, 0.55, d + 0.5, (x0 + x1) / 2, UH + 0.2, (z0 + z1) / 2, concD);   // the cornice
+          p.addBox((x0 + x1) / 2, (z0 + z1) / 2, w / 2 + 0.05, d / 2 + 0.05);
         };
-        tower(25, -6.6, 12, 13, 13); tower(25, 10, 12, 12, 12);
-        // the doors face the walk: a lit entrance and a canopy for each tower
-        for (const z of [-6.6, 10]) { cb(0.1, 2.4, 1.8, 18.98, TER.y + 1.2, z, new THREE.MeshBasicMaterial({ color: '#d8f0ff' }), false); cb(1.4, 0.15, 2.6, 18.3, TER.y + 2.7, z, steel); }
-        // court lights: four tall poles with cool-white heads, and a light that actually lights the court
-        const headM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#eef6ff').convertSRGBToLinear().multiplyScalar(1.6) }); headM.userData.lin = true;
-        for (const [x, z] of [[fx0 + 0.3, fz0 + 0.3], [fx0 + 0.3, fz1 - 0.3], [STEP0 - 0.3, fz0 + 0.3], [STEP0 - 0.3, fz1 - 0.3]]) {
-          cb(0.14, 7.5, 0.14, x, 3.75, z, steel); cb(0.7, 0.22, 0.4, x + (x < CT.x ? 0.35 : -0.35), 7.5, z + (z < CT.z ? 0.3 : -0.3), headM, false);
+        block(UX0, UX1, UZ0, UZ0 + WG); block(UX0, UX1, UZ1 - WG, UZ1); block(UX1 - SPN, UX1, UZ0 + WG, UZ1 - WG);
+        { const tx = UX1 - SPN / 2, tz = CO.z + 4; const wt = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.8, 14), E.mat('#5a4636', { rough: 0.95 })); wt.position.set(tx, UH + 3.1, tz); wt.castShadow = true; hg.add(wt);
+          const roof = new THREE.Mesh(new THREE.ConeGeometry(1.75, 1.1, 14), E.mat('#3a2c22')); roof.position.set(tx, UH + 5.05, tz); hg.add(roof);
+          for (const [a2, c2] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) hb(0.12, 1.9, 0.12, tx + a2 * 1.1, UH + 0.95, tz + c2 * 1.1, steel, false); }
+        // the entrance in the middle of the spine, facing the court: a lit doorway, a canopy, three steps
+        { const ex = UX1 - SPN, ez = CO.z + 6.2; hb(0.1, 2.5, 2.2, ex - 0.03, 1.25 + 0.45, ez, new THREE.MeshBasicMaterial({ color: '#d8f0ff' }), false); hb(1.6, 0.15, 3.2, ex - 0.8, 3.1, ez, steel);   // off to one side of the hoop
+          for (let k = 0; k < 3; k++) hb(1.6 - k * 0.45, 0.15 * (k + 1), 3.0, ex - 0.8 + k * 0.22, 0.075 * (k + 1), ez, concD); }
+        // fire escapes down the wings' faces over the courtyard
+        for (const [zf, sd] of [[UZ0 + WG, 1], [UZ1 - WG, -1]]) for (const xc of [UX0 + 6, UX0 + 13]) for (let y = 3.6; y < UH - 1; y += 2.75) {
+          const z = zf + sd * 0.55, x = xc;
+          hb(2.8, 0.06, 1.1, x, y, z, ironM, false); hb(2.8, 0.9, 0.04, x, y + 0.45, z + sd * 0.53, ironM, false);
+          if (y + 2.75 < UH - 1) { const st = hb(2.7, 0.05, 0.5, x, y + 1.38, z, ironM, false); st.rotation.z = (y / 2.75) % 2 < 1 ? 0.72 : -0.72; }
         }
-        const cl = new THREE.PointLight(new THREE.Color('#dfeaff').convertSRGBToLinear(), 1.6, 34, 1.4); cl.position.set(CT.x, 8, CT.z); cg.add(cl);
-        // fire escapes on the backs of the brownstones, looking down on the court
-        for (let i = 0; i < 4; i++) {
-          const z0 = 17 + i * 6.2;
-          for (const y of [4.1, 6.4, 8.7]) { FB.box(1.1, 0.06, 2.6, 15.15, y, z0 + 0.6, ironM, false); FB.box(0.04, 0.9, 2.6, 15.68, y + 0.45, z0 + 0.6, ironM, false); for (const zz of [-1.25, 1.25]) FB.box(1.1, 0.9, 0.04, 15.15, y + 0.45, z0 + 0.6 + zz, ironM, false); }
-          for (const y of [4.1, 6.4]) { const st = FB.box(0.5, 0.05, 2.7, 15.2, y + 1.15, z0 + 0.6, ironM, false); st.rotation.x = 0.72; }
-        }
-        CB.flush(); FB.flush();
+        CB.flush(); HB.flush();
       }
-      const courtGround = (lx, lz) => {
-        const u = lz - CO.z, v = CO.x - lx; lx = u; lz = v;   // into the court's frame
-        if (lz < TER.z0 || lz > TER.z1) return 0;
-        if (lx >= TER.x0 && lx <= TER.x1) return TER.y;
-        if (lx > STEP0 && lx < TER.x0) return (Math.ceil(((lx - STEP0) / (TER.x0 - STEP0)) * 6) * TER.y) / 6;   // one riser at a time
-        return 0;
-      };
-      p.ground = ((g0) => (lx, lz, y) => Math.max(courtGround(lx, lz), g0 ? g0(lx, lz, y) : 0))(p.ground);   // with the sidewalks' kerb height
-      p.map = [{ t: 'rect', x: 36.6, z: 16, w: 31.8, h: 18.4, c: '#2f5a45' }, { t: 'rect', x: 35, z: 41, w: 30, h: 12, c: '#5a3a30' }, { t: 'rect', x: 10.6, z: 29.4, w: 8, h: 31, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
+      p.map = [{ t: 'rect', x: 20.3, z: 12.25, w: 27.4, h: 7.5, c: '#5a3d30' }, { t: 'rect', x: 20.3, z: 38.25, w: 27.4, h: 7.5, c: '#5a3d30' }, { t: 'rect', x: 29.5, z: 25.25, w: 9, h: 18.5, c: '#5a3d30' }, { t: 'rect', x: 16.5, z: 25.25, w: 15.9, h: 18.4, c: '#2f5a45' }, { t: 'rect', x: -18, z: 28.5, w: 8, h: 12.4, c: '#5a3d30' }, { t: 'rect', x: 0, z: -10, w: W * 2, h: Z0 - Z1, c: '#3c3e46' }, { t: 'rect', x: 0, z: -90, w: 190, h: 110, c: '#1c2230' }];
       p.grade = {
         top: '#05070f', bottom: '#1a2234', fog: '#0f141e', near: 24, far: 190,
         sun: '#9fb4ff', sunInt: 0.3, hemi: 0.28, sunDir: [0.2, 0.8, -0.4],
         tint: [0.96, 1.0, 1.1], expo: 1.25, sat: 0.95, stars: 0.15,
       };
-      p.face = Math.PI / 2;   // facing the stoops
+      p.face = -Math.PI / 2;   // facing the stoops across the street
       p.soloView = true;
-      p.vp = [2, 26.3];   // the music lives on the pavement in front of the two performers, not in the office
+      p.vp = [3.4, 28.5];   // the music lives on the pavement in front of the apartment house's courtyard, across the street from the two performers
       p.pathEnd = 41;
       p.clearR = 26;
       p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
@@ -705,7 +687,7 @@
           // a portrait screen frames whoever has the verse; a wide one keeps both in frame and leans towards the lead
           const asp = innerWidth / innerHeight, ln = camLead * (asp < 1.3 ? 0.8 : 0.8 * Math.max(0, Math.min(1, (asp - 1.5) / 0.28)));   // lean only as far as both still fit
           const zs = narrow ? (who ? 27.55 : 21.85) : 24.7 + ln, zw = narrow ? (who ? 29.4 : 23.2) : 26.3 + ln, zc = zs + (zw - zs) * u, a = Math.sin(t * 0.25) * (narrow ? 0.5 : 1.2);
-          return { pos: [0.6 - 4.6 * u, 1.15 + 0.25 * u, zc + a * (1 - 0.6 * u)], look: [6.6, 2.5 + 3.5 * u, zc + a * 0.3], roll: Math.sin(t * 0.3) * 0.015 };
+          return { pos: mapP([0.6 - 4.6 * u, 1.15 + 0.25 * u, zc + a * (1 - 0.6 * u)]), look: mapP([6.6, 2.5 + 3.5 * u, zc + a * 0.3]), roll: Math.sin(t * 0.3) * 0.015 };   // (in the performers' own frame, turned across the street)
         }
         const k = RM ? 0 : f.pulse * 0.05;
         const x = Math.sin(t * 0.13) * 7;

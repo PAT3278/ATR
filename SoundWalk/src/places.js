@@ -364,6 +364,17 @@
         for (let x = x0 + 0.1; x < x1 + 0.1; x += 2.2) fb(0.14, 1.5, 0.14, x, 0.4, fz, fm);   // posts, their feet in the ground (or the water)
         for (const y of [0.5, 0.98]) fb(x1 - x0, 0.1, 0.05, (x0 + x1) / 2, y, fz + 0.09, fm);
         FB.flush(); p.addBox((x0 + x1) / 2, fz, (x1 - x0) / 2, 0.12); }
+      // The track, all the way from the far end of the embankment over the bridge into the station: on the embankments and
+      // the girder bridges a ballast bed with sloping shoulders, on the truss bridge sleepers laid straight on the deck;
+      // concrete sleepers every 0.6 m and two rails, their tops at 4.45 like the station's.
+      {
+        const TB = E.batch(g), tb = TB.box, ballastM = E.mat('#6d665c', { map: E.tex('slate', 1, 6), rough: 1 }), slpM = E.mat('#8f8a80', { rough: 0.9 }), railM = E.mat('#6c6a66', { metal: 0.7, rough: 0.35 });
+        const Z0 = RZ - 137, Z1 = RZ + 34, onBridge = (z) => z > RZ - 17 && z < RZ + 17;
+        for (const [a, b2] of [[Z0, RZ - 17], [RZ + 17, Z1]]) { tb(3.0, 0.64, b2 - a, BX, 3.92, (a + b2) / 2, ballastM); for (const sx of [-1, 1]) { const sh = tb(0.75, 0.5, b2 - a, BX + sx * 1.55, 3.82, (a + b2) / 2, ballastM); sh.rotation.z = sx * 0.55; } }   // the bed and its shoulders
+        for (let z = Z0 + 0.3; z < Z1; z += 0.6) tb(2.3, 0.1, 0.22, BX, onBridge(z) ? 4.33 : 4.27, z, slpM);
+        for (const sx of [-0.72, 0.72]) { tb(0.07, 0.13, Z1 - Z0, BX + sx, 4.385, (Z0 + Z1) / 2, railM); tb(0.14, 0.03, Z1 - Z0, BX + sx, 4.335, (Z0 + Z1) / 2, railM); }   // rail head and foot
+        TB.flush();
+      }
       for (const [z0, z1] of [[-38.5, -49.5], [-69, -75]]) {
         const gd = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.8, z0 - z1 + 0.6), steel); gd.position.set(BX, 3.2, (z0 + z1) / 2); gd.castShadow = true; g.add(gd);
         for (const sx of [-2.05, 2.05]) { const rl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.0, z0 - z1 + 0.6), steel); rl.position.set(BX + sx, 4.1, (z0 + z1) / 2); g.add(rl); }
@@ -419,11 +430,9 @@
       });
       // stage wash: coloured light on the floor and stage, faked with additive planes (real lights would cost every pixel in the world)
       const wash = [['#ff2a6a', -3], ['#2ad4ff', 3]].map(([hex, z]) => { const m = vglow(hex, 0.05), w1 = new THREE.Mesh(new THREE.PlaneGeometry(9, 6.5), m); w1.rotation.x = -Math.PI / 2; w1.position.set(-1.6, 0.09, z); const w2 = new THREE.Mesh(new THREE.PlaneGeometry(3.1, 6), m); w2.rotation.x = -Math.PI / 2; w2.position.set(-4.9, 0.72, z); V.add(w1, w2); return m; });
-      // The crowd: eighteen people dressed for a rap show in the swag era (the streetwear kit in game.js): dreads, box braids,
-      // twists, cornrows or a fade; fitteds worn flat-brim, forwards, cocked or backwards; shutter shades or dark ones;
-      // oversized white tees, camo and loud hoodies, glossy puffers, varsity jackets; gold and iced chains, designer belts,
-      // stacked skinny denim and high-tops in loud colourways; a ski mask or a bandana on a few. The looks are dealt from
-      // shuffled decks, so every one of them turns up, and each moves to the music in its own way.
+      // The crowd: eighteen people in everyday clothes, each dressed from the shared decks (E.npc in game.js: the head and
+      // hair, something on the head, a bag, a long-sleeved top, the layer that peeks out under it, trousers, shoes), so no
+      // two look alike; each moves to the music in its own way.
       // Which crowd gets drawn is decided as each frame is drawn (the renderer calls a THREE.LOD's update(camera) before it
       // culls; this one looks at where the camera is, not only how far). The room is shut on three sides and under the
       // station floor, so from outside it shows only through the doorway: in the room, or in front of the door within 40 m
@@ -435,116 +444,22 @@
       crowdLOD.update = (cam) => { const c = V.worldToLocal(eye.setFromMatrixPosition(cam.matrixWorld)), d = Math.hypot(c.x, c.z), inside = Math.abs(c.x) < 6.8 && Math.abs(c.z) < 7.8 && c.y < 3.4, door = c.x > 6.6;
         crowdG.visible = inside || (door && d < 40 * Math.min(1, Math.max(0.5, (1.4 * c.x) / d))); farG.visible = !crowdG.visible && door && d < 110; };
       {
-        const K = E.swag, wr = E.rng(4410), pick = (a) => a[Math.floor(wr() * a.length)];
-        const deck = (a) => { const d = a.slice(); for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(wr() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } let k = 0; return () => d[k++ % d.length]; };
-        const M = (c, o = {}) => E.mat(c, o), G = (c, o = {}) => E.gloss(c, { ...o, envMap: K.studio });   // gloss indoors reflects a dim room, not the sky and grass
-        const skins = ['#f0c9a4', '#d9a57c', '#b07a52', '#8a5a3c', '#5e3d2a', '#4a2f20'].map((c) => M(c, { rough: 0.7 }));
-        const gold = K.jewel('#e2b64a', { glow: '#2a1c05' }), silver = K.jewel('#e4e8ee', { rough: 0.12, glow: '#1a1c1f' }), ice = K.jewel('#eef6ff', { rough: 0.05, env: 1.6, glow: '#56606c' });
-        ice.flatShading = true;   // diamonds: faceted, catching every light in the room
-        const white = M('#f4f3ee', { rough: 0.75 }), leather = G('#111113', { rough: 0.35, env: 0.4 });
-        const hairM = ['#0f0c0a', '#1b130e', '#2a1a10'].map((c) => M(c, { rough: 0.75 })), tipM = ['#b8894a', '#d2b05a', '#9a2a22'].map((c) => M(c, { rough: 0.7 }));
-        const denim = (c) => M(c, { map: E.tex('denim', 2, 3), rough: 0.85 }), camo = (c) => M(c, { map: E.tex('camo'), rough: 0.8 });   // scaled in the uvs of the shapes below
-        const jeans = ['#33456e', '#1c1d22', '#7d93b4', '#26304a', '#a3161c', '#1c1d22'].map(denim);   // indigo, black, light wash, dark rinse, red skinnies
-        const tees = [['#ebeae4', 2], ['#8e9096', 1], ['#17171a', 1]].flatMap(([c, n]) => { const m = E.mat(c, { rough: 0.85 }, true); m.vertexColors = true; return Array(n).fill(m); });   // white tees (a shade off pure white), a heather grey, a black; the folds are shaded in vertex colours
-        const hoodies = [camo('#a3b27a'), camo('#86a9d6'), camo('#c0a3dc'), M('#b3161d', { rough: 0.8 }), M('#1f49c8', { rough: 0.8 }), M('#d8a02a', { rough: 0.8 }), M('#121214', { rough: 0.85 })];
-        const puffers = ['#111114', '#a3141c', '#1d3fa6', '#e9e9ea', '#d9a51c', '#111114'].map((c) => G(c, { rough: 0.3, metal: 0.1, env: 0.5 }));   // glossy: the expensive kind
-        const varsity = [['#7a1218', '#ece4cf'], ['#111114', '#ece4cf'], ['#173a7a', '#ece4cf'], ['#1d4a2a', '#d8b04a']].map(([b, s]) => [M(b, { rough: 0.9 }), G(s, { rough: 0.5, env: 0.3 })]);   // wool body, leather sleeves
-        const caps = [['#b3161d', '#2f6b3a'], ['#121214', '#2f6b3a'], ['#1f49c8', '#8a8f96'], ['#f2f0ea', '#2f6b3a'], ['#2a8a3a', '#121214'], ['#e6b81c', '#121214'], ['#121214', '#b3161d']].map(([c, u]) => [M(c, { rough: 0.75 }), M(u, { rough: 0.8 })]);
-        const kicks = [['#f3f1ec', '#0b0b0d', '#c3161f'], ['#121214', '#c3161f', '#c3161f'], ['#f3f1ec', '#1f49c8', '#f3f1ec'], ['#f3f1ec', '#0b0b0d', '#f3f1ec'], ['#121214', '#d9b24a', '#121214'], ['#e6b81c', '#121214', '#e6b81c'], ['#2a8a3a', '#f3f1ec', '#2a8a3a'], ['#f3f1ec', '#7b3fb5', '#f3f1ec']]
-          .map((k) => k.map((c, i) => G(c, { rough: i === 1 ? 0.15 : 0.45, env: i === 1 ? 0.55 : 0.3 })));                                     // base, overlays, collar
-        const shutterM = ['#f6f6f2', '#121214', '#d4161f', '#9be22d', '#f5d218', '#2aa4ff'].map((c) => G(c, { rough: 0.3, env: 0.4 })), lensM = G('#08090b', { rough: 0.05, metal: 0.5, env: 1.1 });
-        const knit = ['#111114', '#2a2b30', '#5a1a1a'].map((c) => M(c, { rough: 0.95 })), bandM = ['#b3161d', '#1f49c8', '#111114'].map((c) => M(c, { rough: 0.85 }));
-        // shared shapes (head radius HR; the hips are the origin of `up`, the front +z). ones(): plain white vertex colours, for parts that share a tee's material
-        const ones = (g) => g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
-        const HR = 0.13, headG = new THREE.SphereGeometry(HR, 12, 9), neckG = new THREE.CylinderGeometry(0.055, 0.06, 0.12, 7), handG = new THREE.SphereGeometry(0.055, 7, 6);
+        const K = E.swag, wr = E.rng(4410);
         const lightG = new THREE.PlaneGeometry(0.08, 0.14), lightM = new THREE.MeshBasicMaterial({ color: '#dfeaff', side: THREE.DoubleSide });
-        const legG = new THREE.CylinderGeometry(0.075, 0.058, 0.84, 8).translate(0, 0.42, 0), seatG = new THREE.CylinderGeometry(0.19, 0.185, 0.16, 10);   // skinny jeans
-        const bodyG = K.uvs(new THREE.CylinderGeometry(0.21, 0.185, 0.55, 10), 3, 1.55).translate(0, 0.325, 0);   // a waist-length top (camo: three repeats round, one size with the sleeves)
-        // the tall tee: from a hem flared a little, rippled into folds that fade out up the chest, to sloping shoulders
-        const teeG = (() => {
-          const pts = [[0.238, -0.16], [0.232, -0.1], [0.224, 0.1], [0.222, 0.38], [0.216, 0.5], [0.196, 0.565], [0.155, 0.6], [0.1, 0.615]].map(([r, y]) => new THREE.Vector2(r, y)), g = new THREE.LatheGeometry(pts, 16), a = g.attributes.position;
-          const sh = new Float32Array(a.count * 3);
-          for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i), z = a.getZ(i), fade = Math.max(0, 1 - (y + 0.16) / 0.66), w = Math.sin(Math.atan2(x, z) * 7 + 0.7), k = 1 + 0.07 * fade * w; a.setXYZ(i, x * k, y, z * k); sh.fill(1 - 0.24 * Math.max(0, -w) * (0.3 + 0.7 * fade), i * 3, i * 3 + 3); }
-          g.setAttribute('color', new THREE.BufferAttribute(sh, 3));   // darker down the hollow of each fold
-          g.computeVertexNormals(); const n = g.attributes.normal, np = pts.length;
-          for (let j = 0; j < np; j++) { const v = new THREE.Vector3(n.getX(j) + n.getX(16 * np + j), n.getY(j) + n.getY(16 * np + j), n.getZ(j) + n.getZ(16 * np + j)).normalize(); n.setXYZ(j, v.x, v.y, v.z); n.setXYZ(16 * np + j, v.x, v.y, v.z); }   // no crease down the front seam
-          return g;
-        })();
-        const pufG = K.pufferGeo(0.25, 0.235, 0.55, 4, 0, 0.03, 12), pufArmG = K.pufferGeo(0.085, 0.07, 0.5, 3, 0, -0.55, 8);
-        const armG = K.uvs(new THREE.CylinderGeometry(0.058, 0.048, 0.58, 8), 1, 1.6).translate(0, -0.29, 0), sleeveG = ones(new THREE.CylinderGeometry(0.088, 0.08, 0.25, 8).translate(0, -0.11, 0)), foreG = new THREE.CylinderGeometry(0.05, 0.043, 0.38, 7).translate(0, -0.4, 0);
-        const cuffG = new THREE.CylinderGeometry(0.052, 0.05, 0.05, 8), hoodG = K.uvs(new THREE.SphereGeometry(0.14, 9, 6), 2, 1), collarG = ones(new THREE.TorusGeometry(0.11, 0.035, 5, 10)), ribG = new THREE.CylinderGeometry(0.19, 0.188, 0.05, 10);
-        const hairG = new THREE.SphereGeometry(HR * 1.06, 12, 8, 0, 6.3, 0, 1.7), fadeG = new THREE.SphereGeometry(HR * 1.025, 12, 8, 0, 6.3, 0, 1.4), beanieG = new THREE.SphereGeometry(HR * 1.1, 10, 7, 0, 6.3, 0, 1.55);
-        const bandG = new THREE.CylinderGeometry(0.192, 0.192, 0.034, 12, 1, true), buckleG = new THREE.CylinderGeometry(0.2, 0.2, 0.045, 5, 1, true, -0.18, 0.36), snapG = new THREE.SphereGeometry(0.012, 5, 4), watchG = new THREE.TorusGeometry(0.05, 0.011, 5, 12);
-        const capG = K.capGeos(0.124, 0.105), shoe = K.hightopGeo(0.12, 0.27), stackG = K.stackGeo(0.064, 0.09, 6);
-        const locStyles = { locs: { n: 28, len: 0.34, out: 0.03, drape: 0.18, tips: 0.25, cuffs: 0.15, front: 1, seg: 5, rad: 4 }, braids: { n: 34, len: 0.4, th: HR * 0.055, out: 0.012, drape: 0.15, cuffs: 0.08, seg: 5, rad: 4 }, twists: { n: 30, len: 0.07, th: HR * 0.08, out: 0.05, drape: 0, seg: 3, rad: 4 } };
-        const outfit = { top: deck(['tee', 'tee', 'tee', 'tee', 'tee', 'hoodie', 'hoodie', 'hoodie', 'hoodie', 'hoodie', 'puffer', 'puffer', 'puffer', 'puffer', 'puffer', 'varsity', 'varsity', 'varsity']),
-          hair: deck(['locs', 'locs', 'locs', 'locs', 'locs', 'locs', 'braids', 'braids', 'braids', 'twists', 'twists', 'twists', 'rows', 'rows', 'fade', 'fade', 'ski', 'ski']),
-          hat: deck(['fitted', 'fitted', 'fitted', 'fitted', 'fitted', 'fitted', 'cocked', 'cocked', 'cocked', 'back', 'back', 'bandana', 'mouth', 'beanie', 'none', 'none', 'none', 'none']),
-          shades: deck(['shutter', 'shutter', 'shutter', 'shutter', 'shutter', 'shutter', 'dark', 'dark', 'dark', 'dark', '', '', '', '', '', '', '', '']),
-          chains: deck([0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 0, 2]) };
         for (let i = 0; i < 60 && crowd.length < 18; i++) {
           const x = -1.9 + cr() * 5.6, z = -5.6 + cr() * 11.2;
           if (Math.abs(z) < 1.4 && x < 0.6) continue;                                          // keep the spot in front of the stage free
           if (crowd.some((c) => Math.hypot(c.f.position.x - x, c.f.position.z - z) < 0.65)) continue;   // and nobody standing inside somebody else
-          const f = new THREE.Group(), up = new THREE.Group(), skin = pick(skins), add = (par, geo, m, px = 0, py = 0, pz = 0, rx = 0, ry = 0, rz = 0) => { if (!geo) return null; const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.rotation.set(rx, ry, rz); par.add(o); return o; };
-          const top = outfit.top(), hairK = outfit.hair(), hat = hairK === 'ski' ? 'none' : outfit.hat(), shades = hairK === 'ski' ? '' : outfit.shades(), nCh = outfit.chains();
-          // legs: skinny jeans stacked on high-tops
-          const jm = pick(jeans), kc = pick(kicks);
-          for (const sd of [-1, 1]) { add(f, legG, jm, sd * 0.09); add(f, stackG, jm, sd * 0.09, 0.18); add(f, shoe.base, kc[0], sd * 0.09); add(f, shoe.accent, kc[1], sd * 0.09); add(f, shoe.collar, kc[2], sd * 0.09); add(f, shoe.white, white, sd * 0.09); }
-          up.position.y = 0.86; f.add(up);                                                      // everything above the hips sways and twists together
-          // the top, and the arms that go with it (front of the chest at zc, for the chains)
-          let zc = 0.145, topM;
-          const arms = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.26, 0.56, 0); up.add(piv); return piv; });
-          if (top === 'tee') {                                                                   // the long white tee, short sleeves, bare forearms
-            topM = pick(tees); zc = 0.163; add(up, teeG, topM).scale.z = 0.68; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(0.8, 0.8, 0.5);
-            arms.forEach((a) => { add(a, sleeveG, topM); add(a, foreG, skin); });
-            if (wr() < 0.6) add(arms[0], watchG, wr() < 0.5 ? gold : ice, 0, -0.55, 0, Math.PI / 2);
-          } else {
-            add(up, seatG, jm, 0, 0.02, 0).scale.z = 0.68;
-            if (top === 'puffer') { topM = pick(puffers); zc = 0.185; add(up, pufG, topM).scale.z = 0.72; add(up, collarG, topM, 0, 0.6, 0, Math.PI / 2).scale.set(1.05, 1.05, 2.2); arms.forEach((a) => add(a, pufArmG, topM)); }
-            else if (top === 'hoodie') {
-              topM = pick(hoodies); add(up, bodyG, topM).scale.z = 0.68; add(up, ribG, topM, 0, 0.075, 0).scale.z = 0.69;
-              add(up, hoodG, topM, 0, 0.56, -0.13).scale.set(1.1, 0.7, 0.55); add(up, K.uvs(new THREE.BoxGeometry(0.24, 0.12, 0.03), 0.7, 0.35), topM, 0, 0.2, 0.125);
-              arms.forEach((a) => { add(a, armG, topM); add(a, cuffG, topM, 0, -0.53, 0); });
-            } else {                                                                             // varsity: wool body, leather sleeves, striped rib, snaps
-              const [b, s] = pick(varsity); topM = b; add(up, bodyG, b).scale.z = 0.68; add(up, ribG, b, 0, 0.075, 0).scale.z = 0.69; add(up, collarG, b, 0, 0.6, 0, Math.PI / 2).scale.set(1, 1, 0.8);
-              add(up, ribG, s, 0, 0.085, 0).scale.set(1.01, 0.12, 0.7); for (let k = 0; k < 4; k++) add(up, snapG, s, 0, 0.17 + k * 0.11, 0.142);
-              arms.forEach((a) => { add(a, armG, s); add(a, cuffG, b, 0, -0.53, 0); });
-            }
-            if (top !== 'puffer') { add(up, bandG, leather, 0, 0.03, 0).scale.z = 0.7; add(up, buckleG, gold, 0, 0.03, 0).scale.z = 0.7; }   // the belt shows under a waist-length top; the plate curves round it
-          }
-          arms.forEach((a) => add(a, handG, skin, 0, -0.6, 0));
-          add(up, neckG, skin, 0, 0.64, 0);
-          // jewellery: a short Cuban link and / or a long rope with an iced medallion
-          for (const k of nCh === 2 ? [0, 1] : nCh ? [wr() < 0.5 ? 0 : 1] : []) {
-            const c = K.chainGeo(k ? { yn: 0.625, rn: 0.1, zc, drop: 0.3, w: 0.1, th: 0.0048, pend: 0.036, lo: 1 } : { yn: 0.63, rn: 0.105, zc, drop: [0.16, 0.19, 0.22][Math.floor(wr() * 3)], w: 0.1, th: 0.0085, links: 1, lo: 1 }), m = wr() < 0.75 ? gold : silver;
-            add(up, c.chain, m); add(up, c.bezel, m); add(up, c.ice, ice);
-          }
-          // the head: hair, a hat, glasses
-          const head = add(up, headG, skin, 0, 0.76, 0), hm = pick(hairM), capped = hat === 'fitted' || hat === 'cocked' || hat === 'back'; let hatM = hm;
-          if (hairK === 'ski') add(head, K.maskGeo(HR), hatM = pick(knit));
-          else {
-            if (hairK === 'fade' || hairK === 'rows' || capped || hat === 'beanie') add(head, fadeG, hm, 0, 0.01, 0, -0.15); else add(head, hairG, hm, 0, 0.01, 0, -0.1);
-            if (hairK === 'rows' && !capped && hat !== 'beanie') add(head, K.cornrows(HR * 1.03), hm);
-            if (locStyles[hairK]) { const L = K.locs(HR, { ...locStyles[hairK], cap: capped || hat === 'beanie' ? 0.22 : undefined, seed: 30 + i }); add(head, L.hair, hm); add(head, L.tips, pick(tipM)); add(head, L.cuffs, gold); }
-            if (capped) { const [cm, um] = pick(caps), g = new THREE.Group(); hatM = cm; g.position.set(0, 0.05, 0.004); g.rotation.set(-0.12, hat === 'back' ? Math.PI : hat === 'cocked' ? (wr() < 0.5 ? -1 : 1) * (0.45 + wr() * 0.3) : (wr() - 0.5) * 0.2, 0); head.add(g);
-              add(g, capG.crown, cm); add(g, capG.brim, cm); add(g, capG.under, um); if (wr() < 0.6) add(g, capG.sticker, silver); }
-            else if (hat === 'beanie') add(head, beanieG, hatM = pick(knit), 0, 0.03, 0);
-            else if (hat === 'bandana' || hat === 'mouth') add(head, K.bandanaGeo(HR, hat === 'mouth'), pick(bandM));
-          }
-          if (shades) { const s = K.shadesGeo(HR, shades === 'shutter' ? 'shutter' : 'dark'); add(head, s.frame, shades === 'shutter' ? pick(shutterM) : gold, 0, -0.008, 0); add(head, s.lens, lensM, 0, -0.008, 0); }
+          const d = E.npc.dress(wr), { f, up, head, arms } = d;
           const style = Math.floor(cr() * 4);                                                   // 0 pumping one fist, 1 both hands up, 2 filming with a phone, 3 swaying
           if (style === 2) { const ph = new THREE.Mesh(lightG, lightM); ph.position.set(0, -0.68, 0.03); ph.rotation.y = Math.PI; arms[1].add(ph); ph.userData.keep = true; }
           f.position.set(x, 0.05, z); f.rotation.y = -Math.PI / 2 + (cr() - 0.5) * 0.5;          // facing the stage
-          f.scale.setScalar(0.9 + cr() * 0.2); crowdG.add(K.compact(f)); f.userData.look = { top, hair: hairK, hat, shades, chains: nCh };
-          { f.updateMatrix(); const col = (g, m) => { const c = m.color, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let k = 0; k < n; k++) a.set([c.r, c.g, c.b], k * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return [g, f.matrix]; };   // the far figure
-            farParts.push(col(new THREE.BoxGeometry(0.3, 0.86, 0.19).translate(0, 0.43, 0), jm), col(new THREE.CylinderGeometry(0.22, 0.21, top === 'tee' ? 0.78 : 0.6, 6).translate(0, top === 'tee' ? 1.24 : 1.17, 0), topM),
-              col(new THREE.SphereGeometry(0.15, 6, 4).translate(0, 1.62, 0), skin), col(new THREE.SphereGeometry(0.155, 6, 3, 0, 6.3, 0, 1.4).translate(0, 1.64, 0), hatM));
-            for (const sd of style === 1 ? [-1, 1] : style === 3 ? [] : [1]) farParts.push(col(new THREE.BoxGeometry(0.1, 0.62, 0.1).translate(sd * 0.27, 1.72, 0.1), top === 'tee' ? skin : topM)); }   // hands up, as they are close to
+          f.scale.setScalar(0.9 + cr() * 0.2); crowdG.add(K.compact(f)); f.userData.look = d.look;
+          { f.updateMatrix(); farParts.push([E.npc.bake(d.look), f.matrix.clone()]); }   // the far figure: the same outfit, plain
           crowd.push({ f, up, head, arms, style, s: cr() * 6.28, e: 0.6 + cr() * 0.7, jump: 0 });
           p.addCircle(BX + x, CZ + z, 0.3, -1e9, 3);
         }
-        const farM = E.mat('#ffffff', { rough: 0.85 }, true); farM.vertexColors = true; farG.add(new THREE.Mesh(K.mergeGeos(farParts), farM));
+        const farM = E.mat('#ffffff', { rough: 0.85 }, true); farM.vertexColors = true; farG.add(new THREE.Mesh(K.mergeGeos(farParts), farM)); farParts.forEach(([g]) => g.dispose());
       }
       // open entrance: lit frame, marquee, light spilling onto the ground outside
       const neon = new THREE.MeshBasicMaterial({ color: '#ff3a44' });
@@ -597,6 +512,11 @@
         car.add(b, s, w);
         if (k === 0) for (const z of [-3, 3]) { const op = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.0), new THREE.MeshBasicMaterial({ color: '#ffe9bd' })); op.position.set(1.39, 1.45, z); op.rotation.y = Math.PI / 2; const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.05, 2.0, 1.3), bodyM); leaf.position.set(1.4, 1.45, z); car.add(op, leaf); doors.push(leaf); }
         car.position.z = -k * 13;
+        car.children.forEach((o) => { o.position.y += 0.5; });   // the body rides on its bogies, its floor level with the platform
+        for (const bz of [-4.6, 4.6]) {   // two bogies a car: a dark frame and four small wheels on the rails (wheel tops under the body)
+          const fr = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.28, 2.6), E.mat('#1c1d20', { metal: 0.4, rough: 0.6 })); fr.position.set(0, 0.36, bz); car.add(fr);
+          for (const wx of [-0.72, 0.72]) for (const wz of [-0.85, 0.85]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.1, 12), E.mat('#2a2a2c', { metal: 0.6, rough: 0.4 })); wh.rotation.z = Math.PI / 2; wh.position.set(wx, 0.35, bz + wz); car.add(wh); }
+        }
         train.add(car);
       }
       train.position.set(BX, 4.35, -230);
@@ -811,17 +731,14 @@
           for (const x of [-40, -22, 12, 20, 36]) { if (gapAt(x - 1, x + 1)) continue; for (const k of [0, 1]) { const bx = x + k * 0.7; pb(0.05, 0.62, 0.62, bx, 0.35, MZ - 5.2, iron, false); pb(0.05, 0.05, 1.5, bx, 0.75, MZ - 5.2, iron, false); } }
           for (const x of [-46, -31, -6, 18, 28, 44]) { if (gapAt(x - 0.5, x + 0.5)) continue; pb(0.5, 0.45, 0.5, x, 0.27, MZ - 5.5, E.mat('#7a5a40', { rough: 0.9 })); const pl = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), E.mat('#4a7a3c', { flat: true })); pl.position.set(x, 0.85, MZ - 5.5); g.add(pl); } }
         // people out on the shopping street and the promenade
-        { const NPp = 34, bodyG = new THREE.CylinderGeometry(0.2, 0.25, 1.1, 8).translate(0, 0.7, 0), headG = new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.42, 0);
-          const pbI = new THREE.InstancedMesh(bodyG, E.mat('#ffffff', { rough: 0.7 }), NPp), phI = new THREE.InstancedMesh(headG, E.mat('#ffffff', { rough: 0.6 }), NPp);
-          const coats = ['#2c3036', '#c9ccd1', '#7a2f2a', '#3a5a7a', '#d8d2c0', '#e6e0d0', '#4a6a3a', '#2457c5'], skins = ['#e1b18c', '#c8946a', '#f0c8a8', '#d6a07c'];
-          port.peds = []; port.pedI = [pbI, phI];
+        { const NPp = 34, folk = E.npc.crowd(NPp, E.rng(8343), 9);   // dressed from the shared decks: nine outfits, each drawn once for all who wear it
+          port.peds = []; port.folk = folk;
           for (let i = 0; i < NPp; i++) {
             const prom = i % 3 === 2, k = pr();
             const path = prom ? { a: atST(8, 4.2), b: atST(40, 4.2) } : (i % 2 ? { a: [-48, MZ + 4.3 + (pr() - 0.5)], b: [sEnd(MZ) - 3, MZ + 4.3 + (pr() - 0.5)] } : { a: [-48, MZ - 4.3 + (pr() - 0.5)], b: [sEnd(MZ) - 3, MZ - 4.3 + (pr() - 0.5)] });
             port.peds.push({ path, t: k, dir: pr() < 0.5 ? 1 : -1, v: (0.9 + pr() * 0.5) / Math.hypot(path.b[0] - path.a[0], path.b[1] - path.a[1]), ph: pr() * 6 });
-            pbI.setColorAt(i, E.lin(coats[Math.floor(pr() * coats.length)])); phI.setColorAt(i, E.lin(skins[Math.floor(pr() * skins.length)]));
           }
-          pbI.castShadow = true; pbI.frustumCulled = phI.frustumCulled = false; g.add(pbI, phI); }
+          g.add(folk.group); }
         port.coast = { sOf, atST };
         PB.flush();
       }
@@ -855,11 +772,10 @@
         halo.material.opacity = 0.18 + f.bass * 0.25;
         cityM.emissiveIntensity = 0.4 + f.mid * 1.2;
         port.boats.forEach((o) => { o.b.position.y = Math.sin(t * 1.1 + o.s) * 0.08 + f.bass * 0.06; o.b.rotation.z = Math.sin(t * 0.8 + o.s) * 0.03; o.b.rotation.x = Math.sin(t * 0.9 + o.s * 2) * 0.02; });
-        if (port.peds) { const [pbI, phI] = port.pedI, m4 = port.m4 || (port.m4 = new THREE.Matrix4()), q = port.q || (port.q = new THREE.Quaternion()), up = new THREE.Vector3(0, 1, 0), ps = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
+        if (port.peds) { const folk = port.folk, m4 = port.m4 || (port.m4 = new THREE.Matrix4()), q = port.q || (port.q = new THREE.Quaternion()), up = new THREE.Vector3(0, 1, 0), ps = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
           port.peds.forEach((o, i) => { o.t += o.dir * o.v * dt; if (o.t > 1) { o.t = 1; o.dir = -1; } else if (o.t < 0) { o.t = 0; o.dir = 1; }
             const { a, b } = o.path, x = a[0] + (b[0] - a[0]) * o.t, z = a[1] + (b[1] - a[1]) * o.t;
-            m4.compose(ps.set(x, Math.abs(Math.sin(t * 6 + o.ph)) * 0.04, z), q.setFromAxisAngle(up, Math.atan2((b[0] - a[0]) * o.dir, (b[1] - a[1]) * o.dir)), sc); pbI.setMatrixAt(i, m4); phI.setMatrixAt(i, m4); });
-          pbI.instanceMatrix.needsUpdate = phI.instanceMatrix.needsUpdate = true; }
+            m4.compose(ps.set(x, Math.abs(Math.sin(t * 6 + o.ph)) * 0.04, z), q.setFromAxisAngle(up, Math.atan2((b[0] - a[0]) * o.dir, (b[1] - a[1]) * o.dir)), sc); folk.set(i, m4); }); folk.done(); }
         port.blinks.forEach((m, i) => { m.visible = f.pulse > 0.35 || Math.sin(t * 2.4 + i * 2) > 0.2; });
         // The train comes out of the haze across the river and disappears into the tunnel.
         // The train comes over the bridge, stops at the platform above the live house with its doors open, then goes back.
@@ -1030,7 +946,7 @@
       {
         const xr = E.rng(5151), MB = E.batch(ext), mb = MB.box;
         const asph = E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 }), asphR = E.mat('#27242e', { map: E.tex('asphalt', 3, 3), rough: 0.9 });
-        const road = E.plane(11, AV0 - AV2 + 1, asph); road.position.set(0, 0.03, (AV0 + AV2 - 1) / 2); ext.add(road); p.pick(road);
+        const road = E.plane(11, AV0 - (AV2 + 2), asph); road.position.set(0, 0.03, (AV0 + AV2 + 2) / 2); ext.add(road); p.pick(road);   // from the block's sheet to the forecourt's paving, overlapping neither (no flicker where two flat sheets lie in one plane)
         const lineM = E.mat('#e8c43a', { rough: 0.6 }), whiteM = E.mat('#d9d4de');
         for (const sd of [-0.12, 0.12]) { const l = E.plane(0.12, AV0 - AV2 - 6, lineM); l.position.set(sd, 0.045, (AV0 + AV2 + 6) / 2); ext.add(l); }   // the double yellow
         for (let z = AV0 - 4; z > AV2 + 6; z -= 6) for (const x of [-2.75, 2.75]) { const l = E.plane(0.12, 2.6, whiteM); l.position.set(x, 0.045, z); ext.add(l); }
@@ -1120,11 +1036,36 @@
         allSlabs.push(...extSlabs); ext.add(slabMesh(extSlabs));
       }
       g.add(ext);
-      // The roundabout in front of the plaza's fountain, where the avenue (the paved road the game lays along the path) meets
-      // the plaza: the cabs come up the avenue, go round it and head back down. A planted island with a lamp and a sign.
+      // The avenue's near end, from the block up to the plaza, is FLIP's own street (the game lays no road strip of its own
+      // here, p.road.own): one sheet of asphalt flush with the block's, its texture running on from it, as wide as the
+      // block's carriageway, opening into the roundabout's disc; raised pavements with kerbs either side, lined up with the
+      // block's; a kerb round the roundabout; a paved strip on to the plaza; and the markings painted on the road itself.
+      const kerbOf = (sd) => { const ss = slabs.filter((s) => Math.sign(s.cx) === sd && s.cz + s.hz > 0); return ss.length ? Math.min(...ss.map((s) => Math.abs(s.cx) - s.hx)) : 5.5; };
+      const IN = Math.max(5.5, Math.min(kerbOf(-1), kerbOf(1), 7.2)), RR = FO + 0.3, Z17 = 17, ZJ = FC[1] - Math.sqrt(RR * RR - IN * IN), CW = 4, PLAZA_Z = FC[1] + 11.4;
+      const blockEnd = Math.max(Z17 - 4, ...slabs.filter((s) => s.cz + s.hz > 0).map((s) => s.cz + s.hz));
       {
-        const fr = new THREE.Group(), FB = E.batch(fr), fb = FB.box, whiteM = E.mat('#d9d4de'), ry = 0.085;
-        const ring = new THREE.Mesh(new THREE.RingGeometry(FI, FO, 56, 1), E.mat('#2a2830', { map: E.tex('asphalt', 3, 3), rough: 0.88 })); ring.rotation.x = -Math.PI / 2; ring.position.set(FC[0], ry, FC[1]); ring.receiveShadow = true; fr.add(ring); p.pick(ring);
+        const sh = new THREE.Shape(), aJ = Math.asin(IN / RR), aC = Math.asin(CW / RR);   // the outline in (lx, -lz): the street, round the disc, the plaza side left open
+        sh.moveTo(-IN, -Z17); sh.lineTo(IN, -Z17); sh.lineTo(IN, -ZJ);
+        const arc = (a0, a1) => { const n = Math.ceil(Math.abs(a1 - a0) / 0.06); for (let i = 1; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n; sh.lineTo(FC[0] + Math.sin(a) * RR, -(FC[1] - Math.cos(a) * RR)); } };
+        arc(aJ, Math.PI * 2 - aJ); sh.lineTo(-IN, -Z17);
+        const tx = E.tex('asphalt', 1 / 7.5, 1 / 6.25); tx.offset.set((30 * tx.repeat.x) % 1, (Z17 * tx.repeat.y) % 1); if (tx.nrm) { tx.nrm.repeat.copy(tx.repeat); tx.nrm.offset.copy(tx.offset); }   // the block's sheet repeats every 7.5 x 6.25 m: carry on in step with it
+        const apron = new THREE.Mesh(new THREE.ShapeGeometry(sh, 1), E.mat('#27242e', { map: tx, rough: 0.9 })); apron.rotation.x = -Math.PI / 2; apron.position.y = 0.03; apron.receiveShadow = true; g.add(apron); p.pick(apron);
+        const pv = E.plane(CW * 2, PLAZA_Z - FC[1] - RR + 0.6, E.mat('#8f8b83', { map: E.tex('paving', 2, 1), rough: 0.9 })); pv.position.set(FC[0], 0.034, (FC[1] + RR - 0.6 + PLAZA_Z) / 2); g.add(pv); p.pick(pv);   // a paved strip on to the plaza's rim
+        const walks = [-1, 1].map((sd) => ({ cx: sd * (IN + 1.9), cz: (blockEnd + ZJ - 0.4) / 2, hx: 1.9, hz: (ZJ - 0.4 - blockEnd) / 2, top: 0.15 }));
+        allSlabs.push(...walks); g.add(slabMesh(walks));
+        const kerbM = E.mat('#9b968c', { rough: 0.85 });
+        for (const [t0, t1] of [[aC, Math.PI - aJ], [Math.PI + aJ, Math.PI * 2 - aC]]) {   // the kerb round the disc, open where the street and the plaza strip join it
+          const band = new THREE.Mesh(new THREE.CylinderGeometry(RR, RR, 0.15, 48, 1, true, t0, t1 - t0), kerbM); band.position.set(FC[0], 0.075, FC[1]); g.add(band);
+          const top = new THREE.Mesh(new THREE.RingGeometry(RR, RR + 0.3, 48, 1, t0 - Math.PI / 2, t1 - t0), kerbM); top.rotation.x = -Math.PI / 2; top.position.set(FC[0], 0.15, FC[1]); g.add(top);
+        }
+        const lineY = 0.036, yel = E.mat('#e8c43a', { rough: 0.6 }), wht = E.mat('#d9d4de');
+        for (const sd of [-0.12, 0.12]) { const l = E.plane(0.12, FC[1] - RR - 1.6 - Z17, yel); l.position.set(sd, lineY, (Z17 + FC[1] - RR - 1.6) / 2); g.add(l); }   // the double yellow up to the give-way line
+        for (const sd of [-1, 1]) { const l = E.plane(0.12, ZJ - Z17, wht); l.position.set(sd * (IN - 0.45), lineY, (Z17 + ZJ) / 2); g.add(l); }   // the edge lines by the kerbs
+      }
+      // The roundabout in front of the plaza's fountain, where the avenue meets the plaza: the cabs come up the avenue,
+      // go round it and head back down. A planted island with a lamp and a sign.
+      {
+        const fr = new THREE.Group(), FB = E.batch(fr), fb = FB.box, whiteM = E.mat('#d9d4de'), ry = 0.031;
         for (const r0 of [FI + 0.25, FO - 0.25]) { const e = new THREE.Mesh(new THREE.RingGeometry(r0 - 0.07, r0 + 0.07, 64, 1), whiteM); e.rotation.x = -Math.PI / 2; e.position.set(FC[0], ry + 0.005, FC[1]); fr.add(e); }
         for (let a = 0; a < Math.PI * 2; a += Math.PI / 9) { const d = E.plane(0.12, 1.1, whiteM); d.position.set(FC[0] + Math.sin(a) * ((FI + FO) / 2), ry + 0.006, FC[1] + Math.cos(a) * ((FI + FO) / 2)); d.rotation.y = a + Math.PI / 2; fr.add(d); }   // the dashed lane line
         for (const sd of [-1, 1]) for (let k = 0; k < 4; k++) { const st = E.plane(0.6, 1.4, whiteM); st.position.set(sd * (1.1 + k * 1.0), ry + 0.006, FC[1] - FO - 1.4); fr.add(st); }   // give-way blocks where the avenue joins
@@ -1195,11 +1136,9 @@
         for (const [x, z0, z1] of [[-5.1, -64, 14], [5.1, -64, 14]]) for (let z = z0 + 3; z < z1; z += 7 + mr() * 6) { if (Math.abs(z - CZ) < 8 || mr() < 0.35) continue; const c = cab(Math.floor(mr() * 7)); c.position.set(x, 0.03, z); c.rotation.y = x < 0 ? 0 : Math.PI; g.add(c); p.addBox(x, z, 1.0, 2.4); }
         for (let k = 0; k < 6; k++) { const c = cab(Math.floor(mr() * 7)); g.add(c); mid.cabs.push({ c, s: (k / 6) * cabLoop.L, v: 8, yaw: 0 }); }   // running the avenue between the two roundabouts
         // crowds on the sidewalks
-        const NP = 110, bodyG = new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), headG = new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0);
-        const pb = new THREE.InstancedMesh(bodyG, E.mat('#ffffff', { rough: 0.7 }), NP), ph = new THREE.InstancedMesh(headG, E.mat('#ffffff', { rough: 0.6 }), NP);
-        const coats = ['#1e2024', '#2c3036', '#7a2f2a', '#3a4038', '#c9ccd1', '#4a4f58', '#8a6a3a', '#2b2f3a', '#d8d2c0', '#2457c5'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
-        for (let i = 0; i < NP; i++) { const west = i % 2 === 0, x = (west ? -1 : 1) * (7.4 + mr() * 3.6); mid.ped.push({ x, z: -66 + mr() * 79, dir: mr() < 0.5 ? 1 : -1, v: 0.9 + mr() * 0.7, ph: mr() * 6 }); pb.setColorAt(i, E.lin(coats[Math.floor(mr() * coats.length)])); ph.setColorAt(i, E.lin(skins[Math.floor(mr() * skins.length)])); }
-        pb.castShadow = true; pb.frustumCulled = ph.frustumCulled = false; g.add(pb, ph); mid.peds = [pb, ph];
+        const NP = 110, folk = E.npc.crowd(NP, E.rng(1238), 14);   // dressed from the shared decks: fourteen outfits, each drawn once for all who wear it
+        for (let i = 0; i < NP; i++) { const west = i % 2 === 0, x = (west ? -1 : 1) * (7.4 + mr() * 3.6); mid.ped.push({ x, z: -66 + mr() * 79, dir: mr() < 0.5 ? 1 : -1, v: 0.9 + mr() * 0.7, ph: mr() * 6 }); }
+        g.add(folk.group); mid.peds = folk;
         // the subway entrance: stairs going down behind railings, green globes, a sign
         { const SX = -8.6, SZ = CZ + 9; mb(1.8, 0.02, 4.2, SX, 0.17, SZ, E.mat('#050505', { rough: 1 }), false);
           for (let s2 = 0; s2 < 6; s2++) mb(1.7, 0.04, 0.5, SX, 0.12 - s2 * 0.02, SZ - 1.6 + s2 * 0.6, E.mat('#3a3a3c'), false);
@@ -1261,7 +1200,7 @@
       p.pathEnd = 18;
       p.clearR = 14;
       p.wake = (lx, lz) => Math.hypot(lx - FC[0], lz - FC[1]) < 85;   // the cabs keep going round the fountain's roundabout while it is in sight
-      p.road = { hw: 5 };   // the avenue carries on to the fountain as a paved road (drawn by the game along the path)
+      p.road = { hw: 5, own: true };   // the avenue carries on to the fountain as a paved road (FLIP draws it itself: own)
       const onAvenue = (lx, lz) => Math.abs(lx) < 33 && lz <= -40 && lz > -116;   // the far stretch of the avenue and its blocks
       p.core = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz);   // the block itself; the outskirts are negotiable
       p.noPier = (lx, lz) => Math.abs(lx) < 7.5 && lz < -30;   // the ring road steps over the avenue
@@ -1284,7 +1223,7 @@
           const u = (c.s / cabLoop.L) * cabLoop.n, i = Math.min(cabLoop.n - 1, Math.floor(u)), a = cabLoop.P[i], b2 = cabLoop.P[i + 1], k = u - i;
           c.c.position.set(a.x + (b2.x - a.x) * k, 0.03, a.z + (b2.z - a.z) * k);
           const want = Math.atan2(b2.x - a.x, b2.z - a.z), d = Math.atan2(Math.sin(want - c.yaw), Math.cos(want - c.yaw)); c.yaw = Math.abs(d) > 2.5 ? want : c.yaw + d * Math.min(1, dt * 8); c.c.rotation.y = c.yaw; });
-        { const [pb, ph] = mid.peds; mid.ped.forEach((q, i) => { q.z += q.dir * q.v * dt; if (q.z > 14) q.z = -66; if (q.z < -66) q.z = 14; m4.compose(ps.set(q.x, 0.15 + Math.abs(Math.sin(t * 6 * q.v + q.ph)) * 0.04, q.z), qq.setFromAxisAngle(upV, q.dir > 0 ? 0 : Math.PI), sc.set(1, 1, 1)); pb.setMatrixAt(i, m4); ph.setMatrixAt(i, m4); }); pb.instanceMatrix.needsUpdate = ph.instanceMatrix.needsUpdate = true; }
+        { const folk = mid.peds; mid.ped.forEach((q, i) => { q.z += q.dir * q.v * dt; if (q.z > 14) q.z = -66; if (q.z < -66) q.z = 14; m4.compose(ps.set(q.x, 0.15 + Math.abs(Math.sin(t * 6 * q.v + q.ph)) * 0.04, q.z), qq.setFromAxisAngle(upV, q.dir > 0 ? 0 : Math.PI), sc.set(1, 1, 1)); folk.set(i, m4); }); folk.done(); }
         { const ph2 = (t % 15) / 15, avenue = ph2 < 0.4 ? 'g' : ph2 < 0.5 ? 'a' : 'r', cross = ph2 < 0.5 ? 'r' : ph2 < 0.9 ? 'g' : 'a', L = mid.lampM;
           mid.lights.forEach((lt) => { const st = lt.ax ? cross : avenue; lt.lamps[0].material = st === 'r' ? L.red : L.off; lt.lamps[1].material = st === 'a' ? L.amb : L.off; lt.lamps[2].material = st === 'g' ? L.grn : L.off; }); }
         { const a = mid.steam.geometry.attributes.position; mid.steamP.forEach((q, i) => { q.t += dt * (0.6 + (i % 5) * 0.1); if (q.t > 3) q.t = 0; a.setXYZ(i, q.h[0] + Math.sin(q.t * 2 + i) * 0.25 * q.t, 0.2 + q.t * 1.3, q.h[1] + Math.cos(q.t * 1.7 + i) * 0.2 * q.t); }); a.needsUpdate = true; }
@@ -1974,7 +1913,7 @@
   PLACES.flash = {
     build(p, E) {
       const g = p.group, r = E.rng(71);
-      const HR = 30, HH = 5;
+      const HR = 21, HH = 5;   // (21 m: its foot stops at FIELD's apartment house, whose north wing stands 14 m from the top)
       const height = (lx, lz) => { const d = Math.hypot(lx, lz); return d >= HR ? 0 : HH * 0.5 * (1 + Math.cos((Math.PI * d) / HR)); };
       p.ground = height;
       const hg = new THREE.RingGeometry(0.01, HR, 48, 18);

@@ -5,9 +5,9 @@
  *   - x / z      where the place's viewpoint is, in metres (the start plaza is at 0, 0; keep within ±70)
  *   - scene      which landscape is built around it and which scenery plays when you look at the view
  *                ('keyaki' | 'tama' | 'flip' | 'park' | 'parkwheel' | 'flash' | 'field' | 'shot' | 'ohh'; anything else gets a generic stage)
- *   - src        the real audio file. Leave null to play the built-in generative sketch instead.
+ *   - src        the real audio file. Leave null and the song is silent (COMING SOON) until its file is added.
  *                Put files in ../audio/ and serve the folder over http (see README) — e.g. 'audio/keyaki.mp3'.
- *   - sketch     which generative sketch plays while src is null (same names as scene)
+ *   - sketch     which generative sketch plays while src is null, only with SW.CONFIG.demo: true (same names as scene)
  *   - links      buttons on the view card. kind 'buy' is highlighted, and is where the buy button goes when there is no shop server.
  *   - price      yen, shown on the buy button. With CONFIG.api set the shop server's catalogue has the final say (it sends its prices).
  *   - access     'preview' | 'full' (default CONFIG.access). Only matters for a real file (src):
@@ -33,6 +33,7 @@ SW.CONFIG = {
   api: null,
   access: 'preview',   // for songs without their own access (see the top of this file)
   preview: 20,         // seconds in each preview excerpt
+  demo: false,         // true: songs without their file play a generated stand-in sketch (src/synth.js) instead of silence
 };
 // Local development: a page served from this computer can point the shop at a local server with ?api=..., e.g.
 //   http://localhost:8000/?api=http://localhost:3000/api/soundwalk
@@ -102,7 +103,7 @@ SW.SONGS = [
     ],
   },
   // The amusement park: two new songs, each heard riding something. Titles are placeholders until the songs have names.
-  // Put the files in audio/ and set src (e.g. 'audio/carousel.mp3'); until then a generated sketch plays.
+  // Put the files in audio/ and set src (e.g. 'audio/carousel.mp3'); until then the place is silent.
   {
     id: 'carousel',
     title: 'MERRY-GO-ROUND',

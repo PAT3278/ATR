@@ -222,6 +222,7 @@ body.viewing #bars i { height: 10vh; }
 .tr-play .ic { width: 15px; height: 15px; fill: currentColor; stroke: none; }
 .tr-play .i-pause, .tr.on .tr-play .ic:first-child { display: none; }
 .tr.on .tr-play .i-pause { display: block; }
+.tr-play:disabled { opacity: 0.35; cursor: default; }
 .tr.on .tr-play { background: var(--red-deep); border-color: var(--red); }
 .tr.wait .tr-play .i-pause { animation: blink 1s steps(2) infinite; }
 .tr-play:hover, .tr-play:focus-visible { background: var(--bone); color: #0a0a09; outline: none; }

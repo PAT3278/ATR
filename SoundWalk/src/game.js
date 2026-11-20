@@ -575,6 +575,136 @@
     pts.push(new THREE.Vector2(rt * 0.75, y0 + h + 0.035), new THREE.Vector2(rt * 0.45, y0 + h + 0.05));
     return new THREE.LatheGeometry(pts, seg, gap / 2, Math.PI * 2 - gap);
   });
+  /* ================= everyday clothes for the people in the world ================= */
+  // Everybody is dressed from separate decks of parts, so the same few shapes and colours make a great many different
+  // people: the head (skin, hair), something on the head, a bag or none, a long-sleeved top, the layer under it that
+  // peeks out at the hem and the neck, trousers (or a long skirt), shoes. Every deck is drawn on its own, colours too.
+  //   npc.look(r)           a random outfit (r: an E.rng)
+  //   npc.dress(r, look?)   one person to animate: { f (feet at the origin, front +z), up (everything above the hips, at
+  //                         0.86), head, arms (shoulder pivots, the arm hanging down -y), legs, torso: up, look }
+  //   npc.crowd(n, r, nv)   n walkers drawn as nv outfits, each one instanced mesh in vertex colours (one draw per outfit):
+  //                         { group, set(i, matrix), done() }
+  const npc = (() => {
+    const C = {
+      skin: ['#f1cfae', '#e1b18c', '#c8946a', '#a0704c', '#7a4e33', '#4e3222'],
+      hair: ['#14100d', '#2b1d14', '#4a3222', '#7a5a3a', '#b8a080', '#8f8f8f'],
+      top: ['#1e2024', '#2f3238', '#5b5f66', '#9aa0a6', '#d9d4c8', '#efece4', '#2f4a3a', '#5a6a3a', '#3a4a6a', '#20304a', '#6a2a26', '#8a5a3a', '#c8a24a', '#a8462e', '#4a3a5a', '#7a8a9a'],
+      layer: ['#efece4', '#1e2024', '#c8312a', '#e8c43a', '#3a7ad8', '#9aa0a6', '#5aa46a', '#e88a3a', '#d8b8c8', '#8a6ad0'],
+      pants: ['#1c1d22', '#2a2c33', '#4a4d55', '#33456e', '#6e83a6', '#c9bfa8', '#6b5a44', '#3d4a35', '#7a7468'],
+      shoe: ['#f1efe9', '#1a1a1c', '#7a5a3a', '#b8b2a6', '#c8312a', '#3a5aa8', '#3a3a3a'],
+      bag: ['#1a1a1c', '#3a3a36', '#7a6a50', '#c9bfa8', '#2f3a4a', '#6a2a26', '#4a5a3a', '#c8a24a'],
+      hat: ['#1a1a1c', '#3a3a3e', '#7a7468', '#c9bfa8', '#2a3a5a', '#6a2a26', '#d8b04a', '#3d4a35'],
+    };
+    const DECK = {
+      hair: ['crop', 'crop', 'buzz', 'long', 'long', 'bun', 'afro', 'curly', 'bob', 'bald'],
+      head: ['none', 'none', 'none', 'beanie', 'beanie', 'cap', 'capback', 'bucket', 'hood', 'headphones', 'glasses', 'glasses'],
+      bag: ['none', 'none', 'none', 'backpack', 'backpack', 'sling', 'sling', 'tote', 'messenger', 'shoulder'],
+      top: ['hoodie', 'hoodie', 'crew', 'crew', 'coat', 'puffer', 'chore', 'tee', 'cardigan', 'shirt'],
+      pants: ['straight', 'straight', 'wide', 'wide', 'slim', 'jogger', 'cargo', 'skirt'],
+      shoes: ['sneaker', 'sneaker', 'runner', 'boot', 'loafer', 'hightop'],
+    };
+    const pick = (r, a) => a[Math.floor(r() * a.length)];
+    function look(r) {
+      const L = { skin: pick(r, C.skin), hairC: pick(r, C.hair), hair: pick(r, DECK.hair), head: pick(r, DECK.head), hatC: pick(r, C.hat), bag: pick(r, DECK.bag), bagC: pick(r, C.bag),
+        top: pick(r, DECK.top), topC: pick(r, C.top), layer: pick(r, C.layer), pants: pick(r, DECK.pants), pantsC: pick(r, C.pants), shoes: pick(r, DECK.shoes), shoeC: pick(r, C.shoe), sole: r() < 0.7 ? '#efece4' : '#2a2a2a' };
+      if (L.head === 'hood' && L.top !== 'hoodie') L.head = 'beanie';   // only a hoodie has a hood to put up
+      if (L.layer === L.topC) L.layer = C.layer[(C.layer.indexOf(L.layer) + 3) % C.layer.length];
+      return L;
+    }
+    const MC = {}, m = (hex) => MC[hex] || (MC[hex] = mat(hex, { rough: 0.85 }));
+    const GC = {}, G = (key, f) => GC[key] || (GC[key] = f());
+    const cyl = (rt, rb, h, n) => new THREE.CylinderGeometry(rt, rb, h, n), sph = (rr, a, b, ...o) => new THREE.SphereGeometry(rr, a, b, ...o), box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    function dress(r, L = look(r), lo = false) {
+      const S = lo ? 6 : 10, f = new THREE.Group(), up = new THREE.Group(); up.position.y = 0.86; f.add(up);
+      const add = (par, geo, hex, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => { const o = new THREE.Mesh(geo, m(hex)); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(sx, sy, sz); par.add(o); return o; };
+      const dark = (hex, k = 0.8) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
+      // legs and shoes
+      const P = L.pantsC, legs = [-1, 1].map((sd) => { const piv = new THREE.Group(); piv.position.set(sd * 0.095, 0.86, 0); f.add(piv); return piv; });
+      const pantsG = { straight: [0.086, 0.076], wide: [0.1, 0.118], slim: [0.076, 0.056], jogger: [0.088, 0.062], cargo: [0.1, 0.104], skirt: [0.05, 0.045] }[L.pants];
+      legs.forEach((lg, i) => {
+        add(lg, G(`leg${L.pants}${S}`, () => cyl(pantsG[0], pantsG[1], 0.8, S).translate(0, -0.4, 0)), L.pants === 'skirt' ? dark(L.skin, 0.35) : P);
+        if (L.pants === 'jogger') add(lg, G('cuffJ' + S, () => cyl(0.066, 0.064, 0.07, S)), dark(P, 0.75), 0, -0.76);
+        if (L.pants === 'cargo') add(lg, G('pocketC', () => box(0.06, 0.16, 0.14)), dark(P, 0.88), (i ? 1 : -1) * 0.1, -0.38);
+      });
+      const shoe = { sneaker: [0.11, 0.08, 0.27, 0.025], runner: [0.125, 0.1, 0.29, 0.045], boot: [0.12, 0.18, 0.26, 0.03], loafer: [0.1, 0.055, 0.26, 0.015], hightop: [0.115, 0.15, 0.27, 0.03] }[L.shoes];
+      for (const sd of [-1, 1]) {
+        const x = sd * 0.095, sole = L.shoes === 'loafer' || L.shoes === 'boot' ? dark(L.shoeC, 0.5) : L.sole;
+        add(f, G(`shoe${L.shoes}`, () => box(shoe[0], shoe[1], shoe[2])), L.shoeC, x, shoe[3] + shoe[1] / 2, 0.045);
+        add(f, G(`sole${L.shoes}`, () => box(shoe[0] + 0.01, shoe[3], shoe[2] + 0.01)), sole, x, shoe[3] / 2, 0.045);
+      }
+      if (L.pants === 'skirt') add(up, G('skirt' + S, () => cyl(0.2, 0.33, 0.62, S + 4).translate(0, -0.31, 0)), P, 0, 0.04, 0, 0, 0, 0, 1, 1, 0.8);
+      else add(up, G('seat' + S, () => cyl(0.19, 0.19, 0.16, S)), P, 0, 0.02, 0, 0, 0, 0, 1, 1, 0.7);
+      // the top, its sleeves, and the layer peeking out at the hem and the neck
+      const T = L.topC, Ly = L.layer, long = L.top === 'coat';
+      const body = { hoodie: [0.215, 0.205, 0.6], crew: [0.205, 0.198, 0.58], coat: [0.215, 0.27, 1.05], puffer: [0.24, 0.235, 0.58], chore: [0.222, 0.225, 0.6], tee: [0.198, 0.188, 0.6], cardigan: [0.208, 0.205, 0.6], shirt: [0.2, 0.192, 0.6] }[L.top];
+      add(up, G(`body${L.top}${S}`, () => cyl(body[0], body[1], body[2], S + 2).translate(0, 0.62 - body[2] / 2, 0)), T, 0, 0, 0, 0, 0, 0, 1, 1, 0.7);
+      if (!long) add(up, G('hem' + S, () => cyl(0.2, 0.2, 0.07, S + 2)), Ly, 0, 0.0, 0, 0, 0, 0, 1, 1, 0.68);   // the longer layer under it shows below the hem
+      add(up, G('neckRing', () => new THREE.TorusGeometry(0.085, 0.022, 5, 10)), Ly, 0, 0.615, 0, Math.PI / 2, 0, 0, 1, 1, 0.8);   // ...and at the neck
+      if (L.top === 'hoodie') { add(up, G('pouch', () => box(0.24, 0.12, 0.03)), T, 0, 0.2, 0.135); if (L.head !== 'hood') add(up, G('hoodDown' + S, () => sph(0.14, S, 6)), T, 0, 0.56, -0.13, 0, 0, 0, 1.1, 0.7, 0.55); add(up, G('hemRib' + S, () => cyl(0.2, 0.2, 0.04, S + 2)), dark(T, 0.85), 0, 0.045, 0, 0, 0, 0, 1, 1, 0.71); }
+      if (L.top === 'crew') add(up, G('hemRib' + S, () => cyl(0.2, 0.2, 0.04, S + 2)), dark(T, 0.85), 0, 0.045, 0, 0, 0, 0, 1, 1, 0.71);
+      if (L.top === 'puffer') for (const y of [0.18, 0.38]) add(up, G('roll' + S, () => cyl(0.25, 0.25, 0.03, S + 2)), dark(T, 0.75), 0, y, 0, 0, 0, 0, 1, 1, 0.72);
+      if (L.top === 'coat') { for (const sd of [-1, 1]) add(up, G('lapel', () => box(0.07, 0.3, 0.02)), dark(T, 0.85), sd * 0.06, 0.46, 0.152, 0, 0, sd * 0.25); add(up, G('belt' + S, () => cyl(0.225, 0.225, 0.05, S + 2)), dark(T, 0.7), 0, 0.12, 0, 0, 0, 0, 1, 1, 0.71); }
+      if (L.top === 'chore') { for (const sd of [-1, 1]) add(up, G('chestPk', () => box(0.09, 0.09, 0.02)), dark(T, 0.85), sd * 0.09, 0.4, 0.158); add(up, G('placket', () => box(0.03, 0.56, 0.02)), dark(T, 0.8), 0, 0.31, 0.158); }
+      if (L.top === 'cardigan') { add(up, G('open', () => box(0.07, 0.55, 0.02)), Ly, 0, 0.32, 0.146); for (let k = 0; k < 4; k++) add(up, G('btn', () => sph(0.012, 4, 3)), dark(T, 0.6), 0.045, 0.14 + k * 0.12, 0.148); }
+      if (L.top === 'shirt') { for (const sd of [-1, 1]) add(up, G('collarPt', () => box(0.07, 0.05, 0.015)), T, sd * 0.05, 0.6, 0.11, 0, 0, sd * 0.5); add(up, G('placket', () => box(0.03, 0.56, 0.02)), dark(T, 0.9), 0, 0.31, 0.142); }
+      const sleeve = L.top === 'puffer' ? [0.08, 0.068] : L.top === 'coat' ? [0.07, 0.064] : L.top === 'tee' ? [0.058, 0.05] : [0.064, 0.056];
+      const arms = [-1, 1].map((sd) => {
+        const piv = new THREE.Group(); piv.position.set(sd * 0.255, 0.56, 0); up.add(piv);
+        add(piv, G(`sleeve${L.top}${S}`, () => cyl(sleeve[0], sleeve[1], 0.56, S).translate(0, -0.28, 0)), T);
+        if (L.top === 'hoodie' || L.top === 'crew' || L.top === 'cardigan') add(piv, G('cuff' + S, () => cyl(0.052, 0.05, 0.04, S)), Ly, 0, -0.565);   // a sleeve of the layer under it at the wrist
+        add(piv, G('hand', () => sph(0.048, 7, 5)), L.skin, 0, -0.61, 0);
+        piv.rotation.z = sd * 0.06; return piv;
+      });
+      add(up, G('neck', () => cyl(0.05, 0.056, 0.12, 7)), L.skin, 0, 0.66, 0);
+      // the head, the hair, what is on it
+      const head = new THREE.Group(); head.position.y = 0.78; up.add(head);
+      add(head, G('skull' + S, () => sph(0.118, S + 2, S)), L.skin, 0, 0, 0, 0, 0, 0, 0.95, 1.08, 1);
+      if (!lo) for (const sd of [-1, 1]) add(head, G('eye', () => sph(0.012, 5, 4)), '#0e0c0b', sd * 0.04, 0.015, 0.105);
+      const H = L.hairC, covered = L.head === 'beanie' || L.head === 'hood' || L.head === 'bucket';
+      const cap = (k) => G('hairCap' + k + S, () => sph(0.124, S + 2, 6, 0, Math.PI * 2, 0, k));
+      if (L.hair !== 'bald' && !(covered && (L.hair === 'crop' || L.hair === 'buzz'))) {
+        if (L.hair === 'buzz') add(head, cap(1.3), H, 0, 0.005, -0.004, -0.2);
+        else if (L.hair !== 'afro') add(head, cap(1.6), H, 0, 0.008, -0.006, -0.25);
+        if (L.hair === 'long') add(head, G('longBack' + S, () => new THREE.CylinderGeometry(0.11, 0.12, 0.3, S, 1, true, Math.PI * 0.55, Math.PI * 0.9)), H, 0, -0.12, -0.01);
+        if (L.hair === 'bob') add(head, G('bob' + S, () => new THREE.CylinderGeometry(0.128, 0.13, 0.13, S + 2, 1, true, Math.PI * 0.35, Math.PI * 1.3)), H, 0, -0.03, 0);
+        if (L.hair === 'bun' && !covered) add(head, G('bun', () => sph(0.055, 7, 5)), H, 0, 0.1, -0.09);
+        if (L.hair === 'afro' && !covered) add(head, G('afro' + S, () => sph(0.17, S + 2, S)), H, 0, 0.05, -0.03);
+        if (L.hair === 'curly' && !covered) for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2; add(head, G('curl', () => sph(0.045, 5, 4)), H, Math.sin(a) * 0.09, 0.08, Math.cos(a) * 0.09 - 0.02); }
+      }
+      const HC = L.hatC;
+      if (L.head === 'beanie') { add(head, G('beanie' + S, () => sph(0.13, S + 2, 6, 0, Math.PI * 2, 0, 1.55)), HC, 0, 0.02, -0.005); add(head, G('beanieCuff' + S, () => cyl(0.133, 0.133, 0.05, S + 2)), dark(HC, 0.85), 0, 0.03, -0.005); }
+      if (L.head === 'cap' || L.head === 'capback') { const g2 = new THREE.Group(); g2.position.set(0, 0.03, 0); g2.rotation.y = L.head === 'capback' ? Math.PI : 0; head.add(g2);
+        add(g2, G('capCrown' + S, () => sph(0.128, S + 2, 6, 0, Math.PI * 2, 0, 1.35)), HC); add(g2, G('capBrim', () => cyl(0.1, 0.1, 0.012, 10).scale(1, 1, 0.75)), HC, 0, 0.02, 0.12, 0.12); }
+      if (L.head === 'bucket') { add(head, G('bucketTop' + S, () => cyl(0.11, 0.13, 0.11, S + 2)), HC, 0, 0.08, 0); add(head, G('bucketBrim' + S, () => cyl(0.135, 0.19, 0.04, S + 2)), HC, 0, 0.025, 0); }
+      if (L.head === 'hood') add(head, G('hoodUp' + S, () => sph(0.15, S + 2, 7, Math.PI / 2 + 0.75, Math.PI * 2 - 1.5, 0, Math.PI * 0.72)), T, 0, 0.012, -0.012, 0, 0, 0, 1, 1.08, 1.05);
+      if (L.head === 'headphones') { add(head, G('band', () => new THREE.TorusGeometry(0.128, 0.012, 4, 14, Math.PI)), HC, 0, 0.01, 0, 0, 0, 0); for (const sd of [-1, 1]) add(head, G('cup', () => cyl(0.045, 0.045, 0.03, 10)), HC, sd * 0.125, 0, 0, 0, 0, Math.PI / 2); }
+      if (L.head === 'glasses') { add(head, G('frame', () => box(0.17, 0.035, 0.012)), HC === '#d8b04a' ? '#c8a24a' : '#141414', 0, 0.015, 0.115); }
+      // the bag
+      const B = L.bagC, strap = (rz, z) => add(up, G('strap', () => box(0.035, 0.82, 0.012)), dark(B, 0.8), 0, 0.3, z, 0, 0, rz);
+      if (L.bag === 'backpack') { add(up, G('pack', () => box(0.3, 0.38, 0.15)), B, 0, 0.36, -0.22); add(up, G('packPk', () => box(0.22, 0.14, 0.04)), dark(B, 0.85), 0, 0.26, -0.31); for (const sd of [-1, 1]) add(up, G('pStrap', () => box(0.04, 0.42, 0.012)), dark(B, 0.8), sd * 0.1, 0.38, 0.15); }
+      if (L.bag === 'sling') { strap(0.75, 0.152); strap(-0.75, -0.152); add(up, G('slingBag', () => box(0.22, 0.11, 0.07)), B, -0.04, 0.42, 0.18, 0, 0, 0.6); }
+      if (L.bag === 'tote') { add(up, G('toteStrap', () => box(0.03, 0.45, 0.012)), dark(B, 0.85), 0.2, 0.36, 0.06); add(up, G('tote', () => box(0.06, 0.36, 0.3)), B, 0.27, 0.0, 0.0, 0, 0, 0.08); }
+      if (L.bag === 'messenger') { strap(0.6, 0.152); strap(-0.6, -0.152); add(up, G('mess', () => box(0.08, 0.26, 0.32)), B, -0.25, 0.02, -0.03); }
+      if (L.bag === 'shoulder') { add(up, G('shStrap', () => box(0.025, 0.32, 0.012)), dark(B, 0.8), -0.2, 0.42, 0.04); add(up, G('shBag', () => box(0.08, 0.16, 0.22)), B, -0.25, 0.24, 0.0); }
+      f.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      return { f, up, head, arms, legs, torso: up, look: L };
+    }
+    // one person in one geometry, its colours in the vertices (for a crowd drawn instanced)
+    function bake(L) {
+      const d = dress(null, L, true), list = []; d.f.updateMatrixWorld(true);
+      d.f.traverse((o) => { if (!o.isMesh) return; const g = o.geometry.clone(), c = o.material.color, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let k = 0; k < n; k++) a.set([c.r, c.g, c.b], k * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); if (g.attributes.uv) g.deleteAttribute('uv'); list.push([g, o.matrixWorld]); });
+      const out = mergeGeos(list); list.forEach(([g]) => g.dispose()); return out;
+    }
+    let crowdM = null;
+    function crowd(n, r, nv = 10) {
+      crowdM = crowdM || (() => { const cm = mat('#ffffff', { rough: 0.85 }, true); cm.vertexColors = true; return cm; })();
+      const group = new THREE.Group(), slot = [], counts = new Array(nv).fill(0);
+      for (let i = 0; i < n; i++) { const v = Math.floor(r() * nv); slot.push([v, counts[v]++]); }
+      const meshes = counts.map((c) => { const im = new THREE.InstancedMesh(bake(look(r)), crowdM, Math.max(1, c)); im.count = c; im.castShadow = true; im.frustumCulled = false; group.add(im); return im; });
+      return { group, set(i, m4) { const [v, k] = slot[i]; meshes[v].setMatrixAt(k, m4); }, done() { meshes.forEach((im) => (im.instanceMatrix.needsUpdate = true)); } };
+    }
+    return { C, look, dress: (r, L, lo) => dress(r, L || look(r), lo), bake, crowd };
+  })();
   const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact, uvs, jewel, studio: studioTex };
   // A deck you can walk under (a parking area, its walkway, a ramp) is the ground only for someone already up at its level,
   // within a step of it (DECK_STEP, the height from which a deck's rails stop you too), or being set down from above (no y).
@@ -583,7 +713,7 @@
   // that strip off for those below (see parkingArea in places2.js) rather than letting them walk in with their head in it.
   const DECK_STEP = 1.2, HEADROOM = 2.4;
   const onDeck = (h, y) => y === undefined || y > h - DECK_STEP;
-  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag, onDeck, DECK_STEP, HEADROOM };
+  const E = { rng, mat, plane, tex, textTex, bench, dot, batch, gloss, basic, lin, ring, rockGeo, waterN, WATER_GLSL, swag, npc, onDeck, DECK_STEP, HEADROOM };
   const places = SW.SONGS.map((song, idx) => {
     const dx = song.x, dz = song.z, len = Math.hypot(dx, dz) || 1;
     const rot = Math.atan2(-dx / len, -dz / len);
@@ -868,6 +998,7 @@
     }
     p.path = pts;
     if (p.onHill) { /* laid over the hills once they exist (p.afterHills, below) */ }
+    else if (p.road && p.road.own) { /* the place paves its road itself (FLIP's avenue, flush with its own street) */ }
     else if (p.road) {   // a paved road instead of a trail: asphalt, a dashed centre line, and the trees kept further back
       const tr = [{ x: ux * 4.6, z: uz * 4.6 }, { x: ux * 7.5, z: uz * 7.5 }, ...pts.slice(0, N + 1)];   // right up to the fountain's rim
       layTrail(tr, { w: p.road.hw, mat: mat('#2a2830', { map: tex('asphalt', 1, 1), rough: 0.88 }), us: 8, vs: 8, y: 0.065 });
@@ -1043,7 +1174,13 @@
   {
     const BLOBS = [[-84, -48, 12, 14], [-78, -66, 10, 12], [-60, -80, 13, 13], [-44, -82, 12, 12], [-28, -84, 9, 10]];   // crests: north of OHH inside the ring road, then north-east towards the funfair; outside the ring road is OHH's coast, which the hills stay off
     const PEAKS = [[-50, -70, 15, 16], [-40, -53, 7, 10], [-33, -44, 4, 9], [-36, -64, 8, 11], [-27, -61, 11, 10], [-19, -51, 7, 7], [-69, -58, 8, 10], [-87, -45, 3, 6], [-33, -88, 9, 7]];   // KEYAKI's mountain (its summit, the spur its trail climbs from the plaza side), the ridge on east and two knolls against the funfair's south-west corner, piled on top; the last three keep OHH's canal buried (a saddle west of the mountain, a knoll north of OHH, the mountain's foot by SHOT's way)
-    const X0 = -164, X1 = 92, Z0 = -152, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz), rk = new Float32Array(nx * nz);
+    // The coast range: from KEYAKI's mountain the hills climb on west and north-west to the coast, highest just behind
+    // OHH's northern beach. Unlike the crests above it is not cut back from the ring road: the road flies over it on its
+    // piers, and the range only keeps under the deck (like the crater rock, deckCap). It stays off the sand (OHH's
+    // hillMask), and keeps low in the line KEYAKI's lookout looks along, so the sea is still seen from the summit.
+    const COAST = [[-66, -96, 22, 10], [-80, -104, 20, 9], [-62, -128, 34, 12], [-78, -136, 50, 13], [-96, -138, 60, 12], [-108, -126, 46, 10], [-112, -148, 40, 11], [-94, -86, 18, 8]];   // up from KEYAKI's north-west flank, a saddle under the ring road, then the high ground behind the north-west beach
+    const keyP = places.find((q) => q.song.scene === 'keyaki'), KV = keyP ? keyP.toWorld(...(keyP.vp || [0, 0])) : null, KVD = [-0.966, -0.259];
+    const X0 = -176, X1 = 92, Z0 = -176, Z1 = -18, D = 2, nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1, h = new Float32Array(nx * nz), rk = new Float32Array(nx * nz);
     const ohh = places.find((q) => q.song.scene === 'ohh'), others = places.filter((q) => q !== ohh);
     places.forEach((q) => { q.vpW = q.toWorld(...(q.vp || [0, 0])); });   // where each one is viewed from (p.vx is set later)
     const dirs = [[0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; dirs.push([Math.cos(a) * 7, Math.sin(a) * 7], [Math.cos(a) * 14, Math.sin(a) * 14]); }
@@ -1063,7 +1200,8 @@
       let H = 0, M = 0; for (const [bx, bz, bh, br] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) H += bh * Math.exp(-q * 1.6); }
       for (const [bx, bz, bh, br] of PEAKS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) M += bh * Math.exp(-q * 1.6); }
       let R = 0, Rk = 0, own = null; for (const p of reliefs) { const l = p.local(x, z), v = p.relief(l.x, l.z, RO); if (v > R) { R = v; Rk = RO.rock; own = p; } }
-      if (H + M < 0.05 && R <= 0) continue;
+      let C = 0; for (const [bx, bz, bh, br] of COAST) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br * br); if (q < 9) C += bh * Math.exp(-q * 1.6); }
+      if (H + M < 0.05 && R <= 0 && C < 0.05) continue;
       if (H + M >= 0.05) {
         H = (16 * (1 - Math.exp(-H / 16)) + 24 * (1 - Math.exp(-M / 24))) * (1 + 0.12 * Math.sin(x * 0.21 + z * 0.07) * Math.cos(z * 0.17 - x * 0.05));   // soft-capped, with a little unevenness
         let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d) * smooth(9, 21, ring.dist(x, z));
@@ -1086,6 +1224,16 @@
         for (const p of places) { if (m <= 0) break; if (p === own || p.onHill || inside(own, p)) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 0.4, hw + 1.4, distToPath(x, z, p.path).d); const l = p.local(x, z); if (coreOf(p)(l.x, l.z)) m = 0; }
         for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
         R = Math.min(R * m, Math.max(0, deckCap(x, z)));
+      }
+      if (C >= 0.05) {   // the coast range: masked like the crests, except at the ring road, where it keeps under the deck instead
+        C = 36 * (1 - Math.exp(-C / 36)) * (1 + 0.1 * Math.sin(x * 0.19 - z * 0.08) * Math.cos(z * 0.15 + x * 0.06));
+        let m = smooth(PLAZA_R + 26, PLAZA_R + 44, Math.hypot(x, z)) * smooth(5, 16, distToPath(x, z, loopPath).d);
+        for (const p of places) { if (m <= 0) break; if (p.onHill) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
+        for (const p of others) { if (m <= 0) break; if (p.onHill || p.rim || Math.hypot(x - p.x, z - p.z) > 140) continue; m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z)); const l = p.local(x, z); if (Math.hypot(x - p.x, z - p.z) < 50 && coreOf(p)(l.x, l.z)) m = 0; }   // (a place's core only near it: SHOT's reaches out along the whole expressway)
+        for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
+        C = Math.min(C * m, Math.max(0, deckCap(x, z) + 1));
+        if (KV) { const dx = x - KV.x, dz = z - KV.z, d = Math.hypot(dx, dz), a = d > 1 ? (dx * KVD[0] + dz * KVD[1]) / d : 0; if (d > 18) C = Math.min(C, 13 + 30 * smooth(0.93, 0.85, a)); }   // the lookout's line of sight to the sea
+        H = Math.max(H, C);
       }
       if (H > 0 && ohh && ohh.hillMask) { const l = ohh.local(x, z); H *= ohh.hillMask(l.x, l.z); }   // OHH's coast: the hills come down behind its beaches, never over the sand, the harbour or the sea
       h[j * nx + i] = Math.max(H, R); rk[j * nx + i] = R > H ? Rk : 0;
@@ -1873,7 +2021,7 @@
   }
   // What kind of listen it is: a preview of the unreleased, the full song, or the stand-in sketch.
   function tagOf(s) {
-    if (!s.src) return '<span class="tr-tag">DEMO</span>';
+    if (!s.src) return CFG.demo ? '<span class="tr-tag">DEMO</span>' : '<span class="tr-tag">COMING SOON</span>';
     if (SW.isPreview(s)) return `<span class="tr-tag pv">PREVIEW ${CFG.preview || 20}s</span>`;
     return '<span class="tr-tag">FULL</span>';
   }
@@ -1901,7 +2049,7 @@
     const s = p.song, n = playsOf(s), sub = [s.artist || CFG.artist, s.year, p.found ? s.place : '未発見'].filter(Boolean).join(' · ');
     const lis = !bare && (s.links || []).find((l) => l.kind !== 'buy');   // the song where it is out already (SoundCloud): a demo here is not it
     return `<div class="tr" data-tr="${i}" style="--c:${esc(p.found ? p.color : '#b3161d')}">`
-      + `<button class="tr-play" type="button" data-play="${i}" aria-label="${esc(s.title)} を再生">${IC.play}${IC.pause}</button>`
+      + `<button class="tr-play" type="button" data-play="${i}" aria-label="${esc(s.title)} を再生"${!s.src && !CFG.demo ? ' disabled' : ''}>${IC.play}${IC.pause}</button>`
       + `<div class="tr-main">${bare ? '' : `<span class="nm">${esc(s.title)}<small>${esc(sub)}</small></span>`}`
       + `<canvas class="tr-wave" data-seek="${i}" aria-hidden="true"></canvas>`
       + `<div class="tr-foot"><span class="tr-time">${timeOf(player.info(s))}</span>${tagOf(s)}<span class="tr-plays" data-plays="${esc(s.id)}"${n == null ? ' hidden' : ''}>▶ ${n == null ? '' : fmtPlays(n)}</span>`
@@ -2510,7 +2658,7 @@
     $('#vMeta').textContent = [(s.artist || CFG.artist) + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
     viewInfo(p, true);
     const ch = SW.Audio.channels[p.idx];
-    $('#vSketch').hidden = !(ch && ch.mode === 'sketch');
+    $('#vSketch').hidden = !(ch && ch.mode === 'sketch' && CFG.demo);
     $('#view').hidden = false;
     $('#prompt').hidden = true; lastFocus = undefined;
     loadCounts();

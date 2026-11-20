@@ -109,7 +109,8 @@
       }, fn);
     }
 
-    startSketch() {
+    startSketch() {   // no stand-in music any more: a song without its file is silent (SW.CONFIG.demo: true brings the generated sketches back)
+      if (!SW.CONFIG.demo) return;
       const ctx = this.ctx;
       if (!this.st) this.st = this.sketch.setup(ctx, this.input);
       const sd = 60 / this.sketch.bpm / 4;
@@ -124,8 +125,8 @@
         el.preload = 'auto';
         el.src = this.song.src;
         el.addEventListener('error', () => {
-          // The file is missing or blocked: fall back to the sketch so the place isn't silent.
-          console.warn('[SoundWalk] could not load', this.song.src, '— playing the sketch instead');
+          // The file is missing or blocked: the place goes quiet (or plays its sketch, with SW.CONFIG.demo).
+          console.warn('[SoundWalk] could not load', this.song.src);
           this.mode = 'sketch';
           this.usingFallback = true;
           if (this.playing) this.startSketch();
@@ -231,7 +232,7 @@
     }
 
     schedule(until) {
-      if (!this.playing || this.mode !== 'sketch') return;
+      if (!this.playing || this.mode !== 'sketch' || !this.st) return;
       const ctx = this.ctx, sk = this.sketch;
       const sd = 60 / sk.bpm / 4;
       const epoch = this.engine.epoch;
@@ -400,7 +401,7 @@
     state: 'stop',   // 'play' | 'pause' | 'stop'
     channel(song) { return (this.chs[song.id] = this.chs[song.id] || new Channel(Engine, song, true)); },
     play(song) {
-      if (!Engine.ctx) return;
+      if (!Engine.ctx || (!song.src && !SW.CONFIG.demo)) return;   // nothing to play yet
       if (this.song && this.song !== song) this.stop();
       const now = Engine.ctx.currentTime;   // how long a sketch has been playing (it loops, so it has no length of its own)
       this.since = this.state === 'pause' ? this.since + now - this.pausedAt : now;
