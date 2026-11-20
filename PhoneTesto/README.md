@@ -108,9 +108,10 @@ studio monitors on the far side. The picture is the control surface.
   when it settles you hear that model alone (exactly as if picked from the
   host's Model parameter, which follows too). Each one is modelled from the
   real thing: frame and edge, glass with the lamp in it, buttons, speaker
-  holes; the laptop's keyboard and grilles; the wired earbuds' shells,
-  stems and cable. Its screen shows the band it can play, lit by the
-  output's spectrum.
+  holes; the laptop's keyboard and grilles; today's open-fit earbuds
+  (contoured head, short stem, speaker mesh, vent, sensor and steel tip,
+  each head and stem one smooth piece) with their case open beside them.
+  Its screen shows the band it can play, lit by the output's spectrum.
 - **Mix** — drag up or down (or the Focus slider, or ↑ ↓): the focus pulls from the
   speaker to the studio monitors behind it, and the lamp follows. All the way
   to the monitors is the dry signal; their woofers move with it.

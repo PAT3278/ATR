@@ -421,13 +421,13 @@
     { name: "Android Budget",  hp: 850, pk: 3800, q: 2.0, g: 5.5, lp: 8000,  drive: 14.4, mk: 2.69, kind: "phone", w: 0.1645, h: 0.0763, d: 0.0091, r: 0.0085, edge: 0.0030, body: "plastic",  frame: 0x3a3b3d, style: "chin" },
     { name: "Android",         hp: 450, pk: 3300, q: 1.6, g: 3.2, lp: 11500, drive: 6.84, mk: 1.6,  kind: "phone", w: 0.1620, h: 0.0748, d: 0.0082, r: 0.0100, edge: 0.0016, body: "alu",      frame: 0x3d4a42, style: "punch" },
     { name: "Laptop Speakers", hp: 200, pk: 2000, q: 1.2, g: 1.5, lp: 14000, drive: 2.7,  mk: 1.24, kind: "laptop", w: 0.304, frame: 0x7e8187 },
-    { name: "Wired Earbuds",   hp: 150, pk: 4500, q: 1.3, g: 3.0, lp: 16500, drive: 1.8,  mk: 0.31, kind: "buds", w: 0.085, frame: 0xf3f3ef }
+    { name: "Earbuds",         hp: 150, pk: 4500, q: 1.3, g: 3.0, lp: 16500, drive: 1.8,  mk: 0.31, kind: "buds", w: 0.092, frame: 0xf3f3ef }
   ];
   const short = ["SE", "11", "13/14", "15/16 Pro", "Android Lo", "Android", "Laptop", "Earbuds"];
   const fmtHz = v => v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + " kHz" : v + " Hz";
   const xs = []; P.forEach((p, i) => xs.push(i ? xs[i - 1] + (P[i - 1].w + p.w) / 2 + 0.2 : 0));
-  const aimOf = i => P[i].kind === "laptop" ? 0.085 : P[i].kind === "buds" ? 0.004 : 0.038;
-  const pitchOf = i => P[i].kind === "buds" ? 0.5 : P[i].kind === "laptop" ? 0.2 : 0.13;
+  const aimOf = i => P[i].kind === "laptop" ? 0.085 : P[i].kind === "buds" ? 0.02 : 0.038;
+  const pitchOf = i => P[i].kind === "buds" ? 0.36 : P[i].kind === "laptop" ? 0.2 : 0.13;
 
   function buildPhone(p) {
     const root = new T3.Group(), lean = new T3.Group(); root.add(lean);
@@ -495,104 +495,241 @@
     return { root, screen: scr, emit: [at(-0.142, -dd / 2 + 0.07), at(0.142, -dd / 2 + 0.07)], laptop: true };
   }
 
+  // ---- shapes as signed distances (millimetres), blended smoothly, then wrapped in a surface ----
+  const len3 = (x, y, z) => Math.sqrt(x * x + y * y + z * z), len2 = (x, y) => Math.sqrt(x * x + y * y);
+  const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
+  const smax = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.max(a, b) + h * h * k * 0.25; };
+  const ellipsoid = (x, y, z, a, b, c) => { const k0 = len3(x / a, y / b, z / c), k1 = len3(x / (a * a), y / (b * b), z / (c * c));
+    return k1 ? k0 * (k0 - 1) / k1 : -Math.min(a, b, c); };
+  const ball = (x, y, z, c, r) => len3(x - c[0], y - c[1], z - c[2]) - r;
+  // a rod from a to b whose radius goes from ra to rb; sq < 1 makes its section an oval, narrower across x
+  function rod(x, y, z, a, b, ra, rb, sq) {
+    const bx = b[0] - a[0], by = b[1] - a[1], bz = b[2] - a[2], px = x - a[0], py = y - a[1], pz = z - a[2];
+    const h = Math.max(0, Math.min(1, (px * bx + py * by + pz * bz) / (bx * bx + by * by + bz * bz)));
+    return len3((px - bx * h) / (sq || 1), py - by * h, pz - bz * h) - (ra + (rb - ra) * h);
+  }
+  const along = (a, u, s) => [a[0] + u[0] * s, a[1] + u[1] * s, a[2] + u[2] * s];
+  const unit = a => { const l = len3(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; };
+  // where a ray from inside the shape leaves it
+  function exitPoint(f, o, u) {
+    let t1 = 0; while (f(...along(o, u, t1)) < 0 && t1 < 40) t1 += 0.1;
+    let t0 = Math.max(0, t1 - 0.1);
+    for (let n = 0; n < 30; n++) { const m = (t0 + t1) / 2; if (f(...along(o, u, m)) < 0) t0 = m; else t1 = m; }
+    return along(o, u, (t0 + t1) / 2);
+  }
+  // the surface where f crosses zero inside the box lo..hi (mm), sampled every `step` mm (naive surface nets).
+  // part(x, y, z), if given, picks each triangle's material index (0..parts-1); shade(x, y, z), if given, returns
+  // each point's colour [r, g, b] (it multiplies the material's). Returns geometry in metres.
+  const EDGE_A = [0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3], EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
+  function surface(f, lo, hi, step, part, parts, shade) {
+    // a coarse grid first; only the coarse cells the surface could pass through are sampled finely
+    // (the fields here change no faster than distance does, so a cell whose corners are all far from zero holds no surface)
+    const K = 4, cnx = Math.ceil((hi[0] - lo[0]) / step / K), cny = Math.ceil((hi[1] - lo[1]) / step / K), cnz = Math.ceil((hi[2] - lo[2]) / step / K);
+    const nx = cnx * K, ny = cny * K, nz = cnz * K, sx = nx + 1, sxy = sx * (ny + 1), v = new Float32Array(sxy * (nz + 1));
+    const csx = cnx + 1, csxy = csx * (cny + 1), cg = new Float32Array(csxy * (cnz + 1)), margin = 0.8 * Math.sqrt(3) * K * step;
+    for (let k = 0, o = 0; k <= cnz; k++) for (let j = 0; j <= cny; j++) for (let i = 0; i <= cnx; i++) cg[o++] = f(lo[0] + i * K * step, lo[1] + j * K * step, lo[2] + k * K * step);
+    // every fine point starts with its coarse cell's sign, then the near cells are sampled exactly
+    for (let k = 0, o = 0; k <= nz; k++) for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) v[o++] = cg[Math.min(cnx, Math.round(i / K)) + Math.min(cny, Math.round(j / K)) * csx + Math.min(cnz, Math.round(k / K)) * csxy] < 0 ? -margin : margin;
+    const near = [];
+    for (let ck = 0; ck < cnz; ck++) for (let cj = 0; cj < cny; cj++) for (let ci = 0; ci < cnx; ci++) {
+      let closest = Infinity, neg = 0;
+      for (let c = 0; c < 8; c++) { const q = cg[ci + (c & 1) + (cj + (c >> 1 & 1)) * csx + (ck + (c >> 2)) * csxy]; if (Math.abs(q) < closest) closest = Math.abs(q); if (q < 0) neg++; }
+      if (closest < margin || (neg > 0 && neg < 8)) near.push(ci, cj, ck);
+    }
+    const sampled = new Uint8Array(v.length);
+    for (let n = 0; n < near.length; n += 3)
+      for (let k = near[n + 2] * K; k <= near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j <= near[n + 1] * K + K; j++) for (let i = near[n] * K; i <= near[n] * K + K; i++) {
+        const o = i + j * sx + k * sxy; if (!sampled[o]) { v[o] = f(lo[0] + i * step, lo[1] + j * step, lo[2] + k * step); sampled[o] = 1; }
+      }
+    // one vertex per fine cell the surface crosses, where its edges cross zero on average
+    const cells = new Int32Array(nx * ny * nz).fill(-1), cv = new Float32Array(8); let pos = new Float32Array(3 * 4096), np = 0;
+    for (let n = 0; n < near.length; n += 3)
+      for (let k = near[n + 2] * K; k < near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j < near[n + 1] * K + K; j++) for (let i = near[n] * K; i < near[n] * K + K; i++) {
+        const o = i + j * sx + k * sxy;
+        cv[0] = v[o]; cv[1] = v[o + 1]; cv[2] = v[o + sx]; cv[3] = v[o + sx + 1]; cv[4] = v[o + sxy]; cv[5] = v[o + sxy + 1]; cv[6] = v[o + sxy + sx]; cv[7] = v[o + sxy + sx + 1];
+        let inside = 0; for (let c = 0; c < 8; c++) if (cv[c] < 0) inside++;
+        if (inside === 0 || inside === 8) continue;
+        let ax = 0, ay = 0, az = 0, cnt = 0;
+        for (let e = 0; e < 12; e++) { const a = EDGE_A[e], b = EDGE_B[e]; if ((cv[a] < 0) === (cv[b] < 0)) continue;
+          const t = cv[a] / (cv[a] - cv[b]);
+          ax += (a & 1) + ((b & 1) - (a & 1)) * t; ay += (a >> 1 & 1) + ((b >> 1 & 1) - (a >> 1 & 1)) * t; az += (a >> 2) + ((b >> 2) - (a >> 2)) * t; cnt++; }
+        if (np + 3 > pos.length) { const grown = new Float32Array(pos.length * 2); grown.set(pos); pos = grown; }
+        cells[i + j * nx + k * nx * ny] = np / 3;
+        pos[np++] = lo[0] + (i + ax / cnt) * step; pos[np++] = lo[1] + (j + ay / cnt) * step; pos[np++] = lo[2] + (k + az / cnt) * step;
+      }
+    pos = pos.subarray(0, np);
+    // a quad across every grid edge the surface crosses, joining the four cells around it
+    const cxy = nx * ny; let tris = new Uint32Array(6 * 4096), nt = 0;
+    const quad = (a, b, c, d) => { if (a < 0 || b < 0 || c < 0 || d < 0) return;
+      if (nt + 6 > tris.length) { const grown = new Uint32Array(tris.length * 2); grown.set(tris); tris = grown; }
+      tris[nt++] = a; tris[nt++] = b; tris[nt++] = c; tris[nt++] = a; tris[nt++] = c; tris[nt++] = d; };
+    for (let n = 0; n < near.length; n += 3)
+      for (let k = near[n + 2] * K; k < near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j < near[n + 1] * K + K; j++) for (let i = near[n] * K; i < near[n] * K + K; i++) {
+        const o = i + j * sx + k * sxy, a = v[o] < 0, c0 = i + j * nx + k * cxy;
+        if (j > 0 && k > 0 && a !== (v[o + 1] < 0)) quad(cells[c0 - nx - cxy], cells[c0 - cxy], cells[c0], cells[c0 - nx]);
+        if (i > 0 && k > 0 && a !== (v[o + sx] < 0)) quad(cells[c0 - 1 - cxy], cells[c0 - cxy], cells[c0], cells[c0 - 1]);
+        if (i > 0 && j > 0 && a !== (v[o + sxy] < 0)) quad(cells[c0 - 1 - nx], cells[c0 - nx], cells[c0], cells[c0 - 1]);
+      }
+    tris = tris.subarray(0, nt);
+    // normals from the field itself, so the surface reads smooth however coarse the grid
+    const nrm = new Float32Array(np), e = step * 0.5;
+    for (let q = 0; q < np; q += 3) {
+      const x = pos[q], y = pos[q + 1], z = pos[q + 2];
+      const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e), l = len3(gx, gy, gz) || 1;
+      nrm[q] = gx / l; nrm[q + 1] = gy / l; nrm[q + 2] = gz / l;
+    }
+    // wind every triangle outward, and sort them by material
+    const which = new Uint8Array(nt / 3), counts = new Uint32Array(parts);
+    for (let t = 0; t < nt; t += 3) {
+      const A = tris[t] * 3, B = tris[t + 1] * 3, C = tris[t + 2] * 3;
+      const ux = pos[B] - pos[A], uy = pos[B + 1] - pos[A + 1], uz = pos[B + 2] - pos[A + 2], wx = pos[C] - pos[A], wy = pos[C + 1] - pos[A + 1], wz = pos[C + 2] - pos[A + 2];
+      if ((uy * wz - uz * wy) * (nrm[A] + nrm[B] + nrm[C]) + (uz * wx - ux * wz) * (nrm[A + 1] + nrm[B + 1] + nrm[C + 1]) + (ux * wy - uy * wx) * (nrm[A + 2] + nrm[B + 2] + nrm[C + 2]) < 0) {
+        const s = tris[t + 1]; tris[t + 1] = tris[t + 2]; tris[t + 2] = s; }
+      const m = part ? part((pos[A] + pos[B] + pos[C]) / 3, (pos[A + 1] + pos[B + 1] + pos[C + 1]) / 3, (pos[A + 2] + pos[B + 2] + pos[C + 2]) / 3) : 0;
+      which[t / 3] = m; counts[m]++;
+    }
+    const geo = new T3.BufferGeometry(), index = new Uint32Array(nt), start = new Uint32Array(parts);
+    for (let m = 1; m < parts; m++) start[m] = start[m - 1] + counts[m - 1] * 3;
+    for (let m = 0; m < parts; m++) if (counts[m]) geo.addGroup(start[m], counts[m] * 3, m);
+    const fillAt = start.slice();
+    for (let t = 0; t < nt; t += 3) { const m = which[t / 3], at = fillAt[m]; index[at] = tris[t]; index[at + 1] = tris[t + 1]; index[at + 2] = tris[t + 2]; fillAt[m] += 3; }
+    geo.setAttribute("position", new T3.BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new T3.BufferAttribute(nrm, 3));
+    if (shade) { const col = new Float32Array(np); for (let q = 0; q < np; q += 3) col.set(shade(pos[q], pos[q + 1], pos[q + 2]), q); geo.setAttribute("color", new T3.BufferAttribute(col, 3)); }
+    geo.setIndex(new T3.BufferAttribute(index, 1));
+    geo.scale(0.001, 0.001, 0.001); geo.computeBoundingSphere();
+    return geo;
+  }
+
+  // ---- earbuds: today's open-fit kind (a contoured head on a short stem, about 30 x 18 x 18 mm), and their case ----
   function buildBuds(p) {
     const root = new T3.Group();
-    const white = new T3.MeshPhysicalMaterial({ color: 0xf2f2ee, roughness: 0.26, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12 });
-    const cableM = new T3.MeshPhysicalMaterial({ color: 0xeeeeea, roughness: 0.38, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.3 });
-    const steel = new T3.MeshStandardMaterial({ color: 0xc9ccd1, metalness: 1, roughness: 0.18 });
-    const black = new T3.MeshStandardMaterial({ color: 0x111113, roughness: 0.5 });
-    // the grille: fine perforated mesh behind the opening
-    const grilleTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d");
-      g.fillStyle = "#74777c"; g.fillRect(0, 0, 256, 256); g.fillStyle = "#26272a";
-      for (let y = 10; y < 256; y += 20) for (let x = (y / 20) % 2 ? 20 : 10; x < 256; x += 20) { g.beginPath(); g.arc(x, y, 5.5, 0, Math.PI * 2); g.fill(); }
-      const t = new T3.CanvasTexture(c); t.encoding = T3.sRGBEncoding; t.anisotropy = 8; return t; })();
-    const grilleM = new T3.MeshStandardMaterial({ map: grilleTex, metalness: 0.55, roughness: 0.45 });
-    // a soft contact shadow, so each part sits on the wood instead of floating over it
+    // one earbud, right ear, in mm: head around the origin, the nozzle (the speaker) leaning toward +z, the stem down
+    const NA = [0, 0.4, 1.2], NB = [2.5, 2.1, 6.4], SA = [0, -3.2, -1.2], SB = [-0.3, -20.6, -2.9];
+    const nozzleDir = unit([NB[0] - NA[0], NB[1] - NA[1], NB[2] - NA[2]]), stemDir = unit([SB[0] - SA[0], SB[1] - SA[1], SB[2] - SA[2]]);
+    const stemRod = (x, y, z) => rod(x, y, z, SA, SB, 3.0, 2.4, 0.86);
+    const budBody = (x, y, z) => {
+      const xr = x * 0.978 + y * 0.208, yr = y * 0.978 - x * 0.208;   // the head is tipped a little toward the nozzle
+      let d = ellipsoid(xr, yr - 0.3, z + 0.3, 7.5, 7.1, 6.3);
+      d = smin(d, rod(x, y, z, NA, NB, 4.3, 3.4), 2.2);        // the nozzle stands out of the head
+      d = smax(d, -(z + 5.2), 2.4);                             // the outer face is flatter
+      return smin(d, smax(stemRod(x, y, z), -(y + 20.95), 0.5), 2.6);   // the stem leaves the head's underside
+    };
+    // marks on the surface, each an oval around a point where a ray from inside leaves it; w(p) is 1 inside, 0 outside, soft at the rim
+    const mark = (from, dir, ru, rv, across) => {
+      const c = exitPoint(budBody, from, dir), n = dir, u = unit([across[1] * n[2] - across[2] * n[1], across[2] * n[0] - across[0] * n[2], across[0] * n[1] - across[1] * n[0]]);
+      const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+      return (x, y, z) => { const rx = x - c[0], ry = y - c[1], rz = z - c[2], h = rx * n[0] + ry * n[1] + rz * n[2]; if (h < -3) return 0;
+        const e = len2((rx * u[0] + ry * u[1] + rz * u[2]) / ru, (rx * v[0] + ry * v[1] + rz * v[2]) / rv);
+        return Math.max(0, Math.min(1, 0.5 + (1 - e) * Math.min(ru, rv) / 0.45)); };
+    };
+    const grille = mark(NB, nozzleDir, 2.75, 2.15, stemDir);                                  // the speaker mesh, an oval on the nozzle's face
+    const vent = mark([0, 0, 0], unit([-0.3, 0.8, -0.5]), 1.6, 0.55, [1, 0, 0]);              // a slot vent on top
+    const sensor = mark([0, 0, 0], unit([0.8, -0.4, 0.45]), 1.25, 1.05, stemDir);           // the skin sensor on the inner side
+    const nozzleTip = exitPoint(budBody, NB, nozzleDir);
+    const shell = (x, y, z) => budBody(x, y, z) + 0.24 * grille(x, y, z) + 0.16 * vent(x, y, z) + 0.05 * sensor(x, y, z);
+    const shellShade = (x, y, z) => { const g = Math.max(grille(x, y, z), vent(x, y, z)), s = sensor(x, y, z), k = 1 - 0.93 * g - 0.99 * s; return [k, k, k + 0.012 * g]; };
+    // the stem's end: a steel tip with the microphone hole
+    const tip = (x, y, z) => smax(smax(stemRod(x, y, z), y + 21.1, 0.35), -(y + 22.5), 0.6);
+    const clamp01 = t => Math.max(0, Math.min(1, t));
+    const tipShade = (x, y, z) => { const m = Math.max(clamp01((len2(x - SB[0], z - SB[2]) - 0.8) / 0.35), clamp01((y + 22.25) / 0.2)), k = 0.06 + 0.94 * m; return [k, k, k]; };
+    const shellG = surface(shell, [-9, -21.6, -6.8], [9.2, 9, 11], 0.26, null, 1, shellShade);
+    const tipG = surface(tip, [-3.4, -23.2, -6], [3, -20.4, 0.4], 0.16, null, 1, tipShade);
+    // the openings again, as a matte layer over the glossy shell: mesh and vents don't shine like the plastic
+    const openG = (() => { const p = shellG.attributes.position, ix = shellG.index.array, keep = [];
+      const wv = new Float32Array(p.count); for (let q = 0; q < p.count; q++) { const x = p.getX(q) * 1000, y = p.getY(q) * 1000, z = p.getZ(q) * 1000; wv[q] = Math.max(grille(x, y, z), vent(x, y, z), sensor(x, y, z)); }
+      const w = q => wv[q];
+      for (let t = 0; t < ix.length; t += 3) if (w(ix[t]) + w(ix[t + 1]) + w(ix[t + 2]) > 0) keep.push(ix[t], ix[t + 1], ix[t + 2]);
+      const col = new Float32Array(p.count * 4); for (let q = 0; q < p.count; q++) col.set([1, 1, 1, wv[q]], q * 4);
+      const g = new T3.BufferGeometry(); g.setAttribute("position", p); g.setAttribute("normal", shellG.attributes.normal); g.setAttribute("color", new T3.BufferAttribute(col, 4)); g.setIndex(keep); return g; })();
+    const openM = new T3.MeshStandardMaterial({ color: 0x17181b, roughness: 0.8, metalness: 0.2, vertexColors: true, transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+
+    const budWhite = new T3.MeshPhysicalMaterial({ color: 0xf4f4f1, roughness: 0.22, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, vertexColors: true });
+    const steel = new T3.MeshStandardMaterial({ color: 0xc4c7cc, metalness: 1, roughness: 0.22, vertexColors: true });
+    const V = a => new T3.Vector3(a[0], a[1], a[2]);
+    const flip = (a, left) => left ? [-a[0], a[1], a[2]] : a;
+    // the turn that lays local direction a0 onto a1, with b0 (across it) toward b1
+    const turn = (a0, b0, a1, b1) => {
+      const frame = (a, b) => { const x = a.clone().normalize(), z = b.clone().projectOnPlane(x).normalize(); return new T3.Matrix4().makeBasis(x, new T3.Vector3().crossVectors(z, x), z); };
+      return new T3.Quaternion().setFromRotationMatrix(frame(a1, b1).multiply(frame(a0, b0).transpose()));
+    };
+    // a bud placed so its stem runs along `stemTo` and its nozzle faces toward `faceTo`; a left bud is the right one mirrored
+    const makeBud = (left, stemTo, faceTo) => {
+      const g = new T3.Group(), inner = new T3.Group(); g.add(inner); if (left) inner.scale.x = -1;
+      inner.add(new T3.Mesh(shellG, budWhite), new T3.Mesh(openG, openM), new T3.Mesh(tipG, steel));
+      g.quaternion.copy(turn(V(flip(stemDir, left)), V(flip(nozzleDir, left)), stemTo, faceTo));
+      return { g, inner };
+    };
+
+    // the case, standing, lid open; in mm, its bottom on the desk
+    const CW = 25, CH = 23.1, CD = 10.6, CR = 12.5, YS = 35.2;
+    const seats = [{ left: true, at: [-11.6, YS + 0.6, 0.3], face: [0.75, 0.55, 0.3] }, { left: false, at: [11.6, YS + 0.6, 0.3], face: [-0.75, 0.55, 0.3] }];
+    seats.forEach(s => {
+      s.q = turn(V(flip(stemDir, s.left)), V(flip(nozzleDir, s.left)), new T3.Vector3(0, -1, 0.05), V(s.face));
+      const w = a => along(s.at, V(flip(a, s.left)).applyQuaternion(s.q).toArray(), 1);
+      s.a = w(SA); s.b = w([SB[0], SB[1] - 2, SB[2]]);
+    });
+    const pocket = (x, y, z, s) => Math.min(ball(x, y, z, s.at, 9.1), rod(x, y, z, s.a, s.b, 3.45, 3.45));
+    // a pebble: a rounded square seen from the front, every edge softened deeply
+    const outer = (x, y, z) => {
+      const qx = Math.abs(x) - CW + CR, qy = Math.abs(y - CH) - CH + CR;
+      const a = len2(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - CR + 8.4, b = Math.abs(z) - CD + 8.4;
+      return len2(Math.max(a, 0), Math.max(b, 0)) + Math.min(Math.max(a, b), 0) - 8.4;
+    };
+    const caseBody = (x, y, z) => { let d = smax(outer(x, y, z), y - YS, 0.6); for (const s of seats) d = smax(d, -pocket(x, y, z, s), 0.7); return d; };
+    const caseLid = (x, y, z) => { let d = smax(outer(x, y, z), YS + 0.3 - y, 0.6); for (const s of seats) d = smax(d, -ball(x, y, z, s.at, 9.1), 0.7); return d; };
+    const bodyPart = (x, y, z) => YS - y < 0.5 || seats.some(s => pocket(x, y, z, s) < 0.35) ? 1 : 0;
+    const lidPart = (x, y, z) => y - YS < 0.8 || seats.some(s => ball(x, y, z, s.at, 9.1) < 0.35) ? 1 : 0;
+    const caseWhite = new T3.MeshPhysicalMaterial({ color: 0xf1f1ee, roughness: 0.3, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.12 });
+    const caseMatte = new T3.MeshStandardMaterial({ color: 0xdcdcd8, roughness: 0.7, metalness: 0 });
+    const caseMats = [caseWhite, caseMatte];
+    const box = new T3.Group(); box.position.set(-0.012, 0, -0.004); box.rotation.y = 0.18; root.add(box);
+    box.add(new T3.Mesh(surface(caseBody, [-26, -0.6, -11.6], [26, YS + 0.8, 11.6], 0.5, bodyPart, 2), caseMats));
+    const hinge = new T3.Group(); hinge.position.set(0, YS * 0.001, -CD * 0.001); hinge.rotation.x = -1.85; box.add(hinge);
+    const lidG = surface(caseLid, [-26, YS - 0.4, -11.6], [26, CH * 2 + 0.6, 11.6], 0.5, lidPart, 2); lidG.translate(0, -YS * 0.001, CD * 0.001);
+    const lid = new T3.Mesh(lidG, caseMats); hinge.add(lid);
+    const pin = new T3.Mesh(new T3.CylinderGeometry(0.0011, 0.0011, 0.011, 16), steel); pin.rotation.z = Math.PI / 2; hinge.add(pin);
+    // the status light on the front
+    const led = new T3.Mesh(new T3.CircleGeometry(0.0006, 20), new T3.MeshBasicMaterial({ color: 0x9dffbf })); led.position.set(0, 0.024, CD * 0.001 + 0.00004); box.add(led);
+
+    const emit = [];
+    // one bud resting in its seat
+    const seated = makeBud(true, new T3.Vector3(0, -1, 0.05), V(seats[0].face));
+    seated.g.position.copy(V(seats[0].at).multiplyScalar(0.001)); box.add(seated.g);
+    emit.push(() => seated.inner.localToWorld(V(nozzleTip).multiplyScalar(0.001)));
+    // the other out on the desk, on its side, the speaker turned up
+    const loose = makeBud(false, new T3.Vector3(0.62, -0.06, 0.78), new T3.Vector3(-0.15, 0.95, -0.2));
+    loose.g.position.set(0.03, 0, 0.016); root.add(loose.g); loose.g.updateMatrixWorld(true);
+    // rest it on the desk: its lowest vertex, exactly (a bounding box turned with it would leave it hovering)
+    let lowest = Infinity; const pv = new T3.Vector3();
+    loose.inner.children.forEach(m => { const a = m.geometry.attributes.position; for (let q = 0; q < a.count; q++) lowest = Math.min(lowest, pv.fromBufferAttribute(a, q).applyMatrix4(m.matrixWorld).y); });
+    loose.g.position.y -= lowest - 0.00005; loose.g.updateMatrixWorld(true);
+    emit.push(() => loose.inner.localToWorld(V(nozzleTip).multiplyScalar(0.001)));
+
+    // soft contact shadows, so nothing floats over the wood
     const blobTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
-      const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(0,0,0,0.75)"); r.addColorStop(0.5, "rgba(0,0,0,0.3)"); r.addColorStop(1, "rgba(0,0,0,0)");
+      const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(0,0,0,0.7)"); r.addColorStop(0.5, "rgba(0,0,0,0.28)"); r.addColorStop(1, "rgba(0,0,0,0)");
       g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new T3.CanvasTexture(c); })();
     const blob = (x, z, sx, sz, rot) => { const m = new T3.Mesh(new T3.PlaneGeometry(1, 1), new T3.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
-      m.rotation.set(-Math.PI / 2, 0, rot || 0); m.scale.set(sx, sz, 1); m.position.set(x, 0.0003, z); m.renderOrder = 1; root.add(m); };
-
-    // the shell, turned from an egg-shaped profile; the speaker faces local +Y
-    const prof = [[0, -0.0086], [0.0032, -0.0082], [0.0058, -0.0068], [0.0078, -0.0044], [0.0089, -0.0014], [0.0091, 0.0012],
-                  [0.0086, 0.0038], [0.0076, 0.0058], [0.0064, 0.0071], [0.0059, 0.0074], [0.0056, 0.0071], [0.0001, 0.0071]].map(([r, y]) => new T3.Vector2(r, y));
-    const shellG = new T3.LatheGeometry(prof, 64); shellG.scale(1, 1, 0.9); shellG.computeVertexNormals();
-    const grilleG = new T3.CircleGeometry(0.0056, 48); grilleG.rotateX(-Math.PI / 2); grilleG.scale(1, 1, 0.9);
-    const ventG = new T3.SphereGeometry(0.0011, 16, 8); ventG.scale(1, 0.5, 2.2);
-
-    // each bud: where it lies, which way its speaker faces, which way its stem points
-    const lay = [
-      { at: [-0.016, 0.006], face: [0.15, 0.85, 0.45], stem: [-0.75, -0.05, 0.55] },
-      { at: [0.02, -0.004], face: [0.15, 0.5, 0.85], stem: [0.85, -0.05, -0.35] }
-    ];
-    const emit = [], ends = [];
-    for (const L of lay) {
-      const bud = new T3.Group(); root.add(bud);
-      const head = new T3.Mesh(shellG, white); bud.add(head);
-      const grille = new T3.Mesh(grilleG, grilleM); grille.position.y = 0.0071; bud.add(grille);
-      const vent = new T3.Mesh(ventG, black); vent.position.set(0, -0.0035, 0.0076); bud.add(vent);
-      // the stem leaves the lower side of the shell and tapers to a rounded end
-      const dir = new T3.Vector3(0, -0.32, -1).normalize(), start = new T3.Vector3(0, -0.0022, -0.0062), len = 0.021;
-      const stemG = new T3.CylinderGeometry(0.0023, 0.0029, len, 32, 1, true); stemG.translate(0, len / 2, 0);
-      const stem = new T3.Mesh(stemG, white); stem.position.copy(start); stem.quaternion.setFromUnitVectors(new T3.Vector3(0, 1, 0), dir); bud.add(stem);
-      const end = start.clone().addScaledVector(dir, len);
-      const cap = new T3.Mesh(new T3.SphereGeometry(0.0023, 24, 12), white); cap.position.copy(end); bud.add(cap);
-      const reliefG = new T3.CylinderGeometry(0.0010, 0.0016, 0.006, 20); reliefG.translate(0, 0.003, 0);
-      const relief = new T3.Mesh(reliefG, white); relief.position.copy(end); relief.quaternion.copy(stem.quaternion); bud.add(relief);
-      const tipLocal = end.clone().addScaledVector(dir, 0.006);
-      // orient: local +Y to the speaker's facing, local stem direction to the stem's direction on the desk
-      const y = new T3.Vector3(...L.face).normalize(), s = new T3.Vector3(...L.stem).normalize();
-      const sLocal = dir.clone(); // stem direction in bud space
-      const basisFrom = new T3.Matrix4().makeBasis(new T3.Vector3().crossVectors(new T3.Vector3(0, 1, 0), sLocal).normalize(), new T3.Vector3(0, 1, 0), sLocal.clone().projectOnPlane(new T3.Vector3(0, 1, 0)).normalize());
-      const sPerp = s.clone().projectOnPlane(y).normalize();
-      const basisTo = new T3.Matrix4().makeBasis(new T3.Vector3().crossVectors(y, sPerp).normalize(), y, sPerp);
-      bud.quaternion.setFromRotationMatrix(basisTo.multiply(basisFrom.transpose()));
-      bud.position.set(L.at[0], 0, L.at[1]);
-      bud.updateMatrixWorld(true);
-      // rest it on the desk: lift until its lowest point touches the wood
-      const box = new T3.Box3().setFromObject(bud); bud.position.y -= box.min.y - 0.0001; bud.updateMatrixWorld(true);
-      emit.push(() => bud.localToWorld(new T3.Vector3(0, 0.0075, 0)));
-      ends.push({ tip: bud.localToWorld(tipLocal.clone()), dir: dir.clone().transformDirection(bud.matrixWorld) });
-      const c = bud.localToWorld(new T3.Vector3(0, 0, 0)), e = bud.localToWorld(end.clone());
-      blob(c.x, c.z, 0.026, 0.022); blob((c.x + e.x) / 2, (c.z + e.z) / 2, 0.012, 0.03, Math.atan2(e.x - c.x, e.z - c.z));
-    }
-
-    // the cable: from each stem down onto the desk, through the splitter and slider, away to the jack
-    const R = 0.00085, onDesk = R + 0.0002, split = new T3.Vector3(0.004, onDesk + 0.0012, -0.05);
-    const tube = (ptsArr) => { const curve = new T3.CatmullRomCurve3(ptsArr, false, "centripetal"); root.add(new T3.Mesh(new T3.TubeGeometry(curve, 160, R, 10, false), cableM)); };
-    ends.forEach((e, k) => {
-      const a = e.tip, b = a.clone().addScaledVector(e.dir, 0.006); b.y = Math.max(onDesk, b.y * 0.4);
-      const side = k ? 1 : -1;
-      const c = a.clone().addScaledVector(e.dir, 0.018); c.y = onDesk;
-      tube([a, b, c, new T3.Vector3(c.x + side * 0.008, onDesk, (c.z + split.z) / 2), new T3.Vector3(split.x + side * 0.004, onDesk, split.z + 0.014), new T3.Vector3(split.x + side * 0.0012, split.y, split.z + 0.006)]);
-    });
-    const tailPts = [new T3.Vector3(split.x, split.y, split.z - 0.006), new T3.Vector3(0.0, onDesk, -0.07), new T3.Vector3(-0.03, onDesk, -0.085), new T3.Vector3(-0.022, onDesk, -0.11),
-                     new T3.Vector3(0.02, onDesk, -0.115), new T3.Vector3(0.05, onDesk, -0.1), new T3.Vector3(0.068, onDesk + 0.0015, -0.112)];
-    tube(tailPts);
-    // splitter: a short pill
-    const pill = new T3.Group(); pill.position.copy(split); root.add(pill);
-    const pb = new T3.Mesh(new T3.CylinderGeometry(0.0021, 0.0021, 0.011, 24), white); pb.rotation.x = Math.PI / 2; pill.add(pb);
-    for (const z of [-0.0055, 0.0055]) { const sp = new T3.Mesh(new T3.SphereGeometry(0.0021, 20, 10), white); sp.position.z = z; pill.add(sp); }
-    blob(split.x, split.z, 0.008, 0.02);
-    // jack: white housing with a chamfer, steel plug with two insulating rings and a pointed tip
-    const jack = new T3.Group(); jack.position.set(0.068, 0.0034, -0.112); jack.rotation.y = -1.2; root.add(jack);
-    const jb = new T3.Mesh(new T3.CylinderGeometry(0.0031, 0.0034, 0.017, 32), white); jb.rotation.x = Math.PI / 2; jb.position.z = -0.0085; jack.add(jb);
-    const jr = new T3.Mesh(new T3.CylinderGeometry(0.0012, 0.0031, 0.004, 24), white); jr.rotation.x = Math.PI / 2; jr.position.z = 0.002; jack.add(jr);
-    const segs = [[0.0058, steel], [0.0007, black], [0.003, steel], [0.0007, black], [0.0028, steel]]; let z = -0.017;
-    for (const [l, m] of segs) { const c = new T3.Mesh(new T3.CylinderGeometry(0.00175, 0.00175, l, 24), m); c.rotation.x = Math.PI / 2; c.position.z = z - l / 2; jack.add(c); z -= l; }
-    const tipC = new T3.Mesh(new T3.ConeGeometry(0.00175, 0.0022, 24), steel); tipC.rotation.x = -Math.PI / 2; tipC.position.z = z - 0.0011; jack.add(tipC);
-    const jw = jack.localToWorld(new T3.Vector3(0, 0, -0.01)); blob(jw.x, jw.z, 0.012, 0.03, -1.2);
-    shadowed(root);
-    root.traverse(m => { if (m.isMesh && m.material.map === blobTex) { m.castShadow = false; m.receiveShadow = false; } });
+      m.rotation.set(-Math.PI / 2, 0, rot || 0); m.scale.set(sx, sz, 1); m.position.set(x, 0.0003, z); m.renderOrder = 1; root.add(m); return m; };
+    shadowed(root); lid.receiveShadow = false;   // its hollows face the lamp edge-on and would streak
+    blob(-0.012, -0.004, 0.066, 0.034, -0.18);
+    const lc = new T3.Box3().setFromObject(loose.g).getCenter(new T3.Vector3()); blob(lc.x, lc.z, 0.03, 0.022, -0.66);
     return { root, screen: null, emit };
   }
 
   const dimEnv = o => o.traverse(m => { if (m.isMesh && m.material && m.material.envMapIntensity !== undefined && m.material !== deskMat) m.material.envMapIntensity *= 0.6; });
   const devices = P.map((p, i) => {
-    const d = p.kind === "phone" ? buildPhone(p) : p.kind === "laptop" ? buildLaptop(p) : buildBuds(p);
+    // the earbuds take a few hundred ms to carve, so they come just after the first picture (below)
+    const d = p.kind === "phone" ? buildPhone(p) : p.kind === "laptop" ? buildLaptop(p) : { root: new T3.Group(), screen: null, emit: [], later: true };
     d.root.position.x = xs[i]; dimEnv(d.root); front.add(d.root); d.lastDraw = -1; return d;
   });
+  requestAnimationFrame(() => setTimeout(() => devices.forEach((d, i) => {
+    if (!d.later) return;
+    const b = buildBuds(P[i]);
+    dimEnv(b.root); d.root.add(b.root); d.emit.push(...b.emit); d.later = false; wake();
+  }), 30));
 
   // ---- studio monitors (back layer) ----
   const studio = new T3.Group(); back.add(studio);
