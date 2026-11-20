@@ -859,94 +859,42 @@
     const tubeM = glowM('#e4f2ff', 1.2), warmM = glowM('#ffd49a', 1.1);
     const lamps = [];   // tubes: { tb: the tube itself (only the failing ones, which go dark), h: halo, p: the pool on the floor, k: landing, pole }
 
-    /* ---- the stair tower: lane A (x < 0) climbs north, lane B climbs south; landings at both ends ---- */
+    /* ---- the ramp: one long straight run from the end of the trail up to the footbridge, in line with it, so you can run
+       (or ride) up it and over the bridge into the parking area without letting go of the key. A concrete deck with
+       yellow edges and non-slip strips, railings, lamps on the west rail; steel piers where it is high enough to walk
+       under, a solid concrete wedge at its foot where it is not. ---- */
     const PY = 0.075;   // the forecourt's paving: over the end of the trail, which runs on under it (the trail lies 6 cm up)
-    const ZN = 18.3, ZF0 = 19.8, ZF1 = 22.2, ZS = 23.7, XO = 1.76, XI = 1.64, LC = 0.88, RISE = H / 5, RUN = ZF1 - ZF0, STEPS = 8;
-    const BX = -0.3, BW = 1.45, BZ0 = 6, BE = BX + BW;   // the footbridge: centre and half-width (it lines up with lane A, which the last flight brings you up), its far end; BE its east edge
+    const ZN = 18.3, ZS = 23.7, XO = 1.76;   // ZN: the ramp's top, where the bridge begins; ZS: the forecourt's things are measured from it
+    const BX = -0.3, BW = 1.45, BZ0 = 6, BE = BX + BW;   // the footbridge (and the ramp): centre and half-width, its far end; BE its east edge
+    const RL = 44, RZ1 = ZN + RL, rampH = (lz) => (H * (RZ1 - lz)) / RL, SOLID = 2.4, ZSOL = RZ1 - (SOLID * RL) / H;   // its run, its foot, its height along it; solid below SOLID
+    const onRamp = (lx, lz) => Math.abs(lx - BX) < BW && lz > ZN - 0.05 && lz < RZ1;
     let crossed = false;   // OHH's canal runs under the bridge (open)
-    const flightY = (k, lz) => { const f = k % 2 ? (ZF1 - lz) / RUN : (lz - ZF0) / RUN; return (k - 1) * RISE + RISE * Math.max(0, Math.min(1, f + 0.5 / STEPS)); };   // flight k = 1..5, its walking line half a step up, on the treads
-    const towerY = (lx, lz, y) => {
-      const c = lz <= ZF0 ? [RISE, 3 * RISE, 5 * RISE] : lz >= ZF1 ? [2 * RISE, 4 * RISE] : lx < 0 ? [1, 3, 5].map((k) => flightY(k, lz)) : [2, 4].map((k) => flightY(k, lz));
-      let best = 0; const w = (y === undefined ? 0 : y) + 0.6;   // the floor under you or the tread just ahead: on the stairs the game keeps your feet on them, so a step's height or so is enough
-      for (const h of c) if (h <= w && h > best) best = h;
-      return best;
-    };
-    const inTower = (lx, lz) => Math.abs(lx) < XO && lz > ZN - 0.05 && lz < ZS + 0.05;
-    // a slab under it
-    bx(XO * 2 + 0.6, 0.1, ZS - ZN + 0.6, 0, 0.037, (ZN + ZS) / 2, concD);
-    // posts (taller at the north end, for the canopy over the top landing, and at the south for the sign), beams under each landing
-    for (const x of [-XO, 0, XO]) for (const z of [ZN, ZF0, ZF1, ZS]) {
-      if (x === 0 && z !== ZS && z !== ZN) continue;
-      const top = x === 0 && z === ZN ? H - 0.1 : z === ZN || z === ZS ? H + 2.55 : H + 1.25;   // (not across the way out onto the bridge)
-      bx(0.14, top, 0.14, x, top / 2, z, steel); bx(0.34, 0.03, 0.34, x, 0.1, z, steelD);
+    {
+      const ang = Math.atan2(H, RL), len = Math.hypot(RL, H), cs = Math.cos(ang), sn = Math.sin(ang), MZ = (ZN + RZ1) / 2;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(BW * 2, 0.4, len), conc); deck.position.set(BX, H / 2 - 0.2, MZ); deck.rotation.x = ang; deck.castShadow = deck.receiveShadow = true; wg.add(deck); p.pick(deck);
+      const along = (w, h, d, x, off, m, sh = false) => { const o = bx(w, h, d, x, H / 2 + off * cs, MZ + off * sn, m, sh); o.rotation.x = ang; return o; };   // laid along the slope, off above its surface
+      for (const sd of [-1, 1]) { along(0.1, 0.012, len, BX + sd * (BW - 0.12), 0.006, yellow); along(0.06, 0.06, len, BX + sd * BW, 1.1, yellow); along(0.04, 0.04, len, BX + sd * BW, 0.6, steel); along(0.16, 0.3, len, BX + sd * (BW + 0.02), -0.12, steelD, true); }
+      for (let z = ZN + 1.2; z < RZ1 - 0.8; z += 1.6) bx(BW * 2 - 0.5, 0.012, 0.14, BX, rampH(z) + 0.008, z, white, false).rotation.x = ang;   // non-slip strips
+      for (let z = ZN + 0.3; z < RZ1; z += 2.2) for (const sd of [-1, 1]) bx(0.06, 1.1, 0.06, BX + sd * BW, rampH(z) + 0.55, z, steel);
+      for (let k = 0, z = ZN + 4; z < RZ1 - 3; z += 11, k++) { const x = BX - BW, y = rampH(z); bx(0.08, 1.0, 0.08, x - 0.05, y + 1.6, z, steel); bx(0.24, 0.12, 0.24, x + 0.05, y + 2.12, z, steelD); bx(0.18, 0.04, 0.18, x + 0.05, y + 2.05, z, warmM, false); halo('#ffd49a', 1.4, x + 0.05, y + 2.0, z, 0.45); }
+      // piers where it is high enough to walk under, a cross beam under the deck on each
+      for (let z = ZN + 3.5; z < ZSOL - 0.5; z += 6.5) { const h = rampH(z) - 0.45; for (const sd of [-1, 1]) { bx(0.3, h, 0.3, BX + sd * (BW - 0.3), h / 2, z, steelD); p.addCircle(BX + sd * (BW - 0.3), z, 0.22, -1e9, h); } bx(BW * 2, 0.25, 0.3, BX, h - 0.05, z, steelD); }
+      // the solid foot: a concrete wedge from the ground up under the deck
+      { const sh = new THREE.Shape(); sh.moveTo(ZSOL, 0); sh.lineTo(RZ1 - (0.4 * RL) / H, 0); sh.lineTo(ZSOL, SOLID - 0.4); sh.lineTo(ZSOL, 0);
+        const geo = new THREE.ExtrudeGeometry(sh, { depth: BW * 2, bevelEnabled: false }); geo.rotateY(-PI / 2); geo.translate(BX + BW, 0, 0);
+        const w = new THREE.Mesh(geo, concD); w.castShadow = w.receiveShadow = true; wg.add(w); }
+      p.addBox(BX, ZSOL, BW, 0.08, -1e9, SOLID - 1.2);   // its face
+      const N = 22;
+      for (let k = 0; k < N; k++) { const z0 = ZN + (RL * k) / N, z1 = ZN + (RL * (k + 1)) / N, zc = (z0 + z1) / 2, hz = (z1 - z0) / 2;
+        for (const sd of [-1, 1]) {
+          p.addBox(BX + sd * (BW + 0.03), zc, 0.06, hz, rampH(z1) - 1.0, 1e9);   // the railings, for someone up on it
+          if (z0 >= ZSOL - 0.1) p.addBox(BX + sd * (BW + 0.05), zc, 0.08, hz, -1e9, rampH(z1) - 1.2);   // the wedge's sides, for someone beside it
+        } }
+      plate('SHOT PA  ↑\n歩行者スロープ  RAMP', 1.5, 0.42, BX, 1.6, RZ1 + 0.4, 0, { w: 512, h: 144, color: '#ffffff', bg: '#1f55b8', font: `700 52px ${JP}`, font2: `700 34px ${JP}`, lit: 0.7 });
+      bx(0.08, 1.4, 0.08, BX - 0.6, 0.7, RZ1 + 0.42, steel); bx(0.08, 1.4, 0.08, BX + 0.6, 0.7, RZ1 + 0.42, steel);
     }
-    for (let k = 1; k <= 5; k++) { const L = k * RISE, zc = k % 2 ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2; bx(XO * 2, 0.16, 0.1, 0, L - 0.1, k % 2 ? ZN : ZS, steel); bx(XO * 2, 0.16, 0.1, 0, L - 0.1, k % 2 ? ZF0 : ZF1, steel); for (const x of [-XO, XO]) bx(0.1, 0.16, ZF0 - ZN, x, L - 0.1, zc, steel); }
-    // landings and treads of grating, yellow nosings, stringers and handrails
-    const landM = grateM((XI * 2) / 0.32, (ZF0 - ZN) / 0.32), land = [], treadL = [], nose = [];
-    for (let k = 1; k <= 5; k++) land.push([0, k * RISE - 0.015, k % 2 ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2]);
-    inst(new THREE.PlaneGeometry(XI * 2, ZF0 - ZN).rotateX(-PI / 2), landM, land, false);
-    for (let k = 1; k <= 5; k++) {
-      const north = k % 2 === 1, x = north ? -LC : LC, base = (k - 1) * RISE, dir = north ? -1 : 1, z0 = north ? ZF1 : ZF0;
-      for (let s = 0; s < STEPS; s++) { const y = base + (s + 1) * (RISE / STEPS); treadL.push([x, y - 0.015, z0 + dir * (s + 0.5) * (RUN / STEPS)]); nose.push([x, y - 0.02, z0 + dir * (s + 0.04) * (RUN / STEPS)]); }
-      const len = Math.hypot(RUN, RISE), ang = Math.atan2(RISE, RUN) * (north ? 1 : -1);
-      for (const sx of [x - 0.74, x + 0.74]) { bx(0.06, 0.26, len, sx, base + RISE / 2 - 0.12, (ZF0 + ZF1) / 2, steelD).rotation.x = ang; bx(0.05, 0.05, len, sx + (sx < x ? 0.02 : -0.02), base + RISE / 2 + 0.92, (ZF0 + ZF1) / 2, yellow, false).rotation.x = ang; }
-    }
-    inst(new THREE.PlaneGeometry(XI - 0.12, RUN / STEPS).rotateX(-PI / 2), grateM((XI - 0.12) / 0.32, RUN / STEPS / 0.32), treadL, false);
-    inst(new THREE.BoxGeometry(XI - 0.12, 0.035, 0.045), yellow, nose, false);
-    // rails round each landing's open sides (along the outer walls; across the top's stairwell, which is open below)
-    for (let k = 1; k <= 5; k++) { const L = k * RISE, zc = k % 2 ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2; for (const x of [-XI + 0.04, XI - 0.04]) bx(0.05, 0.05, ZF0 - ZN, x, L + 0.92, zc, yellow, false); }
-    bx(XI - 0.1, 0.05, 0.05, LC, H + 0.98, ZF0, yellow, false); bx(XI - 0.1, 0.05, 0.05, LC, H + 0.5, ZF0, yellow, false);
-    // the cage: mesh on all four faces up to the top rail, a partition between the lanes, a door at the foot of lane A,
-    // the opening at the top onto the footbridge; a block-walled store under lane B's first flight, sprayed outside
-    const CT = H + 1.3;
-    for (const sd of [-1, 1]) panel(ZS - ZN, CT - 0.1, sd * (XO + 0.04), CT / 2 + 0.05, (ZN + ZS) / 2, PI / 2);
-    panel(XO * 2, H - 0.05, 0, (H - 0.05) / 2 + 0.05, ZN - 0.04, 0);
-    panel(XO - BE, CT - H, (XO + BE) / 2, H + (CT - H) / 2, ZN - 0.04, 0);
-    panel(XO + 0.06, CT - 2.35, -(XO - 0.06) / 2, 2.35 + (CT - 2.35) / 2, ZS + 0.04, 0);
-    panel(XO, CT - 2.5, XO / 2, 2.5 + (CT - 2.5) / 2, ZS + 0.04, 0);
-    panel(RUN, CT - 0.1, 0, CT / 2 + 0.05, (ZF0 + ZF1) / 2, PI / 2, '#6d7973', 0.12);
-    { const blk = E.mat('#9a968e', { map: E.tex('concrete', 0.6, 0.9), rough: 0.95 });
-      bx(XO - 0.08, 2.5, 0.16, XO / 2 + 0.04, 1.25, ZS - 0.02, blk); bx(0.16, 2.5, ZS - ZF1, 0.12, 1.25, (ZF1 + ZS) / 2, blk);
-      bx(0.04, 1.95, 0.82, 0.03, 0.98, (ZF1 + ZS) / 2, E.mat('#5a6470', { rough: 0.5, metal: 0.4 }), false);
-      plate('倉庫\nSTORE', 0.5, 0.26, 0.005, 2.2, (ZF1 + ZS) / 2, -PI / 2, { w: 256, h: 128, color: '#1a1a1c', bg: '#e8e4d8', font: `700 48px ${JP}` });   // facing you as you come in
-      decal(tag('SHOT', ['#ffb43a', '#ff5a2a'], { size: 150 }), 1.55, 0.78, XO / 2 + 0.04, 1.15, ZS + 0.07, 0); }
-    // the door, swung open against the cage; its frame, a lamp over it, plates
-    { const fx = [-XI, -0.12]; for (const x of fx) bx(0.08, 2.3, 0.08, x, 1.15, ZS + 0.05, steel); bx(XI, 0.1, 0.1, -LC, 2.3, ZS + 0.05, steel);
-      const LA = -PI / 2 - 0.12, hx = -XI - 0.02, hz = ZS + 0.06, onLeaf = (u) => [hx + u * Math.cos(LA), hz - u * Math.sin(LA)];   // the leaf, swung about its hinge
-      for (const [bw, bh, u, y] of [[1.46, 0.06, 0.73, 0.08], [1.46, 0.06, 0.73, 2.12], [0.06, 2.1, 0.03, 1.1], [0.06, 2.1, 1.43, 1.1], [1.46, 0.04, 0.73, 1.1]]) { const [x, z] = onLeaf(u); addM(new THREE.BoxGeometry(bw, bh, 0.05), steel, x, y, z, LA); }
-      { const [x, z] = onLeaf(0.73); addM(cells(new THREE.PlaneGeometry(1.4, 2.0), 1.4, 2.0, 0.14), meshM('#7f8c86'), x, 1.1, z, LA, false); }
-      p.addBox(-XI - 0.15, ZS + 0.78, 0.06, 0.74);
-      bx(0.34, 0.2, 0.14, -LC, 2.6, ZS + 0.13, steelD); bx(0.26, 0.12, 0.03, -LC, 2.56, ZS + 0.21, warmM, false); halo('#ffd49a', 1.6, -LC, 2.55, ZS + 0.32, 0.5); pool('#ffc98a', 4.5, -LC, PY + 0.012, ZS + 1.6, 0.22);
-      plate('SHOT PA  ↑\n歩行者用階段  STAIRS', 1.5, 0.42, -LC, 2.95, ZS + 0.1, 0, { w: 512, h: 144, color: '#ffffff', bg: '#1f55b8', font: `700 52px ${JP}`, font2: `700 34px ${JP}`, lit: 0.7 });
-      plate('足元注意\nWATCH YOUR STEP', 0.5, 0.36, -0.06 + 0.32, 1.45, ZS + 0.1, 0, { w: 256, h: 184, color: '#141414', bg: '#f2c40c', font: `900 46px ${JP}`, font2: `700 24px ${JP}` }); }
-    // landing numbers inside (where you arrive on each), with the height; the top one points across the bridge
-    for (let k = 1; k <= 5; k++) {
-      const L = k * RISE, north = k % 2 === 1, z = north ? ZN + 0.05 : ZS - 0.12, x = north ? -LC : LC;
-      plate(k < 5 ? String(k) : 'PA', k < 5 ? 0.46 : 0.6, 0.46, x + (north ? -0.2 : 0.2), L + 1.55, z, north ? 0 : PI, { w: 192, h: 192, color: '#f4f1e6', bg: '#1e4a36', font: `900 ${k < 5 ? 150 : 100}px ${JP}`, lit: 0.7 });
-      plate(`+${L.toFixed(1)} m`, 0.46, 0.13, x + (north ? -0.2 : 0.2), L + 1.22, z, north ? 0 : PI, { w: 192, h: 56, color: '#f4f1e6', bg: '#1e4a36', font: `700 40px ${JP}`, lit: 0.7 });
-      // a fluorescent tube over each landing, on the end wall; the light it throws on the grating
-      const ly = k < 5 ? L + 2.25 : H + 2.3, lz = north ? ZN + 0.1 : ZS - 0.15;
-      const tx = north ? 0.75 : -0.3; bx(0.78, 0.07, 0.11, tx, ly, lz, white); const tg = new THREE.BoxGeometry(0.7, 0.035, 0.04), tb = k === 3 ? add(tg, glowM('#e4f2ff', 1.2, true), tx, ly - 0.05, lz + (north ? 0.03 : -0.03), 0, false) : (addM(tg, tubeM, tx, ly - 0.05, lz + (north ? 0.03 : -0.03), 0, false), null);
-      lamps.push({ tb, h: k === 3 || k === 5 ? halo('#dff0ff', 1.5, tx, ly - 0.08, lz + (north ? 0.12 : -0.12), 0.42) : null, p: pool('#d6ecff', 3.2, 0, L + 0.03, north ? (ZN + ZF0) / 2 : (ZF1 + ZS) / 2, 0.18, k === 3), k });
-    }
-    // the canopy over the top landing and the start of the bridge, and the tower's sign, seen all the way down the trail
-    bx(XO * 2 + 0.5, 0.08, 3.0, 0, H + 2.62, ZN + 0.3, E.mat('#4c5552', { rough: 0.45, metal: 0.5 }));
-    bx(XO * 2 + 0.2, 1.0, 0.1, 0, H + 1.95, ZS + 0.02, steelD);
-    plate('SHOT PA\n歩行者用階段  高速バスのりば', XO * 2, 0.92, 0, H + 1.95, ZS + 0.09, 0, { w: 768, h: 200, color: '#ffffff', bg: '#1f55b8', font: `700 92px ${JP}`, font2: `700 40px ${JP}`, lit: 0.7 });
-    p.addBox(0, ZS + 0.1, 1.85, 0.06, H + 0.35, 1e9);   // no one's feet are ever that high here, so it stops only the camera: up the last flight it stays in the cage, in front of the sign, instead of behind it
-    // the exit sign at the top, green and glowing, over the way out onto the bridge
-    { const t = cvT(256, 96, (c, w, h) => { c.fillStyle = '#18a050'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffffff'; c.font = `700 34px ${JP}`; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText('出口 → PA', 84, h / 2);
-        c.fillRect(14, 14, 54, 68); c.fillStyle = '#18a050'; c.fillRect(20, 20, 42, 56); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(41, 30, 6, 0, 7); c.fill(); c.lineWidth = 6; c.strokeStyle = '#ffffff'; c.lineCap = 'round'; c.beginPath(); c.moveTo(39, 38); c.lineTo(35, 56); c.lineTo(46, 72); c.moveTo(35, 56); c.lineTo(26, 72); c.moveTo(38, 44); c.lineTo(50, 50); c.moveTo(38, 44); c.lineTo(28, 50); c.stroke(); });
-      const m = new THREE.MeshBasicMaterial({ map: t }); m.userData.lin = true; add(new THREE.PlaneGeometry(0.8, 0.3), m, BX - 0.3, H + 2.25, ZN + 0.12, 0, false); }
-    // tower colliders, in short pieces (never long enough to pull the camera in: the cage is see-through)
-    for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) p.addBox(sd * XO, ZN + (ZS - ZN) * (k + 0.5) / 3, 0.08, (ZS - ZN) / 6);
-    p.addBox((XO + BE) / 2, ZN - 0.05, (XO - BE) / 2 + 0.08, 0.07);
-    p.addBox(BX, ZN - 0.05, BW, 0.07, -1e9, H - 1.4);             // the end wall below the top: the bridge leaves above it
-    p.addBox(-XO / 2, ZS + 0.05, XO / 2 + 0.06, 0.07, 1.9, 1e9);   // over the door: someone on the landings stays in
-    p.addBox(XO / 2, ZS + 0.05, XO / 2 + 0.06, 0.07);
-    p.addBox(0, (ZF0 + ZF1) / 2, 0.1, RUN / 2);                    // the partition between the flights
-    p.addBox(LC, ZF0, XI / 2 - 0.06, 0.06, H - 1.0, 1e9);          // the rail across the top of lane B's well
-    p.addBox(LC, (ZF0 + ZS) / 2, XI / 2 - 0.06, (ZS - ZF0) / 2, -1e9, 1.0);   // the store, down at the foot of lane B
+    // the bridge's end wall below its top (where the ramp meets it), so nobody walks in under there from the canal side
+    p.addBox(BX, ZN - 0.05, BW, 0.07, -1e9, H - 1.4);
 
     /* ---- the footbridge across to the walkway, and the walkway's end ---- */
     // its deck is grating on two edge channels and a few cross members: from under it (where the camera often is, behind
@@ -975,7 +923,7 @@
       for (const [z0, z1, u] of [[FZ0, FZ1, true], [FZ1, FZ2, false]]) { U = u; const pv = E.plane(9.6, z1 - z0, pm); pv.position.set(-2.2, PY, (z0 + z1) / 2); (u ? ug : wg).add(pv); if (!u) p.pick(pv); for (const x of [-7, 2.6]) bx(0.18, 0.13, z1 - z0, x, 0.065, (z0 + z1) / 2, conc); }
       U = false; }
     // the gate: two posts, a lit sign across, the mesh leaves folded back open
-    { const GZ = ZS + 6.2, GX = 2.15;
+    { const GZ = RZ1 + 3.4, GX = 2.15;
       for (const sd of [-1, 1]) { bx(0.16, 3.4, 0.16, sd * GX, 1.7, GZ, steel); p.addCircle(sd * GX, GZ, 0.16); panel(1.9, 1.6, sd * (GX + 0.12), 0.95, GZ - 0.95, PI / 2); bx(0.05, 1.6, 0.05, sd * (GX + 0.12), 0.95, GZ - 1.9, steel); bx(0.05, 0.05, 1.9, sd * (GX + 0.12), 1.75, GZ - 0.95, steel); p.addBox(sd * (GX + 0.12), GZ - 0.95, 0.05, 0.95); }
       bx(GX * 2 + 0.3, 0.14, 0.14, 0, 3.25, GZ, steel);
       bx(3.6, 0.95, 0.08, 0, 3.85, GZ, steelD);
@@ -1108,7 +1056,7 @@
         plate(`SHOT\n${12 + i}`, 0.18, 0.3, PX, 2.1, z + 0.17, 0, { w: 112, h: 186, color: '#1a1a1c', bg: '#f0eee6', font: `700 40px ${JP}` });
         if (i % 2 === 0) { const m = E.mat('#ffffff', { map: tiger, rough: 0.6 }); m.map.repeat.set(1, 2); addM(new THREE.CylinderGeometry(0.19, 0.2, 1.8, 10, 1, true), m, PX, 0.9, z); }
         p.addCircle(PX, z, 0.2);
-        const dist = Math.round((z - ZS) / 5) * 5;
+        const dist = Math.round(z / 5) * 5;   // to the parking area
         if (i < 3) plate(`SHOT PA  ↑  ${dist} m\n歩行者通路`, 0.9, 0.46, PX + 0.12, 2.85, z + 0.22, 0.25, { w: 384, h: 196, color: '#ffffff', bg: '#1f55b8', font: `700 58px ${JP}`, font2: `700 38px ${JP}`, lit: 0.7 });
       });
       inst(new THREE.CylinderGeometry(0.05, 0.07, 0.16, 8), white, ins, false);
@@ -1117,38 +1065,34 @@
       const wire = (a, b, sag, th = 0.022) => { const n = 12, pts = []; for (let k = 0; k <= n; k++) { const t = k / n; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t]); }
         for (const [ox, oy] of [[th, 0], [0, th]]) { const s = wp.length / 3; pts.forEach(([x, y, z]) => wp.push(x - ox, y - oy, z, x + ox, y + oy, z)); for (let k = 0; k < n; k++) wi.push(s + k * 2, s + k * 2 + 2, s + k * 2 + 1, s + k * 2 + 1, s + k * 2 + 2, s + k * 2 + 3); } };
       for (let i = 0; i < PZ.length - 1; i++) { for (const dx of [-0.7, 0, 0.7]) wire([PX + dx, 8.08, PZ[i]], [PX + dx, 8.08, PZ[i + 1]], 0.42 + dx * 0.05); wire([PX + 0.45, 6.9, PZ[i]], [PX + 0.45, 6.9, PZ[i + 1]], 0.36); }
-      wire([PX + 0.7, 8.08, PZ[PZ.length - 1]], [-XO, H + 2.4, ZS], 0.3); wire([PX + 0.45, 6.9, PZ[PZ.length - 1]], [-XO, H + 1.1, ZS], 0.25);
       const wgeo = new THREE.BufferGeometry(); wgeo.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wgeo.setIndex(wi); wgeo.computeVertexNormals();
       const wm = E.mat('#1a1a1c', { rough: 0.6 }, true); wm.side = THREE.DoubleSide; wg.add(new THREE.Mesh(wgeo, wm)); }
 
     flushPlates(); flushM();
     // [lx, lz, the level it is at, tight]: the level, so the auto-walk starts from the landing you are on and not the one
     // above or below it, and a warp lands up on the bridge
-    const LN = (ZN + ZF0) / 2, LS = (ZF1 + ZS) / 2;   // the landings' middles, north and south
-    const ROUTE = [[0, ZS + 8, 0], [-0.2, ZS + 6.6, 0], [-0.45, ZS + 5.2, 0, 1], [-0.7, ZS + 3.8, 0, 1], [-LC, ZS + 2.4, 0, 1], [-LC, ZS + 0.9, 0, 1], [-LC, LN, RISE, 1], [LC, LN, RISE, 1], [LC, LS, 2 * RISE, 1], [-LC, LS, 2 * RISE, 1], [-LC, LN, 3 * RISE, 1], [LC, LN, 3 * RISE, 1], [LC, LS, 4 * RISE, 1], [-LC, LS, 4 * RISE, 1], [-LC, LN, H, 1], [-0.5, ZN + 0.2, H, 1],
-      [-0.4, ZN - 1, H], [-0.35, ZN - 3.7, H], [-0.3, ZN - 6.4, H], [-0.25, ZN - 9.1, H], [-0.15, BZ0 + 0.5, H], [0, 4.5, H], [0, 3, H], [0, 1.5, H], [0, 0, H]];   // the last nine are the bridge and walkway: a warp to the place lands at the top of the stairs
+    const ROUTE = [[0, RZ1 + 4, 0], ...Array.from({ length: 23 }, (_, k) => { const z = RZ1 + 0.4 - ((RZ1 - ZN) * k) / 22; return [BX, z, Math.max(0.07, rampH(z))]; }),   // a point every 2 m up the ramp (the hills are kept off the path point by point)
+      [-0.4, ZN - 1, H], [-0.35, ZN - 3.7, H], [-0.3, ZN - 6.4, H], [-0.25, ZN - 9.1, H], [-0.15, BZ0 + 0.5, H], [0, 4.5, H], [0, 3, H], [0, 1.5, H], [0, 0, H]];   // the last nine are the bridge and walkway: a warp to the place lands at the top of the ramp
     return {
       group: wg, route: ROUTE,
       // someone on the ground under the bridge or beside the tower, sent off by the map, is led to the door first: down the
       // tower's west side past the open door leaf (east of it a tree of the funfair's stands too close), or from its east
       // side round its south-east corner. Under the bridge is OHH's canal where it runs there (crossed): its towpath has its own way.
-      lead: (lx, lz, y) => {
-        if (!(y < 1.5) || inTower(lx, lz) || lx < -7.6 || lx > 3.6 || lz < BZ0 + 0.2) return null;
-        if (lx > 1.9 && lz > ZN - 0.3) return lz < ZS + 0.6 ? [[2.45, ZS + 0.85]] : null;
-        if (lz > ZS + (lx < -1.9 ? 2.2 : 0) || (crossed && lz < ZN)) return null;
-        return [...(lz < BZ0 + 3.4 ? [[lx, BZ0 + 3.4]] : []), [-2.6, Math.max(lz, BZ0 + 3.4)], [-2.6, ZS + 2.3]];   // (from beside the cones and the barrier under the bridge, out past them first)
+      lead: (lx, lz, y) => {   // someone down beside or under the ramp, sent off by the map, goes round to its foot first (east of it, clear of the poles)
+        if (!(y < 1.5) || lx < -7.6 || lx > 3.6 || lz < BZ0 + 0.2 || lz > RZ1 + 0.5 || (crossed && lz < ZN)) return null;
+        return [[1.7, Math.max(lz, ZN + 1)], [1.7, RZ1 + 1.2], [BX, RZ1 + 1.2]];
       },
       // OHH's canal crosses here, under the bridge, between za and zb on lx = 0 (it stands its piers there): the paving,
       // the fence, the cones and the barrier down there make way for its cutting
       open(za, zb) { crossed = true; wg.remove(ug); uCols.forEach((b) => (b.y0 = 1e9)); },
-      BZ0, ZN, ZS,
+      BZ0, ZN, ZS, RZ1,
       ground: (lx, lz, y) => {
-        if (inTower(lx, lz)) return towerY(lx, lz, y);
+        if (onRamp(lx, lz)) { const h = rampH(lz); if (y === undefined || y > h - 1.2) return h; }   // the ramp, for someone on it (under it, the ground)
         if (Math.abs(lx - BX) < BW && lz >= BZ0 - 0.1 && lz <= ZN && (y === undefined || y > H - 1.4)) return H;   // the bridge, for someone up on it
         return bankY(lx, lz);
       },
-      stairs: inTower,
-      blocks: (lx, lz) => (lx > CX - 13 && lx < CX + 0.6 && lz > CZ0 - 1 && lz < CZ1 + 1) || (lx > -8.5 && lx < -2.4 && lz > 31.5 && lz < 37.5) || (lx > -11 && lx < 3 && lz > 3 && lz < ZS + 10),
+      stairs: () => false,   // no stairs: the ramp can be run and ridden
+      blocks: (lx, lz) => (Math.abs(lx - BX) < BW + 2 && lz > ZN && lz < RZ1 + 4) || (lx > CX - 13 && lx < CX + 0.6 && lz > CZ0 - 1 && lz < CZ1 + 1) || (lx > -8.5 && lx < -2.4 && lz > 31.5 && lz < 37.5) || (lx > -11 && lx < 3 && lz > 3 && lz < ZS + 10),
       update(t) {
         // the tube on the third landing is failing: dark stutters every few seconds; a lamp out on the trail does the same, slower
         const fl = (t % 6.3 < 1.1 && Math.sin(t * 53) * Math.sin(t * 17) > -0.1) ? 0.12 : 1, fl2 = (t % 9.7 < 0.6 && Math.sin(t * 41) > 0) ? 0.2 : 1;
@@ -1179,8 +1123,8 @@
       // side of it under the deck (between z0 and z1 on lx = 0, hw either side, at y(lz)), keeps the camera under it, and
       // calls open() so that what stood on the ground there makes way
       SW.Ramp = { place: p, hw: 1.8, z0: way.BZ0, z1: way.ZN, y: () => H + 0.16, open: way.open };   // (y: a pier stops 0.5 under it, so up against the bridge's channels)
-      // the game laid the path from the trail's end straight on to the viewpoint; from the forecourt it goes up the flights instead
-      p.afterSpill = () => { const keep = p.path.filter((q) => p.local(q.x, q.z).z > way.ZS + 9.1); p.path.length = 0; p.path.push(...keep, ...way.route.map(([lx, lz, y, tight]) => Object.assign(p.toWorld(lx, lz), { y }, tight ? { tight: true } : {}))); };
+      // the game laid the path from the trail's end straight on to the viewpoint; from the ramp's foot it goes up the ramp and over the bridge instead
+      p.afterSpill = () => { const keep = p.path.filter((q) => p.local(q.x, q.z).z > way.RZ1 + 4); p.path.length = 0; p.path.push(...keep, ...way.route.map(([lx, lz, y, tight]) => Object.assign(p.toWorld(lx, lz), { y }, tight ? { tight: true } : {}))); };
       p.addBox(-3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(3.7, 6.2, 0.6, 0.2, -1e9, H - 2); p.addBox(-2.75, 2.7, 0.2, 3.2); p.addBox(2.75, 2.7, 0.2, 3.2);   // the walkway's sides
 
       // The expressway. In the world it is a stretch of the ring road (drawn by the game); this straight copy is
@@ -1249,7 +1193,7 @@
         c.visible = false; g.add(c); cars.push(c);
       }
 
-      p.map = [{ t: 'rect', x: 0, z: ZC, w: HALF * 2, h: WD, c: '#3a3840' }, { t: 'rect', x: -0.3, z: (way.BZ0 + way.ZN) / 2, w: 2.9, h: way.ZN - way.BZ0, c: '#6e6a68' }, { t: 'rect', x: 0, z: (way.ZN + way.ZS) / 2, w: 3.6, h: way.ZS - way.ZN, c: '#8a8680' }];   // the bridge, the stair tower
+      p.map = [{ t: 'rect', x: 0, z: ZC, w: HALF * 2, h: WD, c: '#3a3840' }, { t: 'rect', x: -0.3, z: (way.BZ0 + way.ZN) / 2, w: 2.9, h: way.ZN - way.BZ0, c: '#6e6a68' }, { t: 'rect', x: -0.3, z: (way.ZN + way.RZ1) / 2, w: 2.9, h: way.RZ1 - way.ZN, c: '#8a8680' }];   // the bridge, the ramp
       p.grade = {
         top: '#07050e', bottom: '#2b1730', fog: '#1d1424', near: 18, far: 125,
         sun: '#ffb36b', sunInt: 0.3, hemi: 0.3, sunDir: [-0.3, 0.7, -0.4],
