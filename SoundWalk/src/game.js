@@ -777,7 +777,7 @@
     let h = hillAt(x, z);
     if (y !== undefined) for (const p of places) if (p.bore) { const l = p.local(x, z), b = p.bore(l.x, l.z, y); if (b != null) { h = b; break; } }   // down in a tunnel through the hills: its floor, not the hill over it
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
-    if (street) h = Math.max(h, street.ground(x, z));
+    if (street) h = Math.max(h, street.ground(x, z, y));
     return h;
   }
 
@@ -1157,6 +1157,11 @@
   }
 
   street = SW.Street ? SW.Street.make(ring, places) : null;
+  if (street) {   // the ground roads cut through the crater wall to the car park: whatever stood across their way at ground level goes
+    const inWay = (o) => (o.y0 === undefined || o.y0 < 2) && street.lines.some((L) => L.y < 2 && Math.hypot(L.x - o.x, L.z - o.z) < L.hw + 0.6);
+    for (let i = boxes.length - 1; i >= 0; i--) if (inWay(boxes[i])) boxes.splice(i, 1);
+    for (let i = circles.length - 1; i >= 0; i--) if (inWay(circles[i])) circles.splice(i, 1);
+  }
 
   /* ================= ring road ================= */
   const ringView = SW.Ring.build(ring, E, {
@@ -1756,6 +1761,18 @@
   // The street under the viaduct and its shops (street.js). At SEASIDE MOTORS' desk you choose the car that waits for you
   // at the beach lay-by: each go brings the next model round (swapping it with whichever bay had it) and onto the turntable.
   streetView = street ? SW.Street.build(street, E, { scene, boxes, circles, interact, pick: (m) => { m.userData.ground = true; pick.push(m); } }) : null;
+  // its ground roads join the ones you can drive (after everything built from the ring road's own: piers, decks, the hills
+  // under them), and its two parking areas (the garage's east bay, the car park's ground floor) are set up like the others
+  if (street) {
+    ring.roads.push(...street.roads);
+    for (const pa of street.pas) {
+      ring.pas.push(pa); pa.place = places.find((p) => p.song.scene === pa.placeId);
+      pa.box = { x: 0, z: 0, hx: 1, hz: 2, c: 1, s: 0, y0: 1e9, y1: 1e9 }; boxes.push(pa.box);
+      pa.ia = { kind: 'car', pa, x: 0, z: 0, sx: 0, sz: 0, r: 3.4, mark: 0, y0: pa.y - 1.2, y1: pa.y + 2.5 }; interact.push(pa.ia);
+      pa.out = { kind: 'exit', pa, x: 0, z: 0, mark: 0 };
+      parkAt(pa, freeCar(pa), pa.slot);
+    }
+  }
   const beachPA = ring.pas.find((q) => q.id === 'beach');
   if (streetView && beachPA) streetView.showCar(garage.indexOf(beachPA.car));
   function pickCar() {
@@ -1816,7 +1833,7 @@
     if (brake) d.v -= Math.sign(d.v) * Math.min(Math.abs(d.v), (idle ? 14 : 44) * dt);
     d.st += (iv.s - d.st) * Math.min(1, dt * 8);
     const R0 = d.road || ring;
-    R0.proj(d.x, d.z, d.hints[R0.id] ?? -1, rp);
+    R0.proj(d.x, d.z, d.hints[R0.id] ?? -1, rp, d.y);
     let tau0 = Math.atan2(rp.tx, rp.tz);
     d.yaw -= d.st * (d.v / (5.5 + (d.v * d.v) / 34)) * dt;   // yaw grows to the left, so steering right lowers it
     d.x += Math.sin(d.yaw) * d.v * dt; d.z += Math.cos(d.yaw) * d.v * dt;
@@ -1829,7 +1846,7 @@
     };
     let best = null, bestK = 1e9;
     for (const Rd of ring.roads) {
-      const o = rqs[Rd.id] || (rqs[Rd.id] = {}); Rd.proj(d.x, d.z, d.hints[Rd.id] ?? -1, o); d.hints[Rd.id] = o.i;
+      const o = rqs[Rd.id] || (rqs[Rd.id] = {}); Rd.proj(d.x, d.z, d.hints[Rd.id] ?? -1, o, d.y); d.hints[Rd.id] = o.i;
       if (o.off || Math.abs(o.y - d.y) > 3) continue;
       if (Rd !== R0 && (Rd.oneWay || Rd.oneLane) && Math.cos(d.yaw + (d.v < 0 ? Math.PI : 0) - Math.atan2(o.tx, o.tz)) < -0.2) continue;   // never onto a one-way ramp against its traffic
       const [lo2, hi2] = band(o); if (o.d < lo2 || o.d > hi2) continue;

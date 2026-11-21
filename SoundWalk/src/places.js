@@ -1744,7 +1744,7 @@
         for (const L of [LV[1], LV[3]]) box(midW, 1.0, 0.2, (CP.wl + CP.el) / 2, L + 0.5, CP.s - 0.1, concD);   // decks 1 and 3's south ends
         // colliders: the outside (all the way up, open on the south at the ground), the decks' ends, the ramps' rails
         const FYw = (L) => FY + L;
-        for (const [x, z, hx, hz, y0] of [[CP.x0, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [CP.x1, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [xm, CP.z0, W / 2, 0.15, -1e9], [xm, CP.z1, W / 2, 0.15, FY + 1.6]]) p.addBox(x, z, hx, hz, y0, 1e9);
+        for (const [x, z, hx, hz, y0] of [[CP.x0, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [CP.x1, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [(CP.x0 + CP.wl) / 2, CP.z0, (CP.wl - CP.x0) / 2, 0.15, -1e9], [(CP.el + CP.x1) / 2, CP.z0, (CP.x1 - CP.el) / 2, 0.15, -1e9], [(CP.wl + CP.el) / 2, CP.z0, (CP.el - CP.wl) / 2, 0.15, FY + 2.6], [xm, CP.z1, W / 2, 0.15, FY + 1.6]]) p.addBox(x, z, hx, hz, y0, 1e9);   // (the north face open at the ground between the lanes: the way in by car, street.js)
         p.addBox((CP.wl + CP.el) / 2, CP.n, midW / 2, 0.12, FYw(LV[2]) - 0.6, FYw(LV[2]) + 1.6); for (const L of [LV[1], LV[3]]) p.addBox((CP.wl + CP.el) / 2, CP.s, midW / 2, 0.12, FYw(L) - 0.6, FYw(L) + 1.6);
         for (let k = 0; k < 7; k++) { const za = CP.s - (Lz * k) / 7, zb = CP.s - (Lz * (k + 1)) / 7, zc = (za + zb) / 2, ta = k / 7, tb = (k + 1) / 7;
           for (const [x, y0, up] of [[CP.wl, LV[0], true], [CP.wl, LV[2], true], [CP.el, LV[1], false]]) { const ya = y0 + LV[1] * (up ? ta : 1 - ta), yb = y0 + LV[1] * (up ? tb : 1 - tb); p.addBox(x, zc, 0.1, Lz / 14, FY + Math.min(ya, yb) - 0.4, FY + Math.max(ya, yb) + 1.3); } }
@@ -1752,8 +1752,8 @@
         // lights under the decks and on the roof; cars on every level
         for (const L of [LV[1], LV[2], LV[3]]) for (const z of [-42, -38, -34]) box(0.12, 0.06, 1.6, (CP.wl + CP.el) / 2, L - 0.34, z, tubeM, false);
         for (const [x, z] of [[CP.x0 + 0.6, CP.z0 + 0.6], [CP.x1 - 0.6, CP.z0 + 0.6], [CP.x1 - 0.6, CP.z1 - 0.6]]) { box(0.12, 4, 0.12, x, LV[3] + 2, z, concD); box(0.5, 0.15, 0.5, x, LV[3] + 4, z, tubeM, false); }
-        if (SW.Cars) { const cr2 = E.rng(4747); let k = 0;
-          for (const L of LV) for (const [x, ry] of [[CP.wl + 2.4, -Math.PI / 2], [CP.el - 2.4, Math.PI / 2]]) for (const z of [-43.4, -40.6, -37.8, -35, -32.2]) {
+        if (SW.Cars) { const cr2 = E.rng(4747); let k = 0;   // (none on the ground floor: it is kept clear to drive in, street.js)
+          for (const L of LV.slice(1)) for (const [x, ry] of [[CP.wl + 2.4, -Math.PI / 2], [CP.el - 2.4, Math.PI / 2]]) for (const z of [-43.4, -40.6, -37.8, -35, -32.2]) {
             if (cr2() < 0.45) continue; const c = SW.Cars.make(E, (k++ * 5) % 7); c.position.set(x, L + 0.02, z); c.rotation.y = ry + (cr2() < 0.3 ? Math.PI : 0); g.add(c); p.addBox(x, z, 2.3, 1.0, FY + L - 0.5, FY + L + 1.6); } }
         // the sign: on the south face over the top, and on a post facing the fair
         { const sm = new THREE.MeshBasicMaterial({ map: E.textTex('P  立体駐車場\nPARKING  ·  CRATER FUNFAIR', { w: 768, h: 220, color: '#ffffff', bg: '#1f55b8', font: '900 104px "Hind","Noto Sans JP",sans-serif', font2: '700 40px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide }); sm.userData.lin = true;

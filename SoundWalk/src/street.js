@@ -86,20 +86,122 @@
       return best < 1e9 ? Q : null;
     };
     const padOf = (x, z) => { const l = ohh.local(x, z); let best = 1e9, pad = null; for (const k in PADS) { const p = PADS[k], d = Math.max(p.x0 - l.x, l.x - p.x1, p.z0 - l.z, l.z - p.z1); if (d < best) { best = d; pad = p; } } return { d: best, pad }; };
+    // ---- Driving on the ground ----
+    // gnd: one way, from the beach along the street (against its line) to the north-east, where it leaves the street, winds
+    // up a spiral beside the ring road and merges from the outside into the C1 entry ramp that climbs outside the loop
+    // (inR), so from down here you can join C1's lower deck. cpk: the car park's spur, out of its ground floor through its
+    // north face, under the loop and into gnd before the spiral (both ways). Your car waits in the garage's east bay and
+    // on the car park's ground floor (pas: parking areas in the game's sense; the game adds them and the roads to its own).
+    const RS = 13, roads = [], pas = [], lines = [];   // lines: the parts of gnd off the street, and cpk (for the hills, the piers, the ground)
+    let spiral = null;
+    const inR = ring.roads.find((q) => q.id === 'inR'), park = find('park');
+    const roadOf = (id, V, hw, o) => {   // V: points ({x, y, z}) about 2 m apart -> a road the drive can use (as ring.js builds C1's)
+      const NB = V.length, B = Object.assign({ id, closed: false, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(hw), GAP: new Uint8Array(NB), OGAP: new Uint8Array(NB), ground: true }, o);
+      V.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; });
+      let LB = 0;
+      for (let i = 0; i < NB; i++) { const a = Math.max(0, i - 1), b = Math.min(NB - 1, i + 1), dx = B.X[b] - B.X[a], dz = B.Z[b] - B.Z[a], l = Math.hypot(dx, dz) || 1; B.TX[i] = dx / l; B.TZ[i] = dz / l; if (i < NB - 1) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); }
+      B.L = LB; B.ds = LB / (NB - 1);
+      const nearB = (x, z, y) => { let bi = 0, bd = 1e18; for (let i = 0; i < NB; i++) { const dx = B.X[i] - x, dz = B.Z[i] - z, dy = y === undefined ? 0 : (B.Y[i] - y) * 4, d = dx * dx + dz * dz + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };   // y: the turns of the spiral lie over one another
+      B.nearest = nearB;
+      B.proj = (x, z, hint, out, y) => {
+        let bi = 0, bd = 1e18;
+        if (hint >= 0) { for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } } }
+        if (hint < 0 || bd > 900 || (y !== undefined && Math.abs(B.Y[bi] - y) > 2.5)) bi = nearB(x, z, y);
+        const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
+        out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
+        out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi];
+        out.tx = B.TX[bi]; out.tz = B.TZ[bi]; out.R = B;
+        out.off = (bi === 0 && a < 0) || (bi === NB - 1 && a > 0);
+        return out;
+      };
+      B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
+      return B;
+    };
+    const resample = (ctl, step = 2) => { const cv = new THREE.CatmullRomCurve3(ctl, false, 'centripetal'), n = Math.max(2, Math.round(cv.getLength() / step)); return cv.getSpacedPoints(n).map((v) => ({ x: v.x, y: v.y, z: v.z })); };
+    const hermite = (p0, t0, p1, t1, out, y0 = RY, y1 = RY) => { const ch = Math.hypot(p1.x - p0.x, p1.z - p0.z), n = Math.max(4, Math.round(ch / 2.5));
+      for (let k = 1; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t, h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+        out.push(new THREE.Vector3(h00 * p0.x + h10 * t0.x * ch + h01 * p1.x + h11 * t1.x * ch, y0 + (y1 - y0) * sm(0, 1, t), h00 * p0.z + h10 * t0.z * ch + h01 * p1.z + h11 * t1.z * ch)); } };
+    if (inR && park) {
+      const rOut = (x, z) => { let j = 0, b = 1e9; for (let i = 0; i < N; i++) { const d = Math.hypot(R.X[i] - x, R.Z[i] - z); if (d < b) { b = d; j = i; } } return rs(j); };
+      // the merge: the last stretch runs alongside inR, edge to edge, then closes in over its outer half
+      let im = 0; while (im < inR.N - 1 && inR.Y[im] < 12) im++;
+      const ie = Math.max(2, im - 12), run = [];   // (it ends on inR's centre line: inR is one lane)
+      for (let k = ie; k <= im + 3; k++) { const nn = rOut(inR.X[k], inR.Z[k]), o = 6.2 * (1 - sm(ie + 4, im, k)); run.push(new THREE.Vector3(inR.X[k] + nn.nx * o, inR.Y[k], inR.Z[k] + nn.nz * o)); }
+      const E = run[0], nE = rOut(inR.X[ie], inR.Z[ie]), tE = { x: inR.TX[ie], z: inR.TZ[ie] }, yE = inR.Y[ie];
+      const C = { x: E.x + nE.nx * RS, z: E.z + nE.nz * RS }, phE = Math.atan2(E.z - C.z, E.x - C.x), sg = Math.sign(-Math.sin(phE) * tE.x + Math.cos(phE) * tE.z) || 1;
+      const SR = P.slice().reverse().map((q) => ({ x: q.x, z: q.z, tx: -q.tx, tz: -q.tz }));   // the street the way gnd runs it
+      // turns: however many put the foot of the spiral where the street, carrying on, points into it best (and not too steep)
+      let best = null;
+      for (const T of [1.25, 1.5, 1.75, 2, 2.25]) {
+        const U = T * Math.PI * 2, phF = phE - sg * U, F = { x: C.x + RS * Math.cos(phF), z: C.z + RS * Math.sin(phF) }, hF = { x: sg * -Math.sin(phF), z: sg * Math.cos(phF) };
+        const aim = { x: F.x - hF.x * 26, z: F.z - hF.z * 26 };
+        let kS = -1, bd = 1e9; SR.forEach((q, k) => { const d = Math.hypot(q.x - aim.x, q.z - aim.z); if (d < bd && q.tx * hF.x + q.tz * hF.z > 0.2) { bd = d; kS = k; } });
+        if (kS < 0) continue;
+        const score = bd + Math.max(0, (yE - RY) / (U * RS) - 0.085) * 400;
+        if (!best || score < best.score) best = { T, U, F, hF, kS, score };
+      }
+      if (best) {
+        const { U, F, hF, kS } = best, ctl = [];
+        for (let k = 0; k <= kS; k++) ctl.push(new THREE.Vector3(SR[k].x, RY, SR[k].z));
+        const S0 = SR[kS]; hermite(S0, { x: S0.tx, z: S0.tz }, F, hF, ctl);
+        const nH = Math.round((U * RS) / 2);
+        for (let k = 0; k <= nH; k++) { const u = U * (1 - k / nH), ph = phE - sg * u, t = k / nH; ctl.push(new THREE.Vector3(C.x + RS * Math.cos(ph), RY + (yE - RY) * (t * t * (3 - 2 * t) * 0.3 + t * 0.7), C.z + RS * Math.sin(ph))); }
+        for (let k = 1; k < run.length; k++) ctl.push(run[k]);
+        const G = roadOf('gnd', resample(ctl), HW, { oneWay: true, oneLane: true });
+        G.kOff = G.nearest(S0.x, S0.z);   // from here on it is off the street
+        roads.push(G); spiral = { C, RS, yE, turns: best.T };
+        // the car park's spur: from its ground floor out through the north face, under the loop, into gnd before the spiral
+        const pf = SW.Ring.frame(park.song), FY = 0.9, at = (lx, lz) => pf.toWorld(lx, lz);
+        const out0 = at(37.5, -47), o1 = at(37.5, -48), dir = { x: o1.x - out0.x, z: o1.z - out0.z };
+        let kj = G.kOff, bj = 1e9; for (let k = G.kOff; k < G.N; k++) { if (G.Y[k] > 0.3) break; const d = Math.hypot(G.X[k] - (out0.x + dir.x * 26), G.Z[k] - (out0.z + dir.z * 26)); if (d < bj) { bj = d; kj = k; } }
+        kj = Math.min(kj, G.N - 8);
+        const in0 = at(37.5, -38), in1 = at(37.5, -43), cctl = [new THREE.Vector3(in0.x, FY, in0.z), new THREE.Vector3(in1.x, FY, in1.z), new THREE.Vector3(out0.x, FY, out0.z)];
+        hermite(out0, dir, { x: G.X[kj], z: G.Z[kj] }, { x: G.TX[kj], z: G.TZ[kj] }, cctl, FY, RY);
+        for (let k = kj; k <= kj + 5; k++) cctl.push(new THREE.Vector3(G.X[k], G.Y[k], G.Z[k]));
+        const K = roadOf('cpk', resample(cctl), 3.2, {});
+        roads.push(K);
+        // where they meet (and where gnd joins inR) the walls open on the side facing the other road
+        for (const A of [G, K]) for (const Bb of [G, K, inR]) { if (A === Bb) continue; for (let i = 0; i < A.N; i++) { const j = Bb.nearest(A.X[i], A.Z[i]), wx = Bb.X[j] - A.X[i], wz = Bb.Z[j] - A.Z[i], sd = wx * A.TZ[i] - wz * A.TX[i];
+          if (Math.abs(A.Y[i] - Bb.Y[j]) < 1.5 && Math.hypot(wx, wz) < A.HW[i] + Bb.HW[j] + 0.3) { if (sd > -1) A.OGAP[i] = 1; if (sd < 1) A.GAP[i] = 1; } } }
+        for (let i = G.kOff; i < G.N; i++) lines.push({ x: G.X[i], z: G.Z[i], y: G.Y[i], hw: HW });
+        for (let i = 0; i < K.N; i++) lines.push({ x: K.X[i], z: K.Z[i], y: K.Y[i], hw: 3.2 });
+        // the parking areas: rect = where the car's centre may be, its open side (low z) overlapping the road it leaves by
+        const mkPA = (id, fr, y, rect, slot, walk, walls, placeId) => {
+          const sw = fr.toWorld(slot.lx, slot.lz), dw = { x: slot.dx * fr.c + slot.dz * fr.s, z: -slot.dx * fr.s + slot.dz * fr.c };
+          const pa = { id, f: fr, y, rect, placeId, slot: { x: sw.x, z: sw.z, yaw: Math.atan2(dw.x, dw.z) },
+            lim(car) { let x0 = rect.cx - rect.hx, x1 = rect.cx + rect.hx, z1 = rect.cz + rect.hz; const z0 = rect.cz - rect.hz;
+              if (car) { const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), ax = Math.abs(fx * fr.c - fz * fr.s), az = Math.abs(fx * fr.s + fz * fr.c), ex = (ax * car.len + az * car.wid) / 2, ez = (az * car.len + ax * car.wid) / 2;
+                x0 = Math.max(x0, walls.x0 + ex); x1 = Math.min(x1, walls.x1 - ex); if (x0 > x1) x0 = x1 = (walls.x0 + walls.x1) / 2; z1 = Math.max(z0, Math.min(z1, walls.z1 - ez)); }
+              return [x0, x1, z0, z1]; },
+            inside(x, z, car) { const l = fr.local(x, z), [x0, x1, z0, z1] = pa.lim(car); return l.x >= x0 && l.x <= x1 && l.z >= z0 && l.z <= z1; },
+            canStand(x, z) { const l = fr.local(x, z); return Math.abs(l.x - walk.cx) <= walk.hx && Math.abs(l.z - walk.cz) <= walk.hz; },
+            clamp(x, z, car) { const l = fr.local(x, z), [x0, x1, z0, z1] = pa.lim(car); return fr.toWorld(Math.max(x0, Math.min(x1, l.x)), Math.max(z0, Math.min(z1, l.z))); } };
+          pas.push(pa); return pa;
+        };
+        const of = SW.Ring.frame(ohh.song), GA = PADS.garage, gx = (GA.x0 + GA.x1) / 2, ex = (gx + GA.x1) / 2;
+        mkPA('garage', of, GA.y, { cx: ex, cz: (BZ + GA.z1) / 2, hx: 2.6, hz: (GA.z1 - BZ) / 2 }, { lx: ex, lz: GA.z1 - 3.4, dx: 0, dz: -1 }, { cx: ex, cz: (GA.z0 + GA.z1) / 2, hx: 2.6, hz: (GA.z1 - GA.z0) / 2 - 0.3 }, { x0: gx + 0.2, x1: GA.x1 - 0.2, z1: GA.z1 - 0.2 }, 'ohh');
+        mkPA('carpark', pf, FY, { cx: 37.5, cz: -39, hx: 4.1, hz: 7.5 }, { lx: 37.5, lz: -36, dx: 0, dz: -1 }, { cx: 37.5, cz: -38.5, hx: 4.2, hz: 7 }, { x0: 33.2, x1: 41.8, z1: -31.2 }, 'park');
+      }
+    }
+    const lb = lines.length ? { x0: Math.min(...lines.map((l) => l.x)) - 12, x1: Math.max(...lines.map((l) => l.x)) + 12, z0: Math.min(...lines.map((l) => l.z)) - 12, z1: Math.max(...lines.map((l) => l.z)) + 12 } : null;
+    const nearLine = (x, z) => { if (!lb || x < lb.x0 || x > lb.x1 || z < lb.z0 || z > lb.z1) return null; let b = null, bd = 1e9; for (const L of lines) { const d = Math.hypot(L.x - x, L.z - z); if (d < bd) { bd = d; b = L; } } return b && bd < 20 ? { d: bd, L: b } : null; };
     const S = {
-      P, HW, PAVE, LAND, PADS, BZ, FRONT, ohh, R,
-      // how much of the hills may stand here: none on the street or the shops' plots, all of them 6 m off
-      mask(x, z) { const q = query(x, z), m = q ? sm(hi + 0.2, hi + 6.5, q.d) : 1; return Math.min(m, sm(0.5, 6, padOf(x, z).d)); },
-      // within m of the street (its pavements too) or of a plot: no tree, bush or stone
-      clear(x, z, m) { const q = query(x, z); return (!!q && q.o > lo(q.k) - m && q.o < hi + m) || padOf(x, z).d < m; },
+      P, HW, PAVE, LAND, PADS, BZ, FRONT, ohh, R, roads, pas, lines, spiral,
+      // how much of the hills may stand here: none on the street, its ground roads or the shops' plots, all of them 6 m off
+      mask(x, z) { const q = query(x, z), nl = nearLine(x, z); let m = q ? sm(hi + 0.2, hi + 6.5, q.d) : 1; if (nl && nl.L.y < 2) m = Math.min(m, sm(nl.L.hw + 1.2, nl.L.hw + 6.5, nl.d)); return Math.min(m, sm(0.5, 6, padOf(x, z).d)); },
+      // within m of the street (its pavements too), its ground roads or a plot: no tree, bush or stone
+      clear(x, z, m) { const q = query(x, z), nl = nearLine(x, z); if (spiral && Math.hypot(x - spiral.C.x, z - spiral.C.z) < spiral.RS + HW + 6 + m) return true; return (!!q && q.o > lo(q.k) - m && q.o < hi + m) || (!!nl && nl.d < nl.L.hw + m) || padOf(x, z).d < m; },
       // no pier in the street or its pavements (one standing beside it, as the ring road's own do down its middle, is fine)
-      pier(x, z) { const q = query(x, z); return (!!q && q.o > lo(q.k) - 1.4 && q.o < hi + 1.4) || padOf(x, z).d < 1; },
-      // the ground: the pavements' kerbed top, the carriageway, the plots' floors
-      ground(x, z) {
+      pier(x, z) { const q = query(x, z), nl = nearLine(x, z); return (!!q && q.o > lo(q.k) - 1.4 && q.o < hi + 1.4) || (!!nl && nl.d < nl.L.hw + 1.6) || padOf(x, z).d < 1; },
+      // the ground: the pavements' kerbed top, the carriageway, the plots' floors, the ground roads (a raised part only for
+      // someone up on it)
+      ground(x, z, y) {
         const pp = padOf(x, z); if (pp.d < 0) return pp.pad.y;
-        const q = query(x, z); if (!q || q.o < lo(q.k) || q.o > hi) return 0;
-        if ((q.k === 1 || q.k === P.length - 1) && Math.abs(q.o) < q.d - 0.05) return 0;   // past either end
-        return q.o > HW || q.o < -HW ? PY : RY;
+        const nl = nearLine(x, z); let h = 0;
+        if (nl && nl.d < nl.L.hw) { const t = nl.L.y; if (t < 1.2 || y === undefined || y > t - 1.2) h = t; }
+        const q = query(x, z); if (!q || q.o < lo(q.k) || q.o > hi) return h;
+        if ((q.k === 1 || q.k === P.length - 1) && Math.abs(q.o) < q.d - 0.05) return h;   // past either end
+        return Math.max(h, q.o > HW || q.o < -HW ? PY : RY);
       },
     };
     return S;
@@ -151,6 +253,67 @@
       const s = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.82), signM(txt)); s.position.set(x - q.tx * 0.08, 3.0, z - q.tz * 0.08); s.rotation.y = Math.atan2(-q.tx, -q.tz); g.add(s);
     }
     B.flush();
+
+    // ---- the ground roads off the street: the way out to the spiral, the spiral and its run in beside the C1 ramp, the car
+    // park's spur. On the ground, asphalt laid over the earth; up off it, a deck with parapets on columns ----
+    {
+      const band = (Rd, k0, k1, o0, o1, dy, m) => {   // a strip between two offsets across Rd, following its height
+        const pos = [], uv = [], idx = [];
+        for (let k = k0; k <= k1; k++) { for (const o of [o0, o1]) { const x = Rd.X[k] + Rd.TZ[k] * o, z = Rd.Z[k] - Rd.TX[k] * o; pos.push(x, Rd.Y[k] + dy, z); uv.push(x / 7.5, -z / 7.5); } if (k > k0) { const v = (k - k0) * 2; idx.push(v - 2, v - 1, v, v - 1, v + 1, v); } }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
+        const me = new THREE.Mesh(geo, m); me.receiveShadow = true; g.add(me); return me;
+      };
+      const wall = (Rd, k0, k1, o, y0, y1, m) => {   // an upright strip along Rd at offset o, from y0 to y1 over its deck
+        const pos = [], idx = [];
+        for (let k = k0; k <= k1; k++) { const x = Rd.X[k] + Rd.TZ[k] * o, z = Rd.Z[k] - Rd.TX[k] * o; pos.push(x, Rd.Y[k] + y0, z, x, Rd.Y[k] + y1, z); if (k > k0) { const v = (k - k0) * 2; idx.push(v - 2, v - 1, v, v - 1, v + 1, v); } }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+        const me = new THREE.Mesh(geo, m); me.castShadow = true; g.add(me); return me;
+      };
+      const concM = E.mat('#8a867e', { map: E.tex('concrete', 1, 1), rough: 0.9 }, true), underM = E.mat('#5d5a55', { rough: 0.95 }, true); concM.side = underM.side = THREE.DoubleSide;
+      const RB = E.batch(g), rb = RB.box, colM = E.mat('#7c786f', { map: E.tex('concrete', 1, 1), rough: 0.92 });
+      for (const Rd of S.roads) {
+        const k0 = Rd.id === 'gnd' ? Math.max(0, Rd.kOff - 2) : 0, hw = Rd.HW[0], k1 = Rd.N - 1;
+        w.pick(band(Rd, k0, k1, -hw, hw, 0.035, asph));
+        band(Rd, k0, k1, -hw + 0.2, -hw + 0.32, 0.042, lineM); band(Rd, k0, k1, hw - 0.32, hw - 0.2, 0.042, lineM);
+        // up off the ground: its underside and edges, and a parapet each side (none where it meets the C1 ramp or the spur)
+        let a = -1;
+        for (let k = k0; k <= k1 + 1; k++) {
+          const up = k <= k1 && Rd.Y[k] > 1.6;
+          if (up && a < 0) a = Math.max(k0, k - 1);
+          if (!up && a >= 0) {
+            const b2 = Math.min(k1, k);
+            band(Rd, a, b2, -hw - 0.25, hw + 0.25, -0.75, underM);
+            wall(Rd, a, b2, -hw - 0.25, -0.75, 0.04, concM); wall(Rd, a, b2, hw + 0.25, -0.75, 0.04, concM);
+            for (const sd of [-1, 1]) {   // the parapets, broken where the wall is open on that side
+              let s0 = -1; for (let j = a; j <= b2 + 1; j++) { const open = j > b2 || (sd > 0 ? Rd.OGAP[j] : Rd.GAP[j]); if (!open && s0 < 0) s0 = j; if (open && s0 >= 0) { if (j - 1 > s0) { wall(Rd, s0, j - 1, sd * (hw + 0.1), 0, 1.0, concM); wall(Rd, s0, j - 1, sd * (hw + 0.3), 0, 1.0, concM); band(Rd, s0, j - 1, sd * (hw + 0.1), sd * (hw + 0.3), 1.0, concM); } s0 = -1; } }
+              // walkers up on it stay on it (a box per short stretch, only at its height)
+              for (let j = a + 1; j <= b2; j += 2) { if (sd > 0 ? Rd.OGAP[j] : Rd.GAP[j]) continue; const x = Rd.X[j] + Rd.TZ[j] * sd * (hw + 0.2), z = Rd.Z[j] - Rd.TX[j] * sd * (hw + 0.2); w.boxes.push({ x, z, hx: Rd.ds * 1.1, hz: 0.15, c: Rd.TX[j], s: -Rd.TZ[j], y0: Rd.Y[j] - 0.6, y1: Rd.Y[j] + 1.4 }); }
+            }
+            for (let j = a + 2; j < b2; j += 5) { const y = Rd.Y[j]; if (y < 2.4 || (S.spiral && Math.hypot(Rd.X[j] - S.spiral.C.x, Rd.Z[j] - S.spiral.C.z) < S.spiral.RS + hw + 2)) continue; rb(0.9, y - 0.75, 0.9, Rd.X[j], (y - 0.75) / 2, Rd.Z[j], colM); w.circles.push({ x: Rd.X[j], z: Rd.Z[j], r: 0.5, y0: -1e9, y1: y - 1.2 }); }
+            a = -1;
+          }
+        }
+        for (let k = k0 + 2; k < k1; k += 2) { if (Rd.id === 'cpk' && k < 6) continue; const a2 = Rd.X[k] - Rd.X[k - 1], b3 = Rd.Z[k] - Rd.Z[k - 1], d = rb(0.12, 0.012, 1.1, (Rd.X[k] + Rd.X[k - 1]) / 2, (Rd.Y[k] + Rd.Y[k - 1]) / 2 + 0.042, (Rd.Z[k] + Rd.Z[k - 1]) / 2, whiteM, false); d.rotation.y = Math.atan2(a2, b3); }
+        // lamps on the spiral's outer parapet
+        if (Rd.id === 'gnd' && S.spiral) for (let k = k0 + 4; k < k1; k += 9) { if (Rd.Y[k] < 1.5) continue; const C = S.spiral.C, ox = Rd.X[k] - C.x, oz = Rd.Z[k] - C.z, ol = Math.hypot(ox, oz) || 1, x = Rd.X[k] + (ox / ol) * (hw + 0.2), z = Rd.Z[k] + (oz / ol) * (hw + 0.2), y = Rd.Y[k];
+          rb(0.12, 5, 0.12, x, y + 2.5, z, postM); const arm = rb(0.1, 0.1, 1.4, x - (ox / ol) * 0.65, y + 5, z - (oz / ol) * 0.65, postM); arm.rotation.y = Math.atan2(ox, oz); rb(0.5, 0.15, 0.32, x - (ox / ol) * 1.3, y + 4.92, z - (oz / ol) * 1.3, lampM, false); }
+      }
+      // the spiral's turns lie over one another: its columns stand just outside its edges, inside and out, and rise through
+      // every turn to the top one there
+      if (S.spiral) { const G2 = S.roads.find((q) => q.id === 'gnd'), C = S.spiral.C, rr = S.spiral.RS;
+        for (let a3 = 0; a3 < 12; a3++) { const ph = (a3 / 12) * Math.PI * 2, cx = Math.cos(ph), cz = Math.sin(ph); let top = 0;
+          for (let k = G2.kOff; k < G2.N; k++) { const ox = G2.X[k] - C.x, oz = G2.Z[k] - C.z, r2 = Math.hypot(ox, oz); if (Math.abs(r2 - rr) < 1.5 && (ox * cx + oz * cz) / r2 > 0.995) top = Math.max(top, G2.Y[k]); }
+          if (top < 2.4) continue;
+          for (const r3 of [rr - S.HW - 0.75, rr + S.HW + 0.75]) { const x = C.x + cx * r3, z = C.z + cz * r3; rb(0.7, top + 0.3, 0.7, x, (top + 0.3) / 2, z, colM); w.circles.push({ x, z, r: 0.4 }); }
+          for (let k = G2.kOff; k < G2.N; k += 1) { const ox = G2.X[k] - C.x, oz = G2.Z[k] - C.z, r2 = Math.hypot(ox, oz); if (Math.abs(r2 - rr) < 1.5 && (ox * cx + oz * cz) / r2 > 0.9995 && G2.Y[k] > 2.4) { const cb = rb(S.HW * 2 + 2.2, 0.5, 0.6, C.x + cx * rr, G2.Y[k] - 1.0, C.z + cz * rr, colM); cb.rotation.y = Math.atan2(cx, cz) + Math.PI / 2; } }   // a beam under each turn between them
+        } }
+      // a sign where the way to C1 leaves the street, and one at the car park's mouth
+      const G = S.roads.find((q) => q.id === 'gnd');
+      if (G) { const k = Math.max(0, G.kOff - 14), x = G.X[k] + G.TZ[k] * -(S.HW + 0.8), z = G.Z[k] - G.TX[k] * -(S.HW + 0.8);
+        rb(0.12, 3.4, 0.12, x, 1.7, z, postM); w.circles.push({ x, z, r: 0.15 });
+        const sgn = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.9), signM('C1  ↗  首都高\n入口 · ENTRANCE')); sgn.position.set(x, 3.15, z); sgn.rotation.y = Math.atan2(-G.TX[k], -G.TZ[k]); g.add(sgn); }
+      RB.flush();
+    }
 
     // ---- the shops, in OHH's frame ----
     const sg = new THREE.Group(); sg.position.set(ohh.x, 0, ohh.z); sg.rotation.y = ohh.rot; g.add(sg);
@@ -221,7 +384,7 @@
       const lx = (GA.x0 + mid) / 2, lz = gz + 0.3;
       for (const sd2 of [-1, 1]) { sb(0.32, 3.6, 0.32, lx + sd2 * 1.75, GA.y + 1.8, lz, E.mat('#2a5fb8', { rough: 0.5 })); lcirc(lx + sd2 * 1.75, lz, 0.25); for (const dz of [-0.9, 0.9]) sb(1.0, 0.08, 0.14, lx + sd2 * 1.15, GA.y + 1.62, lz + dz, dark); }
       carAt(sg, 0, lx, GA.y + 1.7, lz, Math.PI); carBox(lx, lz, 0);
-      carAt(sg, 4, (mid + GA.x1) / 2, GA.y, lz, Math.PI); carBox((mid + GA.x1) / 2, lz, 0);
+      // (the east bay is where your car waits: a parking area, the game parks it)
       // tyres, a red tool chest, the bench, drums outside
       for (let k = 0; k < 4; k++) { const t2 = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.22, 14), tyreM); t2.position.set(GA.x0 + 0.65, GA.y + 0.11 + k * 0.23, GA.z1 - 0.75); sg.add(t2); }
       lcirc(GA.x0 + 0.65, GA.z1 - 0.75, 0.38);
