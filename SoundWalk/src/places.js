@@ -932,6 +932,7 @@
       // The avenue's far stretch: past the crossing it carries straight on, under the elevated ring road, between
       // narrower blocks, and opens into a station forecourt: a roundabout the cabs drive round to head back up the
       // avenue, a taxi rank, a bus stop and a canopy in front of the terminal that closes the view.
+      let VD = null;   // the streets under the viaduct (below)
       const AV0 = -33, AV2 = -70, RC = [0, -82], RI = 4.5, RO = 10.5, TF = -97, ext = new THREE.Group(), extFeet = [], extSlabs = [], termClock = [];
       // The cabs' loop, closed: from the roundabout in front of the plaza's fountain down the southbound lane, round the
       // station's roundabout (keeping the island on the left), back up the avenue and round the fountain's roundabout again.
@@ -945,6 +946,28 @@
         return { L, n, P, slow }; })();
       {
         const xr = E.rng(5151), MB = E.batch(ext), mb = MB.box;
+        // Under the viaduct: where the avenue passes under the ring road, a street turns off left and right and runs on along
+        // under the deck (on its inner side, clear of the single row of piers down its middle), as far as the next place.
+        // VD.branches: points along the ring's centre line in this frame, each with the normal towards the town's middle.
+        VD = (() => {
+          const R = E.ring && E.ring.roads && E.ring.roads[0]; if (!R) return null;
+          const N = R.N, at = (i) => { const j = ((i % N) + N) % N, l = p.local(R.X[j], R.Z[j]); return [l.x, l.z, R.Y[j]]; }, oc = p.local(0, 0);
+          let i0 = 0, bd = 1e9; for (let i = 0; i < N; i++) { const [x, z] = at(i), d = Math.hypot(x, z + 66); if (d < bd) { bd = d; i0 = i; } }
+          if (bd > 20) return null;
+          const fieldS = SW.SONGS.find((q) => q.scene === 'field'), fF = fieldS ? SW.Ring.frame(fieldS) : null, parkS = SW.SONGS.find((q) => q.scene === 'park'), pF = parkS ? SW.Ring.frame(parkS) : null;
+          const stop = (x, z) => { const w = p.toWorld(x, z); if (fF) { const l = fF.local(w.x, w.z); if (Math.abs(l.x) < 28 && l.z > -36 && l.z < 16) return true; } if (pF && Math.hypot(w.x - pF.x, w.z - pF.z) < 64) return true; return Math.abs(w.x) > 138 || Math.abs(w.z) > 138; };
+          const branch = (dir) => { const pts = []; let len = 0, prev = null;
+            for (let k = 0; k < 60; k++) { const i = i0 + dir * k, [x, z, y] = at(i), [x1, z1] = at(i + 1), [x0, z0] = at(i - 1); let tx = x1 - x0, tz = z1 - z0; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+              let nx = -tz, nz = tx; if (nx * (oc.x - x) + nz * (oc.z - z) < 0) { nx = -nx; nz = -nz; }
+              if (prev) len += Math.hypot(x - prev[0], z - prev[1]); prev = [x, z];
+              if (len > 58 || stop(x + nx * 5, z + nz * 5)) break;
+              pts.push({ x, z, nx, nz, y }); }
+            return pts; };
+          const branches = [branch(-1), branch(1)].filter((b) => b.length > 3);
+          const C = 4.95, RW = 3.45;   // the street's centre, out from the viaduct's centre line, and its half-width
+          const near = (lx, lz, lo, hi) => branches.some((b) => b.some((q, k) => { if (k === b.length - 1) return false; const dx = lx - q.x, dz = lz - q.z, o = dx * q.nx + dz * q.nz, a = -dx * q.nz + dz * q.nx; return o > lo && o < hi && Math.abs(a) < 1.6; }));
+          return { branches, C, RW, near, crossZ: (x) => { let best = null; for (const b of branches) for (let k = 1; k < b.length; k++) { const a = b[k - 1], c = b[k], ax = a.x + a.nx * C, cx = c.x + c.nx * C; if ((ax - x) * (cx - x) <= 0 && ax !== cx) { const t = (x - ax) / (cx - ax); best = a.z + a.nz * C + (c.z + c.nz * C - a.z - a.nz * C) * t; } } return best; } };
+        })();
         const asph = E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 }), asphR = E.mat('#27242e', { map: E.tex('asphalt', 3, 3), rough: 0.9 });
         const road = E.plane(11, AV0 - (AV2 + 2), asph); road.position.set(0, 0.03, (AV0 + AV2 + 2) / 2); ext.add(road); p.pick(road);   // from the block's sheet to the forecourt's paving, overlapping neither (no flicker where two flat sheets lie in one plane)
         const lineM = E.mat('#e8c43a', { rough: 0.6 }), whiteM = E.mat('#d9d4de');
@@ -963,7 +986,11 @@
           const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.55), sm); sg.position.set(RC[0], 2.2, RC[1]); ext.add(sg); }
         for (let k = -4; k <= 4; k++) { const st = E.plane(0.7, 3.0, whiteM); st.position.set(k * 1.2, 0.05, AV2 + 3.5); ext.add(st); }   // a crossing where the avenue meets the forecourt
         // sidewalks either side of the avenue, as far as the forecourt
-        for (const sd of [-1, 1]) extSlabs.push({ cx: sd * 8.25, cz: (AV0 + AV2 + 2) / 2, hx: 2.75, hz: (AV0 - AV2 - 2) / 2, top: 0.15 });
+        for (const sd of [-1, 1]) {
+          const zc = VD && VD.crossZ(sd * 8.25), z0 = AV2 + 2, z1 = AV0;   // (the side street crosses the pavement between zc - RW and zc + RW)
+          const parts = zc == null ? [[z0, z1]] : [[z0, zc - VD.RW], [zc + VD.RW, z1]];
+          for (const [a, b2] of parts) if (b2 - a > 0.5) extSlabs.push({ cx: sd * 8.25, cz: (a + b2) / 2, hx: 2.75, hz: (b2 - a) / 2, top: 0.15 });
+        }
         // blocks either side; none under (or within a few metres of) the ring road and its ramps, none on the forecourt
         const roadNear = (x, z, r) => E.ring && [[0, 0], [r, r], [-r, r], [r, -r], [-r, -r], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const w = p.toWorld(x + ox, z + oz); return E.ring.dist(w.x, w.z) < 10; });
         for (const z of [-41, -50, -59]) for (const x of [-15.5, 15.5, -27, 27]) {
@@ -1032,6 +1059,58 @@
           const dep = E.textTex('DEPARTURES  21:04 HUDSON LINE  ·  21:12 HARLEM LINE  ·  21:20 NEW HAVEN', { w: 2048, h: 96, color: '#ffb02a', font: '700 52px "Hind",sans-serif', bg: '#050505' });
           const dm = new THREE.MeshBasicMaterial({ map: dep }); dm.userData.lin = true; const db = new THREE.Mesh(new THREE.PlaneGeometry(14, 0.7), dm); db.position.set(0, 3.9, TF + 0.6); ext.add(db); mb(14.4, 0.9, 0.2, 0, 3.9, TF + 0.45, poleM);
           p.addBox(0, TZ, 24, 8.2); }
+        if (VD) {
+          const { C, RW } = VD;
+          // a strip between two offsets from the viaduct's centre line, cut off where its middle comes within |lx| < clip of the avenue
+          const strip = (b, o0, o1, y, m, clip) => {
+            const pts = []; const mid = (o0 + o1) / 2;
+            for (let k = 0; k < b.length; k++) { const q = b[k], mx = q.x + q.nx * mid; if (Math.abs(mx) < clip) { if (pts.length) break; continue; }
+              if (!pts.length && k > 0) { const a = b[k - 1], ax = a.x + a.nx * mid; if (Math.abs(ax) < clip) { const t = (clip - Math.abs(ax)) / (Math.abs(mx) - Math.abs(ax)); pts.push({ x: a.x + (q.x - a.x) * t, z: a.z + (q.z - a.z) * t, nx: a.nx + (q.nx - a.nx) * t, nz: a.nz + (q.nz - a.nz) * t, y: q.y }); } }
+              pts.push(q); }
+            if (pts.length < 2) return null;
+            const pos = [], uv = [], idx = [];
+            pts.forEach((q, k) => { for (const o of [o0, o1]) { const x = q.x + q.nx * o, z = q.z + q.nz * o; pos.push(x, y, z); uv.push(x / 7.5, -z / 7.5); } if (k) { const v = k * 2; idx.push(v - 2, v - 1, v, v - 1, v + 1, v); } });
+            const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
+            const nrm = new Float32Array(pos.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1; geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));   // (whichever way the strip winds, it faces up)
+            const me = new THREE.Mesh(geo, m); me.receiveShadow = true; ext.add(me); p.pick(me); return pts;
+          };
+          const asphV = E.mat('#2b2830', { map: E.tex('asphalt', 1, 1), rough: 0.9 }, true), lotM = E.mat('#3a3834', { map: E.tex('asphalt', 1, 1), rough: 0.95 }, true), lineV = E.mat('#d9d4de', {}, true);
+          for (const m of [asphV, lotM, lineV]) m.side = THREE.DoubleSide;
+          const tag = (txt, a, b2) => { const c = document.createElement('canvas'); c.width = 512; c.height = 256; const x = c.getContext('2d'); x.translate(256, 128); x.rotate(-0.07); x.font = '900 118px "Arial Black","Hind",sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+            const k = Math.min(1, 470 / x.measureText(txt).width); x.scale(k, k); x.lineWidth = 20; x.strokeStyle = '#101014'; x.strokeText(txt, 0, 4); const gr = x.createLinearGradient(0, -60, 0, 60); gr.addColorStop(0, a); gr.addColorStop(1, b2); x.fillStyle = gr; x.fillText(txt, 0, 4);
+            const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; const m = E.mat('#ffffff', { map: t, rough: 0.8 }, true); m.transparent = true; m.depthWrite = false; m.polygonOffset = true; m.polygonOffsetFactor = -2; m.side = THREE.DoubleSide; return m; };
+          const tags = [tag('FDH', '#ffe14f', '#ff8a2a'), tag('UNDER 9', '#3ff0ff', '#2a6aff'), tag('NYC', '#9bff6a', '#2ab04a'), tag('FLIP', '#ff6a9a', '#b02ad8')];
+          const wallM = E.mat('#8a867e', { map: E.tex('concrete', 1, 1), rough: 0.9 }), postM = E.mat('#5a6068', { metal: 0.5, rough: 0.5 }), lampM = E.basic('#ffb04a');
+          let carK = 0, tagK = 0;
+          for (const b of VD.branches) {
+            const road = strip(b, C - RW, C + RW, 0.03, asphV, 5.5);
+            if (!road) continue;
+            // markings: the edge lines solid, a dashed line down the middle, a stop line where it meets the avenue
+            strip(b, C - RW + 0.2, C - RW + 0.32, 0.036, lineV, 5.5); strip(b, C + RW - 0.32, C + RW - 0.2, 0.036, lineV, 5.5);
+            for (let k = 1; k < road.length; k += 2) { const a = road[k - 1], q = road[k], x = (a.x + q.x) / 2 + ((a.nx + q.nx) / 2) * C, z = (a.z + q.z) / 2 + ((a.nz + q.nz) / 2) * C; const d = mb(0.12, 0.012, 1.1, x, 0.036, z, whiteM, false); d.rotation.y = Math.atan2(q.x - a.x, q.z - a.z); }
+            { const q = road[0], q1 = road[1], x = q.x + q.nx * C + (q1.x - q.x) * 0.3, z = q.z + q.nz * C + (q1.z - q.z) * 0.3, sl = mb(RW * 2 - 0.4, 0.012, 0.4, x, 0.036, z, whiteM, false); sl.rotation.y = Math.atan2(q.nx, q.nz) + Math.PI / 2; sl.rotation.y = Math.atan2(q1.x - q.x, q1.z - q.z); }
+            // the pavement along its inner side, kerbed, in short turned pieces
+            for (let k = 1; k < road.length; k++) { const a = road[k - 1], q = road[k], mx = (a.x + q.x) / 2, mz = (a.z + q.z) / 2, nx = (a.nx + q.nx) / 2, nz = (a.nz + q.nz) / 2, L = Math.hypot(q.x - a.x, q.z - a.z);
+              if (Math.abs(mx + nx * (C + RW + 1)) < 11.2) continue;   // (the avenue's own pavement is there)
+              extSlabs.push({ cx: mx + nx * (C + RW + 1), cz: mz + nz * (C + RW + 1), hx: L / 2 + 0.15, hz: 1, top: 0.15, rot: Math.atan2(a.z - q.z, q.x - a.x) }); }   // (a slab's own x runs along (cos rot, -sin rot): here along the street)
+            // sodium lamps hung under the deck over the street
+            for (let k = 2; k < road.length; k += 5) { const q = road[k], x = q.x + q.nx * C, z = q.z + q.nz * C, y = (q.y || 9) - 1.1; const l = mb(1.0, 0.12, 0.32, x, y, z, lampM, false); l.rotation.y = Math.atan2(q.nx, q.nz); mb(0.05, 0.5, 0.05, x, y + 0.3, z, postM); }
+            // beyond the forecourt, a lot on the far side of the piers: parked cars nose to the wall, a block wall with tags and a rail on posts over it
+            const lot = strip(b, -7.6, -1.5, 0.03, lotM, 29);
+            if (lot) {
+              for (let k = 1; k < lot.length; k++) {
+                const a = lot[k - 1], q = lot[k], nx = (a.nx + q.nx) / 2, nz = (a.nz + q.nz) / 2, x = (a.x + q.x) / 2 - nx * 7.8, z = (a.z + q.z) / 2 - nz * 7.8, L = Math.hypot(q.x - a.x, q.z - a.z) + 0.05, yaw = Math.atan2(q.x - a.x, q.z - a.z);
+                const w = mb(0.3, 1.1, L, x, 0.55, z, wallM); w.rotation.y = yaw;
+                const bxW = p.addBox(x, z, 0.2, L / 2); bxW.c = Math.cos(p.rot + yaw); bxW.s = Math.sin(p.rot + yaw);
+                if (k % 2) mb(0.06, 1.6, 0.06, x, 1.9, z, postM); const rail = mb(0.04, 0.04, L, x, 2.65, z, postM); rail.rotation.y = yaw;
+                if (k % 3 === 1) { const t = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(2.6, L * 1.3), 0.95), tags[tagK++ % tags.length]); t.position.set(x + nx * 0.16, 0.6, z + nz * 0.16); t.rotation.y = Math.atan2(nx, nz); ext.add(t); }
+              }
+              for (let k = 1; k < lot.length; k += 2) { if (xr() < 0.25 || !SW.Cars) continue; const q = lot[k], yaw = Math.atan2(-q.nx, -q.nz) + (xr() < 0.5 ? Math.PI : 0), x = q.x - q.nx * 4.6, z = q.z - q.nz * 4.6;
+                const car = SW.Cars.make(E, (carK++ * 3) % 7); car.position.set(x, 0.04, z); car.rotation.y = yaw; ext.add(car);
+                const cb = p.addBox(x, z, 1.0, 2.3); cb.c = Math.cos(p.rot + yaw); cb.s = Math.sin(p.rot + yaw); }
+            }
+          }
+        }
         MB.flush();
         allSlabs.push(...extSlabs); ext.add(slabMesh(extSlabs));
       }
@@ -1202,10 +1281,11 @@
       p.wake = (lx, lz) => Math.hypot(lx - FC[0], lz - FC[1]) < 85;   // the cabs keep going round the fountain's roundabout while it is in sight
       p.road = { hw: 5, own: true };   // the avenue carries on to the fountain as a paved road (FLIP draws it itself: own)
       const onAvenue = (lx, lz) => Math.abs(lx) < 33 && lz <= -40 && lz > -116;   // the far stretch of the avenue and its blocks
-      p.core = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz);   // the block itself; the outskirts are negotiable
-      p.noPier = (lx, lz) => Math.abs(lx) < 7.5 && lz < -30;   // the ring road steps over the avenue
+      const underVD = (lx, lz) => !!VD && VD.near(lx, lz, -8.2, VD.C + VD.RW + 2.3);   // the streets and the lot under the viaduct
+      p.core = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz) || underVD(lx, lz);   // the block itself; the outskirts are negotiable
+      p.noPier = (lx, lz) => (Math.abs(lx) < 7.5 && lz < -30) || (!!VD && VD.near(lx, lz, VD.C - VD.RW - 0.4, VD.C + VD.RW + 2.3));   // the ring road steps over the avenue and the streets under it
       p.reach = (lx, lz) => (Math.abs(lx) < 20 && lz < -20 && lz > -112 ? 8 : null);   // down the avenue you are still in the city: its night and its traffic
-      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz) || Math.hypot(lx - FC[0], lz - FC[1]) < FO + 3 || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
+      p.blocks = (lx, lz) => (Math.abs(lx) < 34 && lz > -40 && lz < 20) || onAvenue(lx, lz) || underVD(lx, lz) || Math.hypot(lx - FC[0], lz - FC[1]) < FO + 3 || feet.some((f) => Math.abs(f.x - lx) < Math.max(f.w, f.d) / 2 + 2.5 && Math.abs(f.z - lz) < Math.max(f.w, f.d) / 2 + 2.5) || nearWalk(lx, lz);
 
       let roll = 0, rollTarget = 0, lastFlip = 0;
       const m4 = new THREE.Matrix4(), qq = new THREE.Quaternion(), ps = new THREE.Vector3(), sc = new THREE.Vector3(), upV = new THREE.Vector3(0, 1, 0);
@@ -1279,7 +1359,24 @@
       const TW = 3, TZ0 = 10, TZ1 = 17.5, VH = 4.4, CZ_CAR = -9;   // CZ_CAR: where the carousel stands
       const SPIRES = [[-45, -31, 7, 4], [-42, -4, 5, 3.5], [33, -38, 4, 3.5], [-21, -54, 5, 3.5], [25, -52, 3, 3], [-46, -18, 4, 4]];
       const DC = 3.5, CWD = 2.5;   // the cliff's depth (foot to brink) and the crest's width
-      p.rim = (lx, lz) => floorD(lx, lz);
+      // The multi-storey car park in the back right corner, half on the floor, half cut into the crater wall, under the
+      // ramp up to the ring road (17-19 m over it): four levels (the ground and three decks, LV), a straight ramp up each
+      // side lane in turn (west lane: ground to 1, then 2 to 3; east lane: 1 to 2), the decks in the middle, landings across
+      // both ends. You walk in from the fair at its south face. cpY: the surface under you at your height (relative to the floor).
+      const CP = { x0: 30, x1: 45, z0: -47, z1: -29, wl: 33, el: 42, n: -45, s: -31 }, LV = [0, 3.1, 6.2, 9.3];
+      const inCP = (lx, lz, m = 0) => lx > CP.x0 - m && lx < CP.x1 + m && lz > CP.z0 - m && lz < CP.z1 + m;
+      const cpD = (lx, lz) => Math.max(CP.x0 - lx, lx - CP.x1, CP.z0 - lz, lz - CP.z1);   // metres outside it (negative inside)
+      const cpSurf = (lx, lz) => {
+        const tN = Math.max(0, Math.min(1, (CP.s - lz) / (CP.s - CP.n))), mid = lx > CP.wl && lx < CP.el, along = lz > CP.n && lz < CP.s, out = [0];
+        if (mid && along) out.push(LV[1], LV[2], LV[3]);
+        if (lz <= CP.n) out.push(LV[1], LV[3]);
+        if (lz >= CP.s) out.push(LV[2]);
+        if (lx <= CP.wl && along) out.push(LV[1] * tN, LV[2] + (LV[3] - LV[2]) * tN);
+        if (lx >= CP.el && along) out.push(LV[1] + (LV[2] - LV[1]) * (1 - tN));
+        return out;
+      };
+      const cpY = (lx, lz, y) => { const c = cpSurf(lx, lz); if (y === undefined) return Math.max(...c); let b = 0; for (const h of c) if (h <= y + 0.7 && h > b) b = h; return b; };
+      p.rim = (lx, lz) => Math.min(floorD(lx, lz), cpD(lx, lz));
       // The lagoon's zone, on your left as you come in from the tunnel: a ring of its own rock stands round the quay, up to
       // 11 m, open on the east towards the carousel (and over the slipway and the pier), the west closed by the crater wall
       // itself, where the canal comes in from OHH. It stays down where the coaster runs over it (coastPts, set once the
@@ -1310,6 +1407,7 @@
         h += (1.4 * Math.sin(lx * 0.83 + lz * 0.37) * Math.cos(lz * 0.71 - lx * 0.29) + 0.9 * Math.sin(lx * 1.61 - lz * 1.27 + 1.3) + 0.7 * Math.abs(Math.sin(lx * 2.3 + lz * 2.9))) * Math.min(1, d / 2) * Math.min(1, h / 4);   // crags
         if (d > DC) for (const [sx, sz, sh, sr] of SPIRES) { const k = ((lx - sx) ** 2 + (lz - sz) ** 2) / (sr * sr); if (k < 6) h += sh * Math.exp(-k * 1.4); }
         if (lz > TZ1) h *= sm(TW + 0.4, TW + 3.6, Math.abs(lx));   // the cutting the path comes up to the tunnel in
+        h *= sm(0.6, 5, cpD(lx, lz));   // cut back round the car park
         out.rock = 1 - 0.55 * t;
         return Math.max(0, h);
       };
@@ -1318,8 +1416,9 @@
       p.bore = (lx, lz, y) => (inTun(lx, lz) && y < FY + 3 ? FY * Math.max(0, Math.min(1, (TZ1 - lz) / (TZ1 - TZ0))) : inCave(lx, lz) && y < 3 ? 0 : null);
       p.ceil = (lx, lz) => (Math.abs(lx) < TW + 0.6 && lz > TZ0 - 0.4 && lz < TZ1 + 0.3 ? FY + VH - 0.5 : inCave(lx, lz) && lx < CX0 - 0.6 ? 4.6 : null);   // the camera stays under the vault
       p.holeAt = (lx, lz, y) => (Math.abs(lx) < TW + 1.8 && lz > TZ0 - 1.6 && lz < TZ1 + 2.6 && y < FY + VH + 1.3) || (Math.abs(lz - CZ0) < CWH + 2 && lx > CX1 - 0.4 && lx < CX0 + 1.6 && y < 6.4);   // open the rock at the tunnel and cave mouths
-      p.noPier = (lx, lz) => (Math.abs(lx) < 8 && lz > 6 && lz < 32) || floorD(lx, lz) < 2;   // no pier in the cutting, nor on the crater floor (the roads span it)
+      p.noPier = (lx, lz) => (Math.abs(lx) < 8 && lz > 6 && lz < 32) || floorD(lx, lz) < 2 || inCP(lx, lz, 2);   // no pier in the cutting, nor on the crater floor (the roads span it)
       p.ground = (lx, lz, y) => {
+        if (inCP(lx, lz)) return FY + cpY(lx, lz, y === undefined ? undefined : y - FY);   // the car park's levels and ramps, for whoever is on them
         if (lx < FB[0] - 1 || lx > FB[1] + 1 || lz < FB[2] - 1 || lz > FB[3] + 1) return 0;
         if (inSlip(lx, lz)) return FY * Math.max(0, Math.min(1, (lx - SLIP.x0) / (SLIP.x1 - SLIP.x0)));
         if (onPier(lx, lz) && (y === undefined || y > 0.45)) return FY;   // a boat goes on under it (the piles keep it out)
@@ -1416,7 +1515,7 @@
         let acc = 0, a = FLOOR[0];
         for (let i = 1; i <= FLOOR.length; i++) { const b = FLOOR[i % FLOOR.length]; acc += Math.hypot(b[0] - a[0], b[1] - a[1]); if (acc < 3.4 && i < FLOOR.length) continue;
           const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, n = out(mx, mz, [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]);
-          if (!(Math.abs(mx) < TW + 1 && mz > 6) && !(Math.abs(mz - CZ0) < CWH + 0.8 && mx < -34)) { const bx = p.addBox(mx + n[0] * 0.6, mz + n[1] * 0.6, L / 2 + 0.25, 0.75, -1e9, FY + 3), al = p.rot + Math.atan2(-(b[1] - a[1]), b[0] - a[0]); bx.c = Math.cos(al); bx.s = Math.sin(al); }
+          if (!(Math.abs(mx) < TW + 1 && mz > 6) && !(Math.abs(mz - CZ0) < CWH + 0.8 && mx < -34) && !inCP(mx, mz, 1.5)) { const bx = p.addBox(mx + n[0] * 0.6, mz + n[1] * 0.6, L / 2 + 0.25, 0.75, -1e9, FY + 3), al = p.rot + Math.atan2(-(b[1] - a[1]), b[0] - a[0]); bx.c = Math.cos(al); bx.s = Math.sin(al); }
           a = b; acc = 0; } }
 
       // The tunnel in from the plaza: lined with riveted plate on iron ribs, lamps along both walls, an iron gateway at
@@ -1610,8 +1709,47 @@
         for (const sx of [-1.25, 1.25]) add(new THREE.BoxGeometry(0.08, 1.5, 0.08), steelM, sx, 1.85, 0.75);
         const sg2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.42), new THREE.MeshBasicMaterial({ map: E.textTex(label, { w: 512, h: 96, color: '#2a2420', font: '700 60px "Hind",sans-serif', bg: '#f2ead8' }), transparent: true })); sg2.position.set(0, 2.2, 1.06); sg.add(sg2);
         const w = p.toWorld(x, z); p.addCircle(x, z, 1.4); };
-      stall(-4.6, 6.4, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(30.5, -8, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-3.6, -18, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(31.5, -28, -Math.PI / 2, '#6cc070', 'LEMONADE');
+      stall(-4.6, 6.4, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(30.5, -8, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-3.6, -18, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(32.4, -24.5, -Math.PI / 2, '#6cc070', 'LEMONADE');
       stall(-5.5, -42.5, 0, '#9b7bd8', 'GAMES'); stall(12.5, -43.5, 0, '#ef7a1a', 'PRIZES');
+      // the car park itself (CP above): concrete slabs on columns, sloped ramps with rails, parapets, cars on every level, lights
+      {
+        const conc = E.mat('#9a968e', { map: E.tex('concrete', 2, 2), rough: 0.92 }), concD = E.mat('#7c786f', { map: E.tex('concrete', 2, 2), rough: 0.95 }), railM = E.mat('#c9a830', { rough: 0.5, metal: 0.3 }), tubeM = E.basic('#e8f2ff');
+        const W = CP.x1 - CP.x0, Lz = CP.s - CP.n, ang = Math.atan2(LV[1], Lz), len = Math.hypot(Lz, LV[1]), xm = (CP.x0 + CP.x1) / 2, zm = (CP.n + CP.s) / 2, wlx = (CP.x0 + CP.wl) / 2, elx = (CP.el + CP.x1) / 2, midW = CP.el - CP.wl;
+        const box = (w, h, d, x, y, z, m, sh = true) => pb(w, h, d, x, y, z, m, sh);
+        box(W, 0.2, CP.z1 - CP.z0, xm, -0.1, (CP.z0 + CP.z1) / 2, concD);   // the ground slab (its top level with the fair's floor)
+        for (const L of [LV[1], LV[2], LV[3]]) box(midW, 0.3, Lz, (CP.wl + CP.el) / 2, L - 0.15, zm, conc);   // the decks
+        for (const L of [LV[1], LV[3]]) box(W, 0.3, CP.n - CP.z0, xm, L - 0.15, (CP.z0 + CP.n) / 2, conc);   // the north landings
+        box(W, 0.3, CP.z1 - CP.s, xm, LV[2] - 0.15, (CP.s + CP.z1) / 2, conc);   // the south landing
+        const ramp = (x, y0, up) => { const o = box(CP.wl - CP.x0, 0.3, len, x, y0 + LV[1] / 2 - 0.15, zm, conc); o.rotation.x = up ? ang : -ang;   // up: rises northwards
+          for (const sx of [-1, 1]) { const r2 = box(0.06, 0.06, len, x + sx * 1.45, y0 + LV[1] / 2 + 1.0, zm, railM, false); r2.rotation.x = up ? ang : -ang; }
+          for (let k = 0; k <= 6; k++) { const z = CP.s - (Lz * k) / 6, t = k / 6, y = y0 + LV[1] * (up ? t : 1 - t); for (const sx of [-1, 1]) box(0.06, 1.0, 0.06, x + sx * 1.45, y + 0.5, z, railM, false); } };
+        ramp(wlx, LV[0], true); ramp(wlx, LV[2], true); ramp(elx, LV[1], false);
+        for (const x of [CP.x0 + 0.2, CP.wl, CP.el, CP.x1 - 0.2]) for (const z of [CP.z0 + 0.2, zm, CP.z1 - 0.2]) { box(0.45, LV[3] + 1.2, 0.45, x, (LV[3] + 1.2) / 2, z, concD); p.addCircle(x, z, 0.32); }
+        // parapets: round the landings' outer edges and the decks' open ends; a band at each level along the long sides
+        for (const L of [LV[1], LV[2], LV[3]]) {
+          box(W, 1.0, 0.2, xm, L + 0.5, CP.z0 + 0.1, concD); box(W, 1.0, 0.2, xm, L + 0.5, CP.z1 - 0.1, concD);
+          for (const x of [CP.x0 + 0.1, CP.x1 - 0.1]) box(0.2, 1.0, CP.z1 - CP.z0, x, L + 0.5, (CP.z0 + CP.z1) / 2, concD);
+        }
+        box(midW, 1.0, 0.2, (CP.wl + CP.el) / 2, LV[2] + 0.5, CP.n + 0.1, concD);   // deck 2's north end (no landing there)
+        for (const L of [LV[1], LV[3]]) box(midW, 1.0, 0.2, (CP.wl + CP.el) / 2, L + 0.5, CP.s - 0.1, concD);   // decks 1 and 3's south ends
+        // colliders: the outside (all the way up, open on the south at the ground), the decks' ends, the ramps' rails
+        const FYw = (L) => FY + L;
+        for (const [x, z, hx, hz, y0] of [[CP.x0, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [CP.x1, (CP.z0 + CP.z1) / 2, 0.15, (CP.z1 - CP.z0) / 2, -1e9], [xm, CP.z0, W / 2, 0.15, -1e9], [xm, CP.z1, W / 2, 0.15, FY + 1.6]]) p.addBox(x, z, hx, hz, y0, 1e9);
+        p.addBox((CP.wl + CP.el) / 2, CP.n, midW / 2, 0.12, FYw(LV[2]) - 0.6, FYw(LV[2]) + 1.6); for (const L of [LV[1], LV[3]]) p.addBox((CP.wl + CP.el) / 2, CP.s, midW / 2, 0.12, FYw(L) - 0.6, FYw(L) + 1.6);
+        for (let k = 0; k < 7; k++) { const za = CP.s - (Lz * k) / 7, zb = CP.s - (Lz * (k + 1)) / 7, zc = (za + zb) / 2, ta = k / 7, tb = (k + 1) / 7;
+          for (const [x, y0, up] of [[CP.wl, LV[0], true], [CP.wl, LV[2], true], [CP.el, LV[1], false]]) { const ya = y0 + LV[1] * (up ? ta : 1 - ta), yb = y0 + LV[1] * (up ? tb : 1 - tb); p.addBox(x, zc, 0.1, Lz / 14, FY + Math.min(ya, yb) - 0.4, FY + Math.max(ya, yb) + 1.3); } }
+        p.addBox(wlx, CP.s - 6.5, (CP.wl - CP.x0) / 2, 0.15, -1e9, FY + 0.45);   // no walking in at the ground under the low end of the first ramp
+        // lights under the decks and on the roof; cars on every level
+        for (const L of [LV[1], LV[2], LV[3]]) for (const z of [-42, -38, -34]) box(0.12, 0.06, 1.6, (CP.wl + CP.el) / 2, L - 0.34, z, tubeM, false);
+        for (const [x, z] of [[CP.x0 + 0.6, CP.z0 + 0.6], [CP.x1 - 0.6, CP.z0 + 0.6], [CP.x1 - 0.6, CP.z1 - 0.6]]) { box(0.12, 4, 0.12, x, LV[3] + 2, z, concD); box(0.5, 0.15, 0.5, x, LV[3] + 4, z, tubeM, false); }
+        if (SW.Cars) { const cr2 = E.rng(4747); let k = 0;
+          for (const L of LV) for (const [x, ry] of [[CP.wl + 2.4, -Math.PI / 2], [CP.el - 2.4, Math.PI / 2]]) for (const z of [-43.4, -40.6, -37.8, -35, -32.2]) {
+            if (cr2() < 0.45) continue; const c = SW.Cars.make(E, (k++ * 5) % 7); c.position.set(x, L + 0.02, z); c.rotation.y = ry + (cr2() < 0.3 ? Math.PI : 0); g.add(c); p.addBox(x, z, 2.3, 1.0, FY + L - 0.5, FY + L + 1.6); } }
+        // the sign: on the south face over the top, and on a post facing the fair
+        { const sm = new THREE.MeshBasicMaterial({ map: E.textTex('P  立体駐車場\nPARKING  ·  CRATER FUNFAIR', { w: 768, h: 220, color: '#ffffff', bg: '#1f55b8', font: '900 104px "Hind","Noto Sans JP",sans-serif', font2: '700 40px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide }); sm.userData.lin = true;
+          const a = new THREE.Mesh(new THREE.PlaneGeometry(7, 2), sm); a.position.set(xm, LV[3] + 2.4, CP.z1 + 0.05); g.add(a); box(7.2, 0.15, 0.15, xm, LV[3] + 1.35, CP.z1 + 0.05, concD);
+          const b2 = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), sm); b2.position.set(CP.x0 + 1.5, 3.2, CP.z1 + 1.6); g.add(b2); box(0.12, 3, 0.12, CP.x0 + 1.5, 1.5, CP.z1 + 1.5, concD); p.addCircle(CP.x0 + 1.5, CP.z1 + 1.5, 0.15); }
+      }
       // trees in round planters, benches and lamp posts along the walks
       for (const [x, z] of [[4.2, 7.4], [8, -11.5], [11, -16], [-2.5, -35], [16, -40], [11, 7]]) {
         pb(1.4, 0.45, 1.4, x, 0.22, z, E.mat('#bdb6aa', { rough: 0.9 }));
@@ -1797,7 +1935,7 @@
         sun: '#ffd7a0', sunInt: 2.3, hemi: 0.56, sunDir: [0.55, 0.45, 0.3],
         tint: [1.05, 0.99, 0.9], expo: 0.92, sat: 0.7, stars: 0,
       };
-      p.map = [{ t: 'poly', x: 0, z: 0, pts: FLOORM.outline, c: '#a39a8c' }, { t: 'poly', x: 0, z: 0, pts: LAGOON, c: '#3f7c86' }, { t: 'circle', x: VX, z: VZ, r: VR, c: '#3a3330' }];
+      p.map = [{ t: 'rect', x: (CP.x0 + CP.x1) / 2, z: (CP.z0 + CP.z1) / 2, w: CP.x1 - CP.x0, h: CP.z1 - CP.z0, c: '#7c786f' }, { t: 'poly', x: 0, z: 0, pts: FLOORM.outline, c: '#a39a8c' }, { t: 'poly', x: 0, z: 0, pts: LAGOON, c: '#3f7c86' }, { t: 'circle', x: VX, z: VZ, r: VR, c: '#3a3330' }];
       p.face = Math.PI;
       p.vp = [0, -2.5];   // in front of the carousel
       p.trail = [[0, TZ1 + 1], [0, TZ0 - 1.5], [0, -2.5]];   // up the cutting and through the tunnel: the path is laid only as far as its mouth
@@ -1868,7 +2006,7 @@
       p.afterHills = ({ groundAt }) => {
         const H = (lx, lz) => { const w = p.toWorld(lx, lz); return groundAt(w.x, w.z); }, nF = FLOOR.length;
         const nrm = (i) => { const a = FLOOR[(i - 1 + nF) % nF], b = FLOOR[(i + 1) % nF], L = Math.hypot(b[0] - a[0], b[1] - a[1]); let n = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]; if (floorD(FLOOR[i][0] + n[0], FLOOR[i][1] + n[1]) < 0) n = [-n[0], -n[1]]; return n; };
-        const nearGap = (x, z) => (Math.abs(x) < TW + 3.5 && z > 4) || (Math.abs(z - CZ0) < CWH + 3.2 && x < -33);
+        const nearGap = (x, z) => (Math.abs(x) < TW + 3.5 && z > 4) || (Math.abs(z - CZ0) < CWH + 3.2 && x < -33) || inCP(x, z, 1.5);   // (and nothing heaped in the car park)
         const faceD = (i, y) => { const [x0, z0] = FLOOR[i], n = nrm(i); for (let d = 0; d < 9; d += 0.15) if (H(x0 + n[0] * d, z0 + n[1] * d) >= y) return d; return -1; };
         // crags: boulders heaped against the foot and along the brink
         { const shapes = Array.from({ length: 6 }, () => []), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), ps = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -1888,7 +2026,7 @@
         // caves: dark mouths glowing deep inside, barred with iron
         const caveTex = canvasTex(128, 160, (x, w, h) => { x.clearRect(0, 0, w, h); const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0c0907'); gr.addColorStop(0.55, '#1c120c'); gr.addColorStop(0.85, '#6a3412'); gr.addColorStop(1, '#a8571c'); x.fillStyle = gr; x.beginPath(); x.moveTo(8, h); x.lineTo(8, 64); x.quadraticCurveTo(10, 6, 64, 4); x.quadraticCurveTo(118, 6, 120, 64); x.lineTo(120, h); x.closePath(); x.fill(); });
         const caveM = new THREE.MeshBasicMaterial({ map: caveTex, alphaTest: 0.5 }); caveM.userData.lin = true;
-        const cave = (i, y, wd, ht, barred) => { const d = faceD(i, y + ht + 0.6); if (d < 0) return null; const n = nrm(i), [x0, z0] = FLOOR[i], x = x0 + n[0] * (d - 0.15), z = z0 + n[1] * (d - 0.15), yaw = Math.atan2(-n[0], -n[1]);
+        const cave = (i, y, wd, ht, barred) => { const d = faceD(i, y + ht + 0.6); if (d < 0) return null; const n = nrm(i), [x0, z0] = FLOOR[i], x = x0 + n[0] * (d - 0.15), z = z0 + n[1] * (d - 0.15), yaw = Math.atan2(-n[0], -n[1]); if (inCP(x, z, 2)) return null;
           const m = new THREE.Mesh(new THREE.PlaneGeometry(wd, ht), caveM); m.position.set(x, y + ht / 2, z); m.rotation.y = yaw; gw.add(m);
           if (barred) for (let k = 1; k < 6; k++) { const b = pw(0.06, ht * 0.9, 0.06, x - Math.cos(yaw) * (k / 6 - 0.5) * wd * 0.9 - n[0] * 0.08, y + ht * 0.45, z + Math.sin(yaw) * (k / 6 - 0.5) * wd * 0.9 - n[1] * 0.08, ironD); }
           for (const sd of [-1, 1]) { const bo = new THREE.Mesh(E.rockGeo(i + sd + 3), basaltD); bo.scale.set(0.9, ht * 0.55, 0.8); bo.position.set(x + Math.cos(yaw) * sd * (wd / 2 + 0.35) - n[0] * 0.1, y + ht * 0.4, z - Math.sin(yaw) * sd * (wd / 2 + 0.35) - n[1] * 0.1); gw.add(bo); }
@@ -1918,7 +2056,7 @@
           for (let k = 0; k < N; k++) { const c = at((k + 0.5) / N); pw(1.1, 0.06, 0.32, c.x, c.y, c.z, plankM).rotation.y = yaw; }   // planks and ropes go in the batch (two draws, not a hundred)
           for (const sd of [-1, 1]) for (let k = 0; k < N; k++) { const o = side.clone().multiplyScalar(sd * 0.6), a = at(k / N).add(o).setY(at(k / N).y + 1.0), b = at((k + 1) / N).add(o).setY(at((k + 1) / N).y + 1.0); along(pw(0.05, a.distanceTo(b) + 0.02, 0.05, 0, 0, 0, ropeM, false), a, b); if (k % 2 === 0) { const f0 = at(k / N).add(o); along(pw(0.025, 1.0, 0.025, 0, 0, 0, ropeM, false), f0, a); } } }
         // posts along the brink: walking in over the top you stop before the drop
-        for (let i = 0; i < nF; i++) { const [x0, z0] = FLOOR[i], n = nrm(i), x = x0 + n[0] * (DC - 0.4), z = z0 + n[1] * (DC - 0.4); p.addCircle(x, z, 0.95, Math.min(FY + 3, H(x, z) - 1.5), 1e9); }   // above the foot's boxes (up to FY + 3), or lower where the wall is low: anyone that high here is on the rock, not in the crater or its tunnel
+        for (let i = 0; i < nF; i++) { const [x0, z0] = FLOOR[i], n = nrm(i), x = x0 + n[0] * (DC - 0.4), z = z0 + n[1] * (DC - 0.4); if (!inCP(x, z, 1.5)) p.addCircle(x, z, 0.95, Math.min(FY + 3, H(x, z) - 1.5), 1e9); }   // (none in the car park) above the foot's boxes (up to FY + 3), or lower where the wall is low: anyone that high here is on the rock, not in the crater or its tunnel
         PW.flush();
       };
       { const upd0 = p.update; p.update = (t, dt, f, v, viewing) => { upd0(t, dt, f, v, viewing); calderaTick(t, dt, f); }; }   // and the harbour round the lagoon
