@@ -956,18 +956,19 @@
           if (bd > 20) return null;
           const fieldS = SW.SONGS.find((q) => q.scene === 'field'), fF = fieldS ? SW.Ring.frame(fieldS) : null, parkS = SW.SONGS.find((q) => q.scene === 'park'), pF = parkS ? SW.Ring.frame(parkS) : null;
           const stop = (x, z) => { const w = p.toWorld(x, z); if (fF) { const l = fF.local(w.x, w.z); if (Math.abs(l.x) < 28 && l.z > -36 && l.z < 16) return true; } if (pF && Math.hypot(w.x - pF.x, w.z - pF.z) < 64) return true; return Math.abs(w.x) > 138 || Math.abs(w.z) > 138; };
-          const branch = (dir) => { const pts = []; let len = 0, prev = null;
+          const branch = (dir) => { const pts = []; pts.dir = dir; let len = 0, prev = null;   // (dir: which way along the ring; each point keeps its ring index i, for the street that carries on past the end: street.js)
             for (let k = 0; k < 60; k++) { const i = i0 + dir * k, [x, z, y] = at(i), [x1, z1] = at(i + 1), [x0, z0] = at(i - 1); let tx = x1 - x0, tz = z1 - z0; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
               let nx = -tz, nz = tx; if (nx * (oc.x - x) + nz * (oc.z - z) < 0) { nx = -nx; nz = -nz; }
               if (prev) len += Math.hypot(x - prev[0], z - prev[1]); prev = [x, z];
               if (len > 58 || stop(x + nx * 5, z + nz * 5)) break;
-              pts.push({ x, z, nx, nz, y }); }
+              pts.push({ x, z, nx, nz, y, i: ((i % N) + N) % N }); }
             return pts; };
           const branches = [branch(-1), branch(1)].filter((b) => b.length > 3);
           const C = 4.95, RW = 3.45;   // the street's centre, out from the viaduct's centre line, and its half-width
           const near = (lx, lz, lo, hi) => branches.some((b) => b.some((q, k) => { if (k === b.length - 1) return false; const dx = lx - q.x, dz = lz - q.z, o = dx * q.nx + dz * q.nz, a = -dx * q.nz + dz * q.nx; return o > lo && o < hi && Math.abs(a) < 1.6; }));
           return { branches, C, RW, near, crossZ: (x) => { let best = null; for (const b of branches) for (let k = 1; k < b.length; k++) { const a = b[k - 1], c = b[k], ax = a.x + a.nx * C, cx = c.x + c.nx * C; if ((ax - x) * (cx - x) <= 0 && ax !== cx) { const t = (x - ax) / (cx - ax); best = a.z + a.nz * C + (c.z + c.nz * C - a.z - a.nz * C) * t; } } return best; } };
         })();
+        p.vd = VD;   // (street.js carries the street on from the end of its north branch)
         const asph = E.mat('#27242e', { map: E.tex('asphalt', 1.5, 8), rough: 0.9 }), asphR = E.mat('#27242e', { map: E.tex('asphalt', 3, 3), rough: 0.9 });
         const road = E.plane(11, AV0 - (AV2 + 2), asph); road.position.set(0, 0.03, (AV0 + AV2 + 2) / 2); ext.add(road); p.pick(road);   // from the block's sheet to the forecourt's paving, overlapping neither (no flicker where two flat sheets lie in one plane)
         const lineM = E.mat('#e8c43a', { rough: 0.6 }), whiteM = E.mat('#d9d4de');

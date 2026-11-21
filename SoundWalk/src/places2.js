@@ -1175,7 +1175,7 @@
         if (!far && Math.abs(x) < 14) continue;
         const w = 7 + r() * 8, d = 7 + r() * 8, h = far ? 10 + r() * 34 : 4 + r() * 4;
         const b = shotKit.mesh(w, h, d, kr);
-        b.position.set(x, 0, z); g.add(tm.add(b));
+        b.position.set(x, 0, far ? Math.min(z, ZC - WD / 2 - 6 - d / 2) : z); g.add(tm.add(b));   // (the far ones clear of the street under the expressway: street.js)
         blocks.push({ b, h, k: i % 24 });
       }
       p.addBox(0, ZC - WD / 2 - 27, HALF + 30, 22);

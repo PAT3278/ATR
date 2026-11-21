@@ -764,7 +764,8 @@
     }
   });
 
-  var hillField = null;   // the rolling hills north of OHH (built once the places and paths exist, below)
+  var hillField = null;
+  var street = null, streetView = null;   // the street under the viaduct, from FLIP's north branch to the beach (street.js): planned before the piers and the hills, built after   // the rolling hills north of OHH (built once the places and paths exist, below)
   function hillAt(x, z) {   // the height of the drawn hill mesh: each grid cell is the same two triangles PlaneGeometry makes, so feet, trails and signposts sit on the facets
     const F = hillField; if (!F) return 0;
     const fx = (x - F.x0) / F.d, fz = (z - F.z0) / F.d; if (fx < 0 || fz < 0 || fx >= F.nx - 1 || fz >= F.nz - 1) return 0;
@@ -776,6 +777,7 @@
     let h = hillAt(x, z);
     if (y !== undefined) for (const p of places) if (p.bore) { const l = p.local(x, z), b = p.bore(l.x, l.z, y); if (b != null) { h = b; break; } }   // down in a tunnel through the hills: its floor, not the hill over it
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
+    if (street) h = Math.max(h, street.ground(x, z));
     return h;
   }
 
@@ -1154,9 +1156,11 @@
     layTrail([dw, { x: (rim.x + dw.x) / 2, z: (rim.z + dw.z) / 2 }, rim], { w: 1.5 });
   }
 
+  street = SW.Street ? SW.Street.make(ring, places) : null;
+
   /* ================= ring road ================= */
   const ringView = SW.Ring.build(ring, E, {
-    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
+    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || (!!street && street.pier(x, z)) || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
     keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
   });
   scene.add(ringView.group);
@@ -1217,12 +1221,14 @@
           m *= hit;
         }
         for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
+        if (street && m > 0) m *= street.mask(x, z);   // cut away along the street under the viaduct and round its shops
         H *= m;
       } else H = 0;
       if (R > 0) {   // the relief: kept clear of the plaza, the loop, other places and their paths (a narrow gorge), and below the decks
         let m = smooth(PLAZA_R + 16, PLAZA_R + 26, Math.hypot(x, z)) * smooth(4, 8, distToPath(x, z, loopPath).d);
         for (const p of places) { if (m <= 0) break; if (p === own || p.onHill || inside(own, p)) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 0.4, hw + 1.4, distToPath(x, z, p.path).d); const l = p.local(x, z); if (coreOf(p)(l.x, l.z)) m = 0; }
         for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
+        if (street && m > 0) m *= street.mask(x, z);
         R = Math.min(R * m, Math.max(0, deckCap(x, z)));
       }
       if (C >= 0.05) {   // the coast range: masked like the crests, except at the ring road, where it keeps under the deck instead
@@ -1231,6 +1237,7 @@
         for (const p of places) { if (m <= 0) break; if (p.onHill) continue; const hw = p.road ? p.road.hw : 1.6; m *= smooth(hw + 1.2, hw + 11, distToPath(x, z, p.path).d); }
         for (const p of others) { if (m <= 0) break; if (p.onHill || p.rim || Math.hypot(x - p.x, z - p.z) > 140) continue; m *= smooth((p.clearR || 8) + 2, (p.clearR || 8) + 14, Math.hypot(x - p.vpW.x, z - p.vpW.z)); const l = p.local(x, z); if (Math.hypot(x - p.x, z - p.z) < 50 && coreOf(p)(l.x, l.z)) m = 0; }   // (a place's core only near it: SHOT's reaches out along the whole expressway)
         for (const p of carvers) { if (m <= 0) break; const l = p.local(x, z); m *= p.carve(l.x, l.z); }
+        if (street && m > 0) m *= street.mask(x, z);
         C = Math.min(C * m, Math.max(0, deckCap(x, z) + 1));
         if (KV) { const dx = x - KV.x, dz = z - KV.z, d = Math.hypot(dx, dz), a = d > 1 ? (dx * KVD[0] + dz * KVD[1]) / d : 0; if (d > 18) C = Math.min(C, 13 + 30 * smooth(0.93, 0.85, a)); }   // the lookout's line of sight to the sea
         H = Math.max(H, C);
@@ -1274,7 +1281,7 @@
     const r = rng(97), bush = [[], [], []], stones = [], F = hillField;
     const rockAt = (x, z) => { const i = Math.round((x - F.x0) / F.d), j = Math.round((z - F.z0) / F.d); return i < 0 || j < 0 || i >= F.nx || j >= F.nz ? 1 : F.rk[j * F.nx + i]; };
     const ok = (x, z) => {
-      if (Math.abs(x) > 145 || Math.abs(z) > 145 || Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 11 || distToPath(x, z, loopPath).d < 4) return false;
+      if (Math.abs(x) > 145 || Math.abs(z) > 145 || (!!street && street.clear(x, z, 1.5)) || Math.hypot(x, z) < PLAZA_R + 5 || ring.dist(x, z) < 11 || distToPath(x, z, loopPath).d < 4) return false;
       for (const p of places) { if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false; const l = p.local(x, z); if ((p.scrubOut || p.blocks)(l.x, l.z)) return false; if (distToPath(x, z, p.path).d < (p.road ? p.road.hw + 2 : 2.6)) return false; }
       return true;
     };
@@ -1293,7 +1300,7 @@
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if (Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2.5) || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
+      if ((!!street && street.clear(x, z, 2.5)) || Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2.5) || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -1731,7 +1738,8 @@
   const garage = Array.from({ length: NCAR }, (_, i) => { const c = makeCar(i); c.visible = false; carsG.add(c); return c; });
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   let drv = null, drvK = 0, driveHinted = false, padBrake = false, padGas = false, padFast = false;
-  const freeCar = () => { const used = new Set(ring.pas.map((q) => q.car)); if (drv) used.add(drv.car); const free = garage.filter((c) => !used.has(c)); return free[Math.floor(Math.random() * free.length)] || garage[0]; };
+  let carPick = -1;   // the model chosen at SEASIDE MOTORS (street.js): it is the one that waits at the beach lay-by
+  const freeCar = (pa) => { const used = new Set(ring.pas.map((q) => q.car)); if (drv) used.add(drv.car); if (pa && pa.id === 'beach' && carPick >= 0 && !used.has(garage[carPick])) return garage[carPick]; const free = garage.filter((c) => !used.has(c)); return free[Math.floor(Math.random() * free.length)] || garage[0]; };
   function parkAt(pa, car, pose) {
     const u = car.userData, c = Math.cos(pose.yaw), s = Math.sin(pose.yaw);
     pa.car = car; car.visible = true; car.position.set(pose.x, pa.y, pose.z); car.rotation.set(0, pose.yaw, 0);
@@ -1743,8 +1751,22 @@
     pa.box = { x: 0, z: 0, hx: 1, hz: 2, c: 1, s: 0, y0: 1e9, y1: 1e9 }; boxes.push(pa.box);
     pa.ia = { kind: 'car', pa, x: 0, z: 0, sx: 0, sz: 0, r: 3.4, mark: 0, y0: pa.y - 1.2, y1: pa.y + 2.5 }; interact.push(pa.ia);
     pa.out = { kind: 'exit', pa, x: 0, z: 0, mark: 0 };
-    parkAt(pa, freeCar(), pa.slot);
+    parkAt(pa, freeCar(pa), pa.slot);
   });
+  // The street under the viaduct and its shops (street.js). At SEASIDE MOTORS' desk you choose the car that waits for you
+  // at the beach lay-by: each go brings the next model round (swapping it with whichever bay had it) and onto the turntable.
+  streetView = street ? SW.Street.build(street, E, { scene, boxes, circles, interact, pick: (m) => { m.userData.ground = true; pick.push(m); } }) : null;
+  const beachPA = ring.pas.find((q) => q.id === 'beach');
+  if (streetView && beachPA) streetView.showCar(garage.indexOf(beachPA.car));
+  function pickCar() {
+    if (drv || !beachPA || !beachPA.car || !streetView) return;
+    const i = (garage.indexOf(beachPA.car) + 1) % NCAR, want = garage[i], other = ring.pas.find((q) => q !== beachPA && q.car === want);
+    carPick = i;
+    if (other) parkAt(other, beachPA.car, other.slot);
+    parkAt(beachPA, want, beachPA.slot);
+    streetView.showCar(i);
+    say([`SEASIDE MOTORS: ${SW.Cars ? SW.Cars.models[i].name.toUpperCase() : 'CAR ' + (i + 1)}`, 'この車が上の BEACH PA で待っています。エレベーターで上がって乗ってください。']);
+  }
   function startDrive(pa) {
     if (drv || !pa.car) return;
     const car = pa.car;
@@ -1765,7 +1787,7 @@
     const home = pa || d.from;
     ring.pas.forEach((q) => (q.car = null));
     parkAt(home, d.car, pa ? { x: d.x, z: d.z, yaw: d.yaw } : home.slot);
-    ring.pas.forEach((q) => { if (q !== home) parkAt(q, freeCar(), q.slot); });
+    ring.pas.forEach((q) => { if (q !== home) parkAt(q, freeCar(q), q.slot); });
     garage.forEach((c) => { if (!ring.pas.some((q) => q.car === c)) c.visible = false; });
     let spot = null;
     if (pa) {
@@ -2560,6 +2582,7 @@
     if (ia.kind === 'store') { openStore(); return; }
     if (ia.kind === 'hoop') { startHoop(ia.hoop); return; }
     if (ia.kind === 'pool') { startPool(); return; }
+    if (ia.kind === 'garage') { pickCar(); return; }
     if (ia.kind === 'sign') {
       const p = ia.place, s = p.song;
       say([`この道の先：${s.place}（${s.placeEn}）`, p.found ? `♪ ${s.title} が流れている場所。近づくほど音が大きくなる。` : 'どんな曲が流れているかは、行ってみないとわからない。']);
@@ -2730,6 +2753,7 @@
         g.restore();
       });
     });
+    if (streetView) streetView.map(g, toMap, MAP_S);   // the street under the viaduct, and the shops by the beach
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 3 * MAP_S;
     g.beginPath(); loopPath.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
     places.forEach((p) => { g.beginPath(); p.path.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke(); });
@@ -2967,7 +2991,7 @@
       $('#prompt').hidden = !fkey; $('#prompt').className = fkey ? 'k-' + fkey.kind : '';
       if (fkey) {
         $('#promptKey').textContent = TOUCH ? 'A' : 'Z';
-        $('#promptText').textContent = fkey.kind === 'ride' ? fkey.label : fkey.kind === 'store' ? 'RECORDS' : fkey.kind === 'hoop' ? 'FREE THROW' : fkey.kind === 'pool' ? 'POOL' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
+        $('#promptText').textContent = fkey.kind === 'ride' ? fkey.label : fkey.kind === 'store' ? 'RECORDS' : fkey.kind === 'hoop' ? 'FREE THROW' : fkey.kind === 'pool' ? 'POOL' : fkey.kind === 'garage' ? 'CHOOSE A CAR' : !fkey.place ? '' : fkey.place.found ? '♪ ' + fkey.place.song.title : '？';
       }
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
@@ -2991,7 +3015,8 @@
     mixGrade(G, GR, bp ? bp.grade : GR, bp ? bw : 0);
     applyGrade();
     ringView.upd(clamp(1 - G.sunInt / 1.1, 0, 1), loudP && loudP.f ? loudP.f.pulse : 0);
-    ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;   // a view shows only its own place
+    ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;
+    if (streetView) { streetView.group.visible = ringView.group.visible; streetView.update(t); }   // a view shows only its own place
 
     places.forEach((p) => {
       const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
