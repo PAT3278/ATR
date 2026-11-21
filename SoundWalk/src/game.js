@@ -743,6 +743,8 @@
     return p;
   });
 
+  // the far ring of mountains keeps off whatever a place spreads out past the land's edge (p.farClear: FIELD's airport)
+  for (const m of farGroup.children.slice()) { if (m.material !== farM) continue; const r = (m.geometry.parameters && m.geometry.parameters.radius) || 60; if (places.some((p) => p.farClear && [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].some(([ox, oz]) => { const l = p.local(m.position.x + ox, m.position.z + oz); return p.farClear(l.x, l.z); }))) farGroup.remove(m); }
   // Buildings a place lets spill out into the woods (FLIP's outskirts, FIELD's neighbourhood) give way to every other
   // place proper (p.core, or its blocks) and to its viewpoint; where two places' spill overlaps, the higher p.spillRank keeps it.
   const coreOf = (q) => q.core || q.blocks;

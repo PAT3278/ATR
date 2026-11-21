@@ -59,65 +59,18 @@
     build(p, E) {
       const g = p.group, r = E.rng(101);
       const W = 20, Z0 = 8, Z1 = -28, H = 4.4;
-      const floor = E.plane(W * 2, Z0 - Z1, E.mat('#4b4d55', { map: E.tex('paving', 10, 9), rough: 0.5, metal: 0.1 }));
-      floor.position.set(0, 0.04, (Z0 + Z1) / 2);
-      g.add(floor); p.pick(floor);
-      const ceil = new THREE.Mesh(new THREE.BoxGeometry(W * 2 + 0.4, 0.4, Z0 - Z1 + 0.4), E.mat('#202228'));
-      ceil.position.set(0, H + 0.2, (Z0 + Z1) / 2); ceil.castShadow = true;
-      g.add(ceil);
+      // The office floor of the firefight that stood here is gone: FIELD's street runs straight on from here, under the ring
+      // road and past the land's edge, to the airport (airport.js). (W, Z0, Z1: where it stood, still kept clear of piers.)
+      const lights = [], fill = { intensity: 0 };
+      const AIR = SW.Airport ? SW.Airport.build(p, E) : null;
 
-      // Pillars
-      for (const x of [-12, -4, 4, 12]) for (const z of [-3, -11, -19]) {
-        const pl = new THREE.Mesh(new THREE.BoxGeometry(0.9, H, 0.9), E.mat('#6a6c74'));
-        pl.position.set(x, H / 2, z); pl.castShadow = true; g.add(pl);
-        p.addBox(x, z, 0.45, 0.45);
-      }
-      // Glass curtain walls with mullions; the front has a doorway.
-      const glassM = new THREE.MeshStandardMaterial({ color: lin('#7fa6c8'), transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.6, depthWrite: false });
-      glassM.userData.lin = true;
-      const mullM = E.mat('#2d3038', { metal: 0.6, rough: 0.4 });
-      const wall = (x0, z0, x1, z1) => {
-        const len = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(z1 - z0, x1 - x0);
-        const gl = new THREE.Mesh(new THREE.PlaneGeometry(len, H), glassM);
-        gl.position.set((x0 + x1) / 2, H / 2, (z0 + z1) / 2); gl.rotation.y = -ang; g.add(gl);
-        const n = Math.round(len / 4);
-        for (let k = 0; k <= n; k++) {
-          const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, H, 0.12), mullM);
-          m.position.set(x0 + ((x1 - x0) * k) / n, H / 2, z0 + ((z1 - z0) * k) / n); g.add(m);
-        }
-        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-        p.addBox(cx, cz, Math.abs(x1 - x0) / 2 + 0.15, Math.abs(z1 - z0) / 2 + 0.15);
-      };
-      wall(-W, Z1, W, Z1); wall(-W, Z1, -W, Z0); wall(W, Z1, W, Z0);
-      wall(-W, Z0, -3.5, Z0); wall(3.5, Z0, W, Z0);
-
-      // Ceiling light strips
-      const lights = [];
-      for (const x of [-8, 0, 8]) for (const z of [1, -7, -15, -23]) {
-        const m = basic('#dfe9ff');
-        const s = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 3.2), m);
-        s.position.set(x, H - 0.04, z); g.add(s);
-        lights.push({ m, base: m.color.clone(), seed: r() * 10 });
-      }
-      const fill = new THREE.PointLight(lin('#b9ccff'), 1.2, 40, 1.6);
-      fill.position.set(0, H - 0.6, -10); g.add(fill);
-
-      // Cover: desks on their side, crates, a server rack
-      const deskM = E.mat('#8b8f99'), crateM = E.mat('#5a5040');
-      [[-7, -6, 0.3], [6, -8, -0.2], [-2, -14, 0.1], [9, -16, 0.5], [-10, -18, -0.4], [2, -22, 0], [-14, -9, 1.3], [14, -4, 1.4]].forEach(([x, z, a], i) => {
-        const big = i % 3 === 2;
-        const m = new THREE.Mesh(new THREE.BoxGeometry(big ? 1.2 : 2.2, big ? 1.2 : 0.95, big ? 1.2 : 0.9), big ? crateM : deskM);
-        m.position.set(x, big ? 0.6 : 0.48, z); m.rotation.y = a; m.castShadow = true; g.add(m);
-        p.addBox(x, z, big ? 0.8 : 1.2, big ? 0.8 : 0.8);
-      });
-
-      // Manhattan outside the glass
+      // Manhattan beyond the street's end, either side of the way out to the airport
       const winTex = E.tex('windows', 2, 10);
       const fieldKit = SW.Buildings.kit(E, 1), kr = E.rng(7101);
       const towers = [];
       for (let i = 0; i < 70; i++) {
         const lx = (r() - 0.5) * 190, lz = -36 - r() * 110;
-        if (Math.abs(lx) < 24 && lz > -40) continue;
+        if ((Math.abs(lx) < 24 && lz > -40) || Math.abs(lx + 3) < 18 || lz < -84) continue;   // (clear of the street and the airport)
         const w = 6 + r() * 9, d = 6 + r() * 9, h = 25 + r() * 95;
         { const wp = p.toWorld(lx, lz); if (E.ring && E.ring.dist(wp.x, wp.z) < Math.max(w, d) / 2 + 8) continue; }   // the expressway threads between the towers
         const b = fieldKit.mesh(w, h, d, kr);   // one of several designs
@@ -130,52 +83,6 @@
         beam.position.set(x, 0, z); g.add(beam);
         towers.push({ beam, seed: x });
       }
-
-      // Combat: red laser sights from the back, tracers and muzzle flashes on the beat, sparks.
-      const lasers = [];
-      for (let i = 0; i < 4; i++) {
-        const m = glowM('#ff2626', 0.5);
-        const l = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 34, 6).rotateX(Math.PI / 2).translate(0, 0, 17), m);
-        l.position.set(-9 + i * 6, 1.35, -25.5); g.add(l);
-        lasers.push({ l, m, seed: i * 1.7 });
-      }
-      const tracers = [];
-      for (let i = 0; i < 14; i++) {
-        const m = glowM('#ffd27a', 0);
-        const tr = new THREE.Mesh(new THREE.BoxGeometry(1, 0.05, 0.05), m);
-        tr.visible = false; g.add(tr);
-        tracers.push({ tr, m, life: 0 });
-      }
-      const flashes = [0].map(() => { const l = new THREE.PointLight(lin('#ffb060'), 0, 18, 2); g.add(l); return l; });
-      let ti = 0, fi = 0, lastShot = -1;
-      const SP = 500, spos = new Float32Array(SP * 3).fill(-999), svel = new Float32Array(SP * 3), slife = new Float32Array(SP);
-      let sh = 0;
-      const sg = new THREE.BufferGeometry();
-      sg.setAttribute('position', new THREE.BufferAttribute(spos, 3));
-      const sparks = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.12, map: E.dot(), color: lin('#ffcf7a'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-      sparks.material.userData.lin = true;
-      sparks.frustumCulled = false; g.add(sparks);
-      const covers = [[-7, -6], [6, -8], [-2, -14], [9, -16], [-10, -18], [2, -22], [-14, -9], [14, -4]];
-      const shoot = (big) => {
-        const a = covers[Math.floor(r() * covers.length)];
-        let b = covers[Math.floor(r() * covers.length)];
-        if (b === a) b = covers[(covers.indexOf(a) + 3) % covers.length];
-        const ax = a[0], az = a[1], bx = b[0] + (r() - 0.5) * 2, bz = b[1] + (r() - 0.5) * 2, y = 1 + r() * 0.5;
-        const t = tracers[ti]; ti = (ti + 1) % tracers.length;
-        const len = Math.hypot(bx - ax, bz - az);
-        t.tr.position.set((ax + bx) / 2, y, (az + bz) / 2);
-        t.tr.scale.set(len, 1, 1);
-        t.tr.rotation.y = -Math.atan2(bz - az, bx - ax);
-        t.tr.visible = true; t.life = 0.14;
-        const fl = flashes[fi]; fi = (fi + 1) % flashes.length;
-        fl.position.set(ax, y, az); fl.intensity = RM ? 1 : big ? 6 : 3.5;
-        for (let k = 0; k < (big ? 26 : 12); k++) {
-          const i = sh; sh = (sh + 1) % SP;
-          spos.set([bx, y, bz], i * 3);
-          svel.set([(r() - 0.5) * 6, r() * 4, (r() - 0.5) * 6], i * 3);
-          slife[i] = 0.4 + r() * 0.4;
-        }
-      };
 
       // Uptown brownstones along the approach: stoops with iron rails, and two performers on the steps.
       const perf = []; let stoopUp = 0, songT = 0, camLead = -1;
@@ -597,10 +504,13 @@
       p.vp = [3.4, 28.5];   // the music lives on the pavement in front of the apartment house's courtyard, across the street from the two performers
       p.pathEnd = 41;
       p.clearR = 26;
-      p.noPier = (lx, lz) => Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2;   // the ring road crosses above the office: keep its piers out of the floor
-      p.core = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || (Math.abs(lx) < 24 && lz < 13 && lz > -32);   // the row and the office
+      p.noPier = (lx, lz) => (AIR && AIR.road(lx, lz)) || (Math.abs(lx) < W + 2 && lz < Z0 + 2 && lz > Z1 - 2);   // the ring road crosses above the street on its way out: keep its piers out of the street
+      p.shore = (lx, lz) => !!AIR && (AIR.zone(lx, lz) || AIR.road(lx, lz));   // past the land's edge: the street out to the airport, and the airport
+      p.wake = (lx, lz) => !!AIR && AIR.zone(lx, lz);   // out at the airport, far from the street, it still moves
+      p.farClear = (lx, lz) => !!AIR && AIR.zone(lx, lz);   // the far mountains keep off it (game.js)
+      p.core = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || (!!AIR && (AIR.road(lx, lz) || AIR.zone(lx, lz)));   // the row, the street out and the airport
       p.spillRank = 1;   // its rowhouses win over FLIP's outskirts where they meet
-      p.blocks = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (Math.abs(lx) < 24 && lz < 13 && lz > -32) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
+      p.blocks = (lx, lz) => inCourts(lx, lz) || wedgeIn(lx, lz) || (lx > -27 && lx < 17 && lz >= 8 && lz < 61) || neighbourhood.some((f) => Math.abs(f.x - lx) < f.w / 2 + 4.5 && Math.abs(f.z - lz) < f.d / 2 + 2) || (lx > -8 && lx < 17 && lz >= 12 && lz < 48) || (!!AIR && (AIR.road(lx, lz) || AIR.zone(lx, lz))) || (lz < -30 && lz > -150 && Math.abs(lx) < 100);
 
       p.update = (t, dt, f, v) => {
         if (streetLife) {   // the barber's pole turns; the neighbours nod along when the music is up
@@ -608,33 +518,7 @@
           streetLife.neighbours.forEach((n, i) => { n.m.f.position.y = n.base + Math.max(0, Math.sin(t * 6 + i)) * 0.03 * (f.level || 0) * 3; if (n.m.head) n.m.head.rotation.x = Math.sin(t * 4 + i * 1.3) * 0.12 * (f.pulse || 0); });
         }
         if (neonM) neonM.opacity = Math.sin(t * 37) > 0.97 || (t % 7 > 6.85) ? 0.25 : 1;   // the deli's OPEN sign, buzzing
-        // Shots on the kick, a burst on hard hits; a slow trickle so it never goes fully quiet.
-        if (v > 0.05 && ((f.beat && t - lastShot > 0.1) || (f.level > 0.25 && t - lastShot > 1.6))) {
-          lastShot = t;
-          shoot(f.bass > 0.8);
-          if (f.bass > 0.8) shoot(false);
-        }
-        tracers.forEach((tr) => {
-          if (tr.life <= 0) return;
-          tr.life -= dt;
-          tr.m.opacity = Math.max(0, tr.life / 0.14);
-          if (tr.life <= 0) tr.tr.visible = false;
-        });
-        flashes.forEach((l) => (l.intensity *= Math.exp(-dt * 18)));
-        for (let i = 0; i < SP; i++) {
-          if (slife[i] <= 0) continue;
-          const j = i * 3;
-          slife[i] -= dt;
-          if (slife[i] <= 0) { spos[j + 1] = -999; continue; }
-          svel[j + 1] -= 12 * dt;
-          spos[j] += svel[j] * dt; spos[j + 1] = Math.max(0.05, spos[j + 1] + svel[j + 1] * dt); spos[j + 2] += svel[j + 2] * dt;
-        }
-        sg.attributes.position.needsUpdate = true;
-        lasers.forEach((L, i) => {
-          L.l.rotation.y = Math.sin(t * 0.6 + L.seed) * 0.45 + (i - 1.5) * 0.12;
-          L.l.rotation.x = Math.sin(t * 0.9 + L.seed * 2) * 0.03;
-          L.m.opacity = 0.25 + f.mid * 0.7;
-        });
+        if (AIR) AIR.update(t, dt);
         lights.forEach((L) => {
           const flick = !RM && f.high > 0.35 && Math.sin(t * 37 + L.seed * 9) > 0.92 ? 0.15 : 1;
           L.m.color.copy(L.base).multiplyScalar(flick * (1 - f.pulse * 0.45));
