@@ -1772,6 +1772,37 @@
       PA = parkingArea(p, E, g, { y: RH + 0.03, zr: -10.5, depth: 6.4, half: 18, taper: 10, name: 'OHH PA', kiosk: [9, 17], walkway: null, open: [[-9, 8.5]], slotX: 4, ground: (lx, lz) => heightC(lx, lz), skip: (lx, lz) => inChan(lx, lz) || chanD(lx, lz) < 7 });   // the hill top behind it is open to walk on
       E.bench(g, 3.2, -5.6, Math.PI, HH);
       p.addBox(3.2, -5.6, 1.2, 0.4);
+      // A second lay-by on the sea side of the road, over the east beach: your car can wait here too (ring.js 'beach'). It is
+      // the same parkingArea, built in the frame ring.js gives it: the road's frame turned half round about (17, -15)
+      // (x' = 34 - lx, z' = -30 - lz). A short walkway goes out from its back to a lift that runs up and down by itself
+      // between the deck and the sand: stand on its platform and it takes you (no stairs).
+      { const flip = (x, z) => [34 - x, -30 - z], g2 = new THREE.Group(); g2.position.set(34, 0, -30); g2.rotation.y = Math.PI; g.add(g2);
+        const p2 = { addBox: (x, z, hx, hz, y0, y1) => p.addBox(...flip(x, z), hx, hz, y0, y1), addCircle: (x, z, r0, y0, y1) => p.addCircle(...flip(x, z), r0, y0, y1), pick: (m) => p.pick(m) };
+        const LY = RH + 0.03, PB2 = parkingArea(p2, E, g2, { y: LY, zr: -10.5, depth: 6.4, half: 8, taper: 6, name: 'BEACH PA', kiosk: null, walkway: [-1.3, 1.3, 2.9], open: [], slotX: 2, ground: (x, z) => Math.max(heightC(...flip(x, z)), 0.14) });
+        // the lift: a steel cage on the sand at the end of the walkway, open to the beach at the bottom and to the walkway at the top
+        const LX0 = 32.8, LX1 = 35.2, LZ0 = -35.4, LZ1 = -33, BOT = 0.14, steelL = E.mat('#5a6460', { metal: 0.5, rough: 0.5 }), yel = E.mat('#e8c43a', { rough: 0.5 });
+        const LB = E.batch(g), lb = LB.box, lc = [(LX0 + LX1) / 2, (LZ0 + LZ1) / 2];
+        for (const x of [LX0, LX1]) for (const z of [LZ0, LZ1]) lb(0.14, LY + 3, 0.14, x, (LY + 3) / 2, z, steelL);
+        for (let y = 2.6; y < LY + 3; y += 1.6) { lb(LX1 - LX0, 0.08, 0.08, lc[0], y, LZ0, steelL); for (const x of [LX0, LX1]) lb(0.08, 0.08, LZ1 - LZ0, x, y, lc[1], steelL); }   // bars round the open cage
+        for (let y = 0.6; y < LY - 1; y += 1.6) lb(LX1 - LX0, 0.08, 0.08, lc[0], y, LZ1, steelL);
+        lb(LX1 - LX0 + 0.4, 0.2, LZ1 - LZ0 + 0.4, lc[0], LY + 3, lc[1], steelL); lb(0.5, 0.2, 0.3, lc[0], LY + 2.7, lc[1], E.basic('#ffe2b0'), false);
+        LB.flush();
+        for (const x of [LX0 - 0.05, LX1 + 0.05]) p.addBox(x, lc[1], 0.08, (LZ1 - LZ0) / 2 + 0.05);           // its sides
+        p.addBox(lc[0], LZ0 - 0.05, (LX1 - LX0) / 2, 0.08, BOT + 2.4, 1e9);                                       // the sea side, above the way in from the sand
+        p.addBox(lc[0], LZ1 + 0.05, (LX1 - LX0) / 2, 0.08, -1e9, LY - 1.6);                                       // the land side, below the way out onto the walkway
+        const plat = new THREE.Group(); g.add(plat);
+        { const pm = new THREE.Mesh(new THREE.BoxGeometry(LX1 - LX0 - 0.1, 0.16, LZ1 - LZ0 - 0.1), E.mat('#8d948f', { metal: 0.5, rough: 0.6 })); pm.position.set(lc[0], -0.08, lc[1]); pm.castShadow = pm.receiveShadow = true; plat.add(pm); p.pick(pm);
+          const st = new THREE.Mesh(new THREE.BoxGeometry(LX1 - LX0 - 0.1, 0.02, 0.12), yel); st.position.set(lc[0], 0.01, LZ0 + 0.1); plat.add(st); }
+        { const m = new THREE.MeshBasicMaterial({ map: E.textTex('BEACH PA  ↑\nエレベーター  LIFT', { w: 512, h: 150, color: '#ffffff', bg: '#1f55b8', font: '700 56px "Hind","Noto Sans JP",sans-serif', font2: '700 34px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide }); m.userData.lin = true;
+          const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.53), m); sg.position.set(lc[0], 3.0, LZ0 - 0.12); g.add(sg); }
+        // up and down: 4 s at the bottom, 5 s up, 4 s at the top, 5 s down
+        const liftY = (t) => { const u = ((t % 18) + 18) % 18, e = (k) => k * k * (3 - 2 * k); return u < 4 ? BOT : u < 9 ? BOT + (LY - BOT) * e((u - 4) / 5) : u < 13 ? LY : LY - (LY - BOT) * e((u - 13) / 5); };
+        const lift = { y: BOT }; p.beachLift = lift;
+        const inCage = (lx, lz) => lx > LX0 + 0.1 && lx < LX1 - 0.1 && lz > LZ0 + 0.05 && lz < LZ1 - 0.05;
+        p.ground = ((g0) => (lx, lz, y) => { const a = PB2.ground(...flip(lx, lz), y); if (a) return a; if (inCage(lx, lz) && E.onDeck(lift.y, y)) return Math.max(lift.y, BOT); return g0(lx, lz, y); })(p.ground);
+        p.liftTick = (t) => { lift.y = liftY(t); plat.position.y = lift.y; };
+        p.map2 = [{ t: 'rect', x: 34, z: -22.2, w: 16, h: 6.4, c: '#3a3a3e' }];
+      }
 
       // Sea below and beyond
       const sea = new THREE.Mesh(new THREE.PlaneGeometry(700, 380), new THREE.ShaderMaterial({
@@ -1870,7 +1901,7 @@
       }
       p.shore = (lx, lz) => onBeach(lx, lz) || (lx >= BW.x0 && lx < BW.x1 + 12 && lz > -32 && lz < -10);   // past the land's edge: the sand, and the grass behind the south beach that leads onto it
       p.hillMask = (lx, lz) => sstep(-31, -21, lz);   // the rolling hills (game.js) come down behind the sand: never over the beaches, the harbour or the sea
-      p.wake = (lx, lz) => lz < -24 && lz > -100 && Math.abs(lx) < 140;   // far along the beaches, out of this place's light, the people still move
+      p.wake = (lx, lz) => (lz < -24 && lz > -100 && Math.abs(lx) < 140) || (Math.abs(lx - 34) < 30 && lz < -14 && lz > -40);   // far along the beaches, out of this place's light, the people still move
       const BL = { acts: [], after: [], lives: [], roots: [], kit: {}, seg: [], players: [], ball: null, puller: null, at: {}, tick: () => {} }; p.beach = BL;   // BL.at: a few of them by name, for tests
       {
         const sandM = E.mat('#e2cf9e', { map: E.tex('sand', 30, 8) }), wetM = E.mat('#b9a477', { map: E.tex('sand', 30, 1), rough: 0.6 });
@@ -2341,7 +2372,7 @@
         g.add(c); cars.push(c);
       }
 
-      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#5d7342' }, { t: 'rect', x: 0, z: -230, w: 700, h: 400, c: '#244f73' }, { t: 'rect', x: 0, z: RZ, w: HALF * 2, h: 8, c: '#3a393c' }].concat(chanMap, cn ? cn.map : []);
+      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#5d7342' }, { t: 'rect', x: 0, z: -230, w: 700, h: 400, c: '#244f73' }, { t: 'rect', x: 0, z: RZ, w: HALF * 2, h: 8, c: '#3a393c' }].concat(chanMap, cn ? cn.map : []).concat(p.map2 || []);
       p.grade = {
         top: '#4c86c8', bottom: '#ffd69c', fog: '#f1c99c', near: 70, far: 460,
         sun: '#ffd08a', sunInt: 2.9, hemi: 0.75, sunDir: [0.07, 0.06, -1],
@@ -2357,6 +2388,7 @@
       let speed = 0;
       p.update = (t, dt, f, v, viewing) => {
         sea.material.uniforms.t.value = t;
+        if (p.liftTick) p.liftTick(t);   // the beach lay-by's lift
         if (chanWater) chanWater.normalMap.offset.set(t * 0.012, t * 0.02);
         if (cn) cn.update(t);
         BL.tick(t, dt);   // everyone on the beaches

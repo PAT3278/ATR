@@ -91,11 +91,12 @@
     const pas = [];
     // flare (optional): the mouth widens towards the road by `add` metres a side, from local z `zt` down to `zr`, so you
     // can turn in at an angle instead of square
-    const addPA = (id, f, y, rect, slot, gap, walk, walls, flare) => {
+    const OGAP0 = new Uint8Array(N);   // the outer side opened for a lay-by there (joined into R.OGAP below)
+    const addPA = (id, f, y, rect, slot, gap, walk, walls, flare, side = 'in') => {
       const widen = (lz) => (flare && lz !== undefined ? flare.add * Math.max(0, Math.min(1, (flare.zt - lz) / (flare.zt - flare.zr))) : 0);
       const sw = f.toWorld(slot.lx, slot.lz), dw = { x: slot.dx * f.c + slot.dz * f.s, z: -slot.dx * f.s + slot.dz * f.c };
       const pa = {
-        id, f, y, rect, gap, flare,
+        id, f, y, rect, gap, flare, side,
         slot: { x: sw.x, z: sw.z, yaw: Math.atan2(dw.x, dw.z) },
         // Where the car's centre may be. Given the car ({ yaw, len, wid }) the limits pull in by however far its body
         // reaches towards each solid edge (walls = { x0, x1, z1 }; the road side is open), so a nose cannot poke through a rail.
@@ -114,7 +115,7 @@
         canStand(x, z) { const l = f.local(x, z); return Math.abs(l.x - walk.cx) <= walk.hx && Math.abs(l.z - walk.cz) <= walk.hz; },   // where a person on foot fits
         clamp(x, z, car) { const l = f.local(x, z), [x0, x1, z0, z1] = pa.lim(car, l.z); return f.toWorld(Math.max(x0, Math.min(x1, l.x)), Math.max(z0, Math.min(z1, l.z))); },
       };
-      for (let i = 0; i < N; i++) { const l = f.local(X[i], Z[i]); if (Math.abs(l.x) < gap && Math.abs(l.z - ROAD_Z) < 5) GAP[i] = 1; }
+      for (let i = 0; i < N; i++) { const l = f.local(X[i], Z[i]); if (Math.abs(l.x) < gap && Math.abs(l.z - ROAD_Z) < 5) (side === 'out' ? OGAP0 : GAP)[i] = 1; }   // the wall opens on the lay-by's side
       pas.push(pa);
     };
     // rect = where the CAR'S CENTRE may be; it overlaps the road's own band so the two join up
@@ -122,9 +123,13 @@
     // stalls at sixty degrees; your car waits in one of them, nosing towards the way out (see places2.js parkingArea)
     if (shot) addPA('shot', shot, H_SHOT, { cx: 0, cz: -4.7, hx: 24, hz: 4.1 }, { lx: 6, lz: -3.6, dx: 0.87, dz: -0.5 }, 38, { cx: 0, cz: 2.7, hx: 2.3, hz: 3 }, { x0: -24.5, x1: 24.5, z1: -0.7 }, { zr: -7.1, zt: -4.8, add: 12 });
     if (ohh) addPA('ohh', ohh, H_OHH, { cx: 0, cz: -7.9, hx: 18, hz: 4.5 }, { lx: 4, lz: -7.2, dx: 0.87, dz: -0.5 }, 30, { cx: 0, cz: -2.5, hx: 7, hz: 1.4 }, { x0: -18.5, x1: 18.5, z1: -4.2 }, { zr: -10.6, zt: -8.3, add: 10 });
+    // a second lay-by on OHH's straight, on the sea side over the east beach (a lift goes down to the sand; places2.js OHH):
+    // in OHH's frame turned half round about (17, -15), so the road is at ROAD_Z and the lay-by on its +z side as usual
+    if (ohh) { const fb = { x: ohh.x, z: ohh.z, rot: ohh.rot + Math.PI, c: -ohh.c, s: -ohh.s, th: ohh.th, dist: ohh.dist, toWorld: (lx, lz) => ohh.toWorld(34 - lx, -30 - lz), local: (wx, wz) => { const l = ohh.local(wx, wz); return { x: 34 - l.x, z: -30 - l.z }; } };
+      addPA('beach', fb, H_OHH, { cx: 0, cz: -7.9, hx: 8, hz: 4.5 }, { lx: 2, lz: -7.2, dx: 0.87, dz: -0.5 }, 15, { cx: 0, cz: -2.5, hx: 4, hz: 1.4 }, { x0: -8.5, x1: 8.5, z1: -4.2 }, { zr: -10.6, zt: -8.3, add: 6 }, 'out'); }
 
     const R = {
-      N, L, ds, X, Y, Z, TX, TZ, HW, GAP, pas, frames: { shot, ohh, field, tama }, H_SHOT, H_OHH,
+      N, L, ds, X, Y, Z, TX, TZ, HW, GAP, OGAP: OGAP0, pas, frames: { shot, ohh, field, tama }, H_SHOT, H_OHH,
       median: (i) => HW[((i % N) + N) % N] > 7.2,
       // Road coordinates of a world point. hint = a sample index from last time (searches only nearby); out is reused.
       proj(x, z, hint, out) {
@@ -241,7 +246,7 @@
       const all = [B, B2, ...ramps];
       // where a ramp lies on the loop's deck: no walls on the ramp; the loop's median drops where a ramp runs along it, and
       // its inner wall opens where a ramp leaves or joins from the inside
-      R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N); R.OGAP = new Uint8Array(N);
+      R.MGAP = new Uint8Array(N); R.JGAP = new Uint8Array(N); R.OGAP = R.OGAP || new Uint8Array(N);
       for (const Rd of ramps) for (let i = 0; i < Rd.N; i++) {
         const j = nearest(Rd.X[i], Rd.Z[i]), dx = Rd.X[i] - X[j], dz = Rd.Z[i] - Z[j], d = dx * TZ[j] - dz * TX[j], dy = Rd.Y[i] - Y[j];
         // walls open only where the two decks really join: level with each other, and the ramp reaching over the loop's
@@ -414,10 +419,10 @@
       const plateM = new THREE.MeshBasicMaterial({ map: tx }); plateM.userData.lin = true;
       const postM2 = E.mat('#9aa0a8', { metal: 0.6, rough: 0.4 });
       for (const pa of Rd.pas) {
-        const idx = []; for (let i = 0; i < N; i++) if (GAP[i]) { const l = pa.f.local(X[i], Z[i]); if (Math.abs(l.x) < pa.gap + 1 && Math.abs(l.z - ROAD_Z) < 6) idx.push(i); }
+        const out = pa.side === 'out', OPEN = out ? (Rd.OGAP || []) : GAP, idx = []; for (let i = 0; i < N; i++) if (OPEN[i]) { const l = pa.f.local(X[i], Z[i]); if (Math.abs(l.x) < pa.gap + 1 && Math.abs(l.z - ROAD_Z) < 6) idx.push(i); }
         if (!idx.length) continue;
         for (const [i, face] of [[idx[0] - 2, -1], [idx[idx.length - 1] + 2, 1]]) {   // face: +1 looks up the road (towards +s), -1 down it
-          at(i, -(HW[wr(i)] + 0.15), 0); const px = v.x, py = v.y, pz = v.z;
+          at(i, (out ? 1 : -1) * (HW[wr(i)] + 0.15), 0); const px = v.x, py = v.y, pz = v.z;
           const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.4, 0.12), postM2); post.position.set(px, py + 1.7, pz); g.add(post);
           const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), plateM); plate.position.set(px, py + 3.1, pz); plate.rotation.y = yawOf(wr(i)) + (face > 0 ? 0 : Math.PI);
           plate.translateZ(0.08); g.add(plate);
