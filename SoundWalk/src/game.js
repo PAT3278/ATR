@@ -1673,7 +1673,23 @@
   // take you anywhere else slides along the edge instead.
   const LAND = 145, WORLD = 330;
   const canBe = (x, z) => (Math.abs(x) <= LAND && Math.abs(z) <= LAND) || (Math.abs(x) <= WORLD && Math.abs(z) <= WORLD && (isWater(x, z) || places.some((q) => { if (!q.shore) return false; const l = q.local(x, z); return q.shore(l.x, l.z); })));
+  // Where a place cuts the hill's surface away to show a tunnel's mouth (p.holeAt: the canal's portals and light shafts,
+  // the funfair's tunnel and cave), there is nothing to stand on up at the hill's height: someone walking on the hill stops
+  // at its edge, as at a wall, instead of walking out over the hole on ground that is not drawn. Down in the tunnel or the
+  // cutting (well below the hill there) you pass as before. A 1 m grid over the hills, made once.
+  let holeMask = null;
+  function holeAtHill(x, z) {
+    const F = hillField; if (!F) return false;
+    if (!holeMask) {
+      const holers = places.filter((q) => q.holeAt), W = Math.round((F.nx - 1) * F.d), Hh = Math.round((F.nz - 1) * F.d); holeMask = new Uint8Array(W * Hh);
+      for (let j = 0; j < Hh; j++) for (let i = 0; i < W; i++) { const x0 = F.x0 + i + 0.5, z0 = F.z0 + j + 0.5, h = hillAt(x0, z0); if (h < 1.2) continue; if (holers.some((q) => { const l = q.local(x0, z0); return q.holeAt(l.x, l.z, h); })) holeMask[j * W + i] = 1; }
+      holeMask.W = W; holeMask.H = Hh;
+    }
+    const i = Math.floor(x - F.x0), j = Math.floor(z - F.z0);
+    return i >= 0 && j >= 0 && i < holeMask.W && j < holeMask.H && holeMask[j * holeMask.W + i] === 1;
+  }
   function collide(p) {
+    if (p !== P && holeAtHill(p.x, p.z) && !holeAtHill(P.x, P.z) && P.y > hillAt(p.x, p.z) - 1.2) { p.x = P.x; p.z = P.z; }   // the edge of a hole in the hill (above)
     if (!canBe(p.x, p.z)) {
       if (p !== P && canBe(p.x, P.z)) p.z = P.z; else if (p !== P && canBe(P.x, p.z)) p.x = P.x; else if (p !== P && canBe(P.x, P.z)) { p.x = P.x; p.z = P.z; }
       else { const lim = isWater(p.x, p.z) ? WORLD : LAND; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // set down somewhere it cannot be: back onto the land
