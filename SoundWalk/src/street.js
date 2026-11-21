@@ -43,7 +43,7 @@
     // outer side, on round the ring (against its s) until it comes down the coast towards OHH, then away from the deck down
     // to the back of the beach and along it
     const iE = br[br.length - 1].i, C0 = -flip.vd.C, O1 = 5.2, ctl = [];
-    for (let k = 0; k < N; k += 2) {
+    for (let k = -6; k < N; k += 2) {   // (from 6 samples back: over the end of FLIP's street, the same asphalt laid over it, so there is no seam)
       const q = rs(iE - k), o = C0 + (O1 - C0) * sm(2, 26, k);
       ctl.push(new THREE.Vector3(q.x + q.nx * o, 0, q.z + q.nz * o));
       if (k > 60 && ohh.local(q.x, q.z).z < 9) break;
@@ -60,9 +60,11 @@
     P.forEach((q) => {
       let b = 1e9, j = 0; for (let i = 0; i < N; i++) { const d = Math.hypot(R.X[i] - q.x, R.Z[i] - q.z); if (d < b) { b = d; j = i; } }
       q.deck = b < R.HW[j] - 0.8 ? R.Y[j] : null;
+      const a = rs(j); q.ro = (q.x - R.X[j]) * a.nx + (q.z - R.Z[j]) * a.nz;   // its offset from the ring road's centre line (outwards)
       const l = ohh.local(q.x, q.z); q.beach = l.z < BZ + 1 && l.x < 80;
     });
-    const lo = (k) => -HW - (P[k].beach ? LAND : 0), hi = HW + PAVE;
+    { let inner = true; P.forEach((q) => { inner = inner && q.ro < -3; q.inner = inner; }); }   // FLIP's pavement carries on along the town side until the street sets off across under the deck
+    const lo = (k) => -HW - (P[k].beach ? LAND : P[k].inner ? 2 : 0), hi = HW + PAVE;
 
     // nearest point of the line: a coarse grid of the segments near each cell
     const G = 8, x0 = Math.min(...P.map((q) => q.x)) - 16, z0 = Math.min(...P.map((q) => q.z)) - 16, gx = Math.ceil((Math.max(...P.map((q) => q.x)) + 16 - x0) / G), gz = Math.ceil((Math.max(...P.map((q) => q.z)) + 16 - z0) / G);
@@ -126,10 +128,11 @@
     w.pick(ribbon(-S.HW, S.HW, RY, asph));
     w.pick(ribbon(S.HW, S.HW + S.PAVE, PY, pave)); kerb(S.HW, 0, PY, kerbM); kerb(S.HW + S.PAVE, -0.3, PY, kerbM);
     if (kb >= 0) { w.pick(ribbon(-S.HW - S.LAND, -S.HW, PY, pave, kb, last)); kerb(-S.HW, 0, PY, kerbM, kb, last); }
+    { let ki = 0; while (ki < last && P[ki + 1].inner) ki++; if (ki > 0) { w.pick(ribbon(-S.HW - 2, -S.HW, PY, pave, 0, ki)); kerb(-S.HW, 0, PY, kerbM, 0, ki); kerb(-S.HW - 2, -0.3, PY, kerbM, 0, ki); } }   // FLIP's pavement, carried on
     // markings: the edge lines solid, a dashed line down the middle
     ribbon(-S.HW + 0.2, -S.HW + 0.32, 0.036, lineM); ribbon(S.HW - 0.32, S.HW - 0.2, 0.036, lineM);
     const B = E.batch(g), bx = B.box, whiteM = E.mat('#d9d4de'), postM = E.mat('#5a6068', { metal: 0.5, rough: 0.5 }), lampM = E.basic('#ffb04a'), lampW = E.basic('#fff1d0');
-    for (let k = 1; k < P.length; k += 2) { const a = P[k - 1], q = P[k], d = bx(0.12, 0.012, 1.1, (a.x + q.x) / 2, 0.036, (a.z + q.z) / 2, whiteM, false); d.rotation.y = Math.atan2(q.x - a.x, q.z - a.z); }
+    for (let k = 7; k < P.length; k += 2) { const a = P[k - 1], q = P[k], d = bx(0.12, 0.012, 1.1, (a.x + q.x) / 2, 0.036, (a.z + q.z) / 2, whiteM, false); d.rotation.y = Math.atan2(q.x - a.x, q.z - a.z); }
     // lamps: sodium ones hung under the deck; out from under it, along the beach, posts on the sea side with a lantern
     for (let k = 3; k < P.length; k += 7) {
       const q = P[k];
