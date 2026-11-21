@@ -231,7 +231,6 @@
     vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}',
     fragmentShader: `uniform sampler2D tD;uniform vec2 res;uniform float time,bloom,grain,vig,expo,thr,sat,spd,flare;uniform vec2 sunUv;uniform vec3 tint;varying vec2 vUv;
     vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
-    float b2(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}float b4(vec2 a){return b2(.5*a)*.25+b2(a);}
     void main(){vec2 q0=vUv-.5;vec3 c=vec3(0.);float rb=spd*.014*smoothstep(.05,.6,length(q0));
       if(spd>.001){for(int i=0;i<6;i++){c+=texture2D(tD,vUv-q0*rb*float(i)).rgb;}c/=6.;}else c=texture2D(tD,vUv).rgb;
       float an=atan(q0.y,q0.x);float ln=step(.975,fract(sin(floor(an*46.)*12.9898+floor(time*18.)*7.7)*43758.5453))*smoothstep(.28,.62,length(q0))*spd;c+=ln*.35;
@@ -247,10 +246,9 @@
         c+=fl*flare;}
       c=aces(c*expo)*tint;
       float l=dot(c,vec3(.2126,.7152,.0722));c=mix(vec3(l),c,sat);
-      c=pow(max(c,0.),vec3(1./2.2));c=mix(c,c*c*(3.-2.*c),.36);
+      c=pow(max(c,0.),vec3(1./2.2));c=mix(c,c*c*(3.-2.*c),.22);c=mix(c,c*vec3(.97,1.,1.03)+vec3(.03,.045,.065)*(1.-c),.55);
       vec2 q=vUv-.5;c*=1.-vig*smoothstep(.25,.85,length(q*vec2(1.1,1.)));
       float n=fract(sin(dot(floor(vUv*res)+fract(time)*91.7,vec2(12.9898,78.233)))*43758.5453);c+=(n-.5)*grain;
-      c=floor(c*48.+b4(gl_FragCoord.xy))/48.;
       gl_FragColor=vec4(c,1.);}`,
     depthTest: false, depthWrite: false,
   });
@@ -269,7 +267,7 @@
   const envTex = (() => {
     const c = document.createElement('canvas'); c.width = 512; c.height = 256;
     const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
-    gr.addColorStop(0, '#0a2e8f'); gr.addColorStop(0.28, '#2f6fd6'); gr.addColorStop(0.46, '#bcd9f2'); gr.addColorStop(0.5, '#fbe7c8'); gr.addColorStop(0.51, '#8a8a5a'); gr.addColorStop(0.65, '#5d6b34'); gr.addColorStop(1, '#2e3a1c');
+    gr.addColorStop(0, '#2a5eb4'); gr.addColorStop(0.28, '#6d9bd8'); gr.addColorStop(0.46, '#dce9f5'); gr.addColorStop(0.5, '#f2f6fa'); gr.addColorStop(0.51, '#a3abb2'); gr.addColorStop(0.65, '#838c93'); gr.addColorStop(1, '#4e565c');
     g.fillStyle = gr; g.fillRect(0, 0, 512, 256);
     const r = rng(77);
     for (let i = 0; i < 26; i++) { const x = r() * 512, y = 30 + r() * 80, w = 30 + r() * 60, cg = g.createRadialGradient(x, y, 0, x, y, w); cg.addColorStop(0, 'rgba(255,255,255,.9)'); cg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = cg; g.save(); g.translate(x, y); g.scale(1, 0.35); g.translate(-x, -y); g.fillRect(x - w, y - w, w * 2, w * 2); g.restore(); }
@@ -312,7 +310,7 @@
     void main(){vec3 d=normalize(vD);float h=d.y;vec3 c=mix(bottom,top,pow(clamp(h,0.,1.),.42));c=mix(c,bottom*1.12+vec3(.04),exp(-max(h,0.)*14.)*.65);c=mix(c,bottom*.55,clamp(-h*3.,0.,1.));
       float s=max(dot(d,normalize(sunDir)),0.);c+=sunCol*(smoothstep(.9994,.9997,s)*7.+pow(s,90.)*.9+pow(s,9.)*.32);
       if(h>.01){vec2 uv=d.xz/(h+.2)*1.3+vec2(time*.006,time*.002);float n=fbm(uv);float den=smoothstep(.3,.72,n)*smoothstep(.01,.22,h);
-        float lit=smoothstep(.35,.85,fbm(uv+vec2(.07,.05)*1.)-n*.4+.5);vec3 cc=mix(mix(top,vec3(.75,.78,.86),.6)*.85,vec3(1.)*1.15+sunCol*.25*pow(s,3.),lit*.85+pow(s,5.)*.15);c=mix(c,cc,smoothstep(.3,.62,n)*smoothstep(.01,.2,h)*.95);}
+        float lit=smoothstep(.35,.85,fbm(uv+vec2(.07,.05)*1.)-n*.4+.5);vec3 cc=mix(mix(top,vec3(.75,.78,.86),.6)*.85,vec3(1.)*1.15+sunCol*.25*pow(s,3.),lit*.85+pow(s,5.)*.15);c=mix(c,cc,smoothstep(.46,.7,n)*smoothstep(.01,.2,h)*.95);}
       float az=atan(d.z,d.x),rb=0.;
       for(int i=0;i<3;i++){float fi=float(i);float y0=.3+.11*fi+.05*sin(az*2.+time*.12+fi*2.1)+.025*sin(az*5.-time*.09+fi);float w=exp(-pow((h-y0)/.03,2.));rb+=w*(.45+.55*sin(az*3.+time*.17+fi*1.7));}
       c+=mix(vec3(.35,1.,.75),vec3(.45,.8,1.),.5+.5*sin(az*2.+time*.05))*max(rb,0.)*aur;
@@ -347,8 +345,8 @@
       for (let k = 0; k < pa.count; k++) { const x = pa.getX(k), y = pa.getY(k), z = pa.getZ(k), t = (y + h / 2) / h, rr = Math.hypot(x, z), n = fh(x, z, i) * (0.35 + 0.65 * Math.sin(Math.PI * Math.min(1, t * 1.2))); const sc = 1 + n * 0.28; pa.setXYZ(k, x * sc, y + n * h * 0.12 * (1 - t * 0.3), z * sc); }
       geo.computeVertexNormals(); const nm = geo.attributes.normal, sd = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
       for (let k = 0; k < pa.count; k++) { const y = pa.getY(k), t = (y + h / 2) / h, ny = nm.getY(k), lam = 0.45 + 0.75 * Math.max(0, nm.getX(k) * sd.x + ny * sd.y + nm.getZ(k) * sd.z), band = (y * 0.18 + fh(pa.getX(k), pa.getZ(k), i + 5) * 0.6) % 1;
-        let c = band < 0.3 ? [0.6, 0.34, 0.2] : band < 0.55 ? [0.78, 0.6, 0.38] : band < 0.8 ? [0.5, 0.42, 0.34] : [0.84, 0.76, 0.6];
-        if (t < 0.18) c = [0.42, 0.46, 0.26]; if (t > 0.72 - ny * 0.15) c = [1, 1, 1.04];
+        let c = band < 0.3 ? [0.56, 0.59, 0.65] : band < 0.55 ? [0.7, 0.73, 0.78] : band < 0.8 ? [0.49, 0.52, 0.58] : [0.8, 0.82, 0.86];
+        if (t < 0.18) c = [0.52, 0.57, 0.55]; if (t > 0.72 - ny * 0.15) c = [1, 1, 1.04];
         col.set([c[0] * lam, c[1] * lam, c[2] * lam], k * 3); }
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
       const m = new THREE.Mesh(geo, farM); m.position.set(Math.cos(a) * d, h / 2 - 3, Math.sin(a) * d); m.rotation.y = r() * 3; farGroup.add(m); }
@@ -360,7 +358,7 @@
     const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bl, 3));
     farGroup.add(new THREE.Points(bg, farLights)); }
   scene.add(farGroup); farGroup.children.forEach((m) => { if (m.material !== farM) m.visible = false; });
-  const hemi = new THREE.HemisphereLight(lin('#c6d8ff'), lin('#5d4b39'), 0.7);
+  const hemi = new THREE.HemisphereLight(lin('#d2e2ff'), lin('#78808a'), 0.7);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 2.4);
   sun.castShadow = true;
@@ -801,10 +799,15 @@
   function prepGrade(g, rot) {
     const d = new THREE.Vector3(...g.sunDir);
     if (rot !== undefined) d.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
-    const tn = g.tint.map((v) => 1 + (v - 1) * 0.35);   // (a place's own tint, mostly let go: colour is the sky's and the sun's)
-    return { top: lin(g.top), bottom: lin(g.bottom), fog: lin(g.fog), near: g.near, far: g.far ? Math.max(g.far, 140) : g.far, sun: lin(g.sun), sunInt: g.sunInt, hemi: g.hemi, sunDir: d.normalize(), tint: new THREE.Vector3(...tn), expo: g.expo, sat: Math.min(1.7, g.sat * 1.3), stars: g.stars };
+    const tn = g.tint.map((v) => 1 + (v - 1) * 0.25);   // (a place's own tint, mostly let go: colour is the sky's and the sun's)
+    // every place's light is pulled toward the same pale, cool air: its hues kept but quietened and nudged blue-white,
+    // so the world reads as one picture and colour is left for what should catch the eye
+    // (each colour moves toward the clear sky's own, at the brightness the place gave it: a night stays dark, but dark blue)
+    const lum = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    const toward = (hex, tgt, k) => { const c = lin(hex), t = lin(tgt); return c.lerp(t.multiplyScalar(Math.min(1.2, lum(c) / Math.max(1e-4, lum(t)))), k); };
+    return { top: toward(g.top, '#3f78c4', 0.85), bottom: toward(g.bottom, '#e6eef6', 0.85), fog: toward(g.fog, '#d6e1ec', 0.85), near: g.far ? Math.max(g.near, 60) : g.near, far: g.far ? Math.max(g.far, 330) : g.far, sun: toward(g.sun, '#f7faff', 0.5), sunInt: g.sunInt, hemi: g.hemi, sunDir: d.normalize(), tint: new THREE.Vector3(...tn), expo: g.expo, sat: Math.min(0.9, g.sat * 0.85), stars: g.stars };
   }
-  const BASE = prepGrade({ top: '#123c9e', bottom: '#f3d5ae', fog: '#c3d2e4', near: 40, far: 300, sun: '#fff0d2', sunInt: 1.75, hemi: 0.72, sunDir: [0.45, 0.62, 0.35], tint: [1, 1, 1], expo: 1.0, sat: 1.05, stars: 0 });   // Bryce's day: deep blue overhead, a warm haze at the horizon, a hard sun
+  const BASE = prepGrade({ top: '#3f78c4', bottom: '#e6eef6', fog: '#d6e1ec', near: 70, far: 400, sun: '#f7faff', sunInt: 1.7, hemi: 0.85, sunDir: [0.45, 0.62, 0.35], tint: [0.98, 1, 1.03], expo: 1.0, sat: 0.95, stars: 0 });   // Bryce's day: a clear blue overhead paling to white at the horizon, a hard white sun
   // Behind the wheel the day turns to a sodium-lit night (each place still pulls the light its own way).
   const DRIVE = prepGrade({ top: '#04050c', bottom: '#19243c', fog: '#0f1828', near: 26, far: 210, sun: '#9db6ff', sunInt: 0.34, hemi: 0.37, sunDir: [-0.35, 0.7, 0.3], tint: [0.94, 1.0, 1.08], expo: 1.3, sat: 1.05, stars: 0.3 });
   const blank = () => prepGrade({ top: '#000', bottom: '#000', fog: '#000', near: 0, far: 0, sun: '#000', sunInt: 0, hemi: 0, sunDir: [0, 1, 0], tint: [1, 1, 1], expo: 1, sat: 1, stars: 0 });
@@ -1278,11 +1281,11 @@
       // tri: the face's corners in the place's frame (x, y, z three times), for a place that drops whatever stands in its tunnels (OHH's canal)
       const faceIn = (q, t, cx, cy, cz) => { const l = q.local(cx, cz); if (q.holeAt.length > 3) for (let k = 0; k < 3; k++) { const v = ix[t + k], m = q.local(pa.getX(v), pa.getZ(v)); tri[k * 3] = m.x; tri[k * 3 + 1] = pa.getY(v); tri[k * 3 + 2] = m.z; } return q.holeAt(l.x, l.z, cy, tri); };
       if (holes.length) { const keep = []; for (let t = 0; t < ix.length; t += 3) { let cx = 0, cy = 1e9, cz = 0; for (let k = 0; k < 3; k++) { cx += pa.getX(ix[t + k]) / 3; cy = Math.min(cy, pa.getY(ix[t + k])); cz += pa.getZ(ix[t + k]) / 3; } if (holes.some((q) => faceIn(q, t, cx, cy, cz))) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); } geo.setIndex(keep); } }
-    const hmat = mat('#c2c79a', { map: tex('grass', 44, 27), rough: 0.9 }, true), rockT = tex('rock', 1, 1);
+    const hmat = mat('#b8c4b2', { map: tex('grass', 44, 27), rough: 0.9 }, true), rockT = tex('rock', 1, 1);
     hmat.onBeforeCompile = (sh) => {   // where the relief is (attribute rk), dark volcanic rock projected from the three axes instead of the grass
       rimPatch(sh); sh.uniforms.rockMap = { value: rockT }; sh.uniforms.rockC = { value: lin('#55504c') };
       sh.vertexShader = 'attribute float rk;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRk=rk;vWp=(modelMatrix*vec4(transformed,1.)).xyz;vWn=normalize(mat3(modelMatrix)*objectNormal);');
-      sh.fragmentShader = 'uniform sampler2D rockMap;uniform vec3 rockC;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n{float hn=sin(vWp.x*.13+sin(vWp.z*.07)*2.)*.9+sin(vWp.z*.11-vWp.x*.05)*.7;float y=vWp.y+hn;float st=clamp(1.-normalize(vWn).y,0.,1.); float bd=fract(y*.42);vec3 s1=vec3(.62,.32,.17),s2=vec3(.8,.58,.33),s3=vec3(.52,.42,.33),s4=vec3(.86,.78,.62); vec3 strata=bd<.25?s1:bd<.5?mix(s2,s1,.25):bd<.72?s3:s4;strata*=.78+.22*sin(y*7.3); vec3 low=diffuseColor.rgb*vec3(.9,1.02,.62);float rockAmt=clamp(smoothstep(1.2,6.,y)+smoothstep(.25,.55,st),0.,1.); vec3 col=mix(low,strata*(.85+.3*diffuseColor.g),rockAmt);col=mix(col,vec3(1.02,1.03,1.06),smoothstep(17.,22.,y)*(1.-smoothstep(.45,.75,st))); diffuseColor.rgb=col;} if(vRk>.01){vec3 bw=pow(abs(normalize(vWn)),vec3(4.));bw/=bw.x+bw.y+bw.z;vec3 rc=mapTexelToLinear(texture2D(rockMap,vWp.zy*.09)).rgb*bw.x+mapTexelToLinear(texture2D(rockMap,vWp.xz*.09)).rgb*bw.y+mapTexelToLinear(texture2D(rockMap,vWp.xy*.09)).rgb*bw.z;rc*=rockC*(1.3+.45*sin(vWp.y*1.3+vWp.x*.2));diffuseColor.rgb=mix(diffuseColor.rgb,rc,clamp(vRk,0.,1.));}');
+      sh.fragmentShader = 'uniform sampler2D rockMap;uniform vec3 rockC;varying float vRk;varying vec3 vWp;varying vec3 vWn;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n{float hn=sin(vWp.x*.13+sin(vWp.z*.07)*2.)*.9+sin(vWp.z*.11-vWp.x*.05)*.7;float y=vWp.y+hn;float st=clamp(1.-normalize(vWn).y,0.,1.); float bd=fract(y*.42);vec3 s1=vec3(.56,.58,.63),s2=vec3(.72,.74,.77),s3=vec3(.5,.52,.57),s4=vec3(.82,.84,.86); vec3 strata=bd<.25?s1:bd<.5?mix(s2,s1,.25):bd<.72?s3:s4;strata*=.86+.14*sin(y*7.3); vec3 low=diffuseColor.rgb*vec3(.9,.98,.94);float rockAmt=clamp(smoothstep(1.2,6.,y)+smoothstep(.25,.55,st),0.,1.); vec3 col=mix(low,strata*(.85+.3*diffuseColor.g),rockAmt);col=mix(col,vec3(1.02,1.03,1.06),smoothstep(17.,22.,y)*(1.-smoothstep(.45,.75,st))); diffuseColor.rgb=col;} if(vRk>.01){vec3 bw=pow(abs(normalize(vWn)),vec3(4.));bw/=bw.x+bw.y+bw.z;vec3 rc=mapTexelToLinear(texture2D(rockMap,vWp.zy*.09)).rgb*bw.x+mapTexelToLinear(texture2D(rockMap,vWp.xz*.09)).rgb*bw.y+mapTexelToLinear(texture2D(rockMap,vWp.xy*.09)).rgb*bw.z;rc*=rockC*(1.3+.45*sin(vWp.y*1.3+vWp.x*.2));diffuseColor.rgb=mix(diffuseColor.rgb,rc,clamp(vRk,0.,1.));}');
     };
     const hm = new THREE.Mesh(geo, hmat);
     hm.receiveShadow = true; hm.castShadow = false; hm.name = 'hills'; scene.add(hm);

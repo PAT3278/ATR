@@ -1323,6 +1323,10 @@
   /* ------------------------------------------------------------------ */
   PLACES.park = {
     build(p, E) {
+      // The park's paint is quietened: every colour keeps its hue but loses most of its saturation and lifts a little toward
+      // a pale cream, so the rides read as one painted set and only the lamps and the ride you are near catch the eye.
+      const calm = (hex) => { if (typeof hex !== 'string' || hex[0] !== '#') return hex; const c = new THREE.Color(hex), h = {}; c.getHSL(h); c.setHSL(h.h, h.s * 0.32, h.l * 0.88 + 0.09); return '#' + c.getHexString(); };
+      { const E0 = E; E = Object.assign(Object.create(E0), { mat: (hex, o, u) => E0.mat(calm(hex), o, u) }); }
       // The amusement park: a Ferris wheel at the back, a carousel in the middle, a drop tower and a little roller
       // coaster either side, a gate at the front, people queuing. Two songs live here, each heard riding something:
       // this place is the carousel's (its view rides a horse); the wheel's is PLACES.parkwheel, which borrows the wheel
@@ -1449,7 +1453,7 @@
         const floor = new THREE.Mesh(geo, E.mat('#8f857a', { map: E.tex('paving', 0.24, 0.24), rough: 0.88 })); floor.position.y = 0.03; floor.receiveShadow = true; g.add(floor); p.pick(floor); }
       const PB = E.batch(g), pb = PB.box, PW = E.batch(gw), pw = PW.box;
       const canvasTex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; };
-      const stripes = (a, b, n) => canvasTex(256, 64, (c, w, h) => { for (let i = 0; i < n; i++) { c.fillStyle = i % 2 ? b : a; c.fillRect((i * w) / n, 0, w / n + 1, h); } });
+      const stripes = (a, b, n) => canvasTex(256, 64, (c, w, h) => { for (let i = 0; i < n; i++) { c.fillStyle = calm(i % 2 ? b : a); c.fillRect((i * w) / n, 0, w / n + 1, h); } });
       const white = E.mat('#eeece6', { rough: 0.5 }), steel = E.mat('#b9bec4', { metal: 0.7, rough: 0.35 }), dark = E.mat('#2a2c30', { metal: 0.4, rough: 0.5 });
       const C = ['#e8b23a', '#3fa7d6', '#6cc070', '#9b7bd8', '#ef7a3a'].map((c) => E.mat(c, { rough: 0.5 }));
       const glow = (hex) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).convertSRGBToLinear().multiplyScalar(1.4) }); m.userData.lin = true; return m; };
