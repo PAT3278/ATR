@@ -399,6 +399,8 @@
     plastic: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.4 }),
     gloss: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 }),
     dark: new T3.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }),
+    lens: new T3.MeshPhysicalMaterial({ color: 0x04060a, roughness: 0.05, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.4 }),
+    flash: new T3.MeshStandardMaterial({ color: 0xe8dfc8, roughness: 0.35, emissive: 0x2a2418 }),
     hole: new T3.MeshBasicMaterial({ color: 0x020202 })
   };
   const shadowed = o => { o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; };
@@ -437,6 +439,36 @@
     // back glass, a shade off the frame colour
     const backGlass = new T3.Mesh(plate(p.w - p.edge * 1.6, p.h - p.edge * 1.6, p.r - p.edge * 0.8), mat.gloss(new T3.Color(p.frame).multiplyScalar(0.75)));
     backGlass.position.z = -p.d / 2 - 0.00005; backGlass.rotation.y = Math.PI; lean.add(backGlass);
+    // the cameras on the back, at the top (+x) end, each model laid out its own way
+    const zb = -p.d / 2 - 0.0001, top = p.w / 2, side = p.h / 2;
+    const ringM = p.body === "plastic" ? mat.plastic(0x1e1f21) : (mat[p.body])(new T3.Color(p.frame).multiplyScalar(0.8));
+    const bump = (cx, cy, bw, bh, r, t, m) => { const b = new T3.Mesh(slab(bw, bh, t, r, Math.min(t * 0.45, 0.0006)), m || mat.gloss(new T3.Color(p.frame).multiplyScalar(0.9))); b.position.set(cx, cy, zb - t / 2); lean.add(b); return zb - t; };
+    const lens = (cx, cy, r, z0) => {
+      const ringG = new T3.CylinderGeometry(r * 1.22, r * 1.3, 0.0014, 28); ringG.rotateX(Math.PI / 2);
+      const rg = new T3.Mesh(ringG, ringM); rg.position.set(cx, cy, z0 - 0.0007); lean.add(rg);
+      const gl = new T3.Mesh(new T3.CircleGeometry(r, 28), mat.lens); gl.rotation.y = Math.PI; gl.position.set(cx, cy, z0 - 0.00142); lean.add(gl);
+    };
+    const flash = (cx, cy, z0, r) => { const f = new T3.Mesh(new T3.CircleGeometry(r || 0.0017, 16), mat.flash); f.rotation.y = Math.PI; f.position.set(cx, cy, z0 - 0.00005); lean.add(f); };
+    if (p.style === "se") { lens(top - 0.0095, side - 0.0095, 0.0032, zb); flash(top - 0.0095, side - 0.019, zb); }
+    else if (p.style === "notch") {
+      const s = 0.031, cx = top - 0.0045 - s / 2, cy = side - 0.0045 - s / 2, z0 = bump(cx, cy, s, s, 0.0075, 0.0011);
+      if (/11/.test(p.name)) { lens(cx + 0.0072, cy + 0.0072, 0.0052, z0); lens(cx - 0.0072, cy + 0.0072, 0.0052, z0); flash(cx + 0.0072, cy - 0.0078, z0); }
+      else { lens(cx + 0.0072, cy + 0.0072, 0.0052, z0); lens(cx - 0.0072, cy - 0.0072, 0.0052, z0); flash(cx + 0.0075, cy - 0.0075, z0); }
+    } else if (p.style === "island") {
+      const s = 0.036, cx = top - 0.004 - s / 2, cy = side - 0.004 - s / 2, z0 = bump(cx, cy, s, s, 0.0085, 0.0014);
+      lens(cx + 0.0083, cy + 0.0083, 0.0062, z0); lens(cx - 0.0083, cy + 0.0083, 0.0062, z0); lens(cx, cy - 0.0083, 0.0062, z0); flash(cx + 0.0085, cy - 0.0088, z0, 0.0019);
+    } else if (p.style === "punch") {   // a bar across the back, as on some Android phones
+      const z0 = bump(top - 0.028, 0, 0.017, p.h - 0.006, 0.0075, 0.0022, mat.gloss(0x111214));
+      lens(top - 0.028, side - 0.016, 0.0048, z0); lens(top - 0.028, side - 0.031, 0.0048, z0); flash(top - 0.028, -side + 0.02, z0);
+    } else if (p.style === "chin") {   // a small raised strip with three little lenses
+      const cx = top - 0.021, cy = side - 0.012, z0 = bump(cx, cy, 0.03, 0.0115, 0.0055, 0.0012, mat.plastic(0x18191b));
+      lens(cx + 0.0085, cy, 0.0034, z0); lens(cx, cy, 0.0025, z0); lens(cx - 0.0075, cy, 0.0022, z0); flash(cx - 0.0125, cy, z0, 0.0013);
+    }
+    // the antenna lines across a metal frame, near each corner
+    if (p.body !== "plastic") {
+      const lineG = new T3.BoxGeometry(0.0008, 0.0003, p.d * 0.62), lineM = mat.plastic(new T3.Color(p.frame).multiplyScalar(p.body === "titanium" ? 0.7 : 0.82));
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { const l = new T3.Mesh(lineG, lineM); l.position.set(sx * (p.w / 2 - 0.016), sy * (p.h / 2 + 0.00002), 0); lean.add(l); }
+    }
     // front: glass carrying the picture
     const scr = display(p.w - p.edge * 1.2, p.h - p.edge * 1.2, p.r - p.edge * 0.6, 1024);
     scr.mesh.position.z = p.d / 2 + 0.00006; lean.add(scr.mesh);
@@ -464,7 +496,8 @@
     const w = 0.304, dd = 0.215, t = 0.0155;
     const base = new T3.Mesh(slab(w, dd, t, 0.012, 0.0035), alu); base.rotation.x = -Math.PI / 2; base.position.y = t / 2; root.add(base);
     // keyboard: real keys in a slightly darker well
-    const well = new T3.Mesh(plate(0.272, 0.112, 0.006), new T3.MeshStandardMaterial({ color: 0x3a3c40, metalness: 0.6, roughness: 0.5 }));
+    // (the well glows faintly between the keys: the backlight)
+    const well = new T3.Mesh(plate(0.272, 0.112, 0.006), new T3.MeshStandardMaterial({ color: 0x2e3034, metalness: 0.6, roughness: 0.5, emissive: 0xffb36b, emissiveIntensity: 0.07 }));
     well.rotation.x = -Math.PI / 2; well.position.set(0, t + 0.00005, -dd / 2 + 0.071); root.add(well);
     const keyG = slab(0.0155, 0.0155, 0.0012, 0.002, 0.0005); keyG.rotateX(-Math.PI / 2);
     const keyM = new T3.MeshStandardMaterial({ color: 0x0d0d0f, roughness: 0.55, metalness: 0.1 });
@@ -477,8 +510,16 @@
     const inst = new T3.InstancedMesh(keyG, keyM, keys.length); const m4 = new T3.Matrix4();
     keys.forEach(([x, z, wd, row], i) => { m4.makeScale(wd, 1, row === 0 ? 0.6 : 1); m4.setPosition(x, t + 0.0006, z); inst.setMatrixAt(i, m4); });
     root.add(inst);
-    const pad = new T3.Mesh(plate(0.13, 0.08, 0.006), new T3.MeshPhysicalMaterial({ color: 0x5d6066, roughness: 0.3, metalness: 0.5, clearcoat: 0.5 }));
-    pad.rotation.x = -Math.PI / 2; pad.position.set(0, t + 0.00008, dd / 2 - 0.05); root.add(pad);
+    // the trackpad: glass a shade off the aluminium, set in a hairline gap
+    const gap = new T3.Mesh(plate(0.1312, 0.0812, 0.0064), mat.hole); gap.rotation.x = -Math.PI / 2; gap.position.set(0, t + 0.00004, dd / 2 - 0.05); root.add(gap);
+    const pad = new T3.Mesh(plate(0.13, 0.08, 0.006), new T3.MeshStandardMaterial({ color: new T3.Color(p.frame).multiplyScalar(0.8), roughness: 0.4, metalness: 0.85 }));
+    pad.rotation.x = -Math.PI / 2; pad.position.set(0, t + 0.00009, dd / 2 - 0.05); root.add(pad);
+    // the scoop in the front edge for lifting the lid, and the ports down the sides
+    const scoopG = new T3.CircleGeometry(0.0105, 24, 0, Math.PI); scoopG.rotateX(-Math.PI / 2);   // the half toward the keyboard
+    const scoop = new T3.Mesh(scoopG, new T3.MeshStandardMaterial({ color: new T3.Color(p.frame).multiplyScalar(0.55), metalness: 0.8, roughness: 0.35 })); scoop.position.set(0, t + 0.00006, dd / 2 - 0.0012); root.add(scoop);
+    const port = (x, z, len) => { const s = new T3.Mesh(slab(len, 0.0032, 0.0012, 0.0014, 0.0004), mat.hole); s.rotation.y = Math.PI / 2; s.position.set(x, t / 2, z); root.add(s); };
+    port(-w / 2, -0.06, 0.0086); port(-w / 2, -0.042, 0.0086);
+    { const jk = new T3.Mesh(new T3.CircleGeometry(0.0018, 16), mat.hole); jk.rotation.y = Math.PI / 2; jk.position.set(w / 2 + 0.0002, t / 2, -0.05); root.add(jk); }
     // speaker grilles either side of the keyboard
     const dotG = new T3.CylinderGeometry(0.00055, 0.00055, 0.0004, 8);
     const dots = []; for (const sx of [-1, 1]) for (let r = 0; r < 22; r++) for (let c = 0; c < 4; c++) dots.push([sx * (0.1395 + c * 0.0024 * sx * 0 + c * 0.0024 - 0.0036), -dd / 2 + 0.018 + r * 0.0048]);
@@ -774,6 +815,11 @@
     const bg = g.createLinearGradient(sx, sy, sx + sw, sy + sh); bg.addColorStop(0, "#1c1511"); bg.addColorStop(1, "#060507");
     g.save(); g.beginPath(); g.roundRect ? g.roundRect(sx, sy, sw, sh, p.style === "se" || p.kind === "laptop" ? 4 : h * 0.13) : g.rect(sx, sy, sw, sh); g.clip();
     g.fillStyle = bg; g.fillRect(sx, sy, sw, sh);
+    // a quiet wallpaper glow, so the black cut-outs read against the glass as they do on a real screen
+    for (const [gx, gy, r, col] of [[0.86, 0.15, 0.75, "rgba(70,96,190,0.20)"], [0.12, 0.95, 0.7, "rgba(255,138,60,0.15)"]]) {
+      const rg = g.createRadialGradient(sx + sw * gx, sy + sh * gy, 0, sx + sw * gx, sy + sh * gy, sw * r); rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = rg; g.fillRect(sx, sy, sw, sh);
+    }
     if (S.live.on && S.live.qr && p.kind !== "buds") {
       // ON AIR: the screen shows the code to scan
       const q = Math.min(sh * 0.86, sw * 0.42), qx0 = sx + sw - q - sw * 0.06, qy0 = sy + (sh - q) / 2;
@@ -799,13 +845,19 @@
     g.restore();
     // cut-outs and the earpiece, all at the right-hand (top) end
     g.fillStyle = "#000"; const cxp = w - sx - (p.style === "chin" ? sx * 0.6 : 0);
-    if (p.style === "island") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.06, h / 2 - h * 0.17, w * 0.04, h * 0.34, w * 0.02) : 0; g.fill(); }
-    if (p.style === "notch") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.055, h / 2 - h * 0.26, w * 0.06, h * 0.52, w * 0.02) : 0; g.fill(); }
-    if (p.style === "punch" || p.style === "chin") { g.beginPath(); g.arc(cxp - w * 0.035, h / 2, h * 0.035, 0, Math.PI * 2); g.fill(); }
+    // a front camera: dark glass with a faint blue sheen and a glint
+    const eye = (x, y, r) => { g.fillStyle = "#0b1220"; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(90,130,230,0.35)"; g.beginPath(); g.arc(x, y, r * 0.55, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(255,255,255,0.55)"; g.beginPath(); g.arc(x - r * 0.3, y - r * 0.3, r * 0.18, 0, Math.PI * 2); g.fill(); g.fillStyle = "#000"; };
+    if (p.style === "island") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.06, h / 2 - h * 0.17, w * 0.04, h * 0.34, w * 0.02) : 0; g.fill(); eye(cxp - w * 0.04, h / 2 + h * 0.105, h * 0.028); }
+    if (p.style === "notch") { g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.055, h / 2 - h * 0.26, w * 0.06, h * 0.52, w * 0.02) : 0; g.fill();
+      g.fillStyle = "#1d1f22"; g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.012, h / 2 - h * 0.08, w * 0.006, h * 0.16, w * 0.003) : 0; g.fill(); g.fillStyle = "#000";
+      eye(cxp - w * 0.03, h / 2 + h * 0.17, h * 0.03); }
+    if (p.style === "punch" || p.style === "chin") { g.beginPath(); g.arc(cxp - w * 0.035, h / 2, h * 0.035, 0, Math.PI * 2); g.fill(); eye(cxp - w * 0.035, h / 2, h * 0.024); }
     if (p.kind === "phone") { g.fillStyle = "#151515"; g.beginPath(); g.roundRect ? g.roundRect(w - w * 0.012, h / 2 - h * 0.13, w * 0.004, h * 0.26, 3) : 0; g.fill(); }
     if (p.style === "se") { g.strokeStyle = "#3a3a3a"; g.lineWidth = w * 0.004; g.beginPath(); g.arc(w * 0.065, h / 2, h * 0.11, 0, Math.PI * 2); g.stroke();
       g.fillStyle = "#1b1b1b"; g.beginPath(); g.arc(w - w * 0.065, h / 2 - h * 0.25, h * 0.03, 0, Math.PI * 2); g.fill(); }
-    if (p.kind === "laptop") { g.fillStyle = "#000"; g.beginPath(); g.roundRect ? g.roundRect(w / 2 - w * 0.04, 0, w * 0.08, h * 0.035, 8) : 0; g.fill(); }
+    if (p.kind === "laptop") { g.fillStyle = "#000"; g.beginPath(); g.roundRect ? g.roundRect(w / 2 - w * 0.04, 0, w * 0.08, h * 0.035, 8) : 0; g.fill(); eye(w / 2, h * 0.016, h * 0.007); }
     d.screen.tex.needsUpdate = true;
   }
   // ---- camera and layout ----

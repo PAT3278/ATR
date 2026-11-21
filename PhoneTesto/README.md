@@ -107,8 +107,10 @@ studio monitors on the far side. The picture is the control surface.
   camera are blended by where it is, so you hear one turn into the next;
   when it settles you hear that model alone (exactly as if picked from the
   host's Model parameter, which follows too). Each one is modelled from the
-  real thing: frame and edge, glass with the lamp in it, buttons, speaker
-  holes; the laptop's keyboard and grilles; today's open-fit earbuds
+  real thing: frame and edge with its antenna lines, glass with the lamp in
+  it, buttons, speaker holes, each model's own cameras on the back and its
+  front camera in the notch, island or punch-hole; the laptop's backlit
+  keyboard, grilles, trackpad, ports and webcam; today's open-fit earbuds
   (contoured head, short stem, speaker mesh, vent, sensor and steel tip,
   each head and stem one smooth piece) with their case open beside them.
   Its screen shows the band it can play, lit by the output's spectrum.
