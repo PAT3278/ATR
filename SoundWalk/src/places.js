@@ -1285,14 +1285,18 @@
       // itself, where the canal comes in from OHH. It stays down where the coaster runs over it (coastPts, set once the
       // track exists) and clear of the carousel. A volcano smokes on an island in the lagoon (below).
       let coastPts = null;
+      // The zone is shut on the west, north and south by the crater wall itself; on the east, between the coaster and the
+      // rest of the fair, a ridge of its own rock runs north from the way in (the gap facing the carousel, over the slipway and
+      // the pier) to the back of the crater, notched where the coaster's track crosses it.
+      const EAST = [[-6.8, -38.5], [-6.6, -33], [-7.4, -26.5], [-8.2, -20.5], [-8.6, -18.2]];
+      const segD = (pts, x, z) => { let b = 1e9, t0 = 0; for (let i = 0; i < pts.length - 1; i++) { const [ax, az] = pts[i], [bx2, bz2] = pts[i + 1], ex = bx2 - ax, ez = bz2 - az, t = Math.max(0, Math.min(1, ((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez))), d = Math.hypot(ax + ex * t - x, az + ez * t - z); if (d < b) { b = d; t0 = (i + t) / (pts.length - 1); } } return [b, t0]; };
       const innerRing = (lx, lz) => {
-        if (lx > -1 || lx < -33 || lz > 6 || lz < -38 || inPoly(LAGOON, lx, lz)) return 0;
-        const d = polyD(LAGOON, lx, lz); if (d < 2.4 || d > 7.6) return 0;
-        let h = 11 * Math.pow(sm(2.4, 4.2, d) * (1 - sm(5.4, 7.6, d)), 0.6);
-        if (lx > -15) h *= sm(4.5, 7, Math.abs(lz + 12));   // the way in, from the fair
-        h *= sm(8.5, 11.5, Math.hypot(lx, lz - CZ_CAR));   // clear of the carousel
-        h += (1.2 * Math.sin(lx * 0.9 + lz * 0.4) * Math.cos(lz * 0.8 - lx * 0.3) + 0.8 * Math.abs(Math.sin(lx * 2.1 + lz * 2.7))) * Math.min(1, h / 3);   // crags
-        if (coastPts) for (const [x, z, y] of coastPts) if (Math.abs(x - lx) < 1.9 && Math.abs(z - lz) < 1.9) h = Math.min(h, y - 2.4);   // under the coaster's track: it cuts its own notch through the rock
+        if (lx > -1 || lx < -16 || lz > -14 || lz < -44) return 0;
+        const [d, u] = segD(EAST, lx, lz); if (d > 4.2) return 0;
+        let h = 10.5 * (1 - sm(1.0, 4.2, d)) * sm(0, 0.12, u) * sm(1, 0.82, u);   // down at both ends: into the back wall, and at the way in
+        h *= sm(8.5, 11, Math.hypot(lx, lz - CZ_CAR));   // clear of the carousel
+        h += (1.3 * Math.sin(lx * 0.9 + lz * 0.4) * Math.cos(lz * 0.8 - lx * 0.3) + 0.9 * Math.abs(Math.sin(lx * 2.1 + lz * 2.7))) * Math.min(1, h / 3);   // crags
+        if (coastPts) for (const [x, z, y] of coastPts) if (Math.abs(x - lx) < 1.6 && Math.abs(z - lz) < 1.6) h = Math.min(h, y - 2.4);   // the coaster's track cuts its own notch through it
         return Math.max(0, h);
       };
       p.relief = (lx, lz, out) => {   // the crater wall, metres (game.js caps it under the roads and lays it in the hill field)
