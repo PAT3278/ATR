@@ -1,0 +1,18 @@
+{
+  "name": "soundwalk",
+  "private": true,
+  "description": "Dev tools only: the game itself is plain files with no build step.",
+  "scripts": {
+    "serve": "serve -l 8000 .",
+    "play": "node tests/play.mjs",
+    "stop": "node tests/play.mjs --stop",
+    "perf": "node tests/perf.mjs",
+    "test": "node tests/smoke.mjs",
+    "test:headed": "node tests/smoke.mjs --headed",
+    "setup": "npm install && npx playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0",
+    "serve": "^14.2.4"
+  }
+}
