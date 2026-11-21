@@ -1261,7 +1261,8 @@
       // The crater floor: its edge is the foot of the cliffs. Each bend carries the height the wall rises to there and how
       // far its outer slope runs (game.js keeps it under the elevated roads: C1 flies just over the south wall, the ramp
       // from C1 to the ring road over the east one, so those stay lower; the west, towards KEYAKI, is the highest).
-      const FLOOR = crLoop([[0, 10, 10, 8], [14, 9, 10, 8], [25, -1, 11, 9], [28, -18, 13, 10], [26, -33, 14, 10], [19, -45, 14, 9], [6, -50.5, 12, 8], [-10, -49, 13, 8], [-24, -44, 15, 10], [-33, -36, 17, 11], [-37.5, -24, 18, 10], [-36.5, -9, 17, 9], [-31.5, 0, 15, 8], [-23.5, 10.5, 12, 8], [-12, 13.5, 11, 8]], 12);
+      const FLOOR = crLoop([[0, 10, 10, 8], [17, 12, 10, 8], [32, 1, 11, 9], [35, -18, 13, 10], [33, -35, 14, 10], [24, -50, 14, 9], [6, -50.5, 12, 8],   // (wider on the east than it was: the rides there stand apart, under the ramp to the ring road flying 13 m over the edge)
+         [-10, -49, 13, 8], [-24, -44, 15, 10], [-33, -36, 17, 11], [-37.5, -24, 18, 10], [-36.5, -9, 17, 9], [-31.5, 0, 15, 8], [-23.5, 10.5, 12, 8], [-12, 13.5, 11, 8]], 12);
       const FB = FLOOR.reduce((o, [x, z]) => [Math.min(o[0], x), Math.max(o[1], x), Math.min(o[2], z), Math.max(o[3], z)], [1e9, -1e9, 1e9, -1e9]), NI = { i: 0 };
       const floorD = (lx, lz, o) => { if (lx < FB[0] - 40 || lx > FB[1] + 40 || lz < FB[2] - 40 || lz > FB[3] + 40) return 40; const d = polyD(FLOOR, lx, lz, o); return inPoly(FLOOR, lx, lz) ? -d : d; };   // metres outside the floor (negative inside)
       // The lagoon, in the ring the coaster runs round, with an arm out west into the cave the canal comes through.
@@ -1275,12 +1276,28 @@
       const wet = (lx, lz) => inLagoon(lx, lz) || (inSlip(lx, lz) && lx < -12.4);
       p.waterShape(wet);
       // The way in: a tunnel through the south wall, from an open cutting under C1 (TZ1) up a gentle ramp to the quay (TZ0).
-      const TW = 3, TZ0 = 10, TZ1 = 17.5, VH = 4.4;
+      const TW = 3, TZ0 = 10, TZ1 = 17.5, VH = 4.4, CZ_CAR = -9;   // CZ_CAR: where the carousel stands
       const SPIRES = [[-45, -31, 7, 4], [-42, -4, 5, 3.5], [33, -38, 4, 3.5], [-21, -54, 5, 3.5], [25, -52, 3, 3], [-46, -18, 4, 4]];
       const DC = 3.5, CWD = 2.5;   // the cliff's depth (foot to brink) and the crest's width
       p.rim = (lx, lz) => floorD(lx, lz);
+      // The lagoon's zone, on your left as you come in from the tunnel: a ring of its own rock stands round the quay, up to
+      // 11 m, open on the east towards the carousel (and over the slipway and the pier), the west closed by the crater wall
+      // itself, where the canal comes in from OHH. It stays down where the coaster runs over it (coastPts, set once the
+      // track exists) and clear of the carousel. A volcano smokes on an island in the lagoon (below).
+      let coastPts = null;
+      const innerRing = (lx, lz) => {
+        if (lx > -1 || lx < -33 || lz > 6 || lz < -38 || inPoly(LAGOON, lx, lz)) return 0;
+        const d = polyD(LAGOON, lx, lz); if (d < 2.4 || d > 7.6) return 0;
+        let h = 11 * Math.pow(sm(2.4, 4.2, d) * (1 - sm(5.4, 7.6, d)), 0.6);
+        if (lx > -15) h *= sm(4.5, 7, Math.abs(lz + 12));   // the way in, from the fair
+        h *= sm(8.5, 11.5, Math.hypot(lx, lz - CZ_CAR));   // clear of the carousel
+        h += (1.2 * Math.sin(lx * 0.9 + lz * 0.4) * Math.cos(lz * 0.8 - lx * 0.3) + 0.8 * Math.abs(Math.sin(lx * 2.1 + lz * 2.7))) * Math.min(1, h / 3);   // crags
+        if (coastPts) for (const [x, z, y] of coastPts) if (Math.abs(x - lx) < 1.9 && Math.abs(z - lz) < 1.9) h = Math.min(h, y - 2.4);   // under the coaster's track: it cuts its own notch through the rock
+        return Math.max(0, h);
+      };
       p.relief = (lx, lz, out) => {   // the crater wall, metres (game.js caps it under the roads and lays it in the hill field)
-        const d = floorD(lx, lz, NI); if (d <= 0 || d > 30) return 0;
+        const d = floorD(lx, lz, NI); if (d <= 0) { out.rock = 1; return innerRing(lx, lz); }
+        if (d > 30) return 0;
         const q = FLOOR[NI.i], Hc = q[2], Wo = q[3];
         let h, t = 0;
         if (d < DC) { if (d < 0.8) return 0; h = Hc * Math.pow((d - 0.8) / (DC - 0.8), 0.8); }   // the foot starts a little out from the edge: the grid's 2 m cells would otherwise carry the slope in over the paving
@@ -1297,7 +1314,7 @@
       p.bore = (lx, lz, y) => (inTun(lx, lz) && y < FY + 3 ? FY * Math.max(0, Math.min(1, (TZ1 - lz) / (TZ1 - TZ0))) : inCave(lx, lz) && y < 3 ? 0 : null);
       p.ceil = (lx, lz) => (Math.abs(lx) < TW + 0.6 && lz > TZ0 - 0.4 && lz < TZ1 + 0.3 ? FY + VH - 0.5 : inCave(lx, lz) && lx < CX0 - 0.6 ? 4.6 : null);   // the camera stays under the vault
       p.holeAt = (lx, lz, y) => (Math.abs(lx) < TW + 1.8 && lz > TZ0 - 1.6 && lz < TZ1 + 2.6 && y < FY + VH + 1.3) || (Math.abs(lz - CZ0) < CWH + 2 && lx > CX1 - 0.4 && lx < CX0 + 1.6 && y < 6.4);   // open the rock at the tunnel and cave mouths
-      p.noPier = (lx, lz) => Math.abs(lx) < 8 && lz > 6 && lz < 32;   // no pier in the cutting
+      p.noPier = (lx, lz) => (Math.abs(lx) < 8 && lz > 6 && lz < 32) || floorD(lx, lz) < 2;   // no pier in the cutting, nor on the crater floor (the roads span it)
       p.ground = (lx, lz, y) => {
         if (lx < FB[0] - 1 || lx > FB[1] + 1 || lz < FB[2] - 1 || lz > FB[3] + 1) return 0;
         if (inSlip(lx, lz)) return FY * Math.max(0, Math.min(1, (lx - SLIP.x0) / (SLIP.x1 - SLIP.x0)));
@@ -1447,7 +1464,7 @@
         }; }
 
       // the carousel
-      const CZ = -9, car = new THREE.Group(); car.position.set(0, 0, CZ); g.add(car);
+      const CZ = CZ_CAR, car = new THREE.Group(); car.position.set(0, 0, CZ); g.add(car);
       const base = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 5.6, 0.5, 32), white); base.position.y = 0.25; base.receiveShadow = true; g.add(base); base.position.z = CZ;
       const plat = new THREE.Mesh(new THREE.CylinderGeometry(5.0, 5.0, 0.12, 32), E.mat('#b88a5a', { rough: 0.7 })); plat.position.y = 0.56; car.add(plat);
       const core = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 4, 16), E.mat('#ffffff', { map: stripes('#e8b23a', '#eeece6', 12) })); core.position.y = 2.5; car.add(core);
@@ -1489,7 +1506,7 @@
       { const m4 = new THREE.Matrix4(); for (let i = 0; i < 64; i++) { const a = (i / 64) * Math.PI * 2; rimL.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * WR, Math.sin(a) * WR, 0.95)); } wheel.add(rimL); }
 
       // the drop tower, at the back on the right
-      const DX = 18, DZ = -38, DH = 24;
+      const DX = 24, DZ = -39, DH = 24;
       const mast = new THREE.Mesh(new THREE.BoxGeometry(1.1, DH, 1.1), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 2), rough: 0.5 })); mast.position.set(DX, DH / 2, DZ); mast.castShadow = true; g.add(mast);
       pb(2.4, 1.2, 2.4, DX, DH + 0.6, DZ, C[3]);
       const ring = new THREE.Group(); ring.position.set(DX, 2, DZ); g.add(ring);
@@ -1509,6 +1526,7 @@
       const coaster = new THREE.CatmullRomCurve3(CPTS, true, 'centripetal'), NS = 600, CL = coaster.getLength();
       // frames by parallel transport, so the track banks through the loop instead of flipping
       const cP = coaster.getSpacedPoints(NS), cT = [], cN = [], cB = [];
+      coastPts = cP.filter((_, i) => i % 2 === 0).map((v) => [v.x, v.z, v.y + FY]);   // (for the lagoon zone's rock, which keeps under the track)
       for (let i = 0; i <= NS; i++) cT.push(coaster.getTangentAt(Math.min(1, i / NS)).clone());
       cN[0] = new THREE.Vector3(0, 1, 0).addScaledVector(cT[0], -cT[0].y).normalize();
       for (let i = 1; i <= NS; i++) { const ax = new THREE.Vector3().crossVectors(cT[i - 1], cT[i]), s = ax.length(); const n = cN[i - 1].clone(); if (s > 1e-6) n.applyAxisAngle(ax.normalize(), Math.asin(Math.min(1, s))); cN[i] = n.addScaledVector(cT[i], -n.dot(cT[i])).normalize(); }
@@ -1549,7 +1567,7 @@
       let cs = 0;   // distance along the track, metres
 
       // the swing ride (chair-o-plane): a tower whose top turns, chairs flying out on chains as it speeds up
-      const SWX = 14, SWZ = -20, swing = new THREE.Group(); swing.position.set(SWX, 7.2, SWZ); g.add(swing);
+      const SWX = 22, SWZ = -20, swing = new THREE.Group(); swing.position.set(SWX, 7.2, SWZ); g.add(swing);
       { const tw = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, 7.2, 12), E.mat('#ffffff', { map: stripes('#eeece6', '#9b7bd8', 10) })); tw.position.set(SWX, 3.6, SWZ); tw.castShadow = true; g.add(tw); p.addCircle(SWX, SWZ, 0.9);
         const top = new THREE.Mesh(new THREE.ConeGeometry(4.2, 1.6, 24), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 24) })); top.position.y = 0.9; swing.add(top); }
       const chairs = [];
@@ -1562,7 +1580,7 @@
       let swingV = 0;
 
       // the teacups: a turntable of spinning cups
-      const TCX = 13, TCZ = -3, cups = new THREE.Group(); cups.position.set(TCX, 0.25, TCZ); g.add(cups);
+      const TCX = 19, TCZ = -1, cups = new THREE.Group(); cups.position.set(TCX, 0.25, TCZ); g.add(cups);
       { const deck = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.3, 32), E.mat('#ffffff', { map: stripes('#eeece6', '#6cc070', 16) })); deck.position.set(TCX, 0.15, TCZ); g.add(deck); p.addCircle(TCX, TCZ, 4.7); }
       const cupL = [];
       for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2, cp = new THREE.Group(); cp.position.set(Math.cos(a) * 2.8, 0.2, Math.sin(a) * 2.8); cups.add(cp);
@@ -1588,16 +1606,16 @@
         for (const sx of [-1.25, 1.25]) add(new THREE.BoxGeometry(0.08, 1.5, 0.08), steelM, sx, 1.85, 0.75);
         const sg2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.42), new THREE.MeshBasicMaterial({ map: E.textTex(label, { w: 512, h: 96, color: '#2a2420', font: '700 60px "Hind",sans-serif', bg: '#f2ead8' }), transparent: true })); sg2.position.set(0, 2.2, 1.06); sg.add(sg2);
         const w = p.toWorld(x, z); p.addCircle(x, z, 1.4); };
-      stall(-4.6, 6.4, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(20, -9, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-3.6, -18, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(21, -27, -Math.PI / 2, '#6cc070', 'LEMONADE');
+      stall(-4.6, 6.4, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(30.5, -8, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-3.6, -18, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(31.5, -28, -Math.PI / 2, '#6cc070', 'LEMONADE');
       stall(-5.5, -42.5, 0, '#9b7bd8', 'GAMES'); stall(12.5, -43.5, 0, '#ef7a1a', 'PRIZES');
       // trees in round planters, benches and lamp posts along the walks
-      for (const [x, z] of [[4.2, 7.4], [8, -11.5], [21, -18], [-2.5, -35], [22.5, -36], [16, 5]]) {
+      for (const [x, z] of [[4.2, 7.4], [8, -11.5], [11, -16], [-2.5, -35], [16, -40], [11, 7]]) {
         pb(1.4, 0.45, 1.4, x, 0.22, z, E.mat('#bdb6aa', { rough: 0.9 }));
         const tr = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 8), E.mat('#4f7a3c', { rough: 0.9, flat: true })); tr.position.set(x, 3.0, z); tr.scale.y = 1.2; tr.castShadow = true; g.add(tr);
         const tk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 2.2, 6), E.mat('#5a4030')); tk.position.set(x, 1.4, z); g.add(tk); p.addCircle(x, z, 0.8); }
       for (const [x, z, ry] of [[3.2, -20, -Math.PI / 2], [12, -30, 0], [-10.4, -19.4, -Math.PI / 2], [-10.4, -10.9, -Math.PI / 2], [-10.4, -3.9, -Math.PI / 2]]) { E.bench(g, x, z, ry); p.addBox(x, z, ry ? 0.35 : 1.05, ry ? 1.05 : 0.35); }   // three on the quay, looking out over the lagoon
       const lampG = new THREE.CylinderGeometry(0.06, 0.08, 4, 6), bulbM = glowMat('#ffe2a0');
-      for (const [x, z] of [[-3.5, 1.5], [4.5, 1.5], [6.2, -14], [9.5, -27], [16, -31], [-11, -5.2], [-11, -12.6], [-11, -21.5], [24, -14], [1, -46.5]]) {   // iron gas lamps: a fluted post, a caged lantern
+      for (const [x, z] of [[-3.5, 1.5], [4.5, 1.5], [6.2, -14], [9.5, -27], [16, -31], [-11, -5.2], [-11, -12.6], [-11, -21.5], [31, -14], [1, -46.5]]) {   // iron gas lamps: a fluted post, a caged lantern
         const l = new THREE.Mesh(lampG, ironD); l.position.set(x, 2, z); g.add(l); pb(0.36, 0.5, 0.36, x, 0.25, z, ironD);
         const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.46, 8), bulbM); b2.position.set(x, 4.25, z); g.add(b2); const cap = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.3, 8), ironD); cap.position.set(x, 4.62, z); g.add(cap); p.addCircle(x, z, 0.24); }
 
@@ -1613,17 +1631,20 @@
       // Every ride has its way on and its way off: a green のりば (ENTRANCE) gate with a railed queue lane, and an orange
       // おりば (EXIT) gate, each on a little platform facing out from the ride. The rides you can board start you at the
       // entrance and set you down at the exit.
+      // each ride's colour and name, on its gates and on a sign on a pole beside the ride, so you can tell which gate is whose
+      const RIDE = { carousel: { c: '#c8312a', jp: 'メリーゴーラウンド', en: 'CAROUSEL' }, wheel: { c: '#2a6ac8', jp: '観覧車', en: 'FERRIS WHEEL' }, teacups: { c: '#d88a1a', jp: 'コーヒーカップ', en: 'TEACUPS' },
+        swing: { c: '#2a9a8a', jp: '空中ブランコ', en: 'SWING RIDE' }, drop: { c: '#8a3ac8', jp: 'フリーフォール', en: 'DROP TOWER' }, bumper: { c: '#d84a8a', jp: 'ゴーカート', en: 'BUMPER CARS' }, coaster: { c: '#3a8a2a', jp: 'ジェットコースター', en: 'ROLLER COASTER' } };
       const gateAt = {}, gateSign = {};
       const gate = (name, kind, x, z, ry) => {
         const G = new THREE.Group(); G.position.set(x, 0, z); G.rotation.y = ry; g.add(G);
         const c = Math.cos(ry), s2 = Math.sin(ry), toP = (lx, lz) => [x + lx * c + lz * s2, z - lx * s2 + lz * c];
         const add = (geo, m, px, py, pz) => { const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.castShadow = true; G.add(o); return o; };
-        const col = E.mat(kind === 'in' ? '#2f8a4a' : '#d2602a', { rough: 0.5 });
+        const rc = RIDE[name] || { c: '#555555', jp: name, en: name }, col = E.mat(rc.c, { rough: 0.5 }), kc = E.mat(kind === 'in' ? '#2f8a4a' : '#d2602a', { rough: 0.5 });
         add(new THREE.BoxGeometry(2.8, 0.15, 2.4), E.mat('#c9c2b0', { rough: 0.9 }), 0, 0.075, 0);
         for (const sx of [-1.25, 1.25]) { add(new THREE.BoxGeometry(0.14, 2.7, 0.14), col, sx, 1.35, 0.9); p.addCircle(...toP(sx, 0.9), 0.15); }
-        add(new THREE.BoxGeometry(2.64, 0.55, 0.14), col, 0, 2.78, 0.9);
-        const key = kind + name; if (!gateSign[kind]) gateSign[kind] = new THREE.MeshBasicMaterial({ map: E.textTex(kind === 'in' ? 'のりば  ENTRANCE' : 'おりば  EXIT', { w: 512, h: 96, color: '#f4f1e6', font: '700 56px "Hind","Noto Sans JP",sans-serif' }), transparent: true, side: THREE.DoubleSide });
-        const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.45), gateSign[kind]); sg.position.set(0, 2.78, 0.98); G.add(sg);
+        add(new THREE.BoxGeometry(2.64, 0.95, 0.14), col, 0, 2.98, 0.9); add(new THREE.BoxGeometry(2.64, 0.12, 0.16), kc, 0, 2.44, 0.9);   // the ride's colour; a stripe of green (on) or orange (off) under it
+        const key = kind + name; if (!gateSign[key]) gateSign[key] = new THREE.MeshBasicMaterial({ map: E.textTex(`${rc.jp}\n${kind === 'in' ? 'のりば  ENTRANCE' : 'おりば  EXIT'}  ·  ${rc.en}`, { w: 512, h: 184, color: '#ffffff', bg: rc.c, font: `900 ${Math.min(64, Math.floor(460 / rc.jp.length))}px "Hind","Noto Sans JP",sans-serif`, font2: '700 30px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide });
+        const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.9), gateSign[key]); sg.position.set(0, 2.98, 0.98); G.add(sg);
         if (kind === 'in') {   // the queue lane: two rails out from the gate
           for (const sx of [-0.65, 0.65]) { add(new THREE.BoxGeometry(0.05, 0.05, 3.6), steelM, sx, 0.95, 2.9); for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.06, 0.95, 0.06), steelM, sx, 0.48, 1.2 + k * 1.15); for (let k = 0; k < 6; k++) p.addCircle(...toP(sx, 1.2 + k * 0.7), 0.12); }
         }
@@ -1641,7 +1662,9 @@
         coaster: [[...cXZ(-14, 12.4), 0], [...cXZ(-23, 12.4), 0]],
       };
       const queuePts = [];
-      for (const [name, [a, b]] of Object.entries(ridesG)) { const toP = gate(name, 'in', ...a); gate(name, 'out', ...b); queuePts.push(toP(0, 1.7), toP(0, 2.8), toP(0, 3.9)); }
+      for (const [name, [a, b]] of Object.entries(ridesG)) { const toP = gate(name, 'in', ...a); gate(name, 'out', ...b); queuePts.push(toP(0, 1.7), toP(0, 2.8), toP(0, 3.9));
+        { const rc = RIDE[name], [x, z] = toP(-2.2, 2.6), m = new THREE.MeshBasicMaterial({ map: E.textTex(`${rc.jp}\n${rc.en}`, { w: 512, h: 200, color: '#ffffff', bg: rc.c, font: `900 ${Math.min(72, Math.floor(460 / rc.jp.length))}px "Hind","Noto Sans JP",sans-serif`, font2: '700 40px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide });
+          pb(0.12, 4.2, 0.12, x, 2.1, z, E.mat('#2a2c30', { metal: 0.4, rough: 0.5 })); const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.8), m); sg.position.set(x, 4.0, z); sg.rotation.y = a[2]; g.add(sg); p.addCircle(x, z, 0.15); } }   // a name board on a pole beside the queue, seen from across the park
       // a low fence round the swing ride, open at its two gates
       { const R0 = 7.6, aIn = Math.atan2(ridesG.swing[0][1] - SWZ, ridesG.swing[0][0] - SWX), aOut = Math.atan2(ridesG.swing[1][1] - SWZ, ridesG.swing[1][0] - SWX);
         for (let i = 0; i < 48; i++) { const a = (i / 48) * Math.PI * 2, gap = (q) => Math.abs(Math.atan2(Math.sin(a - q), Math.cos(a - q))) < 0.2; if (gap(aIn) || gap(aOut)) continue;
@@ -1679,6 +1702,35 @@
         const gx = -16.4, gwy = pw(0.9, 0.08, 2.6, gx, FY + 0.35, (PIER.z0 - 17.5) / 2 - 0.1, iron); gwy.rotation.x = 0.12;
         for (const sd of [-1, 1]) { const hr = pw(0.04, 0.04, 2.6, gx + sd * 0.42, FY + 1.1, (PIER.z0 - 17.5) / 2 - 0.1, brass, false); hr.rotation.x = 0.12; }
         for (const [px, sx] of [[PIER.x0 + 1, -24.5], [PIER.x1 - 1.2, -15.5]]) { const a = new THREE.Vector3(px, FY + 0.45, PIER.z0 + 0.25), b = new THREE.Vector3(sx, 1.6, -17.7); gw.add(along(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, a.distanceTo(b), 4), E.mat('#cbb48a', { rough: 1 })), a, b)); } }
+      // The volcano: a craggy cone of dark rock on an island in the north of the lagoon, about 15 m high, its crater glowing
+      // and smoking; lava runs down its south side. The glow swells with the bass, a big kick makes it flare.
+      const VX = -21, VZ = -19.5, VR = 5.6, volc = { smoke: null, sp: [], glow: [], light: null };
+      {
+        const vg = new THREE.Group(); vg.position.set(VX, 0, VZ); gw.add(vg);
+        const prof = [[VR + 0.6, -0.6], [VR, 0.6], [VR - 0.6, 2.2], [4.3, 4.6], [3.4, 7.5], [2.7, 10.5], [2.2, 13.4], [2.05, 15.0], [1.7, 15.2], [1.35, 14.4], [0.2, 13.6]].map(([x, y]) => new THREE.Vector2(x, y));
+        const cone = new THREE.LatheGeometry(prof, 28), a = cone.attributes.position;
+        for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i), z = a.getZ(i), rr = Math.hypot(x, z), an = Math.atan2(z, x), k = 1 + (0.13 * Math.sin(an * 5 + y * 0.7) + 0.08 * Math.sin(an * 11 - y * 1.3) + 0.06 * Math.cos(y * 2.1 + an * 3)) * Math.min(1, y / 2 + 0.3) * (rr > 1.6 ? 1 : 0.3); a.setXYZ(i, x * k, y + 0.25 * Math.sin(an * 7 + y), z * k); }
+        cone.computeVertexNormals();
+        const rockM = E.mat('#3a3330', { map: E.tex('rock', 3, 3), rough: 0.95, flat: true }), mt = new THREE.Mesh(cone, rockM); mt.castShadow = mt.receiveShadow = true; vg.add(mt); p.addCircle(VX, VZ, VR);
+        const lavaM = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff5a1a').convertSRGBToLinear().multiplyScalar(1.6) }); lavaM.userData.lin = true; volc.glow.push(lavaM);
+        const pool2 = new THREE.Mesh(new THREE.CircleGeometry(1.45, 16), lavaM); pool2.rotation.x = -Math.PI / 2; pool2.position.y = 14.3; vg.add(pool2);
+        for (const [an, len] of [[1.7, 9], [2.1, 6.5], [1.35, 5]]) {   // lava streaks down the south side
+          const pts = []; for (let k = 0; k <= 10; k++) { const y = 14.8 - (len * k) / 10, rr = 2.0 + (14.8 - y) * 0.27 + 0.12, wob = Math.sin(k * 1.3 + an * 5) * 0.12; pts.push(new THREE.Vector3(Math.cos(an + wob) * rr, y, Math.sin(an + wob) * rr)); }
+          vg.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 20, 0.16, 5), lavaM)); }
+        volc.light = new THREE.PointLight(new THREE.Color('#ff6a2a').convertSRGBToLinear(), 1.6, 34, 1.6); volc.light.position.set(0, 16.5, 0); vg.add(volc.light);
+        // smoke: puffs rising from the crater and leaning off downwind
+        const N = 46, pos = new Float32Array(N * 3), sm2 = new THREE.PointsMaterial({ map: E.dot(), color: new THREE.Color('#6a625c').convertSRGBToLinear(), size: 3.2, transparent: true, opacity: 0.42, depthWrite: false });
+        sm2.userData.lin = true; const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        for (let i = 0; i < N; i++) volc.sp.push({ t: i / N, ox: (r() - 0.5) * 1.2, oz: (r() - 0.5) * 1.2, s: r() * 6 });
+        volc.smoke = new THREE.Points(geo, sm2); volc.smoke.frustumCulled = false; vg.add(volc.smoke);
+        volc.tick = (t, dt, f) => {
+          const k = 1 + (f.bass || 0) * 1.4 + (f.beat && f.bass > 0.75 ? 1.2 : 0);
+          volc.glow.forEach((m) => m.color.setRGB(1.6 * k * 1.0, 0.36 * k, 0.06 * k));
+          volc.light.intensity = 1.2 + 2.2 * (f.bass || 0);
+          for (let i = 0; i < N; i++) { const q = volc.sp[i]; q.t = (q.t + dt * 0.055) % 1; const h = q.t * 26, drift = q.t * q.t * 9; pos.set([q.ox * (1 + q.t * 3) + drift, 15 + h, q.oz * (1 + q.t * 3) + Math.sin(t * 0.3 + q.s) * q.t * 2], i * 3); }
+          geo.attributes.position.needsUpdate = true;
+        };
+      }
       // A rock in the lagoon carries the harbour's light: an iron lattice tower with a lamp room that sweeps its beam round,
       // and a crane jib off it that swings slowly over the water.
       const LHX = -25, LHZ = -9.6, LHH = 12.5, lh = new THREE.Group(); lh.position.set(LHX, 0, LHZ); gw.add(lh);
@@ -1717,6 +1769,7 @@
       let jetH = 0, jetV = 0;
       const calderaTick = (t, dt, f) => {
         lagoonM.uniforms.t.value = t; lagoonM.uniforms.level.value = f.level || 0;
+        volc.tick(t, dt, f);
         sub.position.y = 0.05 + Math.sin(t * 0.7) * 0.05 + (f.bass || 0) * 0.06; sub.rotation.x = Math.sin(t * 0.5) * 0.015; sub.userData.screw.rotation.x += dt * 0.6;
         lh.userData.beam.rotation.y = t * 0.6; lh.userData.jib.rotation.y = Math.sin(t * 0.13) * 0.9 + 0.6;
         // the geyser jet: a strong kick throws it up, then it falls back
@@ -1740,7 +1793,7 @@
         sun: '#ffd7a0', sunInt: 2.3, hemi: 0.56, sunDir: [0.55, 0.45, 0.3],
         tint: [1.05, 0.99, 0.9], expo: 0.92, sat: 0.7, stars: 0,
       };
-      p.map = [{ t: 'poly', x: 0, z: 0, pts: FLOORM.outline, c: '#a39a8c' }, { t: 'poly', x: 0, z: 0, pts: LAGOON, c: '#3f7c86' }];
+      p.map = [{ t: 'poly', x: 0, z: 0, pts: FLOORM.outline, c: '#a39a8c' }, { t: 'poly', x: 0, z: 0, pts: LAGOON, c: '#3f7c86' }, { t: 'circle', x: VX, z: VZ, r: VR, c: '#3a3330' }];
       p.face = Math.PI;
       p.vp = [0, -2.5];   // in front of the carousel
       p.trail = [[0, TZ1 + 1], [0, TZ0 - 1.5], [0, -2.5]];   // up the cutting and through the tunnel: the path is laid only as far as its mouth

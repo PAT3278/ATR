@@ -1584,10 +1584,11 @@
     })() };
     const handset = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.15, 0.012), new THREE.MeshBasicMaterial({ color: lin('#cfe3ff') })); handset.material.userData.lin = true; handset.position.set(0, -0.36, 0.05); handset.visible = false; arms[1].elbow.add(handset);
     let phoneOn = false;
+    const pose = { up: 0, dribble: 0 };   // up: both arms raised (a shot, a contest), dribble: the right hand down at the ball
     let cur = null, last = null, forced = null;
     let phase = 0;
     return {
-      G: A,
+      G: A, pose,
       forceRide(i) { forced = i; if (cur) { cur.g.visible = false; cur = null; } },
       setPhone(on) { phoneOn = on; handset.visible = on; },
       animate(dt, speed, bob, bst = 0, lean = 0, onWater = false) {
@@ -1634,6 +1635,8 @@
         if (k < 0.05) { phase = 0; body.position.y = Math.sin(performance.now() / 700) * 0.006 + bob * 0.03; head.rotation.x = -bob * 0.12; }
         else head.rotation.x = 0;
         if (phoneOn && k < 0.05) { arms[1].pivot.rotation.x = -0.75; arms[1].elbow.rotation.x = -1.35; arms[1].pivot.rotation.z = -0.2; head.rotation.x = 0.32; }   // looking down at the phone
+        if (pose.dribble > 0) { const d = pose.dribble; arms[1].pivot.rotation.x += (-0.55 - arms[1].pivot.rotation.x) * d; arms[1].elbow.rotation.x += (-0.4 + Math.sin(performance.now() / 70) * 0.25 - arms[1].elbow.rotation.x) * d; arms[1].pivot.rotation.z = -0.25 * d; body.rotation.x = Math.max(body.rotation.x, 0.22 * d); }
+        if (pose.up > 0) { const u = pose.up; arms.forEach((a, i) => { a.pivot.rotation.x += (-2.9 - a.pivot.rotation.x) * u; a.elbow.rotation.x += (-0.25 - a.elbow.rotation.x) * u; a.pivot.rotation.z = (i ? 1 : -1) * 0.12 * u; }); }
       },
     };
   }
