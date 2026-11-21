@@ -210,13 +210,15 @@
       // ramp from just inside the edge (keeping to your lane takes you past), and the ramp peels off, climbs beside the
       // road and turns in to the route. r1 serves the inner carriageway and climbs inwards; r2 serves the outer one, so
       // it climbs outside the loop first and then crosses over both carriageways.
-      const r1 = [[66, 7.5, 0], [50, 8, 0], [36, 9.8, 0.05], [24, 13.5, 0.6], [13, 20, 1.6], [6, 27, 2.7], [RW, 34, 3.5], [RW, 38, 3.55]];
+      // r1 grows out of the side of the road: it begins as the slow lane itself, slides out sideways level with the deck
+      // (the deck widening by a lane, the wall opening along it), runs on beside it, and only then turns in and climbs
+      const r1 = (h) => [[120, h(120) - RW - 0.3, 0], [106, h(106) - RW - 0.3, 0], [94, h(94) - 0.4, 0], [82, h(82) + RW + 0.4, 0], [66, h(66) + RW + 0.9, 0.02], [50, h(50) + RW + 1.8, 0.15], [36, h(36) + RW + 2.8, 0.45], [24, 15.5, 0.9], [13, 20, 1.6], [6, 27, 2.7], [RW, 34, 3.5], [RW, 38, 3.55]];
       const r2 = (h) => [[-100, -(h(-100) - 0.5), 0], [-84, -(h(-84) - 0.3), 0], [-70, -(h(-70) + 0.6), 0], [-58, -(h(-58) + 2.4), 0.3], [-46, -(h(-46) + 4.4), 1.3],
         [-34, -(h(-34) + 5.6), 2.5], [-23, -(h(-23) + 5.4), 3.6], [-14, -(h(-14) + 3), 4.5], [-8, -3, 5], [-4.5, 5, 5.1], [-RW, 15, 4.8], [-RW, 24, 4.2], [-RW, 34, 3.5], [-RW, 38, 3.55]];
       const mirror = (pts) => pts.slice().reverse().map(([u, v, dy]) => [-u, v, dy]);   // the west end is the east end turned round
       const r2W = r2((u) => JB.hw(-u)); r2W[0] = [-100, -(JB.hw(100) - 2.1), 0];   // the merge finishes inside the slow lane
       const ramps = [
-        roadFrom('inL', r1.map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
+        roadFrom('inL', r1(JA.hw).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),   // opens: the side that is open to the loop's lanes beside it
         roadFrom('inR', r2(JA.hw).map((p) => JA(...p)), RW, { oneLane: true, opens: 'right' }),
         roadFrom('outL', mirror([[84, 5.9, 0], [68, 6.6, 0], [52, 8.6, 0.05], [38, 12, 0.6], [24, 15.5, 1.4], [13, 21, 2.1], [6, 27.5, 2.8], [RW, 34, 3.5], [RW, 38, 3.55]]).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // the exits finish inside a lane; the west deck lies lower, so this one is longer
         roadFrom('outR', mirror(r2W).map((p) => JB(...p)), RW, { oneLane: true, opens: 'right' }),   // mirrored, the side towards the loop stays the same
@@ -232,7 +234,7 @@
       // the same plan shapes as the lower ramps, lengthened at the loop end; heights rise smoothly with distance travelled
       const climb = (pts, h0, h1, flat) => { let L = 0; const d = [0]; for (let k = 1; k < pts.length; k++) { L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]); d.push(L); }
         return pts.map(([u, v], k) => { const t = Math.max(0, Math.min(1, (d[k] - flat) / (L - flat - 4))), e = t * t * (3 - 2 * t); return [u, v, h0 + (h1 - h0) * e]; }); };
-      const r1x = (h) => climb([[130, h(130) - 0.5], [112, h(112) - 0.5], [96, h(96) - 0.4], [80, h(80) - 0.1], [66, h(66) + 0.2], [50, h(50) + 1], [36, h(36) + 2.8], [24, 14], [13, 20], [6, 27], [RW, 34], [RW, 38]], 0, H2, 22);   // the start follows the loop's edge (it narrows towards the coast)
+      const r1x = (h) => climb([[130, h(130) - RW - 0.3], [118, h(118) - RW - 0.3], [106, h(106) - 0.3], [94, h(94) + RW + 0.4], [80, h(80) + RW + 0.8], [66, h(66) + RW + 1.1], [50, h(50) + RW + 1.6], [36, h(36) + RW + 2.6], [24, 15.5], [13, 20], [6, 27], [RW, 34], [RW, 38]], 0, H2, 40);   // (grown out of the side of the slow lane, as r1)   // the start follows the loop's edge (it narrows towards the coast)
       const r2x = (h) => climb([[-140, -(h(-140) - 0.5)], [-122, -(h(-122) - 0.3)], [-106, -(h(-106) + 0.6)], [-92, -(h(-92) + 2.4)], [-78, -(h(-78) + 4.4)], [-62, -(h(-62) + 5.6)], [-46, -(h(-46) + 5.4)],
         [-30, -(h(-30) + 3)], [-17, -3], [-10, 5], [-RW, 15], [-RW, 24], [-RW, 34], [-RW, 38]], 0, H2, 30);
       const r2xW = r2x((u) => JA.hw(-u)); r2xW[0] = [-140, -(JA.hw(140) - 2.1), 0];

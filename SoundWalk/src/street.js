@@ -227,15 +227,11 @@
       for (const [dz, c] of [[0.75, '#2a6fd0'], [1.5, '#c8312a']]) { const x = GA.x1 + 0.55, dm = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.9, 12), E.mat(c, { rough: 0.5, metal: 0.3 })); dm.position.set(x, 0.45, GA.z0 + dz); dm.castShadow = true; sg.add(dm); lcirc(x, GA.z0 + dz, 0.32); }
     }
 
-    // the used-car lot: two cars nose to the road with prices up, bunting on posts, のぼり
+    // the used-car lot: two cars nose to the road, bunting on posts, のぼり
     const LT = S.PADS.lot;
     {
       slab(LT, E.mat('#3a3834', { map: E.tex('asphalt', 1, 1), rough: 0.95 }));
-      const priceM = (t) => { const m = new THREE.MeshBasicMaterial({ map: E.textTex(t, { w: 512, h: 256, color: '#d8231a', bg: '#fffdf4', font: '900 92px "Hind","Noto Sans JP",sans-serif', font2: '700 52px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide }); m.userData.lin = true; return m; };
-      [[LT.x0 + 2.4, 5, '¥1,480,000\n車検2年付'], [LT.x0 + 5.8, 1, '¥2,980,000\n低走行']].forEach(([x, i, t]) => {
-        const z = LT.z1 - 2.25; carAt(sg, i, x, LT.y, z, Math.PI); carBox(x, z, 0);
-        const b2 = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.45), priceM(t)); b2.position.set(x, 1.32, z - 1.05); b2.rotation.set(-0.55, Math.PI, 0, 'YXZ'); sg.add(b2);   // on the windscreen
-      });
+      [[LT.x0 + 2.4, 5], [LT.x0 + 5.8, 1]].forEach(([x, i]) => { const z = LT.z1 - 2.25; carAt(sg, i, x, LT.y, z, Math.PI); carBox(x, z, 0); });
       // bunting: three posts along the front, strings between them and on to the garage, pennants in turn
       const posts = [[LT.x0 + 0.3, LT.z0 + 0.25], [(LT.x0 + LT.x1) / 2, LT.z0 + 0.25], [LT.x1 - 0.3, LT.z0 + 0.25]];
       posts.forEach(([x, z]) => { sb(0.08, 3.4, 0.08, x, 1.7, z, postM); lcirc(x, z, 0.1); });

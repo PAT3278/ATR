@@ -1882,12 +1882,13 @@
     }
     // ease off behind a slower car in the same lane instead of running into it (steer out to overtake)
     { const hx = Math.sin(d.yaw), hz = Math.cos(d.yaw);
-      for (const c of traffic) {
+      for (const c of traffic.concat(ctraffic)) {
+        if (!c.car.visible) continue;
         const dx = c.car.position.x - d.x, dz = c.car.position.z - d.z, ahead = dx * hx + dz * hz;
         if (ahead < 2 || ahead > 9 + d.v * 0.7 || Math.abs(dx * hz - dz * hx) > 1.5 || Math.cos(wrapA(d.yaw - c.car.rotation.y)) < 0.5) continue;
         const cap = c.v + Math.max(0, ahead - 8) * 0.9; if (d.v > cap) d.v -= Math.min(d.v - cap, 32 * dt);
       } }
-    for (const c of traffic) {   // other cars are solid too: box against box, in the other car's frame
+    for (const c of traffic.concat(ctraffic)) {   // other cars are solid too: box against box, in the other car's frame
       const dx = d.x - c.car.position.x, dz = d.z - c.car.position.z;
       if (Math.abs(dx) > 6 || Math.abs(dz) > 6 || Math.abs(d.y - c.car.position.y) > 2) continue;
       const cy = c.car.rotation.y, ax = Math.sin(cy), az = Math.cos(cy), along = dx * ax + dz * az, lat = dx * az - dz * ax, cu = c.car.userData;
@@ -1930,6 +1931,67 @@
       c.car.position.set(ra.x + ra.tz * dl, ra.y, ra.z - ra.tx * dl);
       c.car.rotation.set(-Math.atan(slope) * c.dir, Math.atan2(ra.tx, ra.tz) + (c.dir < 0 ? Math.PI : 0), 0);
       c.car.visible = Math.abs(ra.x - P.x) < 210 && Math.abs(ra.z - P.z) < 210;
+    }
+  }
+
+  // Traffic on C1, both decks: each car runs a route from the loop up an entry ramp, along the deck and down an exit
+  // ramp back onto the loop, where it carries on in its lane until it is well out of sight, then starts the route again
+  // (only when the start too is out of sight). It keeps its distance from the car in front on its route, and from you.
+  const ctraffic = [];
+  {
+    const byId = (id) => ring.roads.find((q) => q.id === id), r = rng(616), ln = laneD(4.6);
+    const route = (inId, mainId, outId) => {
+      const A = byId(inId), M = byId(mainId), O = byId(outId); if (!A || !M || !O) return null;
+      const lat = (x, z) => { const j = M.nearest(x, z); return [(x - M.X[j]) * M.TZ[j] - (z - M.Z[j]) * M.TX[j], j]; };   // the signed offset from M's centre line, as Rd.proj gives it
+      const [dA, jA] = lat(A.X[A.N - 1], A.Z[A.N - 1]), [dO, jO] = lat(O.X[0], O.Z[0]), sA = Math.sign(dA) || 1, sO = Math.sign(dO) || 1, pts = [];
+      for (let i = 0; i < A.N - 1; i++) pts.push(new THREE.Vector3(A.X[i], A.Y[i], A.Z[i]));
+      for (let j = jA + 3; j <= jO - 3; j++) { const k = smooth(0.35, 0.65, (j - jA) / (jO - jA)), l = (sA + (sO - sA) * k) * ln; pts.push(new THREE.Vector3(M.X[j] + M.TZ[j] * l, M.Y[j], M.Z[j] - M.TX[j] * l)); }
+      for (let i = 1; i < O.N; i++) pts.push(new THREE.Vector3(O.X[i], O.Y[i], O.Z[i]));
+      const cv = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), n = Math.round(cv.getLength());
+      const P = cv.getSpacedPoints(n);
+      return { P, L: n, ds: cv.getLength() / n };
+    };
+    const routes = [['inL', 'c1', 'outL', 3], ['inR', 'c1', 'outR', 3], ['inLb', 'c1b', 'outLb', 2], ['inRb', 'c1b', 'outRb', 2]].map(([a, m, o, k]) => ({ R: route(a, m, o), k })).filter((q) => q.R);
+    for (const { R, k } of routes) for (let i = 0; i < k; i++) {
+      const car = makeCar(Math.floor(r() * NCAR)), v0 = 17 + r() * 6; trafficG.add(car);
+      ctraffic.push({ car, R, st: 'run', s: ((i + 0.2 + r() * 0.4) / k) * R.L * R.ds * 0.9, v: v0, v0, rs: 0, dir: 1, d: 0, t: 0 });
+    }
+  }
+  const cAt = (R, s) => { const u = Math.max(0, Math.min(R.L - 1e-3, s / R.ds)), i = Math.floor(u), k = u - i, a = R.P[i], b = R.P[Math.min(R.L, i + 1)]; return [a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, b.x - a.x, b.y - a.y, b.z - a.z]; };
+  const cro = {};
+  function updCTraffic(dt) {
+    const far = (x, z) => Math.hypot(x - P.x, z - P.z) > 95;
+    for (const c of ctraffic) {
+      const R = c.R, len = R.L * R.ds;
+      if (c.st === 'wait') {   // hidden at the start until nobody would see it appear, and the start is clear
+        const a = R.P[0]; c.car.visible = false;
+        if (far(a.x, a.z) && !ctraffic.some((o) => o !== c && o.R === R && o.st === 'run' && o.s < 14)) { c.st = 'run'; c.s = 0; c.v = c.v0 * 0.8; }
+        continue;
+      }
+      let vt = c.v0;
+      if (c.st === 'run') {
+        for (const o of ctraffic) { if (o === c || o.R !== R || o.st !== 'run') continue; const gap = o.s - c.s; if (gap > 0 && gap < 18) vt = Math.min(vt, gap < 9 ? 0 : o.v); }
+      }
+      { const hx = Math.sin(c.car.rotation.y), hz = Math.cos(c.car.rotation.y), dx = P.x - c.car.position.x, dz = P.z - c.car.position.z, ahead = dx * hx + dz * hz;   // you, just ahead in its lane
+        if (drv && ahead > 0 && ahead < 18 && Math.abs(dx * hz - dz * hx) < 2.2 && Math.abs(P.y - c.car.position.y) < 2) vt = Math.min(vt, ahead < 8 ? 0 : Math.max(0, drv.v)); }
+      c.v += (vt - c.v) * Math.min(1, dt * (vt < c.v ? 3 : 0.8));
+      if (c.st === 'run') {
+        c.s += c.v * dt;
+        if (c.s >= len) {   // off the end of the exit ramp: on along the loop in this lane
+          const e = R.P[R.L], e0 = R.P[R.L - 2]; ring.proj(e.x, e.z, -1, cro);
+          c.st = 'ring'; c.rs = cro.s; c.d = cro.d; c.dir = (e.x - e0.x) * cro.tx + (e.z - e0.z) * cro.tz >= 0 ? 1 : -1; c.t = 0;
+        } else {
+          const [x, y, z, tx, ty, tz] = cAt(R, c.s), h = Math.hypot(tx, tz) || 1;
+          c.car.position.set(x, y, z); c.car.rotation.set(-Math.atan(ty / h), Math.atan2(tx, tz), 0);
+        }
+      }
+      if (c.st === 'ring') {
+        c.rs = (c.rs + c.dir * c.v * dt + ring.L) % ring.L; c.t += dt; ring.at(c.rs, 0, ra);
+        c.d += (c.dir * laneD(ra.hw) - c.d) * Math.min(1, dt * 0.8);   // into the slow lane
+        c.car.position.set(ra.x + ra.tz * c.d, ra.y, ra.z - ra.tx * c.d); c.car.rotation.set(0, Math.atan2(ra.tx, ra.tz) + (c.dir < 0 ? Math.PI : 0), 0);
+        if (far(c.car.position.x, c.car.position.z) || c.t > 40) { c.st = 'wait'; c.car.visible = false; continue; }
+      }
+      c.car.visible = Math.abs(c.car.position.x - P.x) < 210 && Math.abs(c.car.position.z - P.z) < 210;
     }
   }
 
@@ -2997,7 +3059,7 @@
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
 
     updateAudio(dt);
-    updTraffic(dt);
+    updTraffic(dt); updCTraffic(dt);
 
     // Lighting: blend towards the closest place's grade.
     let bp = null, bw = 0, wsum = 0, wfar = 0;
@@ -3343,5 +3405,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
