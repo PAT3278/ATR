@@ -1588,7 +1588,14 @@
 
       // the Ferris wheel
       const WX = 4, WZ = -31, WY = 13.2, WR = 11, wheel = new THREE.Group(); wheel.position.set(WX, WY, WZ); g.add(wheel);   // at the back of the crater, its top over the rim
-      for (const sd of [-1, 1]) for (const lx of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, WY / Math.cos(0.32) + 0.4, 0.5), steel); leg.position.set(WX + lx * WY * Math.tan(0.32) / 2, WY / 2, WZ + sd * 1.4); leg.rotation.z = -lx * 0.32; leg.castShadow = true; g.add(leg); p.addCircle(WX + lx * WY * Math.tan(0.32), WZ + sd * 1.4, 0.5); }
+      // It stands on two big A-frames, one either side of the wheel: each a pair of legs from the axle out to feet 7 m either
+      // side, and a crossbar well above head height, so the middle under the wheel is open and you see straight through to
+      // the boarding platform where the cabins come down.
+      { const beam = (a, b, w, m) => { const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz), o = new THREE.Mesh(new THREE.BoxGeometry(w, L, w), m);
+          o.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / L, dy / L, dz / L)); o.castShadow = true; g.add(o); return o; };
+        const SPREAD = 7, BAR = 7.4, at = (lx, y, sd) => [WX + lx * SPREAD * (1 - y / WY), y, WZ + sd * (1.4 + 0.9 * (1 - y / WY))];
+        for (const sd of [-1, 1]) { for (const lx of [-1, 1]) { beam(at(lx, WY, sd), at(lx, 0, sd), 0.55, steel); p.addCircle(...[at(lx, 0, sd)[0], at(lx, 0, sd)[2]], 0.5); } beam(at(-1, BAR, sd), at(1, BAR, sd), 0.32, steel); }
+        pb(4.2, 0.3, 3.2, WX, 0.15, WZ + 0.4, E.mat('#bdb6aa', { rough: 0.9 })); pb(4.2, 0.02, 0.14, WX, 0.31, WZ + 1.95, E.mat('#e8c43a', { rough: 0.5 })); }   // the boarding platform, its yellow edge
       pb(0.5, 0.5, 3.4, WX, WY, WZ, dark);
       for (const sd of [-0.75, 0.75]) { const rim = new THREE.Mesh(new THREE.TorusGeometry(WR, 0.13, 6, 64), steel); rim.position.z = sd; wheel.add(rim); const rim2 = new THREE.Mesh(new THREE.TorusGeometry(WR * 0.55, 0.08, 6, 48), steel); rim2.position.z = sd; wheel.add(rim2); }
       const NG = 16, gond = [];
@@ -1618,13 +1625,16 @@
       for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2, fig = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.9, 8), white); fig.position.set(Math.cos(a) * 1.9, 0.2, Math.sin(a) * 1.9); ring.add(fig); const hd = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), white); hd.position.set(Math.cos(a) * 1.9, 0.82, Math.sin(a) * 1.9); ring.add(hd); }
       p.addCircle(DX, DZ, 2.5);
 
-      // THE COASTER, across the west side of the park: a station by the gate, a chain lift up the far side, a big drop,
-      // a vertical loop, an airtime hill and a run back past the carousel. A five-car train with riders; it crawls up the
-      // lift, then runs on what the drop gave it.
+      // THE COASTER flies round the whole fair: out of its station by the gate, a chain lift up the west cliff over the canal's
+      // arm, a crest 27 m up, a long drop behind the volcano into a vertical loop, east over the bumper cars, south between
+      // the wheel and the drop tower, high over the swing ride, down over the teacups and the balloon seller and home. Not
+      // a design anyone would sign off: it stands on a handful of tall columns and otherwise just flies. A five-car train
+      // with riders; it crawls up the lift, then runs on what the drop gave it.
       const CK = 0.9, CTX = 2, CTZ = -5;   // the layout as drawn, scaled and moved to run round the lagoon: the lift up the west cliff, the loop at the north end, the station on the south quay
-      const CPTS = [[-12, 1.8, 6], [-20, 1.8, 6], [-27, 1.9, 5.5], [-33, 2.6, 3], [-38, 4.2, -2], [-40, 8, -10], [-40, 13, -18], [-39.5, 18, -25], [-37.5, 20.5, -30],
-        [-33, 15, -34], [-28, 5, -36], [-23, 2.6, -34.5], [-17.5, 4.2, -33], [-15, 9, -32], [-17, 13.8, -31], [-21, 15.5, -30], [-25, 13.5, -29.2], [-26.5, 9, -28.4], [-24, 4.5, -27.6], [-19, 2.8, -26.8],
-        [-13.5, 4.5, -24], [-11.5, 9.5, -19], [-11, 6, -12], [-11.5, 10, -4], [-10, 5, 2.5], [-8.5, 2.4, 6]].map(([x, y, z]) => new THREE.Vector3(x * CK + CTX, y * CK, z * CK + CTZ));
+      const CPTS = [[-8.8, 1.62, 0.4], [-16, 1.62, 0.4], [-23, 1.8, -0.6], [-29, 3.6, -3.6], [-33, 8, -9], [-34.5, 14, -16], [-34, 20, -23], [-32, 24.5, -29.5], [-27, 27, -34.5],   // (in the park's frame: the station as before)
+        [-20, 24, -38.5], [-13, 13, -40.5], [-8, 6, -41], [-3.5, 9, -41.4], [-2, 14.5, -41.8], [-4.5, 18.5, -42.3], [-8.5, 16, -42.8], [-8.5, 10.5, -43.2], [-5, 6.6, -43.6], [1, 7.2, -43.6],
+        [8, 10, -42], [14.5, 14.5, -38.5], [19.5, 17, -32], [20.2, 20, -24], [21, 22, -16], [18.5, 18.5, -6.5], [13, 12.5, -0.5], [6.5, 9.5, 3.5], [1, 7, 2.6], [-4, 3.8, 1.3]]
+        .map(([x, y, z]) => new THREE.Vector3(x, y, z));
       const cXZ = (x, z) => [x * CK + CTX, z * CK + CTZ];   // the rest of the coaster's furniture moves with it
       const coaster = new THREE.CatmullRomCurve3(CPTS, true, 'centripetal'), NS = 600, CL = coaster.getLength();
       // frames by parallel transport, so the track banks through the loop instead of flipping
@@ -1644,13 +1654,12 @@
         g.add(ties); }
       // supports: iron columns under the track (rust-red, like the harbour's iron), every few metres where it runs the right way up
       const legM = E.mat('#6e4636', { metal: 0.45, rough: 0.55 });
-      for (let i = 0; i < NS; i += 9) { const v = cP[i]; if (v.y < 2.2 || cN[i].y < 0.3 || inLagoon(v.x, v.z) || floorD(v.x, v.z) > -0.3) continue; const h = v.y - 0.55, col = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, h, 8), legM); col.position.set(v.x, h / 2, v.z); col.castShadow = true; g.add(col); p.addCircle(v.x, v.z, 0.3); }   // none in the water
+      { let last = -1e9; for (let i = 0; i < NS; i++) { const v = cP[i]; if (i - last < 95 || v.y < 3 || cN[i].y < 0.6 || inLagoon(v.x, v.z) || floorD(v.x, v.z) > -0.5) continue;   // a column every 95 samples or so (about six in all), none in the water
+        last = i; const h = v.y - 0.55, col = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, h, 10), legM); col.position.set(v.x, h / 2, v.z); col.castShadow = true; g.add(col); p.addCircle(v.x, v.z, 0.45); } }
       { const k0 = cP.findIndex((v) => inLagoon(v.x, v.z) && v.x < -32), k1 = cP.findLastIndex((v) => inLagoon(v.x, v.z) && v.x < -32);   // where the lift crosses the canal: an iron truss carries it over
         if (k0 >= 0) { const a = cP[Math.max(0, k0 - 3)], b = cP[Math.min(NS - 1, k1 + 3)], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, L = Math.hypot(b.x - a.x, b.z - a.z), yaw = Math.atan2(b.x - a.x, b.z - a.z), y0 = Math.min(a.y, b.y) - 0.7;
           for (const sd of [-1, 1]) { const ch = pb(0.18, 0.5, L, mx + Math.cos(yaw) * sd * 0.7, y0, mz - Math.sin(yaw) * sd * 0.7, ironD); ch.rotation.y = yaw; for (let k = 0; k <= 6; k++) { const t = k / 6, d = pb(0.08, 0.08, 1.6, a.x + (b.x - a.x) * t + Math.cos(yaw) * sd * 0.7, y0 - 0.55, a.z + (b.z - a.z) * t - Math.sin(yaw) * sd * 0.7, ironD); d.rotation.set(0.6 * (k % 2 ? 1 : -1), yaw, 0, 'YXZ'); } }
           for (const v of [a, b]) for (const sd of [-1, 1]) { const x = v.x + Math.cos(yaw) * sd * 0.7, z = v.z - Math.sin(yaw) * sd * 0.7, h = y0 - 0.3; pb(0.32, h, 0.32, x, h / 2, z, iron); p.addCircle(x, z, 0.3); } } }
-      // the loop stands on two A-frames either side
-      for (const sd of [-1, 1]) { const [lx0, lz0] = cXZ(-21, -30 + sd * 1.9), [cx2, cz2] = cXZ(-21, -30 + sd * 2.6), leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 16 * CK, 0.3), legM); leg.position.set(lx0, 8 * CK, lz0); leg.rotation.x = sd * 0.12; g.add(leg); p.addCircle(cx2, cz2, 0.4); }
       // the station: a platform and a striped canopy over the start
       { const [sx, sz] = cXZ(-18.5, 8.6), [cx, cz] = cXZ(-18.5, 6.4); pb(13 * CK, 1.2, 3 * CK, sx, 0.6, sz, E.mat('#a8a49c', { rough: 0.9 })); pb(14 * CK, 0.2, 7 * CK, cx, 4.3, cz, E.mat('#ffffff', { map: stripes('#eeece6', '#d24a3a', 14) })); }
       for (const x of [-25, -12]) for (const z of [3.2, 9.6]) { const [px, pz] = cXZ(x, z); pb(0.18, 4.1, 0.18, px, 2.15, pz, steelM); }
