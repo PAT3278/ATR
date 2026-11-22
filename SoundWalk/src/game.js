@@ -1434,10 +1434,12 @@
     const ring = new THREE.Mesh(new THREE.RingGeometry(1.7, 2.1, 48), additive(p.color, 0.6));
     ring.rotation.x = -Math.PI / 2; ring.position.set(vp.x, gy + 0.08, vp.z);
     scene.add(beam, ring);
-    const ia = { kind: 'view', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6, y0: gy - DECK_STEP, y1: gy + 2.5 };   // only at the viewpoint's level: SHOT's is up on a walkway you can also walk under
+    // The beam and ring mark where the song is (clicking one walks you there). Only a place with a ride (p.ride) has
+    // something to do there: board it (Z). There is no fixed "view" any more: songs are chosen on a vehicle's radio.
+    const ia = { kind: p.ride ? 'seat' : 'spot', place: p, x: vp.x, z: vp.z, r: 2.6, mark: gy + 2.6, y0: gy - DECK_STEP, y1: gy + 2.5 };   // only at the viewpoint's level: SHOT's is up on a walkway you can also walk under
     beam.userData.ia = ring.userData.ia = ia;
     pick.push(ring, beam);
-    interact.push(ia);
+    if (p.ride) interact.push(ia);
     p.beam = beam; p.ringM = ring;
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex('♪ ？？？'), transparent: true, depthWrite: false, fog: false }));
     label.scale.set(8, 2, 1); label.position.set(vp.x, gy + 7.5, vp.z);
@@ -1685,7 +1687,7 @@
   let boost = 0, dashOn = false, baseFov = 55, wind = null;
   function jump() { if (mode === 'walk' && !P.air && !drv) { P.air = true; P.vy = 8.5 + 2.5 * boost; P.jy = P.y; } }   // jy: where you took off (see update)
   let camPull = null, camFloor = null;   // the camera's eased distance when a wall pulls it in, and its eased floor
-  let camYaw = Math.PI, camPitch = 0.2, lookT = -9, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', viewPlace = null, t = 0;
+  let camYaw = Math.PI, camPitch = 0.2, lookT = -9, mode = 'load', auto = null, focus = null, lastFocus, regionKey = '', t = 0;
   const camDist = 4.7;
   function save() { try { localStorage.setItem(KEY, JSON.stringify({ found: places.filter((p) => p.found).map((p) => p.song.id), x: drv ? drv.from.place.vx : P.x, z: drv ? drv.from.place.vz : P.z, y: drv ? null : P.y, yaw: camYaw })); } catch (e) { /* storage blocked */ } }
   function load() {
@@ -2040,7 +2042,6 @@
   function toast(msg, ms = 2600) { const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (el.hidden = true), ms); }
   function meterHTML(n) { return '<i></i>'.repeat(n); }
   $('#npMeter').innerHTML = meterHTML(8);
-  $('#vVol').innerHTML = meterHTML(10);
   function setMeter(el, v) { const is = el.children, on = Math.round(clamp(v, 0, 1) * is.length); for (let i = 0; i < is.length; i++) is[i].classList.toggle('on', i < on); }
   function updateFound() { $('#discs').innerHTML = places.map((p) => (p.found ? `<i class="on" style="background:${esc(p.color)}"></i>` : '<i></i>')).join(''); }
 
@@ -2240,7 +2241,6 @@
   function shopRefresh(buttons) {
     if (buttons && mode === 'phone' && (phView === 'store' || phView === 'song')) phRender(true);
     else for (const el of document.querySelectorAll('[data-plays]')) { const p = places.find((q) => q.song.id === el.dataset.plays), n = p ? playsOf(p.song) : null; el.hidden = n == null; if (n != null) el.textContent = '▶ ' + fmtPlays(n); }
-    if (viewPlace) viewInfo(viewPlace, buttons);
   }
   // Play counts: a play is one real listen — the song itself heard on its own (the store player, its view, or riding it)
   // for PLAY_S seconds. It counts once, and again only after it has been out of earshot for a while (a replay).
@@ -2253,7 +2253,7 @@
     const A = SW.Audio, now = performance.now() / 1000, wall = countAt ? now - countAt : 0, dt = Math.min(2, wall);
     countAt = now;
     let ch = player.state === 'play' ? player.ch : null;
-    if (!ch) { const p = viewPlace || (ride && ride.p); ch = p ? A.channels[p.idx] : null; }
+    if (!ch) { const p = ride && ride.p; ch = p ? A.channels[p.idx] : null; }
     const id = ch && ch.mode === 'media' && ch.audible() && !A.muted && A.ctx.state === 'running' ? ch.song.id : null;
     for (const k in listens) if (k !== id) { const L = listens[k]; L.at = null; if ((L.idle += dt) > 30) delete listens[k]; }
     if (!id) return;
@@ -2583,7 +2583,8 @@
     }
     if (mode === 'confirm') { if (e.key === 'Escape' || e.code === 'KeyX') { e.preventDefault(); closeConfirm(); } else if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); $('#cfYes').click(); } return; }
     if (mode === 'dialog') { if (e.key === 'Enter' || e.key === 'Escape' || e.code === 'KeyZ' || e.code === 'Space') { e.preventDefault(); advance(); } return; }
-    if (mode === 'view') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); exitView(); } return; }
+    if (radio.open && radioKey(e)) return;
+    if ((mode === 'ride' || (mode === 'walk' && drv)) && e.code === 'KeyR') { e.preventDefault(); if (!e.repeat) radioOpen(!radio.open); return; }
     if (mode === 'ride') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); endRide(); } else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); teaPress(); } return; }
     if (mode !== 'walk') return;
     const k = KEYMAP[e.code];
@@ -2655,7 +2656,8 @@
     if (mode === 'pool' && pool) { if (down(0)) poolHold(true); if (!pressed[0] && padPrev[0]) poolHold(false); if (down(1)) endPool(); if (!pool.moving && Math.abs(gp.axes[0] || 0) > 0.2) pool.aim += (gp.axes[0] || 0) * 0.02; }
     if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); else if (mode === 'phone') { const a = document.activeElement; if (a && $('#phone').contains(a)) a.click(); } }
     if (mode === 'phone') { if (down(12) || down(14)) phoneFocus(-1); else if (down(13) || down(15)) phoneFocus(1); }
-    if (down(1)) { if (mode === 'view') exitView(); else if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
+    if (down(1)) { if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
+    if (radio.on && (mode === 'walk' || mode === 'ride')) { if (down(14)) radioStep(-1); else if (down(15)) radioStep(1); }   // the radio: ← → on the pad
     if (down(9) && mode === 'walk') openMap();
     if (down(1) && mode === 'phone') phoneBack();
     else if (down(3) || down(8)) { if (mode === 'walk') openPhone(); else if (mode === 'phone') closePhone(); }
@@ -2673,7 +2675,7 @@
   function level(ia) { return (ia.y0 === undefined || P.y >= ia.y0) && (ia.y1 === undefined || P.y <= ia.y1); }   // at its height too: a thing on a deck is not yours from under it
   function act(ia) {
     auto = null; keys.clear();
-    if (ia.kind === 'view') { if (ia.place.ride) startRide(ia.place); else enterView(ia.place); return; }
+    if (ia.kind === 'seat') { startRide(ia.place); return; }
     if (ia.kind === 'ride') { startRide(ia.place, ia.ride); return; }
     if (ia.kind === 'board') { openMap(); return; }
     if (ia.kind === 'car') { startDrive(ia.pa); return; }
@@ -2709,7 +2711,7 @@
       for (let k = 1, n = Math.ceil(Math.abs(da) / 0.5); k < n; k++) { const m = a + (da * k) / n; pts.push({ x: Math.cos(m) * 8.6, z: Math.sin(m) * 8.6 }); }   // round the plaza between the well/board and the lamps
       for (let i = 0; i < p.path.length; i++) pts.push(p.path[i]);
     }
-    auto = { pts, i: 0, then: then || interact.find((ia) => ia.kind === 'view' && ia.place === p) };
+    auto = { pts, i: 0, then: then || interact.find((ia) => ia.kind === 'seat' && ia.place === p) };
   }
 
   /* ================= scenic view ================= */
@@ -2728,8 +2730,7 @@
   // (drag / right stick). Esc / B / back: it stops again and you get off.
   function startRide(p, R = p.ride) {
     if (!R || mode !== 'walk') return;
-    if (R.game) { mode = 'ride'; document.body.classList.add('busy', 'riding'); $('#prompt').hidden = true; lastFocus = undefined; keys.clear(); auto = null; }
-    else { enterView(p); viewPlace = null; mode = 'ride'; document.body.classList.remove('viewing'); document.body.classList.add('riding'); }   // the song card, without the fixed camera
+    mode = 'ride'; document.body.classList.add('busy', 'riding'); $('#prompt').hidden = true; lastFocus = undefined; keys.clear(); auto = null; P.speed = 0;
     camBlend = 1;
     R.hold && R.hold(true);
     ride = { p, R, st: 'walk', t: 0, from: null, b: R.board(), lookYaw: 0, lookPitch: 0.08 };
@@ -2743,8 +2744,8 @@
   }
   function finishRide() {
     const r = ride; ride = null; mode = 'walk'; P.y = groundAt(P.x, P.z);
-    $('#view').hidden = true; if (r && r.R.game) { $('#mgame').hidden = true; $('#miShoot').firstChild.textContent = 'SHOOT '; }
-    document.body.classList.remove('busy', 'viewing', 'riding'); collide(P); snapCam(); camBlendDur = 0.6; cv.focus({ preventScroll: true });
+    if (r && r.R.game) { $('#mgame').hidden = true; $('#miShoot').firstChild.textContent = 'SHOOT '; }
+    document.body.classList.remove('busy', 'riding'); collide(P); snapCam(); camBlendDur = 0.6; cv.focus({ preventScroll: true });
   }
   function teaHud(say) {
     const R = ride && ride.R; if (!R) return;
@@ -2790,48 +2791,92 @@
       if (r.t >= 1) { R.hold && R.hold(false); finishRide(); }
     }
   }
-  function enterView(p) {
-    snapCam(); camBlendDur = RM ? 0.01 : 1.6;
-    mode = 'view'; viewPlace = p;
-    P.x = p.vx; P.z = p.vz; P.face = p.rot + p.face; P.speed = 0; auto = null;
-    document.body.classList.add('busy', 'viewing');
-    const s = p.song;
-    $('#vPlace').textContent = s.place;
-    $('#vTitle').textContent = s.title;
-    $('#vMeta').textContent = [(s.artist || CFG.artist) + (s.artistNote ? ` / ${s.artistNote}` : ''), s.year].filter(Boolean).join(' · ');
-    viewInfo(p, true);
-    const ch = SW.Audio.channels[p.idx];
-    $('#vSketch').hidden = !(ch && ch.mode === 'sketch' && CFG.demo);
-    $('#view').hidden = false;
-    $('#prompt').hidden = true; lastFocus = undefined;
-    loadCounts();
-    setTimeout(() => { const f = $('#vActions').querySelector('.btn:not([disabled])'); if (f && !TOUCH && mode === 'view') f.focus({ preventScroll: true }); }, 900);
+  $('#backBtn').addEventListener('click', () => endRide());
+
+  /* ================= radio ================= */
+  // In a car or on a ride there is a radio. AUTO is the old way: behind the wheel, whichever song you are driving past;
+  // on a ride, the ride's own song. Every song you have found is a station of its own, played on the store player (whole
+  // once bought, else as its preview) while the world's sound sinks under it; when it ends the radio moves on to the next
+  // found song. R opens the station list (↑ ↓ to choose, Z / Enter to tune, Esc / R to close: the car keeps driving on
+  // W A S D); ◀ ▶ (or the pad's ← →) step through the stations. The station stays tuned from one ride to the next.
+  const radio = { st: 0, open: false, cur: 0, was: false, nosig: 0, on: false, uiT: 0 };   // st: 0 = AUTO, else the place's index + 1
+  const radioEl = $('#radio'), radioList = $('#radioList');
+  const freq = (i) => (76.4 + i * 1.6).toFixed(1);
+  const radioSongs = (playable) => places.map((p, i) => i + 1).filter((s) => places[s - 1].found && (!playable || places[s - 1].song.src || CFG.demo));   // playable: with a file to play
+  function radioTune(st) {
+    radio.st = st; radio.was = false; radio.nosig = 0;
+    if (!st) player.stop();
+    else { const p = places[st - 1]; player.stop(); player.play(p.song); wantWave(p.song); radio.was = player.state === 'play' && player.song === p.song; radio.nosig = radio.was ? 0 : 1; }   // (a song with no file leaves the radio silent: NO SIGNAL)
+    radio.uiT = 0; if (radio.open) radioListRender();
   }
-  // The card's line about the listen (a preview, or bought) and its play count, and its buttons: the main one as in the
-  // store, then the song's other links (the store link stays as a second way to buy when the sale is direct).
-  function viewInfo(p, buttons) {
-    const s = p.song, n = playsOf(s), bits = [];
-    if (s.src && SW.isPreview(s)) bits.push(`PREVIEW ${CFG.preview || 20}s`);
-    else if (s.src && isOwned(s) && SW.access(s) === 'preview') bits.push('OWNED · FULL');
-    if (n != null) bits.push('▶ ' + fmtPlays(n));
-    $('#vInfo').textContent = bits.join(' · '); $('#vInfo').hidden = !bits.length;
-    if (!buttons) return;
-    let main = buyHTML(p, p.idx);
-    const links = (s.links || []).filter((l) => l.kind !== 'buy' || !main.includes(esc(l.url)));
-    if (links.length && main.includes('準備中')) main = '';   // "soon" only when there is nothing else to offer
-    $('#vActions').innerHTML = main + links.map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(l.label)}" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>STORE ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
+  function radioStep(dir, songsOnly) {
+    const list = songsOnly ? radioSongs(true) : [0, ...radioSongs()];
+    if (!list.length) { radioTune(0); return; }
+    let k = list.indexOf(radio.st); if (k < 0) k = dir > 0 ? -1 : 0;
+    radioTune(list[(k + dir + list.length) % list.length]);
   }
-  $('#vActions').addEventListener('click', (e) => { const b = e.target.closest('[data-buy]'); if (b) buy(places[+b.dataset.buy], b); });
-  function exitView() {
-    if (mode !== 'view') return;
-    snapCam(); camBlendDur = RM ? 0.01 : 0.9;
-    mode = 'walk'; viewPlace = null;
-    collide(P);   // the viewpoint may have a parked car standing on it: step out from inside it
-    document.body.classList.remove('busy', 'viewing');
-    $('#view').hidden = true;
-    cv.focus({ preventScroll: true });
+  function radioListRender() {
+    const rows = [`<button class="rd-row${radio.st === 0 ? ' on' : ''}" type="button" data-st="0"><span class="rd-f">AUTO</span><span class="nm">${ride ? 'この乗り物の曲' : '近くの曲を受信'}</span></button>`]
+      .concat(places.map((p, i) => (p.found
+        ? `<button class="rd-row${radio.st === i + 1 ? ' on' : ''}" type="button" data-st="${i + 1}" style="--c:${esc(p.color)}"><span class="rd-f">${freq(i)}</span><span class="nm">${esc(p.song.title)}<small>${esc(p.song.artist || CFG.artist)}</small></span></button>`
+        : `<button class="rd-row" type="button" disabled><span class="rd-f">${freq(i)}</span><span class="nm">？<small>未発見</small></span></button>`)));
+    radioList.innerHTML = `<div class="rd-h">STATIONS <span>${radioSongs().length}/${places.length}</span></div>` + rows.join('');
+    radioCursor(0);
   }
-  $('#backBtn').addEventListener('click', () => (mode === 'ride' ? endRide() : exitView()));
+  function radioCursor(dir) {
+    const rows = [...radioList.querySelectorAll('.rd-row:not([disabled])')];
+    if (!rows.length) return;
+    if (!dir) radio.cur = Math.max(0, rows.findIndex((r) => r.classList.contains('on')));
+    else radio.cur = (radio.cur + dir + rows.length) % rows.length;
+    rows.forEach((r, k) => r.classList.toggle('sel', k === radio.cur));
+    rows[radio.cur].scrollIntoView({ block: 'nearest' });
+  }
+  function radioOpen(on) {
+    if (on && !radio.on) return;
+    radio.open = on; radioList.hidden = !on; radioEl.classList.toggle('open', on);
+    if (on) radioListRender();
+  }
+  function radioKey(e) {   // while the list is open: true if the key was the radio's
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); radioCursor(e.key === 'ArrowUp' ? -1 : 1); return true; }
+    if (e.key === 'Enter' || e.code === 'KeyZ') { e.preventDefault(); if (!e.repeat) { const r = radioList.querySelectorAll('.rd-row:not([disabled])')[radio.cur]; if (r) radioTune(+r.dataset.st); } return true; }
+    if (e.key === 'Escape' || e.code === 'KeyR' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); if (!e.repeat) radioOpen(false); return true; }
+    return false;
+  }
+  radioList.addEventListener('click', (e) => { const r = e.target.closest('.rd-row:not([disabled])'); if (r) { radioTune(+r.dataset.st); cv.focus({ preventScroll: true }); } });
+  $('#rdPrev').addEventListener('click', () => { radioStep(-1); cv.focus({ preventScroll: true }); });
+  $('#rdNext').addEventListener('click', () => { radioStep(1); cv.focus({ preventScroll: true }); });
+  $('#rdMain').addEventListener('click', () => { radioOpen(!radio.open); cv.focus({ preventScroll: true }); });
+  // Each frame: on in a car or on a ride (not while the phone is out: its player has the speaker then), the tuned song
+  // played on, and the display.
+  function radioTick(dt) {
+    const want = (!!drv || !!ride) && mode !== 'phone';
+    if (want !== radio.on) {
+      radio.on = want; radioEl.hidden = !want;
+      if (want) { if (radio.st) radioTune(radio.st); }
+      else { radioOpen(false); if (radio.st && mode !== 'phone') player.stop(); }
+    }
+    if (!want) return;
+    if (radio.st) {
+      if (player.state === 'play' && player.song === places[radio.st - 1].song) radio.was = true;
+      else if (radio.was && player.state === 'stop') radioStep(1, true);   // the song ended: on to the next one
+    }
+    if ((radio.uiT -= dt) > 0) return;
+    radio.uiT = 0.1;
+    let band = 'AUTO', title = '— — —', sub = '', col = '';
+    if (radio.st) {
+      const p = places[radio.st - 1], inf = player.info(p.song);
+      band = 'FM ' + freq(radio.st - 1); title = p.song.title; col = p.color;
+      sub = radio.nosig > 0 ? 'NO SIGNAL' : [p.song.artist || CFG.artist, inf.preview ? `PREVIEW ${CFG.preview || 20}s` : '', inf.waiting ? '…' : inf.state === 'play' ? timeOf(inf) : ''].filter(Boolean).join(' · ');
+    } else {
+      const p = ride ? ride.p : loudP;
+      if (p) { title = p.found ? p.song.title : '？'; sub = p.found ? (p.song.artist || CFG.artist) : '受信中'; col = p.found ? p.color : ''; }
+      else sub = '受信中';
+    }
+    $('#rdBand').textContent = band; $('#rdTitle').textContent = title; $('#rdSub').textContent = sub;
+    radioEl.style.setProperty('--c', col || '#86b53a');
+    const lv = radio.st ? (player.state === 'play' ? 0.75 : 0) : (ride ? ride.p.gain : loudP ? loudP.gain : 0);
+    radioEl.querySelectorAll('.rd-eq i').forEach((b, k) => { const v = lv * (0.3 + 0.7 * Math.abs(Math.sin(t * (2.3 + k * 1.7) + k * 2))); b.style.transform = `scaleY(${clamp(v, 0.06, 1).toFixed(2)})`; });
+  }
 
   /* ================= map ================= */
   const mapCv = $('#mapCanvas'), mg = mapCv.getContext('2d');
@@ -2955,13 +3000,13 @@
     let loud = null;
     places.forEach((p) => {
       const dx = p.vx - P.x, dz = p.vz - P.z, d = Math.hypot(dx, dz);
-      const viewing = viewPlace === p || (ride && ride.p === p);
+      const viewing = !!(ride && ride.p === p);   // riding it: its song as if you were in it
       // Behind the wheel the car radio picks up whichever song you are driving past: by direction, not distance.
-      const radio = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
-      const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), radio * 0.85);
+      const tuned = drv && !viewing ? smooth(0.5, 0.12, Math.abs(wrapA(Math.atan2(P.z, P.x) - Math.atan2(p.z, p.x)))) : 0;
+      const pp = Math.max(viewing ? 1 : clamp((R_AUD - d) / (R_AUD - R_VIEW), 0, 1), tuned * 0.85);
       p.dwell = ((d < 4.5 && P.y > p.vy - DECK_STEP) || viewing) ? Math.min(1, p.dwell + dt / 12) : Math.max(0, p.dwell - dt / 4);   // lingering at the viewpoint, not under it
       const prox = 0.4 * pp * pp;
-      p.gain = Math.max(prox + (1 - prox) * ease(p.dwell) * pp, radio * 0.5);
+      p.gain = Math.max(prox + (1 - prox) * ease(p.dwell) * pp, tuned * 0.5);
       p.pp = pp;
       if (!p.found && d < 20 && on) {
         p.found = true; refreshLabels(p); updateFound(); save();
@@ -2970,7 +3015,7 @@
       }
       if (!on) { p.f = SILENT; return; }
       const ch = A.channels[p.idx];
-      if (d < R_AUD * 1.1 || viewing || radio > 0) ch.start();
+      if (d < R_AUD * 1.1 || viewing || tuned > 0) ch.start();
       else if (d > R_AUD * 1.3 && ch.gain < 0.002) ch.stop();
       const cut = 260 * Math.pow(20000 / 260, clamp(pp * 1.25, 0, 1));
       const side = d > 0.01 ? (dx * rx + dz * rz) / d : 0;
@@ -2985,14 +3030,13 @@
     if (npT <= 0) {
       npT = 0.08;
       const np = $('#np');
-      if (loud && mode === 'walk') {
+      if (loud && mode === 'walk' && !drv) {   // behind the wheel the radio shows it
         np.hidden = false;
         $('#npTitle').textContent = loud.found ? loud.song.title : '？';
         $('#npArrow').style.transform = `rotate(${loud.dir}rad)`;
         $('#npArrow').style.color = loud.color;
         setMeter($('#npMeter'), Math.sqrt(loud.gain));
       } else np.hidden = true;
-      if (viewPlace) setMeter($('#vVol'), viewPlace.gain);
     }
   }
 
@@ -3060,7 +3104,6 @@
       }
     } else {
       P.speed += (0 - P.speed) * Math.min(1, dt * 10); P.v = 0; P.lean = 0; boost += (0 - boost) * Math.min(1, dt * 4);
-      if (mode === 'view') { let df = viewPlace.rot + viewPlace.face - P.face; df = Math.atan2(Math.sin(df), Math.cos(df)); P.face += df * Math.min(1, dt * 6); }
     }
     // In the air you land only on what was within reach of where you took off (a deck up to two steps above it), and never
     // on one you jump at from underneath, however high the jump: a deck you are under is your ceiling (head stops below it).
@@ -3077,10 +3120,9 @@
     else { P.y += (gh - P.y) * Math.min(1, dt * 14); if (hillAt(P.x, P.z) > 0.05) P.y = clamp(P.y, gh - 0.06, gh + 0.12); }   // the easing that softens a kerb would lag a long slope, sinking the feet into it going up
     avatar.G.position.set(P.x, P.y, P.z);
     avatar.G.rotation.y = P.face;
-    avatar.G.visible = !drv && !pool && !(ride && (ride.st === 'on' || ride.st === 'stopping')) && !(viewPlace && viewPlace.soloView);   // some views are staged where you stand: step out of shot
-    const vf = viewPlace ? viewPlace.f : null;
-    const onW = mode !== 'view' && gh < 0.1 && isWater(P.x, P.z);
-    avatar.animate(dt, P.speed, vf ? vf.pulse : 0, boost, P.lean, onW);
+    avatar.G.visible = !drv && !pool && !(ride && (ride.st === 'on' || ride.st === 'stopping'));
+    const onW = gh < 0.1 && isWater(P.x, P.z);
+    avatar.animate(dt, P.speed, 0, boost, P.lean, onW);
     wakeTick(dt, onW && !drv, P.x, P.z, P.face, P.speed);
 
     const show = focus && mode === 'walk';
@@ -3097,17 +3139,17 @@
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
 
-    updateAudio(dt);
+    updateAudio(dt); radioTick(dt);
     updTraffic(dt); updCTraffic(dt);
 
     // Lighting: blend towards the closest place's grade.
     let bp = null, bw = 0, wsum = 0, wfar = 0;
     places.forEach((p) => {
       const d = reachD(p);
-      const w = viewPlace === p ? 1 : smooth(48, 16, d - (drv ? 20 : 0));   // from the road the places are a little further off, so reach for them sooner
+      const w = smooth(48, 16, d - (drv ? 20 : 0));   // from the road the places are a little further off, so reach for them sooner
       if (w > bw) { bw = w; bp = p; }
       // the wider region: every place within ~115 m pulls the light a little its way, so day does not flip to night at a line
-      const wf = viewPlace ? 0 : smooth(115, 28, d) ** 2;
+      const wf = smooth(115, 28, d) ** 2;
       if (wf > 0) { wsum += wf; mixGrade(GA, GA, p.grade, wf / wsum); wfar = Math.max(wfar, wf); }
     });
     drvK += ((drv ? 1 : 0) - drvK) * Math.min(1, dt * 0.9);
@@ -3116,34 +3158,26 @@
     mixGrade(G, GR, bp ? bp.grade : GR, bp ? bw : 0);
     applyGrade();
     ringView.upd(clamp(1 - G.sunInt / 1.1, 0, 1), loudP && loudP.f ? loudP.f.pulse : 0);
-    ringView.group.visible = carsG.visible = trafficG.visible = !viewPlace || camBlend < 1;
-    if (streetView) { streetView.group.visible = ringView.group.visible; streetView.update(t); }   // a view shows only its own place
+    if (streetView) streetView.update(t);
 
     places.forEach((p) => {
-      const v = viewPlace === p ? 1 : smooth(60, 10, reachD(p));
+      const v = smooth(60, 10, reachD(p));
       const f = p.f || SILENT;
       const l = (p.wake || p.lod) && p.local(P.x, P.z);
       if (p.lod) p.lod(l.x, l.z, scene.fog.far);   // a place spread far and wide (OHH's beaches) leaves out what the fog has swallowed, wherever you are
       const awake = v > 0.001 || (p.wake && p.wake(l.x, l.z));   // a place whose life reaches further than its light (OHH's beaches) keeps moving while you are out there
-      if (awake || viewPlace === p || !p.ran) { p.ran = true; p.update(t, dt, f, v, viewPlace === p); }   // once at the start wherever you are: places set their out-in-the-world look in update()
+      if (awake || !p.ran) { p.ran = true; p.update(t, dt, f, v, false); }   // once at the start wherever you are: places set their out-in-the-world look in update()
       const d = Math.hypot(P.x - p.vx, P.z - p.vz);
-      p.group.visible = !viewPlace || viewPlace === p || viewPlace.lookout || camBlend < 1;   // a view keeps to its own place, unless it is a lookout over the rest
-      const hide = viewPlace === p || d < 7 || (viewPlace && camBlend >= 1);
+      const hide = d < 7;
       p.beam.visible = !hide;
       p.beam.material.opacity = (p.found ? 0.07 : 0.12) + f.pulse * 0.16;
-      p.ringM.material.opacity = viewPlace === p ? 0 : 0.35 + f.pulse * 0.5 + Math.sin(t * 3) * 0.1;
+      p.ringM.material.opacity = 0.35 + f.pulse * 0.5 + Math.sin(t * 3) * 0.1;
       p.label.visible = false;
     });
 
     // Camera
     let tx = P.x, ty = P.y + 1.45, tz = P.z;
-    if (mode === 'view' || (mode === 'modal' && viewPlace)) {
-      const s = viewPlace.shot(t, viewPlace.f || SILENT);
-      tmpV.set(...s.pos); viewPlace.group.localToWorld(tmpV);
-      tmpL.set(...s.look); viewPlace.group.localToWorld(tmpL);
-      fwd.copy(tmpL).sub(tmpV).normalize();
-      tmpU.set(0, 1, 0).applyAxisAngle(fwd, s.roll || 0);
-    } else if (ride && (ride.st === 'on' || ride.st === 'stopping')) {   // on a ride: through your own eyes, free to look round
+    if (ride && (ride.st === 'on' || ride.st === 'stopping')) {   // on a ride: through your own eyes, free to look round
       const yaw = P.face + ride.lookYaw, pt = ride.lookPitch;
       tmpV.set(P.x, P.y + 1.55, P.z); tmpL.set(P.x + Math.sin(yaw) * Math.cos(pt), P.y + 1.55 - Math.sin(pt), P.z + Math.cos(yaw) * Math.cos(pt)); tmpU.set(0, 1, 0);
     } else {
@@ -3158,7 +3192,7 @@
         // It waits a moment after you turn the view by hand, swings faster the faster you go, follows fully when you walk away
         // from it, a good deal when you walk across the screen too (A / D swings the view round with you) and not at all when you
         // walk towards it (S turns you round to face the camera instead of spinning it).
-        if (mode === 'walk' && !drag && !viewPlace && !pool && !hoop && P.v > 0.4) {
+        if (mode === 'walk' && !drag && !pool && !hoop && P.v > 0.4) {
           const away = Math.cos(wrapA(P.face + Math.PI - camYaw)), hand = smooth(0.8, 2.2, t - lookT);
           const k = (auto ? 1 : clamp(away + 0.75, 0, 1)) * hand * smooth(0.4, 3, P.v) * (2.2 + boost * 1.8);
           camYaw += wrapA(P.face + Math.PI - camYaw) * Math.min(1, dt * k);
@@ -3223,7 +3257,7 @@
     planet.position.set(camera.position.x - 260, camera.position.y + 250, camera.position.z - 380);
     worldUpd.forEach((f) => f(t, dt));
     if (drv) { const kmh = Math.round(dv * 3.6); if (kmh !== lastKmh) { lastKmh = kmh; $('#spdNum').textContent = kmh; $('#spdBar').firstElementChild.style.width = Math.min(100, kmh / 2.1) + '%'; } }
-    farGroup.visible = !(viewPlace && camBlend >= 1); farLights.opacity = Math.sin(t * 2.2) > 0.2 ? 1 : 0.15;
+    farLights.opacity = Math.sin(t * 2.2) > 0.2 ? 1 : 0.15;
     sun.position.set(P.x + G.sunDir.x * 60, P.y + G.sunDir.y * 60, P.z + G.sunDir.z * 60);
     sun.target.position.set(P.x, P.y, P.z);
   }
@@ -3444,5 +3478,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, enterView, exitView, routeTo, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();

@@ -43,9 +43,11 @@ for (const [name, ctxOpts] of [['desktop', { viewport: { width: 1280, height: 72
   await page.screenshot({ path: path.join(OUT, `${name}-map.png`) });
   await page.click('#mapClose');
   const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const s = performance.now(); const f = () => { n++; if (performance.now() - s < 2000) requestAnimationFrame(f); else res(n / 2); }; requestAnimationFrame(f); }));
-  await page.evaluate(() => { const sw = window.__soundwalk; sw.enterView(sw.places[0]); });
-  await page.waitForTimeout(3000);
-  await page.screenshot({ path: path.join(OUT, `${name}-view.png`) });
+  // into a car, the radio's station list open, tuned to the first song (found for the test)
+  const radio = await page.evaluate(() => { const sw = window.__soundwalk; sw.places[0].found = true; sw.startDrive(sw.ring.pas.find((q) => q.car)); sw.step(2, 1 / 30); sw.radioOpen(true); sw.radioTune(1); sw.step(4, 1 / 30); return { shown: !document.querySelector('#radio').hidden, rows: document.querySelectorAll('#radioList .rd-row').length, n: sw.places.length, st: sw.radio.st }; });
+  if (!radio.shown || radio.rows !== radio.n + 1 || radio.st !== 1) errors.push('radio: ' + JSON.stringify(radio));
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: path.join(OUT, `${name}-radio.png`) });
   const ok = errors.length === 0; if (!ok) failed++;
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}: loaded in ${load}s, ~${Math.round(fps)} fps${ok ? '' : '\n  ' + errors.join('\n  ')}`);
   await ctx.close();
