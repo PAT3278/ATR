@@ -1417,7 +1417,9 @@
         return Math.max(0, h);
       };
       // In the tunnel the ground is its ramp, not the rock over it; in the cave, the canal.
-      const inTun = (lx, lz) => Math.abs(lx) < TW + 0.2 && lz > TZ0 - 0.6 && lz < TZ1 + 0.2, inCave = (lx, lz) => Math.abs(lz - CZ0) < CWH + 0.6 && lx < CX0 + 0.8 && lx > CX1 - 0.6;
+      // (and on out through the outer mouth into the cutting: the hill's 2 m grid there still slopes up from the cut floor to
+      // the rock over the tunnel, a hump that would lift a walker off the road and into the gateway's rock)
+      const inTun = (lx, lz) => (Math.abs(lx) < TW + 0.2 && lz > TZ0 - 0.6 && lz < TZ1 + 0.2) || (Math.abs(lx) < TW + 1.2 && lz >= TZ1 + 0.2 && lz < TZ1 + 3.5), inCave = (lx, lz) => Math.abs(lz - CZ0) < CWH + 0.6 && lx < CX0 + 0.8 && lx > CX1 - 0.6;
       p.bore = (lx, lz, y) => (inTun(lx, lz) && y < FY + 3 ? FY * Math.max(0, Math.min(1, (TZ1 - lz) / (TZ1 - TZ0))) : inCave(lx, lz) && y < 3 ? 0 : null);
       p.ceil = (lx, lz) => (Math.abs(lx) < TW + 0.6 && lz > TZ0 - 0.4 && lz < TZ1 + 0.3 ? FY + VH - 0.5 : inCave(lx, lz) && lx < CX0 - 0.6 ? 4.6 : null);   // the camera stays under the vault
       p.holeAt = (lx, lz, y) => (Math.abs(lx) < TW + 1.8 && lz > TZ0 - 1.6 && lz < TZ1 + 2.6 && y < FY + VH + 1.3) || (Math.abs(lz - CZ0) < CWH + 2 && lx > CX1 - 0.4 && lx < CX0 + 1.6 && y < 6.4);   // open the rock at the tunnel and cave mouths

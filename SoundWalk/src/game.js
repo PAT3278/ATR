@@ -1721,7 +1721,9 @@
     return i >= 0 && j >= 0 && i < holeMask.W && j < holeMask.H && holeMask[j * holeMask.W + i] === 1;
   }
   function collide(p) {
-    if (p !== P && holeAtHill(p.x, p.z) && !holeAtHill(P.x, P.z) && P.y > hillAt(p.x, p.z) - 1.2) { p.x = P.x; p.z = P.z; }   // the edge of a hole in the hill (above)
+    // the edge of a hole in the hill (above). Only for someone up on the hill: at a tunnel's mouth the hill over it is
+    // still low, and someone walking in on the floor (the funfair's road at 0 m, its quay at 0.9 m) must not be stopped there.
+    if (p !== P && P.y >= 1.2 && P.y > hillAt(P.x, P.z) - 1.2 && holeAtHill(p.x, p.z) && !holeAtHill(P.x, P.z) && P.y > hillAt(p.x, p.z) - 1.2) { p.x = P.x; p.z = P.z; }
     if (!canBe(p.x, p.z)) {
       if (p !== P && canBe(p.x, P.z)) p.z = P.z; else if (p !== P && canBe(P.x, p.z)) p.x = P.x; else if (p !== P && canBe(P.x, P.z)) { p.x = P.x; p.z = P.z; }
       else { const lim = isWater(p.x, p.z) ? WORLD : LAND; p.x = clamp(p.x, -lim, lim); p.z = clamp(p.z, -lim, lim); }   // set down somewhere it cannot be: back onto the land
