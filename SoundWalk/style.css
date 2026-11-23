@@ -290,3 +290,21 @@ body:not(.riding) #backBtn { display: none; }
   #radioList { position: absolute; top: 100%; left: 0; right: 0; margin: 6px 0 0; max-height: 40vh; }
   .rd-top kbd { display: none; }
 }
+
+/* ---------- the song's card on its light ring ---------- */
+/* one line: the song (title, artist / place, kind) and its buy button; above the key hints, at the top on a phone */
+#spot { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 14px); bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); z-index: 4; width: min(420px, calc(100% - 28px)); display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 14px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--red)); box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0, 0, 0, .6); --c: var(--red); animation: spIn .35s ease-out; }
+@keyframes spIn { from { opacity: 0; transform: translateY(8px); } }
+.sp-main { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sp-k { font-family: var(--f-head); font-size: 10px; letter-spacing: .28em; color: var(--c); }
+#spTitle { font-family: var(--f-head); font-weight: 400; font-size: 20px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#spSub { font-family: var(--f-head); font-size: 11px; letter-spacing: .08em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#spTag { display: flex; margin-top: 3px; }
+.sp-act { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.sp-act .btn { justify-content: center; padding: 8px 12px 6px; font-size: 14px; }
+.sp-act .btn .ic { width: 16px; height: 16px; }
+.sp-act kbd { align-self: center; height: 18px; min-width: 18px; font-size: 11px; padding: 1px 4px 0; }
+@media (hover: none) {
+  #spot { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 128px); width: min(360px, calc(100% - 28px)); }
+  @keyframes spIn { from { opacity: 0; } }
+}

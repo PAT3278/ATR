@@ -2239,6 +2239,7 @@
   function playTrack(p) { player.toggle(p.song); wantWave(p.song); }
   // The counts, prices and owned marks changed: update what is on screen (the whole list only when a button changes).
   function shopRefresh(buttons) {
+    if (buttons && spot.p) spotRender();
     if (buttons && mode === 'phone' && (phView === 'store' || phView === 'song')) phRender(true);
     else for (const el of document.querySelectorAll('[data-plays]')) { const p = places.find((q) => q.song.id === el.dataset.plays), n = p ? playsOf(p.song) : null; el.hidden = n == null; if (n != null) el.textContent = '▶ ' + fmtPlays(n); }
   }
@@ -2587,6 +2588,7 @@
     if ((mode === 'ride' || (mode === 'walk' && drv)) && e.code === 'KeyR') { e.preventDefault(); if (!e.repeat) radioOpen(!radio.open); return; }
     if (mode === 'ride') { if (e.key === 'Escape' || e.code === 'KeyX' || e.key === 'Backspace') { e.preventDefault(); endRide(); } else if ((e.code === 'KeyZ' || e.code === 'Space' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); teaPress(); } return; }
     if (mode !== 'walk') return;
+    if (e.code === 'KeyB' && spot.p) { e.preventDefault(); if (!e.repeat) spotBuy(); return; }
     const k = KEYMAP[e.code];
     if (k) { e.preventDefault(); keys.add(k); auto = null; return; }
     if (e.code === 'KeyQ') { camYaw += 0.2; lookT = t; }
@@ -2657,6 +2659,7 @@
     if (down(0)) { if (mode === 'walk') pressA(); else if (mode === 'dialog') advance(); else if (mode === 'title') start(); else if (mode === 'confirm') $('#cfYes').click(); else if (mode === 'phone') { const a = document.activeElement; if (a && $('#phone').contains(a)) a.click(); } }
     if (mode === 'phone') { if (down(12) || down(14)) phoneFocus(-1); else if (down(13) || down(15)) phoneFocus(1); }
     if (down(1)) { if (mode === 'modal') closeMap(); else if (mode === 'confirm') closeConfirm(); }
+    if (down(2) && mode === 'walk' && spot.p) spotBuy();
     if (radio.on && (mode === 'walk' || mode === 'ride')) { if (down(14)) radioStep(-1); else if (down(15)) radioStep(1); }   // the radio: ← → on the pad
     if (down(9) && mode === 'walk') openMap();
     if (down(1) && mode === 'phone') phoneBack();
@@ -2876,6 +2879,32 @@
     radioEl.style.setProperty('--c', col || '#86b53a');
     const lv = radio.st ? (player.state === 'play' ? 0.75 : 0) : (ride ? ride.p.gain : loudP ? loudP.gain : 0);
     radioEl.querySelectorAll('.rd-eq i').forEach((b, k) => { const v = lv * (0.3 + 0.7 * Math.abs(Math.sin(t * (2.3 + k * 1.7) + k * 2))); b.style.transform = `scaleY(${clamp(v, 0.06, 1).toFixed(2)})`; });
+  }
+
+  // The song's card at its light ring: standing on the ring on foot, which song this is and the button to buy it (the
+  // same button as at the record shop's counter and in the phone's STORE). B buys from the keyboard, X on a pad.
+  const spotEl = $('#spot'), spot = { p: null };
+  function spotRender() {
+    const p = spot.p; if (!p) return;
+    const s = p.song, i = places.indexOf(p), lis = (s.links || []).find((l) => l.kind !== 'buy');
+    spotEl.style.setProperty('--c', p.color);
+    $('#spTitle').textContent = s.title;
+    $('#spSub').textContent = [s.artist || CFG.artist, s.year, s.place].filter(Boolean).join(' · ');
+    $('#spTag').innerHTML = tagOf(s);
+    $('#spAct').innerHTML = buyHTML(p, i)
+      + (lis ? `<a class="btn sp-lis" href="${esc(lis.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(lis.label)}">${IC.play}<span>LISTEN ↗</span></a>` : '')
+      + (!TOUCH && !isOwned(s) && ((s.links || []).some((l) => l.kind === 'buy') || canCheckout(s)) ? '<kbd>B</kbd>' : '');
+  }
+  function spotBuy() { const b = spotEl.querySelector('#spAct .btn.primary'); if (b && !b.disabled) b.click(); }
+  spotEl.addEventListener('click', (e) => { const b = e.target.closest('[data-buy]'); if (b && spot.p) buy(spot.p, b); });
+  function spotTick() {
+    let at = null;
+    if (mode === 'walk' && !drv) for (const p of places) {
+      if (p.found && p.song.store !== false && Math.hypot(P.x - p.vx, P.z - p.vz) < 3 && P.y > p.vy - DECK_STEP && P.y < p.vy + 2.5) { at = p; break; }   // on the ring, at its level
+    }
+    if (at === spot.p) return;
+    spot.p = at; spotEl.hidden = !at;
+    if (at) spotRender();
   }
 
   /* ================= map ================= */
@@ -3139,7 +3168,7 @@
     }
     { const ba = $('#btnA'); ba.classList.toggle('ready', !!fkey); ba.classList.toggle('k-car', !!fkey && fkey.kind === 'car'); ba.classList.toggle('k-exit', !!fkey && fkey.kind === 'exit'); }
 
-    updateAudio(dt); radioTick(dt);
+    updateAudio(dt); radioTick(dt); spotTick();
     updTraffic(dt); updCTraffic(dt);
 
     // Lighting: blend towards the closest place's grade.
@@ -3478,5 +3507,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, spot, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
