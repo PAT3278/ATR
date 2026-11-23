@@ -2389,7 +2389,7 @@
         if (f.beat && v > 0.05 && t - lastBurst > 0.34) {
           lastBurst = t;
           const big = f.bass > 0.72;
-          rockets.push({ x: (r() - 0.5) * 70, z: -50 - r() * 30, y: 0, ty: 26 + r() * 22, big, tr: 0 });
+          rockets.push({ x: (r() - 0.5) * 70, z: -50 - r() * 30, y: 0, ty: 40 + r() * 22, big, tr: 0 });   // (high enough to burst over the mountain behind the palace)
         }
         for (let i = rockets.length - 1; i >= 0; i--) {
           const k = rockets[i];

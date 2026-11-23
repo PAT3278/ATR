@@ -779,7 +779,8 @@
   });
 
   var hillField = null;
-  var street = null, streetView = null;   // the street under the viaduct, from FLIP's north branch to the beach (street.js): planned before the piers and the hills, built after   // the rolling hills north of OHH (built once the places and paths exist, below)
+  var street = null, streetView = null, pass = null, passView = null;   // pass: the mountain south of NO JOBB and its pass road (pass.js)
+    // the street under the viaduct, from FLIP's north branch to the beach (street.js): planned before the piers and the hills, built after   // the rolling hills north of OHH (built once the places and paths exist, below)
   function hillAt(x, z) {   // the height of the drawn hill mesh: each grid cell is the same two triangles PlaneGeometry makes, so feet, trails and signposts sit on the facets
     const F = hillField; if (!F) return 0;
     const fx = (x - F.x0) / F.d, fz = (z - F.z0) / F.d; if (fx < 0 || fz < 0 || fx >= F.nx - 1 || fz >= F.nz - 1) return 0;
@@ -792,6 +793,7 @@
     if (y !== undefined) for (const p of places) if (p.bore) { const l = p.local(x, z), b = p.bore(l.x, l.z, y); if (b != null) { h = b; break; } }   // down in a tunnel through the hills: its floor, not the hill over it
     for (const p of places) if (p.ground) { const l = p.local(x, z); h = Math.max(h, p.ground(l.x, l.z, y)); }
     if (street) h = Math.max(h, street.ground(x, z, y));
+    if (pass) h = Math.max(h, pass.ground(x, z, y));
     return h;
   }
 
@@ -1177,6 +1179,7 @@
   }
 
   street = SW.Street ? SW.Street.make(ring, places) : null;
+  pass = SW.Pass ? SW.Pass.make(ring, places) : null;   // the mountain behind NO JOBB: its heights and its road (built below, with the street)
   if (street) {   // the ground roads cut through the crater wall to the car park: whatever stood across their way at ground level goes
     const inWay = (o) => (o.y0 === undefined || o.y0 < 2) && street.lines.some((L) => L.y < 2 && Math.hypot(L.x - o.x, L.z - o.z) < L.hw + 0.6);
     for (let i = boxes.length - 1; i >= 0; i--) if (inWay(boxes[i])) boxes.splice(i, 1);
@@ -1325,7 +1328,7 @@
   {
     const r = rng(99), spots = [];
     const ok = (x, z) => {
-      if ((!!street && street.clear(x, z, 2.5)) || Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2.5) || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
+      if ((!!street && street.clear(x, z, 2.5)) || (!!pass && (pass.ground(x, z) > 0.4 || pass.clear(x, z, 2.5))) || Math.hypot(x, z) < PLAZA_R + 5 || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2.5) || ring.dist(x, z) < 13 || distToPath(x, z, loopPath).d < 4.5) return false;   // nothing grows up through the ring road
       for (const p of places) {
         if (Math.hypot(x - p.x, z - p.z) < p.clearR) return false;
         const l = p.local(x, z); if (p.blocks(l.x, l.z)) return false;
@@ -1785,6 +1788,7 @@
   // The street under the viaduct and its shops (street.js). At SEASIDE MOTORS' desk you choose the car that waits for you
   // at the beach lay-by: each go brings the next model round (swapping it with whichever bay had it) and onto the turntable.
   streetView = street ? SW.Street.build(street, E, { scene, boxes, circles, interact, pick: (m) => { m.userData.ground = true; pick.push(m); } }) : null;
+  passView = pass ? SW.Pass.build(pass, E, { scene, circles, pick: (m) => { m.userData.ground = true; pick.push(m); } }) : null;
   // its ground roads join the ones you can drive (after everything built from the ring road's own: piers, decks, the hills
   // under them), and its two parking areas (the garage's east bay, the car park's ground floor) are set up like the others
   if (street) {
@@ -2959,6 +2963,7 @@
         g.restore();
       });
     });
+    if (passView) passView.map(g, toMap, MAP_S);   // the mountain behind NO JOBB and its road
     if (streetView) streetView.map(g, toMap, MAP_S);   // the street under the viaduct, and the shops by the beach
     g.strokeStyle = 'rgba(200,192,170,.8)'; g.lineWidth = 3 * MAP_S;
     g.beginPath(); loopPath.forEach((q, i) => { const [x, y] = toMap(q.x, q.z); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
