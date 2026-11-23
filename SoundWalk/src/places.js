@@ -2125,12 +2125,13 @@
     build(p, E) {
       const g = p.group, r = E.rng(71);
       const HR = 21, HH = 5;   // (21 m: its foot stops at FIELD's apartment house, whose north wing stands 14 m from the top)
-      // The hill, with a terrace levelled across its top for the palace and its forecourt (TX0..TX1 x TZ): flat there, then
-      // easing down over TF metres to meet the round hill. (The side towards FIELD keeps the hill's own slope.)
-      const TX0 = -5.5, TX1 = 14.5, TZ = 7.5, TF = 4.5, FX = 2.6;
+      // The hill's top is levelled into a round court (centre CX, flat out to TR), easing down over TF metres to meet the
+      // round hill. The court is a palace closed round a fountain: a ring of pale-stone wings with a cloister inside, a
+      // domed hall at the back, a vaulted gate where the path comes in, and on the fireworks' side a low open loggia.
+      const CX = 3, RI = 9.5, RO = 12.9, TR = 13.4, TF = 3.5, FX = CX;
       const height = (lx, lz) => {
         const d = Math.hypot(lx, lz); if (d >= HR) return 0;
-        const e = Math.hypot(Math.max(TX0 - lx, 0, lx - TX1), Math.max(Math.abs(lz) - TZ, 0)), ht = e >= TF ? 0 : HH * 0.5 * (1 + Math.cos((Math.PI * e) / TF)) * Math.min(1, (HR - d) / 1.5);
+        const e = Math.max(0, Math.hypot(lx - CX, lz) - TR), ht = e >= TF ? 0 : HH * 0.5 * (1 + Math.cos((Math.PI * e) / TF)) * Math.min(1, (HR - d) / 1.5);
         return Math.max(HH * 0.5 * (1 + Math.cos((Math.PI * d) / HR)), ht);
       };
       p.ground = height;
@@ -2139,7 +2140,7 @@
       const hp = hg.attributes.position;
       for (let i = 0; i < hp.count; i++) {
         const x = hp.getX(i), y = hp.getY(i);
-        hp.setZ(i, height(x, -y) + (Math.hypot(x, y) < HR - 0.5 ? (r() - 0.5) * 0.15 : 0) + 0.01);
+        hp.setZ(i, height(x, -y) + (Math.hypot(x, y) < HR - 0.5 && Math.hypot(x - CX, y) > TR + 0.3 ? (r() - 0.5) * 0.15 : 0) + 0.01);
       }
       hg.computeVertexNormals();
       const hillM = E.mat('#6c9a50', { flat: true });
@@ -2157,84 +2158,154 @@
         const m = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), E.mat('#2f5a33', { flat: true }));
         m.position.set(x, y, z); m.castShadow = true; tree.add(m);
       });
-      tree.position.set(-9, height(-9, 2) - 0.1, 2);
+      tree.position.set(-12.5, height(-12.5, 9) - 0.1, 9);   // on the slope outside the court, beside the path up
       g.add(tree);
-      p.addCircle(-9, 2, 0.7);
-
-      E.bench(g, -3.2, -2.9, Math.PI, height(-3.2, -2.9) - 0.05);   // by the light ring, looking out at the fireworks
-      p.addBox(-3.2, -2.9, 1.2, 0.4);
-      const lamp = new THREE.Group();
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 3, 6), E.mat('#2a2a30'));
-      post.position.y = 1.5; lamp.add(post);
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffd9a0' }));
-      bulb.position.y = 3.05; lamp.add(bulb);
-      lamp.position.set(-5.6, height(-5.6, -2.2) - 0.05, -2.2);
-      g.add(lamp);
-      p.addCircle(-5.6, -2.2, 0.3);
-      const lampLight = new THREE.PointLight('#ffc98a', 1.2, 12, 2);
-      lampLight.position.set(-5.6, h0 + 2.8, -2.2);
+      p.addCircle(-12.5, 9, 0.7);
+      const lampLight = new THREE.PointLight('#ffc98a', 1.2, 14, 2);
+      lampLight.position.set(CX, HH + 3.4, 7.2);   // under the gate's vault, over the light ring
       g.add(lampLight);
 
-      // The palace on the top: a small neoclassical house of pale stone on a podium, its front (a portico of six columns
-      // under a pediment) facing across the top; a verdigris dome on a drum, a balustrade round the roof, tall windows lit
-      // after dark. In its forecourt, the fountain: a round basin, a two-tier bowl, a jet that leaps on the kick.
       {
         const PB = E.batch(g), pb = PB.box, Y = HH;
-        const stone = E.mat('#d9d4c8', { map: E.tex('concrete', 2, 2), rough: 0.85 }), stoneD = E.mat('#b9b3a6', { map: E.tex('concrete', 2, 2), rough: 0.9 });
+        const stone = E.mat('#d9d4c8', { map: E.tex('concrete', 0.35, 0.35), rough: 0.85 }), stoneD = E.mat('#b9b3a6', { map: E.tex('concrete', 0.35, 0.35), rough: 0.9 });
         const dome = E.mat('#7fa79a', { rough: 0.5, metal: 0.35 }), winLit = E.basic('#ffd9a0'), winDark = E.mat('#1a2028', { rough: 0.2, metal: 0.5 });
-        const PX0 = 8.6, PX1 = 13.6, PZ = 6.5, PH = 6.2;                                   // the main block: front at PX0, half-width PZ
-        pb(PX1 - PX0 + 1.4, 0.7, PZ * 2 + 1.4, (PX0 + PX1) / 2, Y + 0.35, 0, stoneD);  // the podium
-        pb(PX1 - PX0, PH, PZ * 2, (PX0 + PX1) / 2, Y + 0.7 + PH / 2, 0, stone);
-        pb(PX1 - PX0 + 0.5, 0.35, PZ * 2 + 0.5, (PX0 + PX1) / 2, Y + 0.7 + PH + 0.17, 0, stoneD);   // the cornice
-        // the balustrade round the roof
-        for (const [x0, z0, x1, z1] of [[PX0, -PZ, PX0, PZ], [PX1, -PZ, PX1, PZ], [PX0, -PZ, PX1, -PZ], [PX0, PZ, PX1, PZ]]) {
-          const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.32), yb = Y + 0.7 + PH + 0.35;
-          for (let k = 0; k <= n; k++) pb(0.14, 0.55, 0.14, x0 + ((x1 - x0) * k) / n, yb + 0.28, z0 + ((z1 - z0) * k) / n, stone, false);
-          pb(Math.max(0.2, Math.abs(x1 - x0)) + 0.1, 0.12, Math.max(0.2, Math.abs(z1 - z0)) + 0.1, (x0 + x1) / 2, yb + 0.6, (z0 + z1) / 2, stoneD, false);
+        const paveM = E.mat('#d6cfbf', { map: E.tex('paving', 0.4, 0.4), rough: 0.95 });
+        // the plan: a 16-sided ring. Face f is centred at angle 2*HA*f (0 = towards the hall, 90deg = the gate, 270deg = the
+        // fireworks); vertex k sits at HA + 2*HA*k. Apothem a: the distance from the centre to a face.
+        const NS = 16, HA = Math.PI / NS, KC = 1 / Math.cos(HA), TN = Math.tan(HA);
+        const vtx = (aa, k) => { const t = HA + 2 * HA * k; return [CX + aa * KC * Math.cos(t), aa * KC * Math.sin(t)]; };
+        const shadowed = (m) => { m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+        const sector = (f0, f1, a0, a1, y, h, m) => {   // a slab or a block over faces f0..f1, between apothems a0 and a1
+          const pts = [];
+          for (let k = f0 - 1; k <= f1; k++) { const [x, z] = vtx(a1, k); pts.push(new THREE.Vector2(x, -z)); }
+          for (let k = f1; k >= f0 - 1; k--) { const [x, z] = vtx(a0, k); pts.push(new THREE.Vector2(x, -z)); }
+          const ms = new THREE.Mesh(new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: h, bevelEnabled: false }), m);
+          ms.rotation.x = -Math.PI / 2; ms.position.y = y; return shadowed(ms);
+        };
+        const fb = (fc, aa, u, y, w, h, d, m, sh = false) => {   // a box on face fc: w along the face, d across it
+          const t = 2 * HA * fc, o = pb(w, h, d, CX + aa * Math.cos(t) - u * Math.sin(t), y, aa * Math.sin(t) + u * Math.cos(t), m, sh); o.rotation.y = -t - Math.PI / 2; return o;
+        };
+        const onFace = (ms, fc, aa, u = 0) => { const t = 2 * HA * fc; ms.position.x = CX + aa * Math.cos(t) - u * Math.sin(t); ms.position.z = aa * Math.sin(t) + u * Math.cos(t); ms.rotation.y = -t - Math.PI / 2; return shadowed(ms); };
+        const wallBox = (fc, a0, a1, u = 0, hu) => {   // a collider square to face fc, radial a0..a1, tangential u +- hu
+          const t = 2 * HA * fc, am = (a0 + a1) / 2, b = p.addBox(CX + am * Math.cos(t) - u * Math.sin(t), am * Math.sin(t) + u * Math.cos(t), (a1 - a0) / 2, hu);
+          b.c = Math.cos(p.rot - t); b.s = Math.sin(p.rot - t); return b;
+        };
+        const archGeo = (w, h, rad, dep, spring = 0) => {   // a wall w x h with a round arch cut up from its foot (springing at spring)
+          const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(-rad, 0); if (spring) sh.lineTo(-rad, spring); sh.absarc(0, spring, rad, Math.PI, 0, true); sh.lineTo(rad, 0); sh.lineTo(w / 2, 0); sh.lineTo(w / 2, h); sh.lineTo(-w / 2, h); sh.closePath();
+          return new THREE.ExtrudeGeometry(sh, { depth: dep, bevelEnabled: false }).translate(0, 0, -dep / 2);
+        };
+        const colG = new THREE.CylinderGeometry(0.17, 0.21, 1, 14);
+        const column = (x, z, y0, hgt) => {   // a shaft with a square base and capital
+          const c = new THREE.Mesh(colG, stone); c.scale.y = hgt - 0.5; c.position.set(x, y0 + 0.25 + (hgt - 0.5) / 2, z); shadowed(c);
+          pb(0.5, 0.25, 0.5, x, y0 + 0.125, z, stoneD); pb(0.52, 0.25, 0.52, x, y0 + hgt - 0.125, z, stoneD);
+          p.addCircle(x, z, 0.3);
+        };
+        const rail = (fc, aa, y) => {   // a balustrade along face fc at apothem aa: balusters under a hand rail
+          const half = aa * TN, n = Math.max(2, Math.round((half * 2) / 0.34));
+          for (let k = 0; k <= n; k++) fb(fc, aa, -half + (2 * half * k) / n, y + 0.28, 0.13, 0.55, 0.13, stone);
+          fb(fc, aa, 0, y + 0.6, half * 2 + 0.1, 0.12, 0.2, stoneD);
+        };
+        const win = (fc, aa, u, y, out, lit, tall = 1.6) => {   // a window on face fc (out: +1 on an outer face, -1 inner) and its lintel
+          fb(fc, aa + out * 0.03, u, y, 0.85, tall, 0.06, lit ? winLit : winDark); fb(fc, aa + out * 0.07, u, y + tall / 2 + 0.1, 1.15, 0.18, 0.14, stoneD);
+        };
+
+        // the wings: the domed hall at the back (faces -1..1, three floors), two-storey wings either side of the gate
+        const WH = 7.2, HALL = 9.8, wings = [[-1, 1, HALL], [2, 3, WH], [5, 9, WH]];
+        for (const [f0, f1, H] of wings) {
+          sector(f0, f1, RI - 0.15, RO + 0.15, Y, 0.45, stoneD);                 // the plinth
+          sector(f0, f1, RI, RO, Y + 0.45, H - 0.45, stone);
+          sector(f0, f1, RI - 0.25, RO + 0.25, Y + H, 0.35, stoneD);            // the cornice
+          for (let fc = f0; fc <= f1; fc++) {
+            rail(fc, RO + 0.05, Y + H + 0.35); rail(fc, RI - 0.05, Y + H + 0.35);
+            const floors = H > 8 ? [Y + 2.0, Y + 5.0, Y + 8.0] : [Y + 2.0, Y + 5.3];
+            for (const y of floors) { win(fc, RO, -1.15, y, 1, r() < 0.55); win(fc, RO, 1.15, y, 1, r() < 0.55); }
+            for (const y of floors.slice(1)) win(fc, RI, 0, y, -1, r() < 0.7);
+            fc === 0 ? win(fc, RI, 0, Y + 1.75, -1, true, 2.9) : win(fc, RI, 0, Y + 1.5, -1, r() < 0.8, 2.2);   // doors under the cloister (the hall's tall and lit)
+            wallBox(fc, RI, RO, 0, ((RI + RO) / 2) * TN);
+          }
         }
-        // tall windows: two floors along the front and the sides, a door in the portico
-        const win = (x, y, z, ax, lit) => { if (ax === 'x') { pb(0.06, 1.7, 0.9, x, y, z, lit ? winLit : winDark, false); pb(0.14, 0.18, 1.2, x - 0.04, y + 0.98, z, stoneD, false); } else { pb(0.9, 1.7, 0.06, x, y, z, lit ? winLit : winDark, false); pb(1.2, 0.18, 0.14, x, y + 0.98, z, stoneD, false); } };
-        for (const y of [Y + 2.0, Y + 4.8]) {
-          for (const z of [-5.3, -3.8, 3.8, 5.3]) win(PX0 - 0.03, y, z, 'x', r() < 0.6);
-          for (const x of [9.6, 11.1, 12.6]) { win(x, y, -PZ - 0.03, 'z', r() < 0.6); win(x, y, PZ + 0.03, 'z', r() < 0.6); }
+        // the hall's front: a pediment over the middle face, and the dome on a windowed drum
+        { const sh = new THREE.Shape([new THREE.Vector2(-2.6, 0), new THREE.Vector2(2.6, 0), new THREE.Vector2(0, 1.5)]);
+          onFace(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.7, bevelEnabled: false }).translate(0, 0, -0.35), stone), 0, RI + 0.2).position.y = Y + HALL + 0.35;
+          const cx = CX + (RI + RO) / 2, yb = Y + HALL + 0.35;
+          const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 1.4, 32), stone); drum.position.set(cx, yb + 0.7, 0); shadowed(drum);
+          for (let k = 0; k < 12; k++) { const t = (k / 12) * Math.PI * 2, w = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.75, 0.38), r() < 0.7 ? winLit : winDark); w.position.set(cx + Math.cos(t) * 2.11, yb + 0.7, Math.sin(t) * 2.11); w.rotation.y = -t; g.add(w); }
+          const dm = new THREE.Mesh(new THREE.SphereGeometry(2.2, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), dome); dm.position.set(cx, yb + 1.4, 0); shadowed(dm);
+          const ln = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.75, 10), stone); ln.position.set(cx, yb + 1.4 + 2.2 + 0.3, 0); g.add(ln);
+          const tip = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.7, 10), dome); tip.position.set(cx, yb + 1.4 + 2.2 + 1.0, 0); g.add(tip); }
+
+        // the cloister: an arcade on the court side of every wing, its roof a terrace against the wall
+        const AC = RI - 1.35, arcW = 2 * AC * TN, arcG = archGeo(arcW + 0.05, 1.65, arcW / 2 - 0.22, 0.45);
+        const colsAt = new Set();
+        for (const [f0, f1] of wings) {
+          sector(f0, f1, AC - 0.3, RI, Y + 3.95, 0.35, stoneD);
+          for (let fc = f0; fc <= f1; fc++) { onFace(new THREE.Mesh(arcG, stone), fc, AC).position.y = Y + 2.3; rail(fc, AC - 0.2, Y + 4.3); }
+          for (let k = f0 - 1; k <= f1; k++) colsAt.add(((k % NS) + NS) % NS);
         }
-        pb(0.06, 2.8, 1.5, PX0 - 0.03, Y + 2.1, 0, winLit, false); pb(0.06, 1.6, 0.9, PX0 - 0.03, Y + 4.8, -1.4, winLit, false); pb(0.06, 1.6, 0.9, PX0 - 0.03, Y + 4.8, 1.4, winLit, false);
-        // the portico: steps, six columns, the entablature, a pediment
-        const QX = 6.6;
-        for (let k = 0; k < 3; k++) pb(0.45, 0.24 * (k + 1), 6.0, QX - 0.7 + k * 0.4 + 0.2, Y + 0.12 * (k + 1), 0, stoneD);
-        pb(PX0 - QX + 0.2, 0.7, 6.0, (QX + PX0) / 2, Y + 0.35, 0, stoneD);
-        const colG = new THREE.CylinderGeometry(0.2, 0.24, PH - 0.4, 14);
-        for (let k = 0; k < 6; k++) { const c = new THREE.Mesh(colG, stone); c.position.set(QX + 0.35, Y + 0.7 + (PH - 0.4) / 2, -2.5 + k); c.castShadow = true; g.add(c); p.addCircle(QX + 0.35, -2.5 + k, 0.26); }
-        pb(PX0 - QX + 0.2, 0.6, 6.0, (QX + PX0) / 2, Y + 0.7 + PH - 0.1, 0, stone);
-        { const sh = new THREE.Shape([new THREE.Vector2(-3.1, 0), new THREE.Vector2(3.1, 0), new THREE.Vector2(0, 1.5)]); const pg = new THREE.ExtrudeGeometry(sh, { depth: PX0 - QX + 0.4, bevelEnabled: false });
-          const ped = new THREE.Mesh(pg, stone); ped.rotation.y = Math.PI / 2; ped.position.set(QX - 0.1, Y + 0.7 + PH + 0.2, 0); ped.castShadow = true; g.add(ped); }
-        // the dome on its drum, a lantern on top
-        { const cx = (PX0 + PX1) / 2 + 0.3, yb = Y + 0.7 + PH + 0.35;
-          const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 1.3, 32), stone); drum.position.set(cx, yb + 0.65, 0); drum.castShadow = true; g.add(drum);
-          for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; const w = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.4), r() < 0.7 ? winLit : winDark); w.position.set(cx + Math.cos(a) * 2.51, yb + 0.65, Math.sin(a) * 2.51); w.rotation.y = -a; g.add(w); }
-          const dm = new THREE.Mesh(new THREE.SphereGeometry(2.55, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2), dome); dm.position.set(cx, yb + 1.3, 0); dm.castShadow = true; g.add(dm);
-          const ln = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.8, 10), stone); ln.position.set(cx, yb + 1.3 + 2.55 + 0.3, 0); g.add(ln);
-          const tip = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.7, 10), dome); tip.position.set(cx, yb + 1.3 + 2.55 + 1.05, 0); g.add(tip); }
-        p.addBox((PX0 + PX1) / 2, 0, (PX1 - PX0) / 2 + 0.7, PZ + 0.7);
-        p.addBox((QX + PX0) / 2 + 0.3, -2.95, (PX0 - QX) / 2, 0.08); p.addBox((QX + PX0) / 2 + 0.3, 2.95, (PX0 - QX) / 2, 0.08);   // the portico's ends (its front is the steps)
-        // the forecourt: pale gravel round the fountain, from the portico's steps to the path
-        const court = new THREE.Mesh(new THREE.CircleGeometry(4.6, 40), E.mat('#cfc8b8', { map: E.tex('paving', 3, 3), rough: 0.95 })); court.rotation.x = -Math.PI / 2; court.position.set(FX, Y + 0.025, 0); g.add(court); p.pick(court);
-        // the fountain
-        const basin = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.45, 0.55, 40), stoneD); basin.position.set(FX, Y + 0.27, 0); basin.castShadow = true; g.add(basin);
-        const rim = new THREE.Mesh(new THREE.TorusGeometry(2.35, 0.1, 6, 40), stone); rim.rotation.x = Math.PI / 2; rim.position.set(FX, Y + 0.56, 0); g.add(rim);
-        const waterM = E.gloss('#5f8fb0', { rough: 0.08, metal: 0.2, env: 1.4 }); waterM.transparent = true; waterM.opacity = 0.88;
-        const water = new THREE.Mesh(new THREE.CircleGeometry(2.22, 40), waterM); water.rotation.x = -Math.PI / 2; water.position.set(FX, Y + 0.5, 0); g.add(water);
+        for (const k of colsAt) { const [x, z] = vtx(AC, k); column(x, z, Y, 2.3); }
+
+        // the gate: a vaulted passage through the ring where the path comes in, a pediment over it, a lantern inside
+        { const GD = RO - RI + 0.7, gw = (RI + RO) * TN;
+          onFace(new THREE.Mesh(archGeo(gw, WH + 1.2, 1.5, GD, 2.6), stone), 4, (RI + RO) / 2).position.y = Y;
+          fb(4, (RI + RO) / 2, 0, Y + WH + 1.35, gw + 0.4, 0.3, GD + 0.4, stoneD, true);
+          const sh = new THREE.Shape([new THREE.Vector2(-gw / 2 - 0.1, 0), new THREE.Vector2(gw / 2 + 0.1, 0), new THREE.Vector2(0, 1.4)]), pg = new THREE.ExtrudeGeometry(sh, { depth: GD, bevelEnabled: false }).translate(0, 0, -GD / 2);
+          onFace(new THREE.Mesh(pg, stone), 4, (RI + RO) / 2).position.y = Y + WH + 1.5;
+          const lan = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), winLit); onFace(lan, 4, (RI + RO) / 2).position.y = Y + 3.6;
+          wallBox(4, RI - 0.3, RO + 0.3, -(1.5 + gw / 2) / 2 - 0.05, (gw / 2 - 1.5) / 2 + 0.05); wallBox(4, RI - 0.3, RO + 0.3, (1.5 + gw / 2) / 2 + 0.05, (gw / 2 - 1.5) / 2 + 0.05); }
+
+        // the loggia on the fireworks' side: two arcades under a flat roof, open to the sky and the view beyond
+        { const L0 = 10, L1 = 14, LH = 4.5;
+          sector(L0, L1, RI - 0.2, RO + 0.1, Y, 0.08, paveM);
+          sector(L0, L1, RI - 0.3, RO + 0.15, Y + LH, 0.35, stoneD);
+          const inW = 2 * RI * TN, outW = (RO - 0.2) * TN, inG = archGeo(inW + 0.05, 1.9, inW / 2 - 0.25, 0.42), outG = archGeo(outW + 0.05, 1.9, outW / 2 - 0.22, 0.42);
+          for (let fc = L0; fc <= L1; fc++) {
+            onFace(new THREE.Mesh(inG, stone), fc, RI).position.y = Y + 2.6;
+            for (const u of [-outW / 2, outW / 2]) onFace(new THREE.Mesh(outG, stone), fc, RO - 0.2, u).position.y = Y + 2.6;
+            const [mx, mz] = [CX + (RO - 0.2) * Math.cos(2 * HA * fc), (RO - 0.2) * Math.sin(2 * HA * fc)]; column(mx, mz, Y, 2.6);
+            rail(fc, RI - 0.2, Y + LH + 0.35); rail(fc, RO, Y + LH + 0.35);
+          }
+          for (let k = L0 - 1; k <= L1; k++) { const [ix, iz] = vtx(RI, k), [ox, oz] = vtx(RO - 0.2, k); if (k !== L0 - 1 && k !== L1) column(ix, iz, Y, 2.6); column(ox, oz, Y, 2.6); }
+        }
+
+        // the court: pale paving, lanterns on posts, benches facing the pool
+        const court = new THREE.Mesh(new THREE.CircleGeometry(RI * KC, 64), paveM); court.rotation.x = -Math.PI / 2; court.position.set(CX, Y + 0.03, 0); court.receiveShadow = true; g.add(court); p.pick(court);
+        const postM = E.mat('#2a2a30', { metal: 0.5, rough: 0.5 });
+        for (const deg of [45, 135, 225, 315]) {
+          const t = (deg * Math.PI) / 180, x = CX + 6.9 * Math.cos(t), z = 6.9 * Math.sin(t);
+          pb(0.12, 2.8, 0.12, x, Y + 1.4, z, postM); pb(0.34, 0.42, 0.34, x, Y + 2.95, z, winLit, false);
+          p.addCircle(x, z, 0.25);
+        }
+        for (const deg of [30, 150, 210, 330]) {
+          const t = (deg * Math.PI) / 180, x = CX + 5.3 * Math.cos(t), z = 5.3 * Math.sin(t);
+          E.bench(g, x, z, Math.atan2(-Math.cos(t), -Math.sin(t)), Y); p.addCircle(x, z, 0.75);
+        }
+
+        // the pool in the middle: luminous water with lily pads, a two-tier fountain whose jet leaps on the kick, and
+        // motes of light rising off the water
+        const basin = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.15, 0.5, 48), stoneD); basin.position.set(FX, Y + 0.25, 0); shadowed(basin);
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(3.05, 0.12, 6, 48), stone); rim.rotation.x = Math.PI / 2; rim.position.set(FX, Y + 0.52, 0); g.add(rim);
+        const waterM = E.gloss('#4fa9b8', { rough: 0.08, metal: 0.2, env: 1.4 }); waterM.transparent = true; waterM.opacity = 0.9;
+        waterM.emissive = new THREE.Color('#1c9e9a').convertSRGBToLinear(); waterM.emissiveIntensity = 0.6;
+        const water = new THREE.Mesh(new THREE.CircleGeometry(2.92, 48), waterM); water.rotation.x = -Math.PI / 2; water.position.set(FX, Y + 0.46, 0); g.add(water);
+        const padM = E.mat('#3f7a3a', { rough: 0.7 });
+        for (let k = 0; k < 6; k++) { const t = r() * Math.PI * 2, rr = 1.4 + r() * 1.2, pad = new THREE.Mesh(new THREE.CircleGeometry(0.28 + r() * 0.15, 12, 0.3, Math.PI * 2 - 0.6), padM); pad.rotation.set(-Math.PI / 2, 0, r() * 6); pad.position.set(FX + rr * Math.cos(t), Y + 0.475, rr * Math.sin(t)); g.add(pad); }
         const ped0 = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 1.3, 14), stone); ped0.position.set(FX, Y + 1.1, 0); g.add(ped0);
         const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.35, 0.3, 24), stone); bowl.position.set(FX, Y + 1.85, 0); g.add(bowl);
         const ped1 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.8, 12), stone); ped1.position.set(FX, Y + 2.35, 0); g.add(ped1);
         const bowl2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.18, 0.18, 20), stone); bowl2.position.set(FX, Y + 2.8, 0); g.add(bowl2);
         const spray = (o) => { const m = new THREE.MeshBasicMaterial({ color: new THREE.Color('#cfe6ff').convertSRGBToLinear(), transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }); m.userData.lin = true; return m; };
-        const sheet1 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.25, 1.25, 28, 1, true), spray(0.16)); sheet1.position.set(FX, Y + 1.15, 0); g.add(sheet1);   // the water falling off the bowls' rims
+        const sheet1 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.25, 1.35, 28, 1, true), spray(0.16)); sheet1.position.set(FX, Y + 1.12, 0); g.add(sheet1);   // the water falling off the bowls' rims
         const sheet2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.75, 1.0, 20, 1, true), spray(0.18)); sheet2.position.set(FX, Y + 2.25, 0); g.add(sheet2);
         const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.09, 1, 10, 1, true).translate(0, 0.5, 0), spray(0.5)); jet.position.set(FX, Y + 2.88, 0); g.add(jet);
         const crown = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), spray(0.35)); crown.position.set(FX, Y + 4, 0); g.add(crown);
-        const glow = new THREE.PointLight('#9fd0ff', 0.8, 9, 2); glow.position.set(FX, Y + 0.9, 0); g.add(glow);
-        p.addCircle(FX, 0, 2.55);
+        const glow = new THREE.PointLight('#8ff0e6', 1.0, 12, 2); glow.position.set(FX, Y + 0.9, 0); g.add(glow);
+        p.addCircle(FX, 0, 3.25);
+        const MN = 110, mpos = new Float32Array(MN * 3), mcol = new Float32Array(MN * 3), mv = new Float32Array(MN * 2), mtint = ['#bffcf2', '#ffd6f0', '#fff6c8', '#a8e6ff'].map((c) => new THREE.Color(c).convertSRGBToLinear());
+        const mote = (i, y0) => { const t = r() * Math.PI * 2, rr = Math.sqrt(r()) * 2.8; mpos.set([FX + rr * Math.cos(t), y0 != null ? y0 : Y + 0.5, rr * Math.sin(t)], i * 3); mv[i * 2] = 0.35 + r() * 0.6; mv[i * 2 + 1] = r() * 9; };
+        for (let i = 0; i < MN; i++) { mote(i, Y + 0.5 + r() * 9); const c = mtint[i % mtint.length]; mcol.set([c.r, c.g, c.b], i * 3); }
+        const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.BufferAttribute(mpos, 3)); mg.setAttribute('color', new THREE.BufferAttribute(mcol, 3));
+        const motes = new THREE.Points(mg, new THREE.PointsMaterial({ size: 0.32, map: E.dot(), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        motes.frustumCulled = false; g.add(motes);
         PB.flush();
         let jh = 1.2;
         fountainTick = (t, dt, f) => {
@@ -2242,7 +2313,14 @@
           jh += (Math.max(want, jh * 0.97) - jh) * Math.min(1, dt * (want > jh ? 14 : 3)); jh = Math.max(1.2, jh - dt * 1.4);
           jet.scale.y = jh; crown.position.y = Y + 2.88 + jh; crown.scale.setScalar(0.8 + 0.3 * Math.sin(t * 9));
           sheet1.material.opacity = 0.13 + 0.05 * Math.sin(t * 7); sheet2.material.opacity = 0.15 + 0.05 * Math.sin(t * 8 + 1);
-          waterM.opacity = 0.86 + 0.04 * Math.sin(t * 2); glow.intensity = 0.7 + (f.pulse || 0) * 0.8;
+          waterM.opacity = 0.88 + 0.04 * Math.sin(t * 2); waterM.emissiveIntensity = 0.5 + 0.15 * Math.sin(t * 1.3) + (f.pulse || 0) * 0.5; glow.intensity = 0.9 + (f.pulse || 0) * 0.9;
+          const up = 1 + (f.level || 0) * 0.8;
+          for (let i = 0; i < MN; i++) {
+            const j = i * 3, ph = mv[i * 2 + 1] + t * 0.7;
+            mpos[j + 1] += mv[i * 2] * up * dt; mpos[j] += Math.sin(ph) * 0.25 * dt; mpos[j + 2] += Math.cos(ph * 1.3) * 0.25 * dt;
+            if (mpos[j + 1] > Y + 10) mote(i);
+          }
+          mg.attributes.position.needsUpdate = true;
         };
       }
 
@@ -2300,10 +2378,10 @@
         sun: '#7f8cff', sunInt: 0.32, hemi: 0.3, sunDir: [0.3, 0.8, 0.4],
         tint: [0.92, 0.96, 1.15], expo: 1.2, sat: 1.05, stars: 1,
       };
-      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#4f7a3e' }, { t: 'rect', x: 11.1, z: 0, w: 5.8, h: 14.4, c: '#cfc8b8' }, { t: 'circle', x: FX, z: 0, r: 2.4, c: '#5f8fb0' }];
+      p.map = [{ t: 'circle', x: 0, z: 0, r: HR, c: '#4f7a3e' }, { t: 'circle', x: CX, z: 0, r: RO, c: '#b9b3a6' }, { t: 'circle', x: CX, z: 0, r: RI, c: '#ddd6c6' }, { t: 'circle', x: FX, z: 0, r: 3, c: '#4fa9b8' }];
       p.face = Math.PI;
-      p.vp = [-3.2, 0];   // the light ring beside the fountain, on the side away from the palace
-      p.pathEnd = 2.5;
+      p.vp = [CX, 5.8];   // the light ring in the court, between the gate and the pool
+      p.pathEnd = 7.6;
       p.clearR = HR + 2;
       p.blocks = (lx, lz) => Math.hypot(lx, lz) < HR + 3 || (lz < 0 && lz > -100 && Math.abs(lx) < 20 - lz * 0.4);
 
