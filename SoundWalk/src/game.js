@@ -1952,23 +1952,35 @@
     const relY = wrapA(d.yaw - tau), reach = (Math.abs(Math.sin(relY)) * u.len + Math.abs(Math.cos(relY)) * u.wid) / 2;
     focus = here && Math.abs(d.v) < 5 && Math.abs(rq.d) - reach > laneD(rq.hw) + 1.15 ? Object.assign(here.out, { x: d.x, z: d.z, mark: d.y + u.hgt + 0.8 }) : null;
   }
-  // Light traffic in the slow lane each way; it keeps its distance from the car in front, and from you.
+  // Light traffic each way, at its own pace: it keeps to the slow lane, pulls out into the fast lane to pass a slower car
+  // when that lane is clear (where the loop has two lanes), and back in once past; it keeps its distance from the car in
+  // front in its lane, and from you. (Without passing, the faster cars bunched up behind the slowest into a column.)
   const traffic = [];
-  { const r = rng(606); for (let k = 0; k < 12; k++) { const car = makeCar(Math.floor(r() * NCAR)), v0 = 19 + r() * 6; trafficG.add(car); traffic.push({ car, dir: k % 2 ? 1 : -1, s: ((k + r() * 0.6) / 12) * ring.L, v: v0, v0 }); } }
+  { const r = rng(606); for (let k = 0; k < 12; k++) { const car = makeCar(Math.floor(r() * NCAR)), v0 = 15 + r() * 12; trafficG.add(car); traffic.push({ car, dir: k % 2 ? 1 : -1, s: ((Math.floor(k / 2) + r() * 0.8) / 6 + (k % 2) * 0.083) * ring.L % ring.L, v: v0, v0, lane: 0, lo: 0, hw: 0, lt: 0 }); } }
+  const FAST = 3.6, twoLane = (hw) => hw >= 7;   // the fast lane: this much nearer the middle
   const laneD = (hw) => (hw < 3.5 ? 0 : 1.83 + 3.87 * clamp((hw - 4.5) / 3.5, 0, 1));   // a one-lane ramp: keep to its middle
   function updTraffic(dt) {
     const L = ring.L, pv = drv ? drv.v : 0;
+    const gapTo = (c, o) => ((((o.s - c.s) * c.dir) % L) + L) % L;   // how far o is ahead of c, round the loop
+    const clear = (c, lane, back, fwd) => !traffic.some((o) => o !== c && o.dir === c.dir && (o.lane === lane || Math.abs(o.lo - (laneD(c.hw) - lane * FAST)) < 2) && (gapTo(c, o) < fwd || gapTo(o, c) < back));
     for (const c of traffic) {
-      let vt = c.v0;
-      for (const o of traffic) { if (o === c || o.dir !== c.dir) continue; const gap = ((((o.s - c.s) * c.dir) % L) + L) % L; if (gap < 18) vt = Math.min(vt, gap < 9 ? 0 : o.v); }
-      if (drv && !drv.pa && rq.R === ring && Math.abs(rq.d - c.dir * laneD(rq.hw)) < 2.3) {
+      let vt = c.v0, lead = null, lg = 1e9;
+      for (const o of traffic) { if (o === c || o.dir !== c.dir || Math.abs(o.lo - c.lo) > 2) continue; const gap = gapTo(c, o); if (gap < lg) { lg = gap; lead = o; } }
+      c.lt += dt;
+      if (!twoLane(c.hw)) { if (c.lane) { c.lane = 0; c.lt = 0; } }
+      else if (c.lane === 0 && lead && lg < 30 && lead.v0 < c.v0 - 1 && c.lt > 2 && clear(c, 1, 10, 26)) { c.lane = 1; c.lt = 0; }      // pull out to pass
+      else if (c.lane === 1 && c.lt > 4 && clear(c, 0, 9, 22)) { c.lane = 0; c.lt = 0; }                                                   // and back in once past
+      if (lead && lg < 18) vt = Math.min(vt, lg < 9 ? 0 : lead.v);
+      if (drv && !drv.pa && rq.R === ring && Math.abs(rq.d - c.dir * c.lo) < 2.3) {
         const gap = ((((rq.s - c.s) * c.dir) % L) + L) % L;
         if (gap < 20) vt = Math.min(vt, gap < 9 ? 0 : Math.max(0, pv * Math.cos(wrapA(drv.yaw - c.car.rotation.y))));
       }
       c.v += (vt - c.v) * Math.min(1, dt * (vt < c.v ? 3 : 0.8));
       c.s = (c.s + c.dir * c.v * dt + L) % L;
-      ring.at(c.s, 0, ra);
-      const dl = c.dir * laneD(ra.hw), slope = (ring.Y[(ra.i + 1) % ring.N] - ring.Y[ra.i]) / ring.ds;
+      ring.at(c.s, 0, ra); c.hw = ra.hw;
+      const want = Math.max(0, laneD(ra.hw) - (c.lane ? FAST : 0));
+      c.lo = c.lo ? c.lo + (want - c.lo) * Math.min(1, dt * 1.1) : want;
+      const dl = c.dir * c.lo, slope = (ring.Y[(ra.i + 1) % ring.N] - ring.Y[ra.i]) / ring.ds;
       c.car.position.set(ra.x + ra.tz * dl, ra.y, ra.z - ra.tx * dl);
       c.car.rotation.set(-Math.atan(slope) * c.dir, Math.atan2(ra.tx, ra.tz) + (c.dir < 0 ? Math.PI : 0), 0);
       c.car.visible = Math.abs(ra.x - P.x) < 210 && Math.abs(ra.z - P.z) < 210;
@@ -1994,8 +2006,8 @@
     };
     const routes = [['inL', 'c1', 'outL', 3], ['inR', 'c1', 'outR', 3], ['inLb', 'c1b', 'outLb', 2], ['inRb', 'c1b', 'outRb', 2]].map(([a, m, o, k]) => ({ R: route(a, m, o), k })).filter((q) => q.R);
     for (const { R, k } of routes) for (let i = 0; i < k; i++) {
-      const car = makeCar(Math.floor(r() * NCAR)), v0 = 17 + r() * 6; trafficG.add(car);
-      ctraffic.push({ car, R, st: 'run', s: ((i + 0.2 + r() * 0.4) / k) * R.L * R.ds * 0.9, v: v0, v0, rs: 0, dir: 1, d: 0, t: 0 });
+      const car = makeCar(Math.floor(r() * NCAR)), v0 = 15 + r() * 10; trafficG.add(car);
+      ctraffic.push({ car, R, st: 'run', s: ((i + 0.2 + r() * 0.4) / k) * R.L * R.ds * 0.9, v: v0, v0, rs: 0, dir: 1, d: 0, t: 0, hold: r() * 8 });
     }
   }
   const cAt = (R, s) => { const u = Math.max(0, Math.min(R.L - 1e-3, s / R.ds)), i = Math.floor(u), k = u - i, a = R.P[i], b = R.P[Math.min(R.L, i + 1)]; return [a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k, a.z + (b.z - a.z) * k, b.x - a.x, b.y - a.y, b.z - a.z]; };
@@ -2006,7 +2018,7 @@
       const R = c.R, len = R.L * R.ds;
       if (c.st === 'wait') {   // hidden at the start until nobody would see it appear, and the start is clear
         const a = R.P[0]; c.car.visible = false;
-        if (far(a.x, a.z) && !ctraffic.some((o) => o !== c && o.R === R && o.st === 'run' && o.s < 14)) { c.st = 'run'; c.s = 0; c.v = c.v0 * 0.8; }
+        if (far(a.x, a.z) && !ctraffic.some((o) => o !== c && o.R === R && o.st === 'run' && o.s < 14) && (c.hold -= dt) < 0) { c.st = 'run'; c.s = 0; c.v = c.v0 * 0.8; c.hold = 3 + Math.random() * 14; }   // (a while apart: released back to back they ran as a column)
         continue;
       }
       let vt = c.v0;
