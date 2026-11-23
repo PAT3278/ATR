@@ -128,7 +128,7 @@ SW.SONGS = [
     place: '観覧車',
     placeEn: 'FERRIS WHEEL',
     caption: 'ゴンドラが上がるにつれて、街の灯りが見えてくる。',
-    x: 41.0, z: -70.2,   // the boarding spot in front of the wheel, inside the park (places.js: WX, WZ + 6.2 in the park's frame)
+    x: 42.5, z: -66.56,   // the boarding spot in front of the wheel, inside the park (places.js: WX, WZ + 6.2 in the park's frame)
     scene: 'parkwheel',
     sketch: 'flash',
     src: null,

@@ -1346,7 +1346,10 @@
       // The crater floor: its edge is the foot of the cliffs. Each bend carries the height the wall rises to there and how
       // far its outer slope runs (game.js keeps it under the elevated roads: C1 flies just over the south wall, the ramp
       // from C1 to the ring road over the east one, so those stay lower; the west, towards KEYAKI, is the highest).
-      const FLOOR = crLoop([[0, 10, 10, 8], [17, 12, 10, 8], [32, 1, 11, 9], [35, -18, 13, 10], [33, -35, 14, 10], [24, -50, 14, 9], [6, -50.5, 12, 8],   // (wider on the east than it was: the rides there stand apart, under the ramp to the ring road flying 13 m over the edge)
+      // The south (front) wall stands 5 m nearer the plaza than it did, so the tunnel opens right off the walk round the
+      // plaza and the extra floor behind it is the room the rides were short of (its east end stays back a little: the rock's
+      // outer slope, steeper there, must end inside the hill grid, game.js, which stops at world z -18).
+      const FLOOR = crLoop([[0, 15, 10, 8], [17, 16.5, 10, 4], [32, 3, 11, 5], [35, -18, 13, 10], [33, -35, 14, 10], [24, -50, 14, 9], [6, -50.5, 12, 8],   // (wider on the east than it was: the rides there stand apart, under the ramp to the ring road flying 13 m over the edge)
          [-10, -49, 13, 8], [-24, -44, 15, 10], [-33, -36, 17, 11], [-37.5, -24, 18, 10], [-36.5, -9, 17, 9], [-31.5, 0, 15, 8], [-23.5, 10.5, 12, 8], [-12, 13.5, 11, 8]], 12);
       const FB = FLOOR.reduce((o, [x, z]) => [Math.min(o[0], x), Math.max(o[1], x), Math.min(o[2], z), Math.max(o[3], z)], [1e9, -1e9, 1e9, -1e9]), NI = { i: 0 };
       const floorD = (lx, lz, o) => { if (lx < FB[0] - 40 || lx > FB[1] + 40 || lz < FB[2] - 40 || lz > FB[3] + 40) return 40; const d = polyD(FLOOR, lx, lz, o); return inPoly(FLOOR, lx, lz) ? -d : d; };   // metres outside the floor (negative inside)
@@ -1360,8 +1363,15 @@
       const onPier = (lx, lz) => lx > PIER.x0 && lx < PIER.x1 && lz > PIER.z0 && lz < PIER.z1;
       const wet = (lx, lz) => inLagoon(lx, lz) || (inSlip(lx, lz) && lx < -12.4);
       p.waterShape(wet);
-      // The way in: a tunnel through the south wall, from an open cutting under C1 (TZ1) up a gentle ramp to the quay (TZ0).
-      const TW = 3, TZ0 = 10, TZ1 = 17.5, VH = 4.4, CZ_CAR = -9;   // CZ_CAR: where the carousel stands
+      // The way in: a tunnel through the south wall, from the walk round the plaza (its inner edge is ~3 m past TZ1, under
+      // C1) up a gentle ramp to the quay (TZ0). It used to start 4 m further out, at the end of a cutting.
+      const TW = 3, TZ0 = 15, TZ1 = 21, VH = 4.4, CZ_CAR = -9;   // CZ_CAR: where the carousel stands
+      // Where the rides stand, all in one place. The carousel faces you as you come out of the tunnel; on your right the
+      // teacups (their gates turned to the way in), the swing ride and, at the back by the car park, the drop tower; the wheel
+      // behind the carousel, a little to the right (its rim and cabins used to swing through the lagoon's ridge of rock), the
+      // bumper cars behind it against the north wall. Each keeps a clear 4 m or more,
+      // gates and queue lanes included, from the next (they were down to a few tens of centimetres).
+      const WX = 7, WZ = -28.5, DX = 23, DZ = -39, SWX = 24, SWZ = -13, TCX = 19.5, TCZ = 4.5, BCX = 5, BCZ = -45.5;
       const SPIRES = [[-45, -31, 7, 4], [-42, -4, 5, 3.5], [33, -38, 4, 3.5], [-21, -54, 5, 3.5], [25, -52, 3, 3], [-46, -18, 4, 4]];
       const DC = 3.5, CWD = 2.5;   // the cliff's depth (foot to brink) and the crest's width
       // The multi-storey car park in the back right corner, half on the floor, half cut into the crater wall, under the
@@ -1423,7 +1433,7 @@
       p.bore = (lx, lz, y) => (inTun(lx, lz) && y < FY + 3 ? FY * Math.max(0, Math.min(1, (TZ1 - lz) / (TZ1 - TZ0))) : inCave(lx, lz) && y < 3 ? 0 : null);
       p.ceil = (lx, lz) => (Math.abs(lx) < TW + 0.6 && lz > TZ0 - 0.4 && lz < TZ1 + 0.3 ? FY + VH - 0.5 : inCave(lx, lz) && lx < CX0 - 0.6 ? 4.6 : null);   // the camera stays under the vault
       p.holeAt = (lx, lz, y) => (Math.abs(lx) < TW + 1.8 && lz > TZ0 - 1.6 && lz < TZ1 + 2.6 && y < FY + VH + 1.3) || (Math.abs(lz - CZ0) < CWH + 2 && lx > CX1 - 0.4 && lx < CX0 + 1.6 && y < 6.4);   // open the rock at the tunnel and cave mouths
-      p.noPier = (lx, lz) => (Math.abs(lx) < 8 && lz > 6 && lz < 32) || floorD(lx, lz) < 2 || inCP(lx, lz, 2);   // no pier in the cutting, nor on the crater floor (the roads span it)
+      p.noPier = (lx, lz) => (Math.abs(lx) < 8 && lz > TZ0 - 4 && lz < TZ1 + 14.5) || floorD(lx, lz) < 2 || inCP(lx, lz, 2);   // no pier in the cutting, nor on the crater floor (the roads span it)
       p.ground = (lx, lz, y) => {
         if (inCP(lx, lz)) return FY + cpY(lx, lz, y === undefined ? undefined : y - FY);   // the car park's levels and ramps, for whoever is on them
         if (lx < FB[0] - 1 || lx > FB[1] + 1 || lz < FB[2] - 1 || lz > FB[3] + 1) return 0;
@@ -1522,7 +1532,7 @@
         let acc = 0, a = FLOOR[0];
         for (let i = 1; i <= FLOOR.length; i++) { const b = FLOOR[i % FLOOR.length]; acc += Math.hypot(b[0] - a[0], b[1] - a[1]); if (acc < 3.4 && i < FLOOR.length) continue;
           const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2, L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, n = out(mx, mz, [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]);
-          if (!(Math.abs(mx) < TW + 1 && mz > 6) && !(Math.abs(mz - CZ0) < CWH + 0.8 && mx < -34) && !inCP(mx, mz, 1.5)) { const bx = p.addBox(mx + n[0] * 0.6, mz + n[1] * 0.6, L / 2 + 0.25, 0.75, -1e9, FY + 3), al = p.rot + Math.atan2(-(b[1] - a[1]), b[0] - a[0]); bx.c = Math.cos(al); bx.s = Math.sin(al); }
+          if (!(Math.abs(mx) < TW + 1 && mz > TZ0 - 4) && !(Math.abs(mz - CZ0) < CWH + 0.8 && mx < -34) && !inCP(mx, mz, 1.5)) { const bx = p.addBox(mx + n[0] * 0.6, mz + n[1] * 0.6, L / 2 + 0.25, 0.75, -1e9, FY + 3), al = p.rot + Math.atan2(-(b[1] - a[1]), b[0] - a[0]); bx.c = Math.cos(al); bx.s = Math.sin(al); }
           a = b; acc = 0; } }
 
       // The tunnel in from the plaza: lined with riveted plate on iron ribs, lamps along both walls, an iron gateway at
@@ -1594,7 +1604,7 @@
       p.addCircle(0, CZ, 5.6);
 
       // the Ferris wheel
-      const WX = 4, WZ = -31, WY = 13.2, WR = 11, wheel = new THREE.Group(); wheel.position.set(WX, WY, WZ); g.add(wheel);   // at the back of the crater, its top over the rim
+      const WY = 13.2, WR = 11, wheel = new THREE.Group(); wheel.position.set(WX, WY, WZ); g.add(wheel);   // at the back of the crater, its top over the rim
       // It stands on two big A-frames, one either side of the wheel: each a pair of legs from the axle out to feet 7 m either
       // side, and a crossbar well above head height, so the middle under the wheel is open and you see straight through to
       // the boarding platform where the cabins come down.
@@ -1623,7 +1633,7 @@
       { const m4 = new THREE.Matrix4(); for (let i = 0; i < 64; i++) { const a = (i / 64) * Math.PI * 2; rimL.setMatrixAt(i, m4.makeTranslation(Math.cos(a) * WR, Math.sin(a) * WR, 0.95)); } wheel.add(rimL); }
 
       // the drop tower, at the back on the right
-      const DX = 24, DZ = -39, DH = 24;
+      const DH = 24;
       const mast = new THREE.Mesh(new THREE.BoxGeometry(1.1, DH, 1.1), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 2), rough: 0.5 })); mast.position.set(DX, DH / 2, DZ); mast.castShadow = true; g.add(mast);
       pb(2.4, 1.2, 2.4, DX, DH + 0.6, DZ, C[3]);
       const ring = new THREE.Group(); ring.position.set(DX, 2, DZ); g.add(ring);
@@ -1659,10 +1669,12 @@
       { const tieG = new THREE.BoxGeometry(1.25, 0.08, 0.14), ties = new THREE.InstancedMesh(tieG, steelM, Math.floor(NS / 2)), m4 = new THREE.Matrix4();
         for (let k = 0; k < Math.floor(NS / 2); k++) { const i = k * 2, mb = new THREE.Matrix4().makeBasis(cB[i], cN[i], cT[i]); m4.copy(mb).setPosition(cP[i].clone().addScaledVector(cN[i], -0.1)); ties.setMatrixAt(k, m4); }
         g.add(ties); }
-      // supports: iron columns under the track (rust-red, like the harbour's iron), every few metres where it runs the right way up
+      // supports: iron columns under the track (rust-red, like the harbour's iron), every few metres where it runs the right way up.
+      // Put up once the rest of the fair stands (below): off(x, z) keeps them out of every ride, gate, queue, stall and the
+      // walk in (one used to stand in the swing ride's turning top, another in a stall's roof).
       const legM = E.mat('#6e4636', { metal: 0.45, rough: 0.55 });
-      { let last = -1e9; for (let i = 0; i < NS; i++) { const v = cP[i]; if (i - last < 95 || v.y < 3 || cN[i].y < 0.6 || inLagoon(v.x, v.z) || floorD(v.x, v.z) > -0.5) continue;   // a column every 95 samples or so (about six in all), none in the water
-        last = i; const h = v.y - 0.55, col = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, h, 10), legM); col.position.set(v.x, h / 2, v.z); col.castShadow = true; g.add(col); p.addCircle(v.x, v.z, 0.45); } }
+      const columns = (off) => { let last = -1e9; for (let i = 0; i < NS; i++) { const v = cP[i]; if (i - last < 95 || v.y < 3 || cN[i].y < 0.6 || inLagoon(v.x, v.z) || floorD(v.x, v.z) > -0.5 || off(v.x, v.z)) continue;   // a column every 95 samples or so (about six in all), none in the water
+        last = i; const h = v.y - 0.55, col = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, h, 10), legM); col.position.set(v.x, h / 2, v.z); col.castShadow = true; g.add(col); p.addCircle(v.x, v.z, 0.45); } };
       { const k0 = cP.findIndex((v) => inLagoon(v.x, v.z) && v.x < -32), k1 = cP.findLastIndex((v) => inLagoon(v.x, v.z) && v.x < -32);   // where the lift crosses the canal: an iron truss carries it over
         if (k0 >= 0) { const a = cP[Math.max(0, k0 - 3)], b = cP[Math.min(NS - 1, k1 + 3)], mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, L = Math.hypot(b.x - a.x, b.z - a.z), yaw = Math.atan2(b.x - a.x, b.z - a.z), y0 = Math.min(a.y, b.y) - 0.7;
           for (const sd of [-1, 1]) { const ch = pb(0.18, 0.5, L, mx + Math.cos(yaw) * sd * 0.7, y0, mz - Math.sin(yaw) * sd * 0.7, ironD); ch.rotation.y = yaw; for (let k = 0; k <= 6; k++) { const t = k / 6, d = pb(0.08, 0.08, 1.6, a.x + (b.x - a.x) * t + Math.cos(yaw) * sd * 0.7, y0 - 0.55, a.z + (b.z - a.z) * t - Math.sin(yaw) * sd * 0.7, ironD); d.rotation.set(0.6 * (k % 2 ? 1 : -1), yaw, 0, 'YXZ'); } }
@@ -1686,7 +1698,7 @@
       let cs = 0;   // distance along the track, metres
 
       // the swing ride (chair-o-plane): a tower whose top turns, chairs flying out on chains as it speeds up
-      const SWX = 22, SWZ = -20, swing = new THREE.Group(); swing.position.set(SWX, 7.2, SWZ); g.add(swing);
+      const swing = new THREE.Group(); swing.position.set(SWX, 7.2, SWZ); g.add(swing);
       { const tw = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, 7.2, 12), E.mat('#ffffff', { map: stripes('#eeece6', '#9b7bd8', 10) })); tw.position.set(SWX, 3.6, SWZ); tw.castShadow = true; g.add(tw); p.addCircle(SWX, SWZ, 0.9);
         const top = new THREE.Mesh(new THREE.ConeGeometry(4.2, 1.6, 24), E.mat('#ffffff', { map: stripes('#eeece6', '#3fa7d6', 24) })); top.position.y = 0.9; swing.add(top); }
       const chairs = [];
@@ -1699,7 +1711,7 @@
       let swingV = 0;
 
       // the teacups: a turntable of spinning cups
-      const TCX = 19, TCZ = -1, cups = new THREE.Group(); cups.position.set(TCX, 0.25, TCZ); g.add(cups);
+      const cups = new THREE.Group(); cups.position.set(TCX, 0.25, TCZ); g.add(cups);
       { const deck = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.3, 32), E.mat('#ffffff', { map: stripes('#eeece6', '#6cc070', 16) })); deck.position.set(TCX, 0.15, TCZ); g.add(deck); p.addCircle(TCX, TCZ, 4.7); }
       const cupL = [];
       for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2, cp = new THREE.Group(); cp.position.set(Math.cos(a) * 2.8, 0.2, Math.sin(a) * 2.8); cups.add(cp);
@@ -1710,7 +1722,7 @@
         cupL.push(cp); }
 
       // the bumper cars: a roofed floor at the back, cars nudging about
-      const BCX = 5, BCZ = -44, bump = [];
+      const bump = [];
       pb(12, 0.12, 8, BCX, 0.06, BCZ, E.mat('#3a3d44', { metal: 0.5, rough: 0.35 })); pb(12.6, 0.25, 8.6, BCX, 4.3, BCZ, E.mat('#ffffff', { map: stripes('#eeece6', '#ef7a1a', 18) }));
       for (const x of [BCX - 6, BCX + 6]) for (const z of [BCZ - 4, BCZ + 4]) { pb(0.2, 4.2, 0.2, x, 2.1, z, steelM); p.addCircle(x, z, 0.25); }
       for (let i = 0; i < 6; i++) { const bc = new THREE.Group(); const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.4, 1.6), C[i % C.length]); body.position.y = 0.35; bc.add(body); const bp = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.12, 6, 16), dark); bp.rotation.x = Math.PI / 2; bp.scale.set(0.8, 1.15, 1); bp.position.y = 0.25; bc.add(bp);
@@ -1718,15 +1730,15 @@
         bc.position.set(BCX + (r() - 0.5) * 9, 0.12, BCZ + (r() - 0.5) * 5); g.add(bc); bump.push({ g: bc, a: r() * 6.28, v: 1.2 + r() * 0.8, turn: 0 }); }
 
       // stalls along the main walk: striped roofs, lit counters
-      const stall = (x, z, rot, roofC, label) => { const sg = new THREE.Group(); sg.position.set(x, 0, z); sg.rotation.y = rot; g.add(sg);
+      const stallAt = [], stall = (x, z, rot, roofC, label) => { const sg = new THREE.Group(); sg.position.set(x, 0, z); sg.rotation.y = rot; g.add(sg);
         const add = (geo, m, px, py, pz) => { const o = new THREE.Mesh(geo, m); o.position.set(px, py, pz); o.castShadow = true; sg.add(o); return o; };
         add(new THREE.BoxGeometry(2.6, 1.1, 1.4), E.mat('#eeece6', { rough: 0.6 }), 0, 0.55, 0); add(new THREE.BoxGeometry(2.4, 0.06, 1.2), glowMat('#fff2d0'), 0, 1.12, 0.05);
         add(new THREE.BoxGeometry(2.9, 0.2, 1.9), E.mat('#ffffff', { map: stripes('#eeece6', roofC, 10) }), 0, 2.6, 0.1);
         for (const sx of [-1.25, 1.25]) add(new THREE.BoxGeometry(0.08, 1.5, 0.08), steelM, sx, 1.85, 0.75);
         const sg2 = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.42), new THREE.MeshBasicMaterial({ map: E.textTex(label, { w: 512, h: 96, color: '#2a2420', font: '700 60px "Hind",sans-serif', bg: '#f2ead8' }), transparent: true })); sg2.position.set(0, 2.2, 1.06); sg.add(sg2);
-        const w = p.toWorld(x, z); p.addCircle(x, z, 1.4); };
-      stall(-4.6, 6.4, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(30.5, -8, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-3.6, -18, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(32.4, -24.5, -Math.PI / 2, '#6cc070', 'LEMONADE');
-      stall(-5.5, -42.5, 0, '#9b7bd8', 'GAMES'); stall(12.5, -43.5, 0, '#ef7a1a', 'PRIZES');
+        stallAt.push([x, z]); p.addCircle(x, z, 1.4); };
+      stall(-6, 9, Math.PI / 2, '#d24a3a', 'HOT DOGS'); stall(28.5, 0.5, -Math.PI / 2, '#3fa7d6', 'ICE CREAM'); stall(-6.4, -21, Math.PI / 2, '#e8b23a', 'CANDY FLOSS'); stall(32.4, -24.5, -Math.PI / 2, '#6cc070', 'LEMONADE');
+      stall(-7, -42.5, 0, '#9b7bd8', 'GAMES'); stall(17.5, -45.5, 0, '#ef7a1a', 'PRIZES');
       // the car park itself (CP above): concrete slabs on columns, sloped ramps with rails, parapets, cars on every level, lights
       {
         const conc = E.mat('#9a968e', { map: E.tex('concrete', 2, 2), rough: 0.92 }), concD = E.mat('#7c786f', { map: E.tex('concrete', 2, 2), rough: 0.95 }), railM = E.mat('#c9a830', { rough: 0.5, metal: 0.3 }), tubeM = E.basic('#e8f2ff');
@@ -1767,23 +1779,23 @@
           const b2 = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.75), sm); b2.position.set(CP.x0 + 1.5, 3.2, CP.z1 + 1.6); g.add(b2); box(0.12, 3, 0.12, CP.x0 + 1.5, 1.5, CP.z1 + 1.5, concD); p.addCircle(CP.x0 + 1.5, CP.z1 + 1.5, 0.15); }
       }
       // trees in round planters, benches and lamp posts along the walks
-      for (const [x, z] of [[4.2, 7.4], [8, -11.5], [11, -16], [-2.5, -35], [16, -40], [11, 7]]) {
+      for (const [x, z] of [[11.5, 13.5], [11, -16], [-2, -36], [16, -40]]) {
         pb(1.4, 0.45, 1.4, x, 0.22, z, E.mat('#bdb6aa', { rough: 0.9 }));
         const tr = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 8), E.mat('#4f7a3c', { rough: 0.9, flat: true })); tr.position.set(x, 3.0, z); tr.scale.y = 1.2; tr.castShadow = true; g.add(tr);
         const tk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 2.2, 6), E.mat('#5a4030')); tk.position.set(x, 1.4, z); g.add(tk); p.addCircle(x, z, 0.8); }
-      for (const [x, z, ry] of [[3.2, -20, -Math.PI / 2], [12, -30, 0], [-10.4, -19.4, -Math.PI / 2], [-10.4, -10.9, -Math.PI / 2], [-10.4, -3.9, -Math.PI / 2]]) { E.bench(g, x, z, ry); p.addBox(x, z, ry ? 0.35 : 1.05, ry ? 1.05 : 0.35); }   // three on the quay, looking out over the lagoon
+      for (const [x, z, ry] of [[21.5, -25.5, 0], [24.5, -25.5, 0], [-10.4, -19.4, -Math.PI / 2], [-10.4, -10.9, -Math.PI / 2], [-10.4, -3.9, -Math.PI / 2]]) { E.bench(g, x, z, ry); p.addBox(x, z, ry ? 0.35 : 1.05, ry ? 1.05 : 0.35); }   // two between the swing ride and the drop tower, three on the quay looking out over the lagoon
       const lampG = new THREE.CylinderGeometry(0.06, 0.08, 4, 6), bulbM = glowMat('#ffe2a0');
-      for (const [x, z] of [[-3.5, 1.5], [4.5, 1.5], [6.2, -14], [9.5, -27], [16, -31], [-11, -5.2], [-11, -12.6], [-11, -21.5], [31, -14], [1, -46.5]]) {   // iron gas lamps: a fluted post, a caged lantern
+      for (const [x, z] of [[-3.5, 1.5], [4.5, 1.5], [-3.5, 8.5], [3.5, 8.5], [8, -13], [12.5, -20.5], [15.5, -34], [-11, -5.2], [-11, -12.6], [-11, -21.5], [22, -2.5], [-3.5, -47.5]]) {   // iron gas lamps: a fluted post, a caged lantern
         const l = new THREE.Mesh(lampG, ironD); l.position.set(x, 2, z); g.add(l); pb(0.36, 0.5, 0.36, x, 0.25, z, ironD);
         const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.46, 8), bulbM); b2.position.set(x, 4.25, z); g.add(b2); const cap = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.3, 8), ironD); cap.position.set(x, 4.62, z); g.add(cap); p.addCircle(x, z, 0.24); }
 
       // a balloon seller and a popcorn cart by the carousel
-      { const bx = 5.5, bz = 4.5; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 5), dark); pole.position.set(bx, 0.8, bz); g.add(pole);
+      { const bx = 6, bz = 7; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 5), dark); pole.position.set(bx, 0.8, bz); g.add(pole);
         for (let i = 0; i < 9; i++) { const a = r() * 6.3, rr = 0.2 + r() * 0.5, h = 2.6 + r() * 0.9, bl = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), C[i % C.length]); bl.scale.y = 1.2; bl.position.set(bx + Math.cos(a) * rr, h, bz + Math.sin(a) * rr); g.add(bl); }
-        const kx = -3.8, kz = 2.4; pb(1.6, 1.0, 0.9, kx, 0.5, kz, E.mat('#ffffff', { map: stripes('#eeece6', '#d24a3a', 10) })); pb(1.3, 0.9, 0.7, kx, 1.5, kz, new THREE.MeshStandardMaterial({ color: '#fff4cc', transparent: true, opacity: 0.6 }));
+        const kx = -4.2, kz = 3.6; pb(1.6, 1.0, 0.9, kx, 0.5, kz, E.mat('#ffffff', { map: stripes('#eeece6', '#d24a3a', 10) })); pb(1.3, 0.9, 0.7, kx, 1.5, kz, new THREE.MeshStandardMaterial({ color: '#fff4cc', transparent: true, opacity: 0.6 }));
         const umb = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.6, 12), E.mat('#ffffff', { map: stripes('#eeece6', '#e8b23a', 12) })); umb.position.set(kx, 2.9, kz); g.add(umb); p.addBox(kx, kz, 0.85, 0.5); p.addCircle(bx, bz, 0.5); }
       // string lights from the gate to the carousel
-      { const sl = []; for (const sd of [-1, 1]) for (let i = 0; i <= 20; i++) { const t = i / 20, x = sd * (3.6 + t * 0.2), z = 9.2 - t * 12.7, y = 5.2 - Math.sin(t * Math.PI) * 1.1 - t * 0.6; sl.push(x, y, z); }
+      { const sl = []; for (const sd of [-1, 1]) for (let i = 0; i <= 20; i++) { const t = i / 20, x = sd * (3.6 + t * 0.2), z = TZ0 - 0.8 - t * (TZ0 + 2.7), y = 5.2 - Math.sin(t * Math.PI) * 1.1 - t * 0.6; sl.push(x, y, z); }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(sl, 3)); const pm = new THREE.PointsMaterial({ map: E.dot(), color: E.lin('#ffe2a0'), size: 0.5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }); pm.userData.lin = true; g.add(new THREE.Points(geo, pm)); }
 
       // Every ride has its way on and its way off: a green のりば (ENTRANCE) gate with a railed queue lane, and an orange
@@ -1806,16 +1818,16 @@
         if (kind === 'in') {   // the queue lane: two rails out from the gate
           for (const sx of [-0.65, 0.65]) { add(new THREE.BoxGeometry(0.05, 0.05, 3.6), steelM, sx, 0.95, 2.9); for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(0.06, 0.95, 0.06), steelM, sx, 0.48, 1.2 + k * 1.15); for (let k = 0; k < 6; k++) p.addCircle(...toP(sx, 1.2 + k * 0.7), 0.12); }
         }
-        gateAt[key] = toP(0, 0);
+        gateAt[key] = toP(0, 0); if (kind === 'in') gateAt['q' + name] = toP(0, 2.6);   // and the head of its queue lane
         return toP;
       };
       const out = (cx, cz, dx, dz, r0) => { const l = Math.hypot(dx, dz); return [cx + (dx / l) * r0, cz + (dz / l) * r0, Math.atan2(dx, dz)]; };
       const ridesG = {
         carousel: [out(0, CZ, -0.6, 0.8, 7.0), out(0, CZ, 0.6, 0.8, 7.0)],
         wheel: [[WX - 2.8, WZ + 4.2, 0], [WX + 2.8, WZ + 4.2, 0]],
-        teacups: [out(TCX, TCZ, -0.3, 1, 6.1), out(TCX, TCZ, 0.5, 1, 6.1)],
-        swing: [out(SWX, SWZ, -0.45, 1, 8.2), out(SWX, SWZ, 0.15, 1, 8.2)],
-        drop: [out(DX, DZ, -1, 0.4, 4.4), out(DX, DZ, 1, 0.4, 4.4)],
+        teacups: [out(TCX, TCZ, -1, 0.6, 6.1), out(TCX, TCZ, -1, -0.05, 6.1)],   // turned to the way in from the tunnel
+        swing: [out(SWX, SWZ, -1, 0.25, 8.2), out(SWX, SWZ, -1, -0.35, 8.2)],   // to the walk past the carousel
+        drop: [out(DX, DZ, -0.5, 1, 4.4), out(DX, DZ, 0.4, 1, 4.4)],   // to the open floor in front of it, its back to the car park
         bumper: [[BCX - 3.6, BCZ + 5.4, 0], [BCX + 3.6, BCZ + 5.4, 0]],
         coaster: [[...cXZ(-14, 12.4), 0], [...cXZ(-23, 12.4), 0]],
       };
@@ -1836,6 +1848,8 @@
       const clothes = ['#2b2f3a', '#7a2f2a', '#3a5a40', '#c9c2b0', '#1e1f22', '#4a6a8a', '#8a6a3a', '#5a3a5a', '#d8d2c0', '#2f4a5a'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
       cells.forEach((c, i) => { bodies.setColorAt(i, E.lin(clothes[Math.floor(r() * clothes.length)])); heads.setColorAt(i, E.lin(skins[Math.floor(r() * skins.length)])); c.h = 0.9 + r() * 0.2; });
       bodies.castShadow = heads.castShadow = true; g.add(bodies, heads);
+      columns((x, z) => Math.hypot(x, z - CZ) < 8.5 || (Math.abs(x - WX) < 12 && Math.abs(z - WZ) < 3.5) || Math.hypot(x - DX, z - DZ) < 4 || Math.hypot(x - SWX, z - SWZ) < 9 || Math.hypot(x - TCX, z - TCZ) < 6 || (Math.abs(x - BCX) < 7.2 && Math.abs(z - BCZ) < 5)
+        || Object.values(gateAt).some(([gx, gz]) => Math.hypot(x - gx, z - gz) < 2.4) || cells.some((c) => Math.hypot(x - c.x, z - c.z) < 1.4) || stallAt.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 3) || (Math.abs(x) < 3.5 && z > CZ));   // the coaster's columns (above)
       // ---- the harbour in the crater ----
       // The submarine at the pier: a riveted iron hull with copper bands, a row of lit portholes, a conning tower with a
       // brass rail and a periscope, diving planes and a caged screw; a gangway from the pier. It rides the swell with the bass.
@@ -1959,7 +1973,7 @@
       p.clearR = 12;
       p.blocks = (lx, lz) => floorD(lx, lz) < DC + CWD + 1.5;   // the floor, the cliffs and the crest: no trees (the outer slopes keep a few)
       // the way to the wheel (PLACES.parkwheel's trail): through the tunnel, then between the carousel and the teacups
-      SW.parkRide = { wheel, gond, grade: p.grade, route: [[0, TZ1 + 1], [0, TZ0 - 1.5], [3.5, 3], [7, -3.5], [7.2, -11], [6, -17]].map(([x, z]) => p.toWorld(x, z)), board: () => p.toWorld(gateAt.inwheel[0], gateAt.inwheel[1]), exit: () => p.toWorld(gateAt.outwheel[0], gateAt.outwheel[1]), wheelHold: { on: false, i: 0, stopped: false } };
+      SW.parkRide = { wheel, gond, grade: p.grade, route: [[0, TZ1 + 1], [0, TZ0 - 1.5], [2, 6], [7, -3.5], [7.2, -11], [7.5, -17]].map(([x, z]) => p.toWorld(x, z)), board: () => p.toWorld(gateAt.inwheel[0], gateAt.inwheel[1]), exit: () => p.toWorld(gateAt.outwheel[0], gateAt.outwheel[1]), wheelHold: { on: false, i: 0, stopped: false } };
       // ride the carousel: walk up to the platform, climb onto an outside horse
       const hv = new THREE.Vector3(), hq = new THREE.Quaternion(), hf = new THREE.Vector3();
       let horseI = 1;
@@ -1978,7 +1992,7 @@
         board: () => p.toWorld(gateAt.inteacups[0], gateAt.inteacups[1]), exit: () => p.toWorld(gateAt.outteacups[0], gateAt.outteacups[1]), hold: (on) => { tea.held = on; }, stopped: () => teaSpin === 0,
         seat: (v) => { cupL[0].getWorldPosition(v); v.y += 0.05; cupL[0].getWorldQuaternion(tq); tf.set(0, 0, 1).applyQuaternion(tq); return Math.atan2(tf.x, tf.z); },
         spin: () => (0.5 + 1.2 + tea.boost * 2.4) * teaSpin };
-      p.interact({ kind: 'ride', place: p, ride: tea, label: 'TEACUPS', lx: gateAt.inteacups[0], lz: gateAt.inteacups[1] + 2.6, r: 2.0, mark: 1.8 });   // at the head of the queue lane
+      p.interact({ kind: 'ride', place: p, ride: tea, label: 'TEACUPS', lx: gateAt.qteacups[0], lz: gateAt.qteacups[1], r: 2.0, mark: 1.8 });   // at the head of the queue lane
       const cm4 = new THREE.Matrix4();
       p.update = (t, dt, f) => {
         const bob = f.pulse * 0.12;
@@ -2022,7 +2036,7 @@
       p.afterHills = ({ groundAt }) => {
         const H = (lx, lz) => { const w = p.toWorld(lx, lz); return groundAt(w.x, w.z); }, nF = FLOOR.length;
         const nrm = (i) => { const a = FLOOR[(i - 1 + nF) % nF], b = FLOOR[(i + 1) % nF], L = Math.hypot(b[0] - a[0], b[1] - a[1]); let n = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]; if (floorD(FLOOR[i][0] + n[0], FLOOR[i][1] + n[1]) < 0) n = [-n[0], -n[1]]; return n; };
-        const nearGap = (x, z) => (Math.abs(x) < TW + 3.5 && z > 4) || (Math.abs(z - CZ0) < CWH + 3.2 && x < -33) || inCP(x, z, 1.5);   // (and nothing heaped in the car park)
+        const nearGap = (x, z) => (Math.abs(x) < TW + 3.5 && z > TZ0 - 6) || (Math.abs(z - CZ0) < CWH + 3.2 && x < -33) || inCP(x, z, 1.5);   // (and nothing heaped in the car park)
         const faceD = (i, y) => { const [x0, z0] = FLOOR[i], n = nrm(i); for (let d = 0; d < 9; d += 0.15) if (H(x0 + n[0] * d, z0 + n[1] * d) >= y) return d; return -1; };
         // crags: boulders heaped against the foot and along the brink
         { const shapes = Array.from({ length: 6 }, () => []), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), ps = new THREE.Vector3(), sc = new THREE.Vector3();
