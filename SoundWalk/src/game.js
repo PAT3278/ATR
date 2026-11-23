@@ -1190,6 +1190,9 @@
   const ringView = SW.Ring.build(ring, E, {
     blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || (!!street && street.pier(x, z)) || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
     keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
+    // nor up through a building or a parked bus: a collider box that big, standing below the pier's top (a pier may stand
+    // among the thin ones: rails, kerbs, benches set round it)
+    solid: (x, z, r, top) => boxes.some((b) => { if (Math.min(b.hx, b.hz) < 1.2 || (b.y0 ?? -1e9) > top || (b.y1 ?? 1e9) < 0.3) return false; const dx = x - b.x, dz = z - b.z; return Math.abs(dx * b.c - dz * b.s) < b.hx + r && Math.abs(dx * b.s + dz * b.c) < b.hz + r; }),
   });
   scene.add(ringView.group);
   ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
@@ -1933,7 +1936,10 @@
         if (ahead < 2 || ahead > 9 + d.v * 0.7 || Math.abs(dx * hz - dz * hx) > 1.5 || Math.cos(wrapA(d.yaw - c.car.rotation.y)) < 0.5) continue;
         const cap = c.v + Math.max(0, ahead - 8) * 0.9; if (d.v > cap) d.v -= Math.min(d.v - cap, 32 * dt);
       } }
-    for (const c of traffic.concat(ctraffic)) {   // other cars are solid too: box against box, in the other car's frame
+    // other cars are solid too: box against box, in the other car's frame. Only the ones you can see: a C1 car that has
+    // finished its route waits hidden wherever it left the loop (in the slow lane), and was an invisible wall there.
+    for (const c of traffic.concat(ctraffic)) {
+      if (!c.car.visible) continue;
       const dx = d.x - c.car.position.x, dz = d.z - c.car.position.z;
       if (Math.abs(dx) > 6 || Math.abs(dz) > 6 || Math.abs(d.y - c.car.position.y) > 2) continue;
       const cy = c.car.rotation.y, ax = Math.sin(cy), az = Math.cos(cy), along = dx * ax + dz * az, lat = dx * az - dz * ax, cu = c.car.userData;
