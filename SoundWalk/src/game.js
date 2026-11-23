@@ -1188,8 +1188,8 @@
 
   /* ================= ring road ================= */
   const ringView = SW.Ring.build(ring, E, {
-    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || (!!street && street.pier(x, z)) || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
-    keepOut: (x, z) => places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
+    blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || (!!street && street.pier(x, z)) || (!!pass && pass.pier(x, z)) || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
+    keepOut: (x, z) => (!!pass && pass.keep(x, z)) || places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
   });
   scene.add(ringView.group);
   ringView.piers.forEach((q) => circles.push({ x: q.x, z: q.z, r: q.r, y1: q.y1 }));
@@ -1709,7 +1709,7 @@
   // beaches reach out beyond that edge, south past the port town), as far as the edge of the world. A step that would
   // take you anywhere else slides along the edge instead.
   const LAND = 145, WORLD = 330;
-  const canBe = (x, z) => (Math.abs(x) <= LAND && Math.abs(z) <= LAND) || (Math.abs(x) <= WORLD && Math.abs(z) <= WORLD && (isWater(x, z) || places.some((q) => { if (!q.shore) return false; const l = q.local(x, z); return q.shore(l.x, l.z); })));
+  const canBe = (x, z) => (Math.abs(x) <= LAND && Math.abs(z) <= LAND) || (!!pass && pass.land(x, z)) || (Math.abs(x) <= WORLD && Math.abs(z) <= WORLD && (isWater(x, z) || places.some((q) => { if (!q.shore) return false; const l = q.local(x, z); return q.shore(l.x, l.z); })));
   // Where a place cuts the hill's surface away to show a tunnel's mouth (p.holeAt: the canal's portals and light shafts,
   // the funfair's tunnel and cave), there is nothing to stand on up at the hill's height: someone walking on the hill stops
   // at its edge, as at a wall, instead of walking out over the hole on ground that is not drawn. Down in the tunnel or the
@@ -1794,6 +1794,18 @@
   if (street) {
     ring.roads.push(...street.roads);
     for (const pa of street.pas) {
+      ring.pas.push(pa); pa.place = places.find((p) => p.song.scene === pa.placeId);
+      pa.box = { x: 0, z: 0, hx: 1, hz: 2, c: 1, s: 0, y0: 1e9, y1: 1e9 }; boxes.push(pa.box);
+      pa.ia = { kind: 'car', pa, x: 0, z: 0, sx: 0, sz: 0, r: 3.4, mark: 0, y0: pa.y - 1.2, y1: pa.y + 2.5 }; interact.push(pa.ia);
+      pa.out = { kind: 'exit', pa, x: 0, z: 0, mark: 0 };
+      parkAt(pa, freeCar(pa), pa.slot);
+    }
+  }
+  // the pass road over the mountain behind NO JOBB (pass.js) is a road you can drive too, from under the viaduct at FLIP's
+  // avenue to the palace; a car waits at the mountain's foot, at the pass and at the palace end
+  if (pass) {
+    ring.roads.push(pass.road);
+    for (const pa of pass.pas) {
       ring.pas.push(pa); pa.place = places.find((p) => p.song.scene === pa.placeId);
       pa.box = { x: 0, z: 0, hx: 1, hz: 2, c: 1, s: 0, y0: 1e9, y1: 1e9 }; boxes.push(pa.box);
       pa.ia = { kind: 'car', pa, x: 0, z: 0, sx: 0, sz: 0, r: 3.4, mark: 0, y0: pa.y - 1.2, y1: pa.y + 2.5 }; interact.push(pa.ia);

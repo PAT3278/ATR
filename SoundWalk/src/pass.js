@@ -19,15 +19,35 @@
   'use strict';
   const SW = (window.SW = window.SW || {});
   const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-  const X0 = -36, X1 = 78, Z0 = 66, Z1 = 142, D = 1;
-  // [x, z, height, radius]: the summit over the ring road (drawn out along it), the outer flank over the ramp outside it,
-  // the west peak the road turns round, the knoll between the road's two legs, and low ground tying them together
-  const BLOBS = [[33, 120, 26, 18], [22, 122, 14, 11], [44, 113, 16, 12], [30, 134, 18, 14], [12, 132, 12, 11], [52, 108, 8, 9], [-20, 92, 26, 11], [-6, 104, 12, 9], [12, 92, 13, 7], [1, 93, 10, 8], [20, 107, 16, 10], [-26, 82, 12, 9], [-2, 82, 7, 7]];
+  const X0 = -44, X1 = 88, Z0 = 66, Z1 = 198, D = 1;
+  // [x, z, height, radius]: the summit south of the ring road, the high ground between it and the road (over both
+  // tunnels), its east face that the course zig-zags up, its south ridge, and the hill on the town side the descent
+  // wraps round on its way down to the palace
+  const BLOBS = [[12, 158, 50, 18], [-10, 152, 24, 12], [34, 172, 30, 13], [48, 152, 30, 15], [60, 160, 18, 11], [50, 136, 18, 9], [38, 132, 26, 10],
+    [30, 124, 28, 11], [42, 118, 24, 9], [23, 127, 18, 8], [18, 142, 30, 12], [6, 96, 24, 8], [-6, 94, 12, 8], [16, 92, 10, 7], [24, 110, 12, 8]];
   const LIFT = 9.5, TUN = 8, CAP = 4.5, TW = 0.9, TH = 7.4;   // TW: the tube's clearance past the deck's edge; TH: its height over the deck
-  // the pass road, from where it leaves the viaduct to the palace's loggia: [x, z, y]
-  const CTL = [[56.5, 98.4, 0.35], [49, 98.6, 1.2], [41, 99.4, 2.5], [33, 100.2, 3.9], [25, 100.4, 5.3], [17, 100, 6.7], [9.5, 99.1, 8.1], [3, 97.7, 9.3], [-2.2, 96.4, 10.1], [-6.2, 94.2, 10.6], [-8, 91, 10.8],
-    [-6.6, 87.6, 10.6], [-2.6, 85.4, 10.2], [6, 84.2, 9.3], [14, 83.4, 8.3], [20.5, 81.6, 7.4], [23.2, 78.4, 6.6], [21.4, 75.4, 5.9], [17, 73.6, 5.3], [13, 72.6, 5.05]];
-  const PASS_AT = 10;   // CTL index of the pass (the hairpin's apex)
+  const HWR = 3.4;   // the course's half-width (one lane each way, kept to the middle as on the ramps: laneD < 3.5 m)
+  // The course, from where FLIP's street (under the viaduct) reaches it: [x, z, y]; null heights are filled in by
+  // distance between the given ones. Out from under the ring road and its outer ramp to the mountain's foot; up its
+  // east face in four legs and three hairpins; round the summit's east flank and north over both tunnels to the pass;
+  // down the town side round the hill in two more hairpins to the open loggia at the back of NO JOBB's palace.
+  const COURSE = [
+    [66.5, 94.6, 0.03], [69.4, 101, 0.05], [71.6, 107.5, 0.12], [72.4, 113.5, 0.3], [70.6, 120.5, 0.5],
+    [69.4, 130, null], [68.6, 145, null], [68.2, 158, null], [67.6, 168, null],
+    [66.6, 174.5, null], [61.2, 179.4, null], [55.6, 175.2, null],
+    [55, 166, null], [55, 152, null], [55.4, 140, null], [55.6, 134.5, null],
+    [54.4, 130.4, null], [49, 128.6, null], [43.6, 131.2, null],
+    [43, 142, null], [42.6, 155, null], [42.2, 166, null], [41.6, 172.4, null],
+    [39.8, 178, null], [34.6, 180.2, null], [29.2, 176.6, null],
+    [28.4, 166, null], [28.4, 152, null], [28.5, 140, null], [28.2, 130, null],
+    [27.4, 121, 24],
+    [27.4, 113, null], [25.4, 106.8, null], [17, 104.2, null], [6, 103.2, null], [-3, 101.6, null],
+    [-8.6, 99.6, null], [-11.8, 95.2, null], [-9.4, 90.6, null],
+    [-3, 89.4, null], [8, 88.6, null], [17, 87.8, null],
+    [22.6, 86.6, null], [25.8, 82.6, null], [23.2, 78.8, null],
+    [18.6, 76.4, null], [13.2, 73.2, 5.05],
+  ];
+  const PASS_C = 30, HAIRPINS = [10, 17, 24, 37, 43];   // COURSE indices: the pass, and each hairpin's apex
 
   function make(ring, places) {
     const find = (k) => places.find((p) => p.song.scene === k);
@@ -37,13 +57,13 @@
     const br = flip.vd.branches.find((b) => b.dir === 1); if (!br || !br.length) return null;
     const nx = Math.round((X1 - X0) / D) + 1, nz = Math.round((Z1 - Z0) / D) + 1;
 
-    // ---- the raw range: blobs, kept off NO JOBB's hill, FIELD's ground and the land's edge ----
+    // ---- the raw range: blobs, kept off NO JOBB's hill, FIELD's ground and the far edge ----
     const DIRS = [[0, 0, 0]]; for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; DIRS.push([Math.cos(a) * 3, Math.sin(a) * 3, 0.25], [Math.cos(a) * 7, Math.sin(a) * 7, 0.75]); }
     const fieldHit = (x, z) => { if (!field || !field.core) return 1; let hit = 1; for (const [ox, oz, k] of DIRS) { const l = field.local(x + ox, z + oz); if (field.core(l.x, l.z)) { hit = Math.min(hit, k); if (!hit) break; } } return hit; };
     const raw = (x, z) => {
       let H = 0; for (const [bx, bz, bh, br2] of BLOBS) { const q = ((x - bx) ** 2 + (z - bz) ** 2) / (br2 * br2); if (q < 9) H += bh * Math.exp(-q * 1.6); }
       if (H < 0.02) return 0;
-      H *= (1 + 0.08 * Math.sin(x * 0.23 + z * 0.07) * Math.cos(z * 0.19 - x * 0.06)) * sm(17, 25, Math.hypot(x - flash.x, z - flash.z)) * sm(141, 126, z);
+      H *= (1 + 0.08 * Math.sin(x * 0.23 + z * 0.07) * Math.cos(z * 0.19 - x * 0.06)) * sm(17, 25, Math.hypot(x - flash.x, z - flash.z)) * sm(Z1 - 1, Z1 - 16, z) * sm(X1 - 1, X1 - 12, x) * sm(X0 + 1, X0 + 12, x);
       return H > 0.02 ? H * fieldHit(x, z) : 0;
     };
 
@@ -55,7 +75,6 @@
       if (!S.length) continue;
       S.forEach((s) => { s.t = raw(s.x, s.z) >= s.y + TUN; });
       if (r !== R0 && els.length) { const rs = els[0].S; S.forEach((s) => { let b = 1e9, t = s.t; for (const q of rs) { const d = Math.hypot(q.x - s.x, q.z - s.z); if (d < b) { b = d; t = q.t; } } if (b < 22) s.t = t; }); }   // (the ring road first: those alongside it share its portals)
-      // runs: drop the short ones, fill short gaps
       const runs = []; let a = -1;
       for (let k = 0; k < S.length; k++) {
         const on = S[k].t && (a < 0 || S[k].i - S[k - 1].i === 1);
@@ -65,7 +84,7 @@
       S.forEach((s) => { s.t = false; });
       const spans = [];
       for (let [p, q] of runs) if (q - p >= 7) {   // then out each way while the mountain still stands over the deck, so the portals sit at its foot, not in a cliff
-        if (r === R0) { while (p > 0 && S[p - 1].i === S[p].i - 1 && raw(S[p - 1].x, S[p - 1].z) >= S[p - 1].y + 4.5) p--; while (q < S.length - 1 && S[q + 1].i === S[q].i + 1 && raw(S[q + 1].x, S[q + 1].z) >= S[q + 1].y + 4.5) q++; }
+        if (r === R0) { while (p > 0 && S[p - 1].i === S[p].i - 1 && raw(S[p - 1].x, S[p - 1].z) >= S[p - 1].y + 6) p--; while (q < S.length - 1 && S[q + 1].i === S[q].i + 1 && raw(S[q + 1].x, S[q + 1].z) >= S[q + 1].y + 6) q++; }
         for (let k = p; k <= q; k++) S[k].t = true; spans.push([p, q]);
       }
       S.forEach((s, k) => { const a2 = S[k - 1], b2 = S[k + 1]; s.tx = (b2 || s).x - (a2 || s).x; s.tz = (b2 || s).z - (a2 || s).z; const l = Math.hypot(s.tx, s.tz) || 1; s.tx /= l; s.tz /= l; });
@@ -73,26 +92,30 @@
     }
     const allS = els.flatMap((e) => e.S);
 
-    // ---- the road's line: under the deck from the end of FLIP's street, then the pass road ----
+    // ---- the road's line: FLIP's street under the deck (from where it turns off the avenue), then the course ----
     const N = R0.N, W = (i) => ((i % N) + N) % N;
     const inner = (i) => { const j = W(i), a = W(i - 1), b = W(i + 1); let tx = R0.X[b] - R0.X[a], tz = R0.Z[b] - R0.Z[a]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l; let nX = -tz, nZ = tx; if (nX * -R0.X[j] + nZ * -R0.Z[j] < 0) { nX = -nX; nZ = -nZ; } return { x: R0.X[j], z: R0.Z[j], nx: nX, nz: nZ }; };
-    const C = flip.vd.C, iE = br[br.length - 1].i, ctl = [];
-    let k = -3; for (; k < 60; k++) { const q = inner(iE + k), x = q.x + q.nx * C, z = q.z + q.nz * C; if (x < CTL[0][0] + 6) break; if (k % 2 === 0 || k === -3) ctl.push(new THREE.Vector3(x, 0.03, z)); }
-    const nUnder = ctl.length;
-    for (const [x, z, y] of CTL) ctl.push(new THREE.Vector3(x, y, z));
+    const C = flip.vd.C, ctl = [], i0 = br[0].i;
+    for (let k = 0; k < 90; k++) { const q = inner(i0 + k), x = q.x + q.nx * C, z = q.z + q.nz * C; if (Math.hypot(x - COURSE[0][0], z - COURSE[0][1]) < 5) break; if (k % 2 === 0) ctl.push(new THREE.Vector3(x, 0.03, z)); }
+    const nFlip = br.length;   // FLIP's own stretch of it (drawn by FLIP): the course's asphalt starts where it ends
+    // the heights left null: by distance between the given ones
+    const cs = COURSE.map(([x, z, y]) => ({ x, z, y })); let acc = 0; cs.forEach((c, i) => { if (i) acc += Math.hypot(c.x - cs[i - 1].x, c.z - cs[i - 1].z); c.s = acc; });
+    cs.forEach((c, i) => { if (c.y != null) return; let a = i, b = i; while (cs[a].y == null) a--; while (cs[b].y == null) b++; c.y = cs[a].y + ((cs[b].y - cs[a].y) * (c.s - cs[a].s)) / (cs[b].s - cs[a].s); });
+    const c0 = ctl.length; for (const c of cs) ctl.push(new THREE.Vector3(c.x, c.y, c.z));
     const curve = new THREE.CatmullRomCurve3(ctl, false, 'centripetal'), L = curve.getLength(), n = Math.round(L / 1);
     const P = curve.getSpacedPoints(n).map((v) => ({ x: v.x, y: Math.max(0.03, v.y), z: v.z }));
-    // where the pass road begins (the first CTL point) and the pass itself, by nearest point
-    const nearK = (x, z) => { let b = 1e9, kk = 0; P.forEach((q, i) => { const d = Math.hypot(q.x - x, q.z - z); if (d < b) { b = d; kk = i; } }); return kk; };
-    const kPass0 = nearK(CTL[0][0], CTL[0][1]), kTop = nearK(CTL[PASS_AT][0], CTL[PASS_AT][1]);
+    const nearK = (x, z, from = 0) => { let b = 1e9, kk = 0; for (let i = from; i < P.length; i++) { const q = P[i], d = Math.hypot(q.x - x, q.z - z); if (d < b) { b = d; kk = i; } } return kk; };
+    const kFlip = nearK(...(() => { const w = flip.toWorld(br[br.length - 1].x + br[br.length - 1].nx * C, br[br.length - 1].z + br[br.length - 1].nz * C); return [w.x, w.z]; })());
+    const kPass0 = nearK(COURSE[4][0], COURSE[4][1]), kTop = nearK(COURSE[PASS_C][0], COURSE[PASS_C][1], kPass0);
+    const kPins = HAIRPINS.map((c) => nearK(COURSE[c][0], COURSE[c][1], kPass0));
     P.forEach((q, i) => {
       const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)]; let tx = b.x - a.x, tz = b.z - a.z; const l = Math.hypot(tx, tz) || 1; q.tx = tx / l; q.tz = tz / l; q.nx = -q.tz; q.nz = q.tx;
-      q.hw = i < kPass0 - 12 ? flip.vd.RW : i < kPass0 ? flip.vd.RW + (2.9 - flip.vd.RW) * sm(kPass0 - 12, kPass0, i) : 2.9;
-      q.under = i < kPass0;
+      q.hw = HWR; q.under = i < kPass0;
     });
+    void c0; void nFlip;
     // a coarse grid of the road's segments, for the nearest point
     const G = 6, cells = new Map(), gx = 1000, gx0 = -400, gz0 = -400;
-    for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i]; for (let j = Math.floor((Math.min(a.z, b.z) - 9 - gz0) / G); j <= Math.floor((Math.max(a.z, b.z) + 9 - gz0) / G); j++) for (let ii = Math.floor((Math.min(a.x, b.x) - 9 - gx0) / G); ii <= Math.floor((Math.max(a.x, b.x) + 9 - gx0) / G); ii++) { const key = j * gx + ii; if (!cells.has(key)) cells.set(key, []); cells.get(key).push(i); } }
+    for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i]; for (let j = Math.floor((Math.min(a.z, b.z) - 26 - gz0) / G); j <= Math.floor((Math.max(a.z, b.z) + 26 - gz0) / G); j++) for (let ii = Math.floor((Math.min(a.x, b.x) - 26 - gx0) / G); ii <= Math.floor((Math.max(a.x, b.x) + 26 - gx0) / G); ii++) { const key = j * gx + ii; if (!cells.has(key)) cells.set(key, []); cells.get(key).push(i); } }
     const Q = { d: 0, y: 0, o: 0, k: 0, hw: 3 };
     const roadQ = (x, z) => {
       const list = cells.get(Math.floor((z - gz0) / G) * gx + Math.floor((x - gx0) / G)); if (!list) return null;
@@ -101,6 +124,28 @@
         if (d < best) { best = d; Q.d = d; Q.y = a.y + (b.y - a.y) * t; Q.k = i; Q.hw = a.hw; Q.o = (x - px) * a.nx + (z - pz) * a.nz; } }
       return best < 1e9 ? Q : null;
     };
+
+    // ---- the lots: a pull-off beside the road where a car waits (and where you can turn round): at the mountain's
+    // foot, at the pass, and at the palace end. side: which side of the road (+1 along n); len along it, depth out ----
+    const lots = [];
+    const lot = (id, k, side, len, depth, placeId) => {
+      const q = P[k], ux = q.tx, uz = q.tz, vx = q.nx * side, vz = q.nz * side, y = q.y;
+      const fr = { local: (x, z) => ({ x: (x - q.x) * ux + (z - q.z) * uz, z: (x - q.x) * vx + (z - q.z) * vz }), toWorld: (lx, lz) => ({ x: q.x + ux * lx + vx * lz, z: q.z + uz * lx + vz * lz }) };
+      const lim = (car) => { let x0 = -len / 2 + 1, x1 = len / 2 - 1, z0 = 0.6, z1 = depth - 1.2;
+        if (car) { const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw), ax = Math.abs(fx * ux + fz * uz), az = Math.abs(fx * vx + fz * vz), ex = (ax * car.len + az * car.wid) / 2, ez = (az * car.len + ax * car.wid) / 2;
+          x0 = -len / 2 + ex; x1 = len / 2 - ex; if (x0 > x1) x0 = x1 = 0; z1 = Math.max(z0, depth - ez); }
+        return [x0, x1, z0, z1]; };
+      const sw = fr.toWorld(0, depth - 2.6);
+      const pa = { id, y, placeId, f: fr, k, side, len, depth, slot: { x: sw.x, z: sw.z, yaw: Math.atan2(ux, uz) }, lim,
+        inside(x, z, car) { const l = fr.local(x, z), [a0, a1, b0, b1] = lim(car); return l.x >= a0 && l.x <= a1 && l.z >= b0 && l.z <= b1; },
+        canStand(x, z) { const l = fr.local(x, z); return Math.abs(l.x) <= len / 2 && l.z >= -0.5 && l.z <= depth + 1.5; },
+        clamp(x, z, car) { const l = fr.local(x, z), [a0, a1, b0, b1] = lim(car); return fr.toWorld(Math.max(a0, Math.min(a1, l.x)), Math.max(b0, Math.min(b1, l.z))); } };
+      lots.push(pa); return pa;
+    };
+    lot('touge-foot', nearK(69.6, 127, kPass0), -1, 16, 9, 'field');   // (west of the first leg, under the mountain)
+    lot('touge-pass', kTop, 1, 14, 9, 'flash');                          // (on the town side of the pass, over the tunnels)
+    lot('touge-palace', P.length - 9, -1, 13, 9, 'flash');             // (the end, beside the palace's loggia)
+    const inLot = (x, z, m = 0) => { for (const pa of lots) { const l = pa.f.local(x, z); if (Math.abs(l.x) <= pa.len / 2 + m && l.z >= -m && l.z <= pa.depth + m) return pa; } return null; };
 
     // ---- the heights ----
     const h = new Float32Array(nx * nz), tun = new Float32Array(nx * nz).fill(NaN);
@@ -115,8 +160,10 @@
       }
       H = Math.max(Math.min(H, Math.max(0, cap)), H > 0.3 || lift ? lift : 0);
       const q = roadQ(x, z);
+      if (q && q.k >= kPass0 - 4 && q.d < q.hw + 60) { const ry = q.y - 0.04, fill = ry - Math.max(0, q.d - q.hw - 0.8) * 0.62; if (fill > H) H = Math.min(fill, Math.max(0, cap) + (q.d < q.hw + 1.2 ? 99 : 0)); }   // the mountain carries the course: where the road runs above the ground, the slope falls away from its edge (about 32 degrees), not a bank
       if (q && q.d < q.hw + 7) { const ry = q.y - 0.04, t = sm(q.hw + 0.7, q.hw + 6.5, q.d); H = q.k < kPass0 - 4 ? Math.min(H, ry + (H - ry) * t) : ry + (H - ry) * t; }   // (under the deck the street only cuts: it never raises the ground)
-      if (lift > H && !(q && q.d < q.hw + 1.2)) H = lift;   // a tunnel stays covered even where the road cuts into the slope beside it (a rock face there)
+      { const pa = inLot(x, z, 4); if (pa) { const l = pa.f.local(x, z), e = Math.max(Math.abs(l.x) - pa.len / 2, -l.z, l.z - pa.depth, 0), t = sm(0.6, 4, e); H = pa.y - 0.04 + (H - pa.y + 0.04) * t; } }   // the lots: flat
+      if (lift > H && !(q && q.d < q.hw + 1.2) && !inLot(x, z, 1)) H = lift;   // a tunnel stays covered even where the road cuts into the slope beside it (a rock face there)
       h[j * nx + i] = Math.max(0, H);
     }
     const at = (A, x, z) => {   // on the drawn facets (two triangles per cell, as PlaneGeometry makes them)
@@ -131,12 +178,38 @@
       if (y !== undefined) { const ty = tunAt(x, z); if (ty === ty && y < ty + 5) return Math.min(v, Math.max(0, ty - CAP)); }   // down in a tunnel (or driving through one): the floor under the deck, not the mountain over it
       return v;
     };
-    const clear = (x, z, m) => { const q = roadQ(x, z); return !!q && q.d < q.hw + m; };   // on (or within m of) the road
-    return { X0, Z0, D, nx, nz, h, P, kPass0, kTop, nUnder, els, raw, roadQ, ground, tunAt, clear, flash };
+    const clear = (x, z, m) => { const q = roadQ(x, z); return (!!q && q.d < q.hw + m) || !!inLot(x, z, m); };   // on (or within m of) the road or a lot
+
+    // ---- the course as a road the game can drive (the shape ring.js and street.js give theirs) ----
+    const road = (() => {
+      const V = P;   // (from FLIP's avenue: its street under the deck is the same road)
+      const NB = V.length, B = { id: 'touge', closed: false, N: NB, X: new Float32Array(NB), Y: new Float32Array(NB), Z: new Float32Array(NB), TX: new Float32Array(NB), TZ: new Float32Array(NB), HW: new Float32Array(NB).fill(HWR), GAP: new Uint8Array(NB), OGAP: new Uint8Array(NB), ground: true };
+      V.forEach((v, i) => { B.X[i] = v.x; B.Y[i] = v.y; B.Z[i] = v.z; B.TX[i] = v.tx; B.TZ[i] = v.tz; });
+      let LB = 0; for (let i = 0; i < NB - 1; i++) LB += Math.hypot(B.X[i + 1] - B.X[i], B.Z[i + 1] - B.Z[i]); B.L = LB; B.ds = LB / (NB - 1);
+      const nearB = (x, z, y) => { let bi = 0, bd = 1e18; for (let i = 0; i < NB; i++) { const dx = B.X[i] - x, dz = B.Z[i] - z, dy = y === undefined ? 0 : (B.Y[i] - y) * 4, d = dx * dx + dz * dz + dy * dy; if (d < bd) { bd = d; bi = i; } } return bi; };   // y: legs of the course lie one above another
+      B.nearest = nearB;
+      B.proj = (x, z, hint, out, y) => {
+        let bi = 0, bd = 1e18;
+        if (hint >= 0) for (let k = -14; k <= 14; k++) { const i = Math.max(0, Math.min(NB - 1, hint + k)), dx = B.X[i] - x, dz = B.Z[i] - z, d = dx * dx + dz * dz; if (d < bd) { bd = d; bi = i; } }
+        if (hint < 0 || bd > 900 || (y !== undefined && Math.abs(B.Y[bi] - y) > 2.5)) bi = nearB(x, z, y);
+        const dx = x - B.X[bi], dz = z - B.Z[bi], a = dx * B.TX[bi] + dz * B.TZ[bi], nb = Math.max(0, Math.min(NB - 1, bi + (a >= 0 ? 1 : -1))), k = Math.min(1, Math.abs(a) / B.ds);
+        out.i = bi; out.s = bi * B.ds + a; out.d = dx * B.TZ[bi] - dz * B.TX[bi];
+        out.y = B.Y[bi] + (B.Y[nb] - B.Y[bi]) * k; out.hw = B.HW[bi]; out.tx = B.TX[bi]; out.tz = B.TZ[bi]; out.R = B;
+        out.off = (bi === 0 && a < 0) || (bi === NB - 1 && a > 0);
+        return out;
+      };
+      B.dist = (x, z) => { const i = nearB(x, z); return Math.hypot(x - B.X[i], z - B.Z[i]); };
+      return B;
+    })();
+    // the land: the mountain reaches out past the town's edge (|z| 145), and you may walk and drive out over it
+    const land = (x, z) => x > X0 + 3 && x < X1 - 3 && z > Z0 && z < Z1 - 3 && (at(h, x, z) > 0.2 || clear(x, z, 4));
+    const pier = (x, z) => { const q = roadQ(x, z); return (!!q && q.d < q.hw + 2.5 && q.y < 3) || !!inLot(x, z, 2); };   // no pier of the elevated roads in the way of the road where it runs under them
+    const keep = (x, z) => x > X0 && x < X1 && z > Z0 && z < Z1 && (raw(x, z) > 0.5 || clear(x, z, 6));   // the skyline's towers stand off it
+    return { X0, Z0, D, nx, nz, h, P, kPass0, kTop, kPins, kFlip, els, raw, roadQ, ground, tunAt, clear, inLot, land, pier, keep, road, pas: lots, flash };
   }
 
   function build(M, E, w) {
-    const { X0, Z0, D, nx, nz, h, P, kPass0, kTop, els, roadQ } = M, scene = w.scene, rng = E.rng(4747);
+    const { X0, Z0, D, nx, nz, h, P, kPass0, kTop, kFlip, els, roadQ } = M, scene = w.scene, rng = E.rng(4747);
     const grp = new THREE.Group(); grp.name = 'pass'; scene.add(grp);
     const pick = (m) => { if (w.pick) w.pick(m); };
 
@@ -220,18 +293,19 @@
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
         const ms = new THREE.Mesh(g, m); ms.receiveShadow = true; grp.add(ms); return ms;
       };
-      const road = ribbon((q) => -q.hw, (q) => q.hw, 0.035, asph); pick(road);
-      ribbon((q) => -q.hw + 0.2, (q) => -q.hw + 0.34, 0.04, white); ribbon((q) => q.hw - 0.34, (q) => q.hw - 0.2, 0.04, white);
+      const k0 = Math.max(0, kFlip - 3);   // (FLIP draws its own stretch of the street, up to where its branch ends)
+      const road = ribbon((q) => -q.hw, (q) => q.hw, 0.035, asph, k0); pick(road);
+      ribbon((q) => -q.hw + 0.2, (q) => -q.hw + 0.34, 0.04, white, k0); ribbon((q) => q.hw - 0.34, (q) => q.hw - 0.2, 0.04, white, k0);
       ribbon(-0.2, -0.07, 0.042, yellow, kPass0 - 2); ribbon(0.07, 0.2, 0.042, yellow, kPass0 - 2);   // the pass road: a double yellow line, no overtaking
-      ribbon(-0.07, 0.07, 0.042, white, 0, kPass0 - 2, (k) => Math.floor(k / 2) % 3 !== 0);           // under the deck: a dashed white line
-      const B = E.batch(grp), bx = B.box, railM = E.mat('#e6e8ea', { metal: 0.4, rough: 0.4 }), postM = E.mat('#c9ccd0', { metal: 0.5, rough: 0.5 }), lampM = E.basic('#ffb04a'), poleM = E.mat('#5a6068', { metal: 0.5, rough: 0.5 });
+      ribbon(-0.07, 0.07, 0.042, white, k0, kPass0 - 2, (k) => Math.floor(k / 2) % 3 !== 0);           // under the deck: a dashed white line
+      const B = E.batch(grp), bx = B.box, railM = E.mat('#e6e8ea', { metal: 0.4, rough: 0.4 }), postM = E.mat('#c9ccd0', { metal: 0.5, rough: 0.5 }), lampM = E.basic('#ffb04a'), poleM = E.mat('#5a6068', { metal: 0.5, rough: 0.5 }), asphB = E.mat('#2b2830', { map: E.tex('asphalt', 2, 2), rough: 0.9 }), white2 = E.mat('#e4e0e8', { rough: 0.6 });
       // under the deck: sodium lamps hung from it over the street, as along FLIP's stretch
-      for (let k = 2; k < kPass0 - 6; k += 9) { const q = P[k], y = 8.0, l = bx(1.0, 0.12, 0.32, q.x, y, q.z, lampM, false); l.rotation.y = Math.atan2(q.nx, q.nz); bx(0.05, 0.9, 0.05, q.x, y + 0.5, q.z, poleM); }
+      for (let k = k0 + 4; k < kPass0 - 6; k += 9) { const q = P[k], y = 8.0, l = bx(1.0, 0.12, 0.32, q.x, y, q.z, lampM, false); l.rotation.y = Math.atan2(q.nx, q.nz); bx(0.05, 0.9, 0.05, q.x, y + 0.5, q.z, poleM); }
       // the guard rail: posts every 2 m and a beam, along whichever side drops away (where it does)
       for (let k = kPass0 + 2; k < P.length - 6; k += 2) {
         const q = P[k], dropL = q.y - M.ground(q.x - q.nx * (q.hw + 2.5), q.z - q.nz * (q.hw + 2.5)), dropR = q.y - M.ground(q.x + q.nx * (q.hw + 2.5), q.z + q.nz * (q.hw + 2.5));
         for (const [sd, dr] of [[-1, dropL], [1, dropR]]) {
-          if (dr < 0.9) continue;
+          if (dr < 0.9 || M.inLot(q.x + q.nx * sd * (q.hw + 1), q.z + q.nz * sd * (q.hw + 1), 0.5)) continue;
           const o = sd * (q.hw + 0.45), x = q.x + q.nx * o, z = q.z + q.nz * o, q2 = P[k + 2], x2 = q2.x + q2.nx * o, z2 = q2.z + q2.nz * o, L = Math.hypot(x2 - x, z2 - z);
           bx(0.1, 0.8, 0.1, x, q.y + 0.4, z, postM);
           const r = bx(0.06, 0.32, L + 0.05, (x + x2) / 2, (q.y + q2.y) / 2 + 0.62, (z + z2) / 2, railM); r.rotation.order = 'YXZ'; r.rotation.y = Math.atan2(x2 - x, z2 - z); r.rotation.x = -Math.atan2(q2.y - q.y, L);
@@ -239,22 +313,30 @@
         }
       }
       // lamps on the pass road: on the uphill side, every 24 m or so
-      for (let k = kPass0 + 6; k < P.length - 4; k += 24) {
+      for (let k = kPass0 + 6; k < P.length - 4; k += 30) {
         const q = P[k], up = M.ground(q.x + q.nx * (q.hw + 2.5), q.z + q.nz * (q.hw + 2.5)) > M.ground(q.x - q.nx * (q.hw + 2.5), q.z - q.nz * (q.hw + 2.5)) ? 1 : -1, o = up * (q.hw + 0.9), x = q.x + q.nx * o, z = q.z + q.nz * o;
         bx(0.12, 5.2, 0.12, x, q.y + 2.6, z, poleM); const arm = bx(1.3, 0.1, 0.1, x - q.nx * up * 0.6, q.y + 5.15, z - q.nz * up * 0.6, poleM); arm.rotation.y = Math.atan2(-q.nz, q.nx);
         const l = bx(0.55, 0.14, 0.3, x - q.nx * up * 1.2, q.y + 5.05, z - q.nz * up * 1.2, lampM, false); l.rotation.y = Math.atan2(-q.nz, q.nx);
         w.circles.push({ x, z, r: 0.25, y0: q.y - 1.5, y1: q.y + 6 });
       }
-      // the pass: a pull-off on the outside of the hairpin, its sign, a bench looking out west, and chevrons round the bend
+      // the pass: its sign at the back of the pull-off on the town side, a bench there looking out over the town; chevrons
+      // round every hairpin on its outside; and the lots themselves, asphalt with a bay painted where the car waits
       {
-        const q = P[kTop], out = -1, sx = q.x + q.nx * out * (q.hw + 2.2), sz = q.z + q.nz * out * (q.hw + 2.2), gy = q.y;
+        const pp = M.pas.find((q) => q.id === 'touge-pass'), sw = pp.f.toWorld(-3.5, pp.depth + 0.6), gy = pp.y, q = P[kTop];
         const signM = new THREE.MeshBasicMaterial({ map: E.textTex('はなび峠\nHANABI PASS', { w: 512, h: 256, color: '#ffffff', bg: '#1f55b8', font: '700 92px "Noto Sans JP","Hind",sans-serif', font2: '700 52px "Hind","Noto Sans JP",sans-serif' }), side: THREE.DoubleSide }); signM.userData.lin = true;
-        const sg = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), signM); sg.position.set(sx, gy + 2.6, sz); sg.rotation.y = Math.atan2(-q.nx * out, -q.nz * out); grp.add(sg);
-        for (const u of [-0.9, 0.9]) bx(0.08, 2.4, 0.08, sx + q.tx * u, gy + 1.2, sz + q.tz * u, poleM);
-        w.circles.push({ x: sx, z: sz, r: 1.1, y0: gy - 1.5, y1: gy + 4 });
+        const fy = Math.atan2(-q.nx * pp.side, -q.nz * pp.side), sg = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), signM); sg.position.set(sw.x, gy + 2.7, sw.z); sg.rotation.y = fy; grp.add(sg);
+        for (const u of [-1, 1]) bx(0.08, 2.5, 0.08, sw.x + q.tx * u, gy + 1.25, sw.z + q.tz * u, poleM);
+        w.circles.push({ x: sw.x, z: sw.z, r: 1.2, y0: gy - 1.5, y1: gy + 4 });
+        const bw = pp.f.toWorld(3.5, pp.depth + 0.3); E.bench(grp, bw.x, bw.z, fy + Math.PI, gy);
         const chev = new THREE.MeshBasicMaterial({ map: E.textTex('<', { w: 128, h: 128, color: '#111111', bg: '#ffd21f', font: '900 120px "Arial Black",sans-serif' }), side: THREE.DoubleSide }); chev.userData.lin = true;
-        for (const dk of [-9, -5, 5, 9]) { const c = P[Math.max(0, Math.min(P.length - 1, kTop + dk))], o = out * (c.hw + 0.6), cv = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.55), chev); cv.position.set(c.x + c.nx * o, c.y + 1.2, c.z + c.nz * o); cv.rotation.y = Math.atan2(-c.nx * out, -c.nz * out) + (dk < 0 ? 0 : Math.PI); grp.add(cv); bx(0.06, 0.9, 0.06, c.x + c.nx * o, c.y + 0.45, c.z + c.nz * o, poleM); }
-        E.bench(grp, q.x + q.nx * out * (q.hw + 3.6) + q.tx * 2.2, q.z + q.nz * out * (q.hw + 3.6) + q.tz * 2.2, Math.atan2(q.nx * out, q.nz * out), gy);
+        for (const kp of M.kPins) {
+          const a = P[Math.max(0, kp - 8)], b = P[Math.min(P.length - 1, kp + 8)], c0 = P[kp], ins = ((a.x + b.x) / 2 - c0.x) * c0.nx + ((a.z + b.z) / 2 - c0.z) * c0.nz, out = ins > 0 ? -1 : 1;
+          for (const dk of [-6, -3, 0, 3, 6]) { const c = P[Math.max(0, Math.min(P.length - 1, kp + dk))], o = out * (c.hw + 0.7), cv = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.6), chev); cv.position.set(c.x + c.nx * o, c.y + 1.2, c.z + c.nz * o); cv.rotation.y = Math.atan2(-c.nx * out, -c.nz * out); grp.add(cv); bx(0.06, 0.9, 0.06, c.x + c.nx * o, c.y + 0.45, c.z + c.nz * o, poleM); }
+        }
+        for (const pa of M.pas) {
+          const c = pa.f.toWorld(0, pa.depth / 2), yaw = Math.atan2(P[pa.k].tx, P[pa.k].tz), s = bx(pa.depth, 0.06, pa.len, c.x, pa.y + 0.01, c.z, asphB, false); s.rotation.y = yaw + Math.PI / 2;
+          for (const u of [-2.6, 2.6]) { const e = pa.f.toWorld(u * 0.62, pa.depth - 2.6), l = bx(0.12, 0.012, 5.2, e.x, pa.y + 0.045, e.z, white2, false); l.rotation.y = yaw + Math.PI / 2; }
+        }
       }
       B.flush();
     }
@@ -262,7 +344,7 @@
     // ---- trees: dark conifers over the slopes, off the road, the decks and the portals ----
     {
       const pts = [];
-      for (let z = Z0 + 2; z < Z0 + (nz - 1) * D - 2; z += 4.2) for (let x = X0 + 2; x < X0 + (nx - 1) * D - 2; x += 4.2) {
+      for (let z = Z0 + 2; z < Z0 + (nz - 1) * D - 2; z += 3.4) for (let x = X0 + 2; x < X0 + (nx - 1) * D - 2; x += 3.4) {
         const px = x + (rng() - 0.5) * 3.4, pz = z + (rng() - 0.5) * 3.4, gy = M.ground(px, pz); if (gy < 1.2 || rng() < 0.3) continue;
         const q = roadQ(px, pz); if (q && q.d < q.hw + 3.2) continue;
         const sl = Math.abs(M.ground(px + 1, pz) - M.ground(px - 1, pz)) + Math.abs(M.ground(px, pz + 1) - M.ground(px, pz - 1)); if (sl > 2.6) continue;
