@@ -284,9 +284,9 @@
       L.band('trim', -0.035, R, 0, R - 0.035);
       L.band('trim', 0, R - 0.035, -0.004, Rr);
       const lipW = W.lipW || 0.025, ro = Rr - lipW, xl = -(W.lipD || 0.036), xt = -0.012, rt = Rr - lipW * (xt + 0.004) / (xl + 0.004);
-      L.band(W.lip || 'metal', -0.004, Rr, xl, ro);
+      L.band(W.lip || 'wheel', -0.004, Rr, xl, ro);
       L.band(sp.gap || 'trim', xl, ro, -(W.dish || 0.1), 0);
-      const n = sp.n, per = Math.PI * 2 / n, wr = (sp.f || 0.3) * per / 2, wh = (sp.fh || 0.6) * per / 2, ri = sp.ri || 0.05, xh = -(sp.xh || 0.026), sS = sp.slot || 'metal';
+      const n = sp.n, per = Math.PI * 2 / n, wr = (sp.f || 0.3) * per / 2, wh = (sp.fh || 0.6) * per / 2, ri = sp.ri || 0.05, xh = -(sp.xh || 0.026), sS = sp.slot || 'wheel';   // (the wheel's own slot: its finish is chosen per car, see make)
       const hubC = L.P(xh + 0.01, 0, 0), arms = sp.vee ? [-sp.vee, sp.vee] : [0];
       for (let i = 0; i < n; i++) {
         const c0 = i * per + (sp.ph || 0), lh = L.P(xh, ri, c0 - wh), rh = L.P(xh, ri, c0 + wh);
@@ -625,7 +625,7 @@
   });
 
   const built = {}, mats = new Map();
-  const ORDER = ['paint', 'clad', 'glass', 'trim', 'metal', 'red', 'head', 'tail'];
+  const ORDER = ['paint', 'clad', 'glass', 'trim', 'metal', 'wheel', 'red', 'head', 'tail'];
   function geometry(S) {
     const key = S.geo || S.id;
     if (!built[key]) {
@@ -643,22 +643,27 @@
       metal: S.alias && S.alias.metal ? null : E.gloss(S.metal || '#dadde0', S.mm || { rough: 0.2, metal: 0.5, env: 1.2 }),
     });
   }
+  // black wheels: gloss black lip and spokes (one material for every model)
+  const blackW = new Map(), blackOf = (E) => blackW.get(E) || (blackW.set(E, E.gloss('#121316', { rough: 0.3, metal: 0.55, env: 0.9 })), blackW.get(E));
+  let made = 0;
 
   SW.Cars = {
     // len/wid/hgt describe the body; `span` is the full width across the door mirrors (use it where mirrors must not touch).
     models: SPECS.map((S) => ({ id: S.id, name: S.name, len: S.len, wid: S.wid, hgt: S.hgt, span: S.span, wheelbase: S.ax[0] - S.ax[1], front: S.front, rear: S.rear, wheelR: S.R })),
-    make(E, i) {
+    // o.black: black wheels (true / false); left out, about one car in three gets them, the same ones on every load
+    make(E, i, o) {
       const S = SPECS[((i | 0) % SPECS.length + SPECS.length) % SPECS.length];
       const B = geometry(S), M = materials(E, S);
       const head = E.basic('#fff2d2'), tail = E.basic('#e01318');
-      const slot = { paint: M.paint, glass: M.glass, metal: M.metal, head, tail };
+      const black = o && o.black != null ? !!o.black : ((made++ * 2654435761 + i * 40503) >>> 0) % 100 < 33;
+      const slot = { paint: M.paint, glass: M.glass, metal: M.metal, wheel: black ? blackOf(E) : (M.metal || M.paint), head, tail };
       const g = new THREE.Group(); g.name = 'car:' + S.id;
       for (const k of ORDER) {
         if (!B.geo[k]) continue;
         const m = slot[k] || (k === 'trim' ? E.mat('#121316', { rough: 0.8 }) : k === 'clad' ? E.mat(S.clad, { rough: 0.6 }) : E.mat('#c01a1a', { rough: 0.45 }));
         const mesh = new THREE.Mesh(B.geo[k], m); mesh.name = k; mesh.castShadow = k === 'paint'; mesh.receiveShadow = true; g.add(mesh);
       }
-      g.userData = { len: S.len, wid: S.wid, hgt: S.hgt, head, tail };
+      g.userData = { len: S.len, wid: S.wid, hgt: S.hgt, head, tail, black };
       return g;
     },
   };

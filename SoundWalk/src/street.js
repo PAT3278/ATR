@@ -432,8 +432,8 @@
     const dk = ohh.toWorld(show.desk[0], show.desk[1] - 1.1);
     const ia = { kind: 'garage', x: dk.x, z: dk.z, sx: dk.x, sz: dk.z, r: 1.6, mark: 2.5 }; w.interact.push(ia);
     const showCar = (i) => {
-      if (!cars || i < 0) return; i %= SW.Cars.models.length; if (i === show.cur) return;
-      if (!show.cache[i]) { const c = cars(i); turn.add(c); show.cache[i] = c; }
+      if (!cars || i < 0) return; const N = SW.Cars.models.length; i %= N * 2; if (i === show.cur) return;   // N.. : the same models on black wheels
+      if (!show.cache[i]) { const c = SW.Cars.make(E, i % N, { black: i >= N }); turn.add(c); show.cache[i] = c; }
       show.cache.forEach((c, k) => { if (c) c.visible = k === i; }); show.cur = i;
     };
     return {

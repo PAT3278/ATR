@@ -1762,9 +1762,9 @@
     return g;
   }
   const NCAR = SW.Cars ? SW.Cars.models.length : 4;
-  const makeCar = (i) => { const c = SW.Cars ? SW.Cars.make(E, i) : plainCar(i); c.rotation.order = 'YXZ'; if (c.userData.tail) c.userData.tail0 = c.userData.tail.color.clone(); return c; };
+  const makeCar = (i, o) => { const c = SW.Cars ? SW.Cars.make(E, i, o) : plainCar(i); c.rotation.order = 'YXZ'; if (c.userData.tail) c.userData.tail0 = c.userData.tail.color.clone(); return c; };
   const carsG = new THREE.Group(), trafficG = new THREE.Group(); scene.add(carsG, trafficG);
-  const garage = Array.from({ length: NCAR }, (_, i) => { const c = makeCar(i); c.visible = false; carsG.add(c); return c; });
+  const garage = Array.from({ length: NCAR * 2 }, (_, i) => { const c = makeCar(i % NCAR, { black: i >= NCAR }); c.visible = false; carsG.add(c); return c; });   // every model twice: silver wheels, then black
   const wrapA = (a) => Math.atan2(Math.sin(a), Math.cos(a));
   let drv = null, drvK = 0, driveHinted = false, padBrake = false, padGas = false, padFast = false;
   let carPick = -1;   // the model chosen at SEASIDE MOTORS (street.js): it is the one that waits at the beach lay-by
@@ -1801,12 +1801,12 @@
   if (streetView && beachPA) streetView.showCar(garage.indexOf(beachPA.car));
   function pickCar() {
     if (drv || !beachPA || !beachPA.car || !streetView) return;
-    const i = (garage.indexOf(beachPA.car) + 1) % NCAR, want = garage[i], other = ring.pas.find((q) => q !== beachPA && q.car === want);
+    const i = (garage.indexOf(beachPA.car) + 1) % garage.length, want = garage[i], other = ring.pas.find((q) => q !== beachPA && q.car === want);
     carPick = i;
     if (other) parkAt(other, beachPA.car, other.slot);
     parkAt(beachPA, want, beachPA.slot);
     streetView.showCar(i);
-    say([`SEASIDE MOTORS: ${SW.Cars ? SW.Cars.models[i].name.toUpperCase() : 'CAR ' + (i + 1)}`, 'この車が上の BEACH PA で待っています。エレベーターで上がって乗ってください。']);
+    say([`SEASIDE MOTORS: ${SW.Cars ? SW.Cars.models[i % NCAR].name.toUpperCase() : 'CAR ' + (i % NCAR + 1)}${i >= NCAR ? ' · BLACK WHEELS' : ''}`, 'この車が上の BEACH PA で待っています。エレベーターで上がって乗ってください。']);
   }
   function startDrive(pa) {
     if (drv || !pa.car) return;
