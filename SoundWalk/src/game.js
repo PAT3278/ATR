@@ -299,16 +299,17 @@
   /* ================= scene ================= */
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xffffff, 30, 150);
-  const skyU = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, time: { value: 0 }, aur: { value: 0.1 } };
+  const skyU = { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, time: { value: 0 }, aur: { value: 0.1 }, glow: { value: new THREE.Color() }, glowDir: { value: new THREE.Vector3(0, 0, 1) }, disc: { value: 1 } };
   const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
     vertexShader: 'varying vec3 vD;void main(){vD=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-    fragmentShader: `uniform vec3 top,bottom,sunDir,sunCol;uniform float time,aur;varying vec3 vD;
+    fragmentShader: `uniform vec3 top,bottom,sunDir,sunCol,glow,glowDir;uniform float time,aur,disc;varying vec3 vD;
     float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float ns(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1.,0.)),f.x),mix(h21(i+vec2(0.,1.)),h21(i+vec2(1.,1.)),f.x),f.y);}
     float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<4;i++){s+=a*ns(p);p=p*2.03+vec2(17.,9.);a*=.5;}return s;}
     void main(){vec3 d=normalize(vD);float h=d.y;vec3 c=mix(bottom,top,pow(clamp(h,0.,1.),.42));c=mix(c,bottom*1.12+vec3(.04),exp(-max(h,0.)*14.)*.65);c=mix(c,bottom*.55,clamp(-h*3.,0.,1.));
-      float s=max(dot(d,normalize(sunDir)),0.);c+=sunCol*(smoothstep(.9994,.9997,s)*7.+pow(s,90.)*.9+pow(s,9.)*.32);
+      float s=max(dot(d,normalize(sunDir)),0.);c+=sunCol*((smoothstep(.9994,.9997,s)*7.+pow(s,90.)*.9)*disc+pow(s,9.)*.32);
+      float g=max(dot(d,normalize(glowDir)),0.),ga=max(dot(normalize(d.xz+vec2(1e-4)),normalize(glowDir.xz+vec2(1e-4))),0.);c+=glow*(pow(g,6.)*.9+exp(-max(h,0.)*9.)*pow(ga,3.)*.8);   // an afterglow: the light of a sun already set, low over one side of the sky
       if(h>.01){vec2 uv=d.xz/(h+.2)*1.3+vec2(time*.006,time*.002);float n=fbm(uv);float den=smoothstep(.3,.72,n)*smoothstep(.01,.22,h);
         float lit=smoothstep(.35,.85,fbm(uv+vec2(.07,.05)*1.)-n*.4+.5);vec3 cc=mix(mix(top,vec3(.75,.78,.86),.6)*.85,vec3(1.)*1.15+sunCol*.25*pow(s,3.),lit*.85+pow(s,5.)*.15);c=mix(c,cc,smoothstep(.46,.7,n)*smoothstep(.01,.2,h)*.95);}
       float az=atan(d.z,d.x),rb=0.;
@@ -807,7 +808,10 @@
     // (each colour moves toward the clear sky's own, at the brightness the place gave it: a night stays dark, but dark blue)
     const lum = (c) => c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
     const toward = (hex, tgt, k) => { const c = lin(hex), t = lin(tgt); return c.lerp(t.multiplyScalar(Math.min(1.2, lum(c) / Math.max(1e-4, lum(t)))), k); };
-    return { top: toward(g.top, '#3f78c4', 0.85), bottom: toward(g.bottom, '#e6eef6', 0.85), fog: toward(g.fog, '#d6e1ec', 0.85), near: g.far ? Math.max(g.near, 60) : g.near, far: g.far ? Math.max(g.far, 330) : g.far, sun: toward(g.sun, '#f7faff', 0.5), sunInt: g.sunInt, hemi: g.hemi, sunDir: d.normalize(), tint: new THREE.Vector3(...tn), expo: g.expo, sat: Math.min(0.9, g.sat * 0.85), stars: g.stars };
+    // (g.keep: a grade that is the point of its place, an evening's colour, keeps most of it)
+    const K = g.keep ? 0.2 : 0.85, gd = new THREE.Vector3(...(g.glowDir || [0, 0, 1])); if (rot !== undefined) gd.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot);
+    return { top: toward(g.top, '#3f78c4', K), bottom: toward(g.bottom, '#e6eef6', K), fog: toward(g.fog, '#d6e1ec', K), near: g.far && !g.keep ? Math.max(g.near, 60) : g.near, far: g.far && !g.keep ? Math.max(g.far, 330) : g.far, sun: toward(g.sun, '#f7faff', g.keep ? 0.1 : 0.5), sunInt: g.sunInt, hemi: g.hemi, sunDir: d.normalize(), tint: new THREE.Vector3(...tn), expo: g.expo, sat: Math.min(g.keep ? 1 : 0.9, g.sat * (g.keep ? 1 : 0.85)), stars: g.stars,
+      glow: lin(g.glow || '#000000'), glowDir: gd.normalize(), disc: g.disc === undefined ? 1 : g.disc };
   }
   const BASE = prepGrade({ top: '#3f78c4', bottom: '#e6eef6', fog: '#d6e1ec', near: 70, far: 400, sun: '#f7faff', sunInt: 1.7, hemi: 0.85, sunDir: [0.45, 0.62, 0.35], tint: [0.98, 1, 1.03], expo: 1.0, sat: 0.95, stars: 0 });   // Bryce's day: a clear blue overhead paling to white at the horizon, a hard white sun
   // Behind the wheel the day turns to a sodium-lit night (each place still pulls the light its own way).
@@ -820,9 +824,10 @@
     o.sunInt = a.sunInt + (b.sunInt - a.sunInt) * k; o.hemi = a.hemi + (b.hemi - a.hemi) * k;
     o.sunDir.copy(a.sunDir).lerp(b.sunDir, k).normalize(); o.tint.copy(a.tint).lerp(b.tint, k);
     o.expo = a.expo + (b.expo - a.expo) * k; o.sat = a.sat + (b.sat - a.sat) * k; o.stars = a.stars + (b.stars - a.stars) * k;
+    o.glow.copy(a.glow).lerp(b.glow, k); o.glowDir.copy(a.glowDir).lerp(b.glowDir, k).normalize(); o.disc = a.disc + (b.disc - a.disc) * k;
   }
   function applyGrade() {
-    skyU.top.value.copy(G.top); skyU.bottom.value.copy(G.bottom); skyU.sunDir.value.copy(G.sunDir); skyU.sunCol.value.copy(G.sun).multiplyScalar(Math.min(1, G.sunInt / 2));
+    skyU.top.value.copy(G.top); skyU.bottom.value.copy(G.bottom); skyU.sunDir.value.copy(G.sunDir); skyU.sunCol.value.copy(G.sun).multiplyScalar(Math.min(1, G.sunInt / 2)); skyU.glow.value.copy(G.glow); skyU.glowDir.value.copy(G.glowDir); skyU.disc.value = G.disc;
     scene.fog.color.copy(G.fog); scene.fog.near = G.near; scene.fog.far = G.far;
     sun.color.copy(G.sun); sun.intensity = G.sunInt; hemi.intensity = G.hemi;
     post.uniforms.tint.value.copy(G.tint); post.uniforms.expo.value = G.expo; post.uniforms.sat.value = G.sat;
@@ -1179,7 +1184,13 @@
   }
 
   street = SW.Street ? SW.Street.make(ring, places) : null;
-  pass = SW.Pass ? SW.Pass.make(ring, places) : null;   // the mountain behind NO JOBB: its heights and its road (built below, with the street)
+  pass = SW.Pass ? SW.Pass.make(ring, places) : null;
+  // Up on the pass the sun has just gone down behind the range: an orange afterglow low over the far side under a deep
+  // blue, the first star out (on down to the palace it is NO JOBB's night). The light blends in like a place's: from
+  // the road up the mountain, nearest the pass itself.
+  const passLight = pass ? { grade: prepGrade({ top: '#0b1840', bottom: '#5a4660', fog: '#2c2a4a', near: 34, far: 230, sun: '#ff9a5a', sunInt: 0.62, hemi: 0.5, sunDir: [-0.15, 0.16, 1],
+    tint: [1.04, 0.98, 1.0], expo: 1.2, sat: 1.0, stars: 0.45, glow: '#ff8a40', glowDir: [-0.15, 0.03, 1], disc: 0, keep: true }),
+    pts: pass.P.filter((q, k) => k >= pass.kPass0 && k % 3 === 0) } : null;   // the mountain behind NO JOBB: its heights and its road (built below, with the street)
   if (street) {   // the ground roads cut through the crater wall to the car park: whatever stood across their way at ground level goes
     const inWay = (o) => (o.y0 === undefined || o.y0 < 2) && street.lines.some((L) => L.y < 2 && Math.hypot(L.x - o.x, L.z - o.z) < L.hw + 0.6);
     for (let i = boxes.length - 1; i >= 0; i--) if (inWay(boxes[i])) boxes.splice(i, 1);
@@ -3236,6 +3247,11 @@
       const wf = smooth(115, 28, d) ** 2;
       if (wf > 0) { wsum += wf; mixGrade(GA, GA, p.grade, wf / wsum); wfar = Math.max(wfar, wf); }
     });
+    if (passLight) {   // the pass, as if it were a place: its road up and over
+      let d = 1e9; for (const q of passLight.pts) { const e = Math.hypot(P.x - q.x, P.z - q.z); if (e < d) d = e; }
+      const w = smooth(48, 16, d - (drv ? 20 : 0)); if (w > bw) { bw = w; bp = passLight; }
+      const wf = smooth(115, 28, d) ** 2; if (wf > 0) { wsum += wf; mixGrade(GA, GA, passLight.grade, wf / wsum); wfar = Math.max(wfar, wf); }
+    }
     drvK += ((drv ? 1 : 0) - drvK) * Math.min(1, dt * 0.9);
     mixGrade(GB, BASE, DRIVE, ease(clamp(drvK, 0, 1)));
     mixGrade(GR, GB, wsum > 0 ? GA : GB, wsum > 0 ? 0.55 * wfar : 0);
@@ -3573,5 +3589,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, spot, openSong, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, spot, openSong, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, pass: () => pass, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
