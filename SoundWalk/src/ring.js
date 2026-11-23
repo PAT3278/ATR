@@ -389,7 +389,7 @@
     const others = (R.roads || []).filter((q) => q !== Rd);
     const clear = (x, y, z) => { for (const Q of others) { let j = 0, bd = 1e18; for (let k = 0; k < Q.N; k++) { const e = (Q.X[k] - x) ** 2 + (Q.Z[k] - z) ** 2; if (e < bd) { bd = e; j = k; } } const dy = Q.Y[j] - y; if (Math.sqrt(bd) < Q.HW[j] + 1 && dy > -1.6 && dy < 8.5) return false; } return true; };
     for (let i = 5; i < N; i += 9) {
-      if (!hasMed(i) || medH(i) < 0.7) continue;
+      if (!hasMed(i) || medH(i) < 0.7 || (o.noLamp && o.noLamp(X[i], Z[i]))) continue;   // (o.noLamp: in a tunnel, which has its own lights in its crown)
       if (!clear(X[i], Y[i], Z[i]) || ![-2.8, 2.8].every((d) => (at(i, d, 0), clear(v.x, Y[wr(i)], v.z)))) continue;
       const yw = yawOf(i);
       poleL.push({ x: X[i], y: Y[i] + 3.9, z: Z[i], sy: 6.6 });
@@ -400,7 +400,7 @@
     }
     if (Rd.urban) for (let i = 4, k = 0; i < N - 2; i += 7, k++) {   // no median: lamps on alternate walls, the arm reaching over the lanes
       const sd = k % 2 ? 1 : -1, yw = yawOf(i);
-      if ((sd < 0 && GAP[i]) || (sd > 0 && OG[i])) continue;   // not on an open side
+      if ((sd < 0 && GAP[i]) || (sd > 0 && OG[i]) || (o.noLamp && o.noLamp(X[i], Z[i]))) continue;   // not on an open side, nor in a tunnel
       if (!clear(...(at(i, sd * (HW[i] - 0.25), 0), [v.x, Y[i], v.z])) || !clear(...(at(i, sd * (HW[i] - 2.9), 0), [v.x, Y[i], v.z]))) continue; at(i, sd * (HW[i] - 0.25), 0); const bx = v.x, by = v.y, bz = v.z;
       poleL.push({ x: bx, y: by + 3.6, z: bz, sy: 6 }); (R.lampAt || (R.lampAt = [])).push({ id: Rd.id, i, sd, x: bx, y: by, z: bz, kind: 'side' }); at(i, sd * (HW[i] - 1.6), 6.6); armL.push({ x: v.x, y: v.y, z: v.z, yaw: yw, sx: 0.47 });
       at(i, sd * (HW[i] - 2.9), 6.48); headL.push({ x: v.x, y: v.y, z: v.z, yaw: yw }); glowP.push(v.x, v.y - 0.1, v.z); at(i, sd * (HW[i] - 3), 0.05); poolL.push({ x: v.x, y: v.y, z: v.z, yaw: yw });

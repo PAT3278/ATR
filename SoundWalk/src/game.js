@@ -1189,6 +1189,7 @@
   /* ================= ring road ================= */
   const ringView = SW.Ring.build(ring, E, {
     blocked: (x, z) => Math.hypot(x, z) < PLAZA_R + 4 || (!!street && street.pier(x, z)) || (!!pass && pass.pier(x, z)) || Math.hypot(x - shopAt.x, z - shopAt.z) < 6 || hallAt.near(x, z, 2) || distToPath(x, z, loopPath).d < 4 || places.some((p) => { if (distToPath(x, z, p.path).d < 4) return true; if (!p.noPier) return false; const l = p.local(x, z); return p.noPier(l.x, l.z); }),   // no pier in a place's way, on a path or in the plaza
+    noLamp: (x, z) => !!pass && !Number.isNaN(pass.tunAt(x, z)),   // under the mountain the tunnel's own lights take over
     keepOut: (x, z) => (!!pass && pass.keep(x, z)) || places.some((p) => { const l = p.local(x, z); return p.blocks(l.x, l.z); }),
     // nor up through a building or a parked bus: a collider box that big, standing below the pier's top (a pier may stand
     // among the thin ones: rails, kerbs, benches set round it)
