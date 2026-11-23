@@ -2200,7 +2200,7 @@
     if (inf.preview) return `0:00 / ${mmss(inf.len)}`;
     return `${mmss(inf.state === 'stop' ? 0 : inf.t)} / ${inf.dur ? mmss(inf.dur) : '-:--'}`;
   }
-  function trackHTML(p, i, bare) {
+  function trackHTML(p, i, bare, noBuy) {
     const s = p.song, n = playsOf(s), sub = [s.artist || CFG.artist, s.year, p.found ? s.place : '未発見'].filter(Boolean).join(' · ');
     const lis = !bare && (s.links || []).find((l) => l.kind !== 'buy');   // the song where it is out already (SoundCloud): a demo here is not it
     return `<div class="tr" data-tr="${i}" style="--c:${esc(p.found ? p.color : '#b3161d')}">`
@@ -2209,7 +2209,7 @@
       + `<canvas class="tr-wave" data-seek="${i}" aria-hidden="true"></canvas>`
       + `<div class="tr-foot"><span class="tr-time">${timeOf(player.info(s))}</span>${tagOf(s)}<span class="tr-plays" data-plays="${esc(s.id)}"${n == null ? ' hidden' : ''}>▶ ${n == null ? '' : fmtPlays(n)}</span>`
       + (lis ? `<a class="tr-lis" href="${esc(lis.url)}" target="_blank" rel="noopener" title="${esc(lis.label)}" aria-label="${esc(s.title)}：${esc(lis.label)}">${IC.play}<span>LISTEN ↗</span></a>` : '')
-      + `<span class="tr-buy">${buyHTML(p, i)}</span></div></div></div>`;
+      + (noBuy ? '' : `<span class="tr-buy">${buyHTML(p, i)}</span>`) + '</div></div></div>';
   }
   function drawWave(cv, p, inf) {
     const dpr = Math.min(2, devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
@@ -2301,7 +2301,7 @@
         : '<button class="ph-row" type="button" disabled><span class="dot" style="background:#55524a"></span><span class="nm">？</span></button>').join('');
     } else if (phView === 'song' && phSong) {
       const s = phSong.song, links = (s.links || []).filter((l) => l.kind !== 'buy' || canCheckout(s) || isOwned(s)).map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener" aria-label="${esc(l.label)}">${l.kind === 'buy' ? IC.cart + '<span>STORE ↗</span>' : IC.play + '<span>LISTEN ↗</span>'}</a>`).join('');
-      h = `<h3 class="ph-h">MUSIC</h3><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc([(s.artist || CFG.artist), s.year].filter(Boolean).join(' · '))}</p>${trackHTML(phSong, phSong.idx, true)}<div class="ph-acts">${links}<button class="btn" type="button" data-warp="1">${PHI.map}<span>GO</span></button></div>`;
+      h = songPage(phSong, links);
     } else if (phView === 'store') {
       h = storeHTML();
     } else if (phView === 'live') {
@@ -2317,10 +2317,28 @@
     (first || $('#phClose')).focus({ preventScroll: true });
     plT = 0; playerUI(0);
   }
+  // The song's page, the purchase screen: anyone should see at a glance what it is and what to press. A jacket in the
+  // song's colour, the title, the player (▶ to listen), then ONE big button that says in words what it does (buy for
+  // ¥200 / buy at the store / bought / not yet), a line saying what happens next, and the lesser links below.
+  function songPage(p, links) {
+    const s = p.song, i = places.indexOf(p), link = (s.links || []).find((l) => l.kind === 'buy');
+    let big, note;
+    if (isOwned(s)) { big = `<button class="btn owned big" type="button" disabled>${IC.check}<span>購入済み</span></button>`; note = 'この端末で、いつでもフルで聴けます。'; }
+    else if (canCheckout(s)) { big = `<button class="btn primary big" type="button" data-buy="${i}" aria-label="${esc(s.title)} を ${yen(priceOf(s))} で買う">${IC.cart}<span>${yen(priceOf(s))} で買う</span></button>`; note = 'お支払いの画面に進みます（カードなど）。買うと、この端末でフルで聴けます。'; }
+    else if (link) { big = `<a class="btn primary big" href="${esc(link.url)}" target="_blank" rel="noopener">${IC.cart}<span>ストアで買う ↗</span></a>`; note = '配信ストアのページが開きます。'; }
+    else { big = '<button class="btn big" type="button" disabled><span>準備中</span></button>'; note = 'まだ買えません。'; }
+    if (SW.isPreview(s) && !isOwned(s)) note = `▶ で${CFG.preview || 20}秒だけ試聴できます。` + note;
+    const sub = [s.artist || CFG.artist, s.year].filter(Boolean).join(' · ');
+    return `<div class="ph-head"><div class="ph-jacket" style="--c:${esc(p.color)}" aria-hidden="true"></div><div class="ph-t"><p class="ph-big">${esc(s.title)}</p><p class="ph-sub">${esc(sub)}</p>${p.found ? `<p class="ph-sub">${esc(s.place)}</p>` : ''}</div></div>`
+      + trackHTML(p, i, true, true) + `<div class="ph-buy">${big}</div><p class="ph-note">${note}</p>`
+      + `<div class="ph-acts">${links}${phDirect ? '<button class="btn" type="button" data-back="1"><span>‹ もどる</span></button>' : `<button class="btn" type="button" data-warp="1">${PHI.map}<span>ここへ行く</span></button>`}</div>`;
+  }
+  let phDirect = false;   // the page was opened straight from a light ring: back goes back to the world
+  function openSong(p) { if (mode !== 'walk' || !p) return; phSong = p; openPhone('song'); phDirect = true; phRender(); }
   function openPhone(view, counter) {
     if (mode !== 'walk') return;
-    mode = 'phone'; keys.clear(); auto = null; phView = view || 'home';
-    document.body.classList.add('busy'); if (!counter) avatar.setPhone(true);
+    mode = 'phone'; keys.clear(); auto = null; phView = view || 'home'; phDirect = false;
+    document.body.classList.add('busy'); if (!counter) { avatar.setPhone(true); document.body.classList.add('phoning'); }
     $('#phone').classList.toggle('counter', !!counter);   // at the shop's counter the store opens as a big catalogue, not on the phone
     $('#phone').hidden = false; phRender();
     loadCounts(); retryPending();
@@ -2328,11 +2346,11 @@
   const openStore = () => openPhone('store', true);
   function closePhone() {
     if (mode !== 'phone') return;
-    mode = 'walk'; $('#phone').hidden = true; $('#phone').classList.remove('counter'); document.body.classList.remove('busy'); avatar.setPhone(false);
+    mode = 'walk'; $('#phone').hidden = true; $('#phone').classList.remove('counter'); document.body.classList.remove('busy', 'phoning'); avatar.setPhone(false); phDirect = false;
     player.stop();   // the store player is a listening booth: the places take over again
     cv.focus({ preventScroll: true });
   }
-  function phoneBack() { if (phView === 'home' || $('#phone').classList.contains('counter')) closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
+  function phoneBack() { if (phView === 'home' || phDirect || $('#phone').classList.contains('counter')) closePhone(); else { phView = phView === 'song' ? 'music' : 'home'; phRender(); } }
   function phoneKey(e) {
     if (e.code === 'KeyP' || e.code === 'Tab') { e.preventDefault(); if (!e.repeat) closePhone(); return; }
     if (e.key === 'Escape' || e.key === 'Backspace' || e.code === 'KeyX') { e.preventDefault(); if (!e.repeat) phoneBack(); return; }
@@ -2344,7 +2362,7 @@
     if (list.length) { const i = list.indexOf(document.activeElement); list[(i + dir + list.length) % list.length].focus({ preventScroll: true }); }
   }
   phScreen.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-go], [data-song], [data-warp], [data-buy], [data-play], [data-seek]');
+    const b = e.target.closest('[data-go], [data-song], [data-warp], [data-buy], [data-play], [data-seek], [data-back]');
     if (!b) return;
     if (b.dataset.buy !== undefined) { buy(places[+b.dataset.buy], b); return; }
     if (b.dataset.play !== undefined) { playTrack(places[+b.dataset.play]); plT = 0; return; }
@@ -2357,6 +2375,7 @@
     else if (b.dataset.go) { phView = b.dataset.go; phRender(); }
     else if (b.dataset.song !== undefined) { phSong = places[+b.dataset.song]; phView = 'song'; phRender(); }
     else if (b.dataset.warp && phSong) { closePhone(); warpTo(phSong); }
+    else if (b.dataset.back) phoneBack();
   });
   $('#phBack').addEventListener('click', phoneBack);
   $('#phHome').addEventListener('click', () => { if ($('#phone').classList.contains('counter')) { closePhone(); return; } phView = 'home'; phRender(); });
@@ -2903,12 +2922,12 @@
     $('#spTitle').textContent = s.title;
     $('#spSub').textContent = [s.artist || CFG.artist, s.year, s.place].filter(Boolean).join(' · ');
     $('#spTag').innerHTML = tagOf(s);
-    $('#spAct').innerHTML = buyHTML(p, i)
-      + (lis ? `<a class="btn sp-lis" href="${esc(lis.url)}" target="_blank" rel="noopener" aria-label="${esc(s.title)}：${esc(lis.label)}">${IC.play}<span>LISTEN ↗</span></a>` : '')
-      + (!TOUCH && !isOwned(s) && ((s.links || []).some((l) => l.kind === 'buy') || canCheckout(s)) ? '<kbd>B</kbd>' : '');
+    const label = isOwned(s) ? `${IC.check}<span>購入済み</span>` : canCheckout(s) ? `${IC.cart}<span>${yen(priceOf(s))} で買う</span>` : (s.links || []).some((l) => l.kind === 'buy') ? `${IC.cart}<span>買う</span>` : '<span>くわしく</span>';
+    void lis; void i;
+    $('#spAct').innerHTML = `<button class="btn ${isOwned(s) ? 'owned' : 'primary'}" type="button" data-song-open="1" aria-label="${esc(s.title)} の曲のページ（試聴・購入）">${label}</button>` + (TOUCH ? '' : '<kbd>B</kbd>');
   }
-  function spotBuy() { const b = spotEl.querySelector('#spAct .btn.primary'); if (b && !b.disabled) b.click(); }
-  spotEl.addEventListener('click', (e) => { const b = e.target.closest('[data-buy]'); if (b && spot.p) buy(spot.p, b); });
+  function spotBuy() { if (spot.p) openSong(spot.p); }   // B / the pad's X / the card's button: the song's page on the phone
+  spotEl.addEventListener('click', (e) => { if (e.target.closest('[data-song-open]') && spot.p) openSong(spot.p); });
   function spotTick() {
     let at = null;
     if (mode === 'walk' && !drv) for (const p of places) {
@@ -3277,6 +3296,16 @@
       for (const q of places) if (q.ceil && P.y < 3) { const l = q.local(cx, cz), lp = q.local(P.x, P.z), c = q.ceil(l.x, l.z) ?? q.ceil(lp.x, lp.z); if (c != null) cy = Math.min(cy, c); }   // under a roof (a tunnel): keep below it   // P.y: the camera follows you into a tunnel or onto an upper floor
       tmpV.set(cx, cy, cz); tmpL.set(tx - Math.sin(camYaw) * ahead, ty - 0.1 - ahead * 0.25, tz - Math.cos(camYaw) * ahead); tmpU.set(0, 1, 0);
     }
+    // The phone out (not the shop's counter): the camera comes in close over your right shoulder, the way a film frames
+    // someone reading their phone, you on the left of the picture; the phone fills the right and the world behind it
+    // softens (body.phoning, style.css).
+    phCam += ((mode === 'phone' && !drv && !$('#phone').classList.contains('counter') ? 1 : 0) - phCam) * Math.min(1, dt * (mode === 'phone' ? 3.2 : 5));
+    if (phCam > 0.002) {
+      const fx = Math.sin(P.face), fz = Math.cos(P.face), rx = -fz, rz = fx, k = ease(clamp(phCam, 0, 1)), wide = innerWidth > innerHeight;
+      const back = wide ? 2.15 : 2.3, side = wide ? 0.95 : 0.35, look = wide ? 1.25 : 0.2;
+      phV.set(P.x - fx * back + rx * side, P.y + 1.72, P.z - fz * back + rz * side); phL.set(P.x + fx * 2.2 + rx * look, P.y + 1.3, P.z + fz * 2.2 + rz * look);
+      tmpV.lerp(phV, k); tmpL.lerp(phL, k);
+    }
     if (camBlend < 1) {
       camBlend = Math.min(1, camBlend + dt / camBlendDur);
       const k = ease(camBlend);
@@ -3457,7 +3486,8 @@
     }
     return best;
   }
-  let last = performance.now(), camHold = null;
+  let last = performance.now(), camHold = null, phCam = 0;
+  const phV = new THREE.Vector3(), phL = new THREE.Vector3();
   // No stalls when a place comes into or goes out of view. three.js builds every material's shader for one number of
   // lights, and rebuilds all of them (a few hundred: a stall of a third of a second or more on a laptop GPU) whenever that
   // number changes, as it did each time a place's group was shown or hidden with its lamps in it. So every lamp a place
@@ -3519,5 +3549,5 @@
   });
 
   // Exposed for automated checks.
-  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, spot, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
+  window.__soundwalk = { holdCam(f) { camHold = f; }, groundAt, hills: () => hillField, isWater, camera, rooms, camBlock, hallAt, get hoop() { return hoop; }, get pool() { return pool; }, poolHold, poolTick, poolCam, hoopShoot, endHoop, hoopTick, startHoop, startPool, boxes, circles, shopAt, P, places, collide, shop, player, owned: SW.owned, verify, loadCounts, avatar, scene, setT(v) { t = v; }, setCam(y, pt) { camYaw = y; if (pt !== undefined) camPitch = pt; }, get mode() { return mode; }, routeTo, radio, radioTune, radioStep, radioOpen, spot, openSong, start, ring, rq, traffic, startDrive, endDrive, ctraffic, loopPath, drive: () => drv, step(n, dt) { for (let i = 0; i < n; i++) { t += dt; update(dt); } } };
 })();
