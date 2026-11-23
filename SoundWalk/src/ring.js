@@ -354,8 +354,13 @@
     };
     const yawOf = (i) => Math.atan2(TX[i], TZ[i]);   // +Z of an instance along the road
 
-    // piers with a cap beam
+    // piers with a cap beam. None in a place's way (o.blocked), and none (nor a double deck's leg) that would come up
+    // through something: a building or a parked bus (o.solid: TAMA's brick block stands under the north-west junction,
+    // FLIP's station forecourt under the upper deck's exit ramp) or another road's deck lower down (at both junctions the
+    // upper deck's ramps pass over the lower deck's)
     const piers = [], pierL = [], capL = [];
+    const through = (x, z, r, top) => (R.roads || []).some((Q) => { if (Q === Rd || Q === Rd.stack) return false; let bd = 1e18, j = 0; for (let k = 0; k < Q.N; k++) { const e = (Q.X[k] - x) ** 2 + (Q.Z[k] - z) ** 2; if (e < bd) { bd = e; j = k; } } return Math.sqrt(bd) < Q.HW[j] + r && Q.Y[j] - 1.3 < top; });
+    const hits = (x, z, r, top) => (o.solid && o.solid(x, z, r, top)) || through(x, z, r, top);
     for (let i = 3; i < N; i += 8) {
       if (o.blocked && o.blocked(X[i], Z[i])) continue;
       if (Rd.avoidRing && R.dist && (() => { let b = 1e9; for (let k = 0; k < R.N; k += 2) b = Math.min(b, Math.hypot(R.X[k] - X[i], R.Z[k] - Z[i])); return b < R.HW[0] + 3; })()) continue;   // not through the loop's deck
@@ -363,12 +368,14 @@
         const L0 = Rd.stack; let b = 1e9, j = 0; for (let k = 0; k < L0.N; k++) { const e = Math.hypot(L0.X[k] - X[i], L0.Z[k] - Z[i]); if (e < b) { b = e; j = k; } }
         if (b < L0.HW[j] + 2) {
           const dd = L0.HW[j] + 1.1, h2 = Y[i] - 2.3;
+          if ([-1, 1].some((sd) => (at(i, sd * dd, 0), hits(v.x, v.z, 0.85, h2)))) continue;
           for (const sd of [-1, 1]) { at(i, sd * dd, 0); pierL.push({ x: v.x, y: (h2 - lift) / 2 - (Y[i] - h2) * 0 , z: v.z, sy: h2, sx: 0.7, sz: 0.7 }); piers.push({ x: v.x, z: v.z, r: 0.9, y1: Y[i] - 2 }); }
           capL.push({ x: X[i], y: Y[i] - 1.8, z: Z[i], yaw: yawOf(i), sx: dd * 2 + 1 });
           continue;
         }
       }
       const h = Y[i] - 2.3;
+      if (hits(X[i], Z[i], 1.2, h)) continue;
       pierL.push({ x: X[i], y: h / 2, z: Z[i], sy: h });
       capL.push({ x: X[i], y: Y[i] - 1.8, z: Z[i], yaw: yawOf(i), sx: HW[i] * 2 - 3 });
       piers.push({ x: X[i], z: Z[i], r: 1.3, y1: Y[i] - 2 });
