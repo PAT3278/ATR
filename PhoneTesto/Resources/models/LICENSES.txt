@@ -1,0 +1,57 @@
+The models here are adapted from works on Sketchfab, each licensed under
+Creative Commons Attribution 4.0 International (CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/), obtained from Sketchfab or through
+the Objaverse archive (https://objaverse.allenai.org).
+
+se.glb
+  adapted from "iPhone SE 2020" by HarlWise
+  https://sketchfab.com/3d-models/2fe95b999a804e47a97bc830e021ef08
+
+11.glb
+  adapted from "Iphone 11" by atomle
+  https://sketchfab.com/3d-models/558b8e99bbd4483b9bb2182d8dc72de2
+
+13.glb
+  adapted from "Iphone 13 (Free)" by kirigami318
+  https://sketchfab.com/3d-models/c9c0d15472fd4537aa904e290848f142
+
+pro.glb
+  adapted from "Apple iPhone 15 Pro Black" by Polyman_3D
+  https://sketchfab.com/3d-models/6fd1283ec05d412d99a3f23b2e80e473
+
+android.glb
+  adapted from "Google Pixel 6 Pro" by DatSketch
+  https://sketchfab.com/3d-models/b9b58ca40c254f8dafd8370869af74fb
+
+budget.glb
+  adapted from "Xiaomi Redmi Note 8t" by rrtyi
+  https://sketchfab.com/3d-models/b9d3cf1383f942a4a0549ca19eed63c9
+
+laptop.glb
+  adapted from "2021 Macbook Pro 14" (M1 Pro / M1 Max)" by akshatmittal
+  https://sketchfab.com/3d-models/f6b0b940fb6a4286b18a674ef32af2d3
+
+tablet.glb
+  adapted from "IPad Mini 6 2021" by DatSketch
+  https://sketchfab.com/3d-models/f363c2b1c74a462588db184bd4fb024e
+
+monitor.glb
+  adapted from "Yamaha HS5 Studio Monitor" by ivan-wsk
+  https://sketchfab.com/3d-models/eec7203e4f964fa5976df3afee33f946
+
+earbuds.glb
+  adapted from "Airpods" by stephen1147648377
+  https://sketchfab.com/3d-models/f82118e3dacf475089009efe2b930ee3
+
+Changes, devices and monitor (Tools/make-models.py): parts sorted by material
+and given the plugin's own, textures (monitor: kept as vertex colours), screens
+and brand logos left out, scaled, re-centred, quantised.
+Changes, earbuds (Tools/make-earbuds.py): the metal charging ring removed and
+the stem closed, the sensor and microphone holes closed, slots added near the
+stem's end, the surface smoothed; the strain relief and cable are added by the
+page that shows it.
+
+desk-colour.jpg, desk-normal.jpg, desk-rough.jpg
+  "Wood Table Worn", Poly Haven, CC0 (https://polyhaven.com/a/wood_table_worn), recompressed
+studio.hdr
+  "Studio Small 05", Poly Haven, CC0 (https://polyhaven.com/a/studio_small_05), scaled down

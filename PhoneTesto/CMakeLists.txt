@@ -93,10 +93,25 @@ endif()
 # The editor (a 3D room drawn with three.js, MIT, see Resources/thirdparty),
 # the phone player page, its playback engine, a WebAssembly Opus decoder for
 # phones whose browser withholds WebCodecs (MIT), and the Barlow fonts (SIL
-# OFL, see Resources/fonts/OFL.txt) used by both pages.
+# OFL, see Resources/fonts/OFL.txt) used by both pages. The models are
+# CC BY and the desk's wood CC0 (see Resources/models/LICENSES.txt).
 juce_add_binary_data(PhoneTestoAssets SOURCES
     Resources/room.html
     Resources/thirdparty/three.min.js
+    Resources/models/se.glb
+    Resources/models/11.glb
+    Resources/models/13.glb
+    Resources/models/pro.glb
+    Resources/models/android.glb
+    Resources/models/budget.glb
+    Resources/models/tablet.glb
+    Resources/models/laptop.glb
+    Resources/models/monitor.glb
+    Resources/models/earbuds.glb
+    Resources/models/studio.hdr
+    Resources/models/desk-colour.jpg
+    Resources/models/desk-normal.jpg
+    Resources/models/desk-rough.jpg
     Resources/player.html
     Resources/player-worklet.js
     Resources/thirdparty/opus-decoder.min.js

@@ -18,8 +18,9 @@ it is. Insert it as the last plugin on your master bus.
 ## Live: the mix on your own phone
 
 Insert PhoneTesto as the **last plugin on your master bus** and open it: it's
-on the air, and the window shows a code to scan. (If you've switched to the
-speaker emulation, **LISTEN ON PHONE** brings you back.)
+on the air, and the window shows a code to scan. (If you've moved on to the
+speaker emulation, **LISTEN ON PHONE**, the first place on the desk, brings
+you back.)
 
 1. A small server starts inside the plugin (port `51813`, or the next free
    one) when the window opens. Loading a project doesn't open a network port
@@ -89,41 +90,38 @@ time against it.
 
 ## The window
 
-It opens on the air: the code to scan, large and sharp, with the number of
-phones listening (and a bar showing the sound going out), the address to type
-instead, and an optional password. Behind it, out of focus, is the room the
-speaker emulation lives in. A new plugin starts here; what you last used is
-saved with the project (a project saved by an earlier version, which had no
-modes, opens in the emulation it was using).
+The window is a desk at night: walnut under a lamp, drawn in 3D, with a pair
+of studio monitors on the far side. Along it stand, in a row, a tablet on an
+aluminium stand and then the speakers. The picture is the control surface.
 
-**SPEAKER EMULATION** switches to the room — phones stop until you come back,
-and reconnect by themselves when you do. The room is a desk at night: the
-speakers stand in a row on walnut under a lamp, drawn in 3D, with a pair of
-studio monitors on the far side. The picture is the control surface.
+It opens at the first place on the desk, the tablet: its screen shows the code
+to scan, large and sharp, and the number of phones listening. Under the desk
+go the address to type instead, a bar showing the sound going out, and an
+optional password. (For now the window is in English only.) Stopping at the stand puts the
+plugin on the air; moving on to a speaker takes it off (phones stop, and
+reconnect by themselves when you come back). A new plugin starts on the air;
+what you last used is saved with the project (a project saved by an earlier
+version, which had no modes, opens in the emulation it was using).
 
 - **Speaker model** — drag sideways along the desk (or press a model key
-  under the room, or ← →). The camera slides to the next speaker and the
+  under the room, or ← →; from the stand, → goes to the first speaker and
+  back from it ← to the stand). The camera slides to the next speaker and the
   sound goes with it: while you move, the two speakers either side of the
   camera are blended by where it is, so you hear one turn into the next;
   when it settles you hear that model alone (exactly as if picked from the
-  host's Model parameter, which follows too). Each one is modelled from the
-  real thing: frame and edge with its antenna lines, glass with the lamp in
-  it, buttons, speaker holes, each model's own cameras on the back and its
-  front camera in the notch, island or punch-hole; the laptop's backlit
-  keyboard, grilles, trackpad, ports and webcam; today's open-fit earbuds
-  (contoured head, short stem, speaker mesh, vent, sensor and steel tip,
-  each head and stem one smooth piece) with their case open beside them.
+  host's Model parameter, which follows too). Each one is a real model
+  (see Third-party code) on photographed wood, its screen in the colour of its
+  body.
   Its screen shows the band it can play, lit by the output's spectrum.
 - **Mix** — drag up or down (or the Focus slider, or ↑ ↓): the focus pulls from the
   speaker to the studio monitors behind it, and the lamp follows. All the way
   to the monitors is the dry signal; their woofers move with it.
 - **Output**, **MONO** (the sound rings from the speaker's two ends draw
   together into one) and **BYPASS** (focus and light move to the monitors).
-- **LISTEN ON PHONE** — back on the air (the phone on the desk shows the code
-  too).
+- **LISTEN ON PHONE** — the stand's key: back on the air.
 
 Drag the window's corner to resize; the size is saved with the project.
-Everything the page needs (three.js, the Barlow fonts) is built into the
+Everything the page needs (three.js, the Barlow fonts, the models) is built into the
 plugin, so it works offline. It is drawn by the system's web view: WebView2
 on Windows (part of Windows 10 and 11), WebKit on macOS and Linux. Without a
 web view (an old Windows without the WebView2 Runtime) the window says what
@@ -131,12 +129,12 @@ to install; the sound works either way.
 
 - **Keys belong to the host.** After you use the mouse in the room, keyboard
   focus goes back to the plugin window, so the space bar starts and stops
-  your DAW as usual; only the arrow keys are the room's, and on the air not
-  even those. Typing in the password field keeps the keys there.
+  your DAW as usual; only the arrow keys are the room's (on the air, just
+  → to move on). Typing in the password field keeps the keys there.
 - **It costs nothing while idle.** The room is drawn only while something
   moves, sound plays or a setting changes. On a slow graphics card it draws
-  at a lower resolution (and smaller shadows) to stay fluid, and goes back up
-  when it can.
+  at a lower resolution (and smaller shadows) to stay fluid while it moves,
+  and at the full one when it's still.
 - **Keyboard and screen readers:** the room takes focus with Tab and answers
   the arrows; the model name is announced when it changes; with *reduce
   motion* set, the camera moves quickly and the sound rings are off.
@@ -152,8 +150,8 @@ node Tools/room-demo.mjs path/to/song.mp3
 ```
 
 then open the printed address on this computer, or on a phone on the same
-Wi-Fi. It opens on the room; LISTEN ON PHONE there only shows what the code
-screen looks like, marked as an example.
+Wi-Fi. It opens on a speaker; the stand there only shows what the code looks
+like, marked as an example.
 
 
 ## Speaker emulation
@@ -329,12 +327,14 @@ node Tests/browser/room_test.mjs
   browser demo: it loads with the bundled three.js and fonts, draws the
   room, plays a test song, a drag moves through the speakers and settles.
   As the plugin's editor, against a stand-in for JUCE's bridge: it opens on
-  the air with the code and no emulation controls, switches to the emulation
-  and back, offers Try again when the network refused, sends the
+  the air at the stand with the code and no emulation controls, → moves on
+  to the first speaker (off the air) and the stand's key goes back, offers
+  Try again when the network refused, sends the
   camera position while the user moves and ends the blend when it settles,
   hands keyboard focus back after mouse use, passes unused keys on to the
   host (space included) but keeps them while the password is typed. And the
-  layout at 720×480, 1000×660 and 1600×1000 with the Live card up.
+  stand at 720×480, 1000×660 and 1600×1000: the code at least 140 px on
+  screen, the password field in view.
 - **Editor self-test** — the stand-alone app with
   `PHONETESTO_EDITOR_SELFTEST=<folder>` opens its editor (on the air, with
   the code to scan), and the page reports what it shows (WebGL renderer, how much of the room the speaker
@@ -417,6 +417,12 @@ Tools/room-demo.mjs        Serves the editor's page as a browser demo (Web Audio
 - [three.js](https://threejs.org) r128 — MIT
   (`Resources/thirdparty/three-LICENSE.txt`); included in the repo and
   embedded in the plugin.
+- The models of the phones, tablet, laptop, earbuds and studio monitors are
+  adapted from works by HarlWise, atomle, kirigami318, akshatmittal, DatSketch, rrtyi, Polyman_3D, ivan-wsk, stephen1147648377
+  on Sketchfab — CC BY 4.0; the desk's wood and the studio reflections are
+  from [Poly Haven](https://polyhaven.com) — CC0. Each is credited in
+  `Resources/models/LICENSES.txt`; included in the repo and embedded in the
+  plugin.
 - [opus-decoder](https://github.com/eshaz/wasm-audio-decoders) 0.7.12 by
   Ethan Halsall — MIT, wrapping libopus (BSD)
   (`Resources/thirdparty/opus-decoder-LICENSE.txt`); included in the repo

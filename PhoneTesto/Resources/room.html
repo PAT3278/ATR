@@ -44,35 +44,25 @@
   .hint { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font: 500 12px var(--sans);
           color: var(--dim); letter-spacing: 0.04em; pointer-events: none; transition: opacity 0.6s; }
   .hint.gone { opacity: 0; }
-  body.live .hud .name, body.live .hud .spec { display: none; }
 
-  /* Live, the first screen: the code to scan, large and crisp, over the room out of focus */
-  .listen { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px 18px;
-            background: radial-gradient(ellipse at 50% 48%, rgba(13, 12, 11, 0.25), rgba(13, 12, 11, 0.7)); }
-  .listen-card { --qr: clamp(140px, min(46vh, 32vw), 300px); display: flex; align-items: center; gap: 28px; max-width: 760px;
-                 padding: 24px; border-radius: 10px; background: rgba(21, 19, 17, 0.88); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55); }
-  .listen canvas { width: var(--qr); height: var(--qr); flex: none; background: #fff; border-radius: 6px; image-rendering: pixelated; }
-  .listen-text { display: grid; gap: 10px; min-width: 0; max-width: 340px; }
-  .listen-text > * { min-width: 0; }
-  .onair { display: flex; align-items: center; gap: 8px; font: 700 12px var(--cond); letter-spacing: 0.2em; color: var(--air); }
-  .onair::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--air); box-shadow: 0 0 10px var(--air); }
-  .listen h1 { margin: 0; font: 600 clamp(22px, 3vw, 30px)/1.1 var(--cond); letter-spacing: 0.01em; text-wrap: balance; }
-  .listen p { margin: 0; font: 500 14px/1.45 var(--sans); color: var(--dim); }
-  .listen .count { font: 600 15px var(--sans); }
-  .listen .send { height: 4px; border-radius: 2px; background: rgba(238, 231, 220, 0.08); overflow: hidden; }
-  .listen .send i { display: block; height: 100%; width: 0; background: var(--lamp); }
-  .listen .url { font: 500 12px/1.35 var(--sans); color: var(--dim); word-break: break-all; user-select: text; -webkit-user-select: text; }
-  .listen label { display: grid; gap: 5px; font: 600 11px var(--cond); letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
-  .listen input { width: 100%; min-width: 0; font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line);
-                  border-radius: 4px; padding: 7px 9px; user-select: text; -webkit-user-select: text; }
-  .listen input::placeholder { color: var(--dim); opacity: 0.55; font-weight: 500; }
-  .listen .err { font: 500 13px/1.4 var(--sans); color: var(--air); }
-  .listen .note { font: 500 12px/1.4 var(--sans); color: var(--dim); opacity: 0.8; }
-  .retry { justify-self: start; appearance: none; border: 1px solid var(--air); border-radius: 999px; padding: 8px 14px; background: transparent;
+  /* Listening on the phone is the first place on the desk: a tablet on a stand, with the code to scan.
+     Under it, in the strip, what goes with it: who's listening, the address, the password. */
+  .airinfo { display: grid; gap: 5px; flex: 1 1 220px; min-width: 0; }
+  .airinfo .count { display: flex; align-items: center; gap: 10px; min-width: 0; font: 600 14px var(--sans); }
+  .onair { display: flex; align-items: center; gap: 7px; flex: none; font: 700 12px var(--cond); letter-spacing: 0.2em; color: var(--air); }
+  .onair::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--air); box-shadow: 0 0 10px var(--air); }
+  .airinfo .send { height: 3px; border-radius: 2px; background: rgba(238, 231, 220, 0.08); overflow: hidden; }
+  .airinfo .send i { display: block; height: 100%; width: 0; background: var(--lamp); }
+  .airinfo .url { font: 500 12px/1.35 var(--sans); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; -webkit-user-select: text; }
+  .pwctl { flex: 0 1 190px; }
+  .pwctl input { width: 100%; min-width: 0; font: 600 14px var(--sans); color: var(--ink); background: rgba(238,231,220,0.06); border: 1px solid var(--line);
+                 border-radius: 4px; padding: 6px 9px; user-select: text; -webkit-user-select: text; }
+  .pwctl input::placeholder { color: var(--dim); opacity: 0.55; font-weight: 500; }
+  .err { flex: 1 1 200px; font: 500 13px/1.4 var(--sans); color: var(--air); }
+  .retry { appearance: none; border: 1px solid var(--air); border-radius: 999px; padding: 8px 14px; background: transparent; flex: none;
            color: var(--air); font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; }
-  @media (max-width: 640px) { .listen-card { flex-direction: column; text-align: center; gap: 16px; padding: 18px; } .listen-text { justify-items: center; } .listen label { width: 100%; } }
-  @media (max-height: 560px) { .listen-card { padding: 16px; gap: 20px; } .listen p { font-size: 13px; } .listen .note { display: none; } }
-  @media (max-height: 470px) { .listen .url { display: none; } }
+  .chip.air-chip { display: flex; align-items: center; gap: 7px; }
+  .chip.air-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--air); box-shadow: 0 0 6px var(--air); }
 
   .strip { background: var(--strip); border-top: 1px solid var(--line); display: grid; gap: 12px; padding: 12px 18px 14px; }
   .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -81,12 +71,6 @@
           font: 600 13px var(--cond); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: background 0.3s, color 0.3s; }
   .chip[aria-pressed="true"] { background: var(--ink); color: var(--room); }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
-  .air { appearance: none; border: 1px solid var(--air); height: 40px; border-radius: 999px; padding: 0 18px 0 14px; background: transparent; color: var(--ink);
-         font: 700 13px var(--cond); letter-spacing: 0.16em; cursor: pointer; display: flex; align-items: center; gap: 9px; flex: none; }
-  .air::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--air); box-shadow: 0 0 8px var(--air); }
-  .emu { appearance: none; border: 1px solid var(--line); height: 40px; border-radius: 999px; padding: 0 16px; background: transparent; color: var(--dim);
-         font: 600 12px var(--cond); letter-spacing: 0.12em; cursor: pointer; flex: none; }
-  .emu b { color: var(--ink); font-weight: 600; margin-left: 6px; }
   /* one mode at a time: on the air the emulation's controls aren't shown */
   body.live .emu-only { display: none !important; }
   body:not(.live) .live-only { display: none !important; }
@@ -121,56 +105,56 @@
     <canvas id="fx"></canvas>
     <div class="vignette"></div>
     <div class="hud"><div><div class="brand">PHONETESTO</div><div class="name" id="name" aria-live="polite">Phone 15/16 Pro</div></div><div class="spec" id="spec"></div></div>
-    <div class="hint emu-only" id="hint">Drag sideways to change speakers &#xb7; Drag up or down to pull focus</div>
-    <div class="listen" id="listen" role="region" aria-labelledby="listenTitle" hidden>
-      <div class="listen-card">
-        <canvas id="qr" width="600" height="600" role="img" aria-label="QR code: open it with your phone's camera to listen"></canvas>
-        <div class="listen-text">
-          <div class="onair" id="onair">ON AIR</div>
-          <h1 id="listenTitle">Listen on your phone</h1>
-          <p id="listenHow">Scan the code with your phone's camera. The phone needs the same Wi-Fi as this computer.</p>
-          <div class="count" id="liveCount" aria-live="polite"></div>
-          <div class="send" aria-hidden="true"><i id="sendLevel"></i></div>
-          <div class="url" id="liveUrl"></div>
-          <label for="pw"><span id="pwLabel">Password (optional)</span><input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false"></label>
-          <div class="err" id="liveErr" hidden></div>
-          <button class="retry" id="retry" type="button" hidden>Try again</button>
-          <div class="note" id="liveNote">Phones get the mix as it is: no speaker emulation while on air.</div>
-        </div>
-      </div>
-    </div>
+    <div class="hint" id="hint">Drag sideways to change speakers &#xb7; Drag up or down to pull focus</div>
   </div>
   <div class="strip">
-    <div class="chips emu-only" id="chips" role="group" aria-label="Speaker model"></div>
+    <div class="chips" id="chips" role="group" aria-label="Listen on your phone, or a speaker model"></div>
     <div class="row">
+      <div class="airinfo live-only" id="airinfo" role="region" aria-label="Listening on phones">
+        <div class="count"><span class="onair" id="onair">LIVE</span><span id="liveCount" aria-live="polite"></span></div>
+        <div class="send" aria-hidden="true"><i id="sendLevel"></i></div>
+        <div class="url" id="liveUrl"></div>
+      </div>
+      <label class="ctl pwctl live-only" for="pw"><span id="pwLabel">Password (optional)</span><input id="pw" type="text" maxlength="32" autocomplete="off" spellcheck="false"></label>
+      <div class="err live-only" id="liveErr" hidden></div>
+      <button class="retry live-only" id="retry" type="button" hidden>Try again</button>
       <div class="demo emu-only" id="demo" hidden>
         <button class="play" id="play" type="button" aria-label="Play" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M3 1.5v13l11-6.5z"/></svg></button>
         <div class="song"><b id="songName">song.mp3</b><input id="file" type="file" accept="audio/*"><label for="file" id="pick">Choose a song</label></div>
       </div>
-      <button class="air emu-only" id="toLive" type="button">LISTEN ON PHONE</button>
       <label class="ctl emu-only" for="mix"><span>Focus <output id="mixOut">Phone 100%</output></span><input id="mix" type="range" min="0" max="100" step="0.5" value="100"></label>
       <label class="ctl" for="vol"><span>Output <output id="volOut">100%</output></span><input id="vol" type="range" min="0" max="100" step="0.5" value="100"></label>
       <button class="tog emu-only" id="mono" type="button" aria-pressed="false">MONO</button>
       <button class="tog emu-only" id="bypass" type="button" aria-pressed="false">BYPASS</button>
-      <button class="emu live-only" id="toEmulate" type="button">SPEAKER EMULATION<b id="emuState">OFF</b></button>
     </div>
   </div>
 </div>
 
 <script>
 (() => {
-  const ja = /^ja/i.test(navigator.language || "");
+  // English first: the Japanese texts are kept here, off, until they're redone for the new design
+  const JAPANESE = false;
+  const ja = JAPANESE && /^ja/i.test(navigator.language || "");
   if (ja) document.documentElement.lang = "ja";
   if (ja) {
     const t = (id, text) => { document.getElementById(id).textContent = text; };
-    t("listenTitle", "\u30b9\u30de\u30db\u3067\u8074\u304f");
-    t("listenHow", "\u30b9\u30de\u30db\u306e\u30ab\u30e1\u30e9\u3067\u8aad\u307f\u53d6\u3063\u3066\u304f\u3060\u3055\u3044\u3002\u3053\u306ePC\u3068\u540c\u3058Wi-Fi\u306b\u3064\u306a\u3044\u3067\u304a\u304d\u307e\u3059\u3002");
     t("pwLabel", "\u30d1\u30b9\u30ef\u30fc\u30c9\uff08\u4efb\u610f\uff09");
     t("retry", "\u3082\u3046\u4e00\u5ea6");
-    t("liveNote", "\u30b9\u30de\u30db\u306b\u306f\u30df\u30c3\u30af\u30b9\u304c\u305d\u306e\u307e\u307e\u5c4a\u304d\u307e\u3059\u3002\u30aa\u30f3\u30a8\u30a2\u4e2d\u306f\u30a8\u30df\u30e5\u30ec\u30fc\u30c8\u3057\u307e\u305b\u3093\u3002");
-    t("toLive", "\u30b9\u30de\u30db\u3067\u8074\u304f");
-    document.getElementById("toEmulate").firstChild.textContent = "\u30b9\u30d4\u30fc\u30ab\u30fc\u3092\u30a8\u30df\u30e5\u30ec\u30fc\u30c8";
   }
+  // what the stand with the code says
+  const AIRTXT = ja ? {
+    title: "\u30b9\u30de\u30db\u3067\u8074\u304f",
+    how: "\u30b9\u30de\u30db\u306e\u30ab\u30e1\u30e9\u3067\u8aad\u307f\u53d6\u3063\u3066\u304f\u3060\u3055\u3044\u3002\u3053\u306ePC\u3068\u540c\u3058Wi-Fi\u306b\u3064\u306a\u3044\u3067\u304a\u304d\u307e\u3059\u3002",
+    note: "\u30b9\u30de\u30db\u306b\u306f\u30df\u30c3\u30af\u30b9\u304c\u305d\u306e\u307e\u307e\u5c4a\u304d\u307e\u3059\u3002\u30aa\u30f3\u30a8\u30a2\u4e2d\u306f\u30a8\u30df\u30e5\u30ec\u30fc\u30c8\u3057\u307e\u305b\u3093\u3002",
+    err: "\u3053\u306ePC\u3067\u53d7\u4fe1\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30d5\u30a1\u30a4\u30a2\u30a6\u30a9\u30fc\u30eb\u306e\u8a2d\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    off: "\u3053\u3053\u3067\u6b62\u307e\u308b\u3068\u3001\u30b9\u30de\u30db\u306b\u5c4a\u304d\u307e\u3059"
+  } : {
+    title: "Listen on your phone",
+    how: "Scan the code with your phone's camera. The phone needs the same Wi-Fi as this computer.",
+    note: "Phones get the mix as it is: no speaker emulation while on air.",
+    err: "Couldn't start listening on this computer. Check the firewall settings.",
+    off: "Stop here to send the mix to your phone"
+  };
   if (ja) document.getElementById("hint").textContent = "\u6a2a\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u6a5f\u7a2e\u3092\u5207\u308a\u66ff\u3048\u30fb\u4e0a\u4e0b\u306b\u30c9\u30e9\u30c3\u30b0\u3067\u30d4\u30f3\u30c8";
 
   // ---- the plugin: parameters and meters come in as "state", controls go out as "ui" ----
@@ -338,31 +322,45 @@
     const pm = new T3.PMREMGenerator(renderer), tex = pm.fromScene(s, 0.035).texture; pm.dispose(); return tex;
   }
   if (rBack.isWebGLRenderer) { back.environment = envFor(rBack); front.environment = envFor(rDev); }
-
-  // walnut desk
-  function walnut() {
-    const c = document.createElement("canvas"); c.width = 1024; c.height = 512; const g = c.getContext("2d");
-    const base = g.createLinearGradient(0, 0, 0, 512); base.addColorStop(0, "#3a2619"); base.addColorStop(0.5, "#45301f"); base.addColorStop(1, "#33231a");
-    g.fillStyle = base; g.fillRect(0, 0, 1024, 512);
-    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 260; i++) {
-      const y = rnd() * 512, a = 0.04 + rnd() * 0.12, amp = 2 + rnd() * 9, fq = 0.004 + rnd() * 0.01, ph = rnd() * 6;
-      g.strokeStyle = rnd() < 0.7 ? `rgba(20,10,4,${a})` : `rgba(120,80,50,${a * 0.6})`; g.lineWidth = 0.6 + rnd() * 2.2;
-      g.beginPath(); for (let x = 0; x <= 1024; x += 16) { const yy = y + Math.sin(x * fq + ph) * amp + Math.sin(x * fq * 3.1 + ph) * amp * 0.3; x ? g.lineTo(x, yy) : g.moveTo(x, yy); } g.stroke();
+  // files still on their way (the self-test waits for them)
+  let loading = 0;
+  const arrive = p => { loading++; return p.then(v => { loading--; wake(); return v; }, e => { loading--; throw e; }); };
+  // reflections: a photographed photo studio (studio_small_05, Poly Haven, CC0), once it's here; the drawn one above until then
+  function radiance(buf) {
+    const b = new Uint8Array(buf); let at = 0; const line = () => { let t = ""; while (b[at] !== 10) t += String.fromCharCode(b[at++]); at++; return t; };
+    while (line() !== ""); const m = /-Y (\d+) \+X (\d+)/.exec(line()), h = +m[1], w = +m[2], out = new Float32Array(w * h * 3), row = new Uint8Array(w * 4);
+    for (let y = 0; y < h; y++) {
+      if (b[at] === 2 && b[at + 1] === 2) { at += 4; for (let c = 0; c < 4; c++) for (let x = 0; x < w;) { let n = b[at++]; if (n > 128) { n -= 128; const v = b[at++]; while (n--) row[c * w + x++] = v; } else while (n--) row[c * w + x++] = b[at++]; } }
+      else for (let x = 0; x < w; x++) for (let c = 0; c < 4; c++) row[c * w + x] = b[at++];
+      for (let x = 0; x < w; x++) { const e = row[3 * w + x], k = e ? Math.pow(2, e - 136) : 0, o = ((h - 1 - y) * w + x) * 3; for (let c = 0; c < 3; c++) out[o + c] = row[c * w + x] * k; }
     }
-    const t = new T3.CanvasTexture(c); t.encoding = T3.sRGBEncoding; t.wrapS = t.wrapT = T3.RepeatWrapping; t.anisotropy = 8; return t;
+    const t = new T3.DataTexture(out, w, h, T3.RGBFormat, T3.FloatType); t.encoding = T3.LinearEncoding; t.mapping = T3.EquirectangularReflectionMapping; t.minFilter = t.magFilter = T3.LinearFilter; t.needsUpdate = true; return t;
   }
-  const deskMap = walnut(); deskMap.repeat.set(4, 2);
-  const deskMat = new T3.MeshStandardMaterial({ map: deskMap, roughness: 0.55, metalness: 0, envMapIntensity: 0.12 });
+  const bytes = async url => { const r = await fetch(url); if (!r.ok) throw new Error(url + ": " + r.status); return r.arrayBuffer(); };
+
+  if (rBack.isWebGLRenderer) arrive(bytes("studio.hdr")).then(buf => {
+    const t = radiance(buf);
+    for (const [r, sc] of [[rBack, back], [rDev, front]]) { const pm = new T3.PMREMGenerator(r); sc.environment = pm.fromEquirectangular(t).texture; pm.dispose(); }
+    wake();
+  });
+
+  // the desk: photographed wood (wood_table_worn, Poly Haven, CC0), fixed to the world so it stays put as the camera slides over it
+  const TILE = 0.55, WOOD = {};
+  for (const [k, file] of [["map", "desk-colour.jpg"], ["normalMap", "desk-normal.jpg"], ["roughnessMap", "desk-rough.jpg"]]) {
+    const t = new T3.Texture(); t.wrapS = t.wrapT = T3.RepeatWrapping; t.anisotropy = 8; if (k === "map") t.encoding = T3.sRGBEncoding; WOOD[k] = t;
+    arrive(bytes(file).then(b => createImageBitmap(new Blob([b], { type: "image/jpeg" }), { imageOrientation: "flipY" }))).then(img => { for (const u of [t, t.twin]) { u.image = img; u.flipY = false; u.needsUpdate = true; } });
+    t.twin = t.clone();
+  }
+  const deskMat = new T3.MeshStandardMaterial({ map: WOOD.map.twin, normalMap: WOOD.normalMap.twin, roughnessMap: WOOD.roughnessMap.twin, color: 0x8f8a84, roughness: 0.9, metalness: 0, envMapIntensity: 0.12 });
+  WOOD.map.twin.repeat.set(40 / TILE, 20 / TILE); WOOD.map.twin.offset.set(-20 / TILE, -10 / TILE);
   const deskBack = new T3.Mesh(new T3.PlaneGeometry(40, 20), deskMat); deskBack.rotation.x = -Math.PI / 2; deskBack.receiveShadow = true; back.add(deskBack);
   const wall = new T3.Mesh(new T3.PlaneGeometry(40, 10), new T3.MeshStandardMaterial({ color: 0x1a1714, roughness: 0.95 }));
   back.add(wall);
-  // the front desk fades out toward the back, where the studio layer takes over
-  const fade = (() => { const c = document.createElement("canvas"); c.width = 4; c.height = 256; const g = c.getContext("2d");
-    const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, "#000"); gr.addColorStop(0.45, "#fff"); gr.addColorStop(1, "#fff");
-    g.fillStyle = gr; g.fillRect(0, 0, 4, 256); return new T3.CanvasTexture(c); })();
-  const deskFrontMat = deskMat.clone(); deskFrontMat.alphaMap = fade; deskFrontMat.transparent = true; deskFrontMat.depthWrite = true;
-  const deskFront = new T3.Mesh(new T3.PlaneGeometry(1, 1), deskFrontMat); deskFront.rotation.x = -Math.PI / 2; deskFront.receiveShadow = true; front.add(deskFront);
+  // the front desk fades out behind the devices, where the studio layer's takes over
+  const deskFrontMat = new T3.MeshStandardMaterial({ map: WOOD.map, normalMap: WOOD.normalMap, roughnessMap: WOOD.roughnessMap, color: 0x8f8a84, roughness: 0.9, metalness: 0, envMapIntensity: 0.12, vertexColors: true, transparent: true });
+  const deskG = new T3.PlaneGeometry(1, 1, 1, 12); { const c = new Float32Array(deskG.attributes.position.count * 4);
+    for (let q = 0; q < c.length / 4; q++) { const v = deskG.attributes.position.getY(q) + 0.5; c.set([1, 1, 1, Math.max(0, Math.min(1, (0.97 - v) / 0.3))], q * 4); } deskG.setAttribute("color", new T3.BufferAttribute(c, 4)); }
+  const deskFront = new T3.Mesh(deskG, deskFrontMat); deskFront.rotation.x = -Math.PI / 2; deskFront.receiveShadow = true; deskFront.renderOrder = -1; front.add(deskFront);
 
   // lights: the desk lamp follows the view; a cool rim from behind gives the edges a line of light
   const lamp = new T3.SpotLight(0xffcf98, 3, 0, 0.36, 0.75, 1.2);
@@ -398,7 +396,7 @@
     alu: c => new T3.MeshStandardMaterial({ color: c, metalness: 0.85, roughness: 0.28, envMapIntensity: 1.0 }),
     plastic: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.4 }),
     gloss: c => new T3.MeshPhysicalMaterial({ color: c, metalness: 0, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 }),
-    dark: new T3.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }),
+    dark: new T3.MeshLambertMaterial({ color: 0x050506 }),
     lens: new T3.MeshPhysicalMaterial({ color: 0x04060a, roughness: 0.05, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.02, envMapIntensity: 1.4 }),
     flash: new T3.MeshStandardMaterial({ color: 0xe8dfc8, roughness: 0.35, emissive: 0x2a2418 }),
     hole: new T3.MeshBasicMaterial({ color: 0x020202 })
@@ -416,391 +414,255 @@
 
   // ---- the speakers ----
   const P = [
-    { name: "Phone SE",        hp: 700, pk: 3500, q: 1.8, g: 4.5, lp: 9000,  drive: 11.7, mk: 2.25, kind: "phone", w: 0.1384, h: 0.0673, d: 0.0073, r: 0.0095, edge: 0.0022, body: "alu",      frame: 0xd9d7d2, style: "se" },
-    { name: "Phone 11",        hp: 500, pk: 3000, q: 1.6, g: 3.5, lp: 11000, drive: 8.1,  mk: 1.71, kind: "phone", w: 0.1509, h: 0.0757, d: 0.0083, r: 0.0118, edge: 0.0012, body: "alu",      frame: 0xb7aec9, style: "notch" },
-    { name: "Phone 13/14",     hp: 400, pk: 2800, q: 1.5, g: 2.5, lp: 12000, drive: 5.4,  mk: 1.64, kind: "phone", w: 0.1467, h: 0.0715, d: 0.0078, r: 0.0108, edge: 0.0008, body: "alu",      frame: 0x2c3240, style: "notch" },
-    { name: "Phone 15/16 Pro", hp: 300, pk: 2500, q: 1.4, g: 2.0, lp: 13000, drive: 3.6,  mk: 1.45, kind: "phone", w: 0.1476, h: 0.0716, d: 0.0083, r: 0.0118, edge: 0.0010, body: "titanium", frame: 0xb8ad9c, style: "island" },
-    { name: "Android Budget",  hp: 850, pk: 3800, q: 2.0, g: 5.5, lp: 8000,  drive: 14.4, mk: 2.69, kind: "phone", w: 0.1645, h: 0.0763, d: 0.0091, r: 0.0085, edge: 0.0030, body: "plastic",  frame: 0x3a3b3d, style: "chin" },
-    { name: "Android",         hp: 450, pk: 3300, q: 1.6, g: 3.2, lp: 11500, drive: 6.84, mk: 1.6,  kind: "phone", w: 0.1620, h: 0.0748, d: 0.0082, r: 0.0100, edge: 0.0016, body: "alu",      frame: 0x3d4a42, style: "punch" },
+    { name: "Phone SE",        hp: 700, pk: 3500, q: 1.8, g: 4.5, lp: 9000,  drive: 11.7, mk: 2.25, kind: "phone", file: "se", hb: 0.0346, zs: 1.22, scr: [-0.05284, -0.0315, 0.05256, 0.03155, 0.0005], front: 0.00287, bare: true, w: 0.1384, h: 0.0673, d: 0.0073, r: 0.0095, edge: 0.0022, body: "alu",      frame: 0xd9d7d2, style: "se" },
+    { name: "Phone 11",        hp: 500, pk: 3000, q: 1.6, g: 3.5, lp: 11000, drive: 8.1,  mk: 1.71, kind: "phone", file: "11", hb: 0.0382, scr: [-0.0736, -0.036, 0.0736, 0.036, 0.0098], front: 0.00482, w: 0.1509, h: 0.0757, d: 0.0083, r: 0.0118, edge: 0.0012, body: "alu",      frame: 0xb7aec9, style: "notch" },
+    { name: "Phone 13/14",     hp: 400, pk: 2800, q: 1.5, g: 2.5, lp: 12000, drive: 5.4,  mk: 1.64, kind: "phone", file: "13", hb: 0.0358, scr: [-0.0724, -0.0349, 0.0724, 0.0349, 0.0094], front: 0.00455, w: 0.1467, h: 0.0715, d: 0.0078, r: 0.0108, edge: 0.0008, body: "alu",      frame: 0x2c3240, style: "notch" },
+    { name: "Phone 15/16 Pro", hp: 300, pk: 2500, q: 1.4, g: 2.0, lp: 13000, drive: 3.6,  mk: 1.45, kind: "phone", file: "pro", hb: 0.0359, scr: [-0.0723, -0.0344, 0.0723, 0.0344, 0.0094], front: 0.00595, w: 0.1466, h: 0.0706, d: 0.0083, r: 0.0118, edge: 0.0010, body: "titanium", frame: 0xb8ad9c, style: "island" },
+    { name: "Android Budget",  hp: 850, pk: 3800, q: 2.0, g: 5.5, lp: 8000,  drive: 14.4, mk: 2.69, kind: "phone", file: "budget", hb: 0.0377, scr: [-0.0814, -0.0373, 0.0814, 0.0373, 0.0085], front: 0.00497, w: 0.1645, h: 0.0763, d: 0.0091, r: 0.0085, edge: 0.0030, body: "plastic",  frame: 0x3a3b3d, style: "chin" },
+    { name: "Android",         hp: 450, pk: 3300, q: 1.6, g: 3.2, lp: 11500, drive: 6.84, mk: 1.6,  kind: "phone", file: "android", hb: 0.0368, scr: [-0.0783, -0.0342, 0.0783, 0.0342, 0.0035], front: 0.00522, w: 0.1620, h: 0.0748, d: 0.0082, r: 0.0100, edge: 0.0016, body: "alu",      frame: 0x3d4a42, style: "punch" },
     { name: "Laptop Speakers", hp: 200, pk: 2000, q: 1.2, g: 1.5, lp: 14000, drive: 2.7,  mk: 1.24, kind: "laptop", w: 0.304, frame: 0x7e8187 },
-    { name: "Earbuds",         hp: 150, pk: 4500, q: 1.3, g: 3.0, lp: 16500, drive: 1.8,  mk: 0.31, kind: "buds", w: 0.092, frame: 0xf3f3ef }
+    { name: "Earbuds",         hp: 150, pk: 4500, q: 1.3, g: 3.0, lp: 16500, drive: 1.8,  mk: 0.31, kind: "buds", w: 0.07, frame: 0xf3f3ef }
   ];
   const short = ["SE", "11", "13/14", "15/16 Pro", "Android Lo", "Android", "Laptop", "Earbuds"];
   const fmtHz = v => v >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + " kHz" : v + " Hz";
   const xs = []; P.forEach((p, i) => xs.push(i ? xs[i - 1] + (P[i - 1].w + p.w) / 2 + 0.2 : 0));
-  const aimOf = i => P[i].kind === "laptop" ? 0.085 : P[i].kind === "buds" ? 0.02 : 0.038;
-  const pitchOf = i => P[i].kind === "buds" ? 0.36 : P[i].kind === "laptop" ? 0.2 : 0.13;
+  // Before the speakers, the first place on the desk (-1): listening on your own phone, the plugin's main job.
+  // A tablet on a stand shows the code to scan; stopping there puts the plugin on the air.
+  const AIR = { name: ja ? "\u30b9\u30de\u30db\u3067\u8074\u304f" : "Listen on phone", kind: "air", w: 0.222 };
+  const at = s => s < 0 ? AIR : P[s];
+  const LO = -1, HI = P.length - 1;
+  const X = s => s < 0 ? xs[0] - (AIR.w + P[0].w) / 2 - 0.2 : xs[s];
+  const aimOf = i => at(i).kind === "air" ? 0.074 : at(i).kind === "laptop" ? 0.085 : at(i).kind === "buds" ? 0.006 : 0.038;
+  const pitchOf = i => at(i).kind === "air" ? 0.07 : at(i).kind === "buds" ? 0.6 : at(i).kind === "laptop" ? 0.2 : 0.13;
+
+  // ---- the models (Resources/models: CC BY, see LICENSES.txt there) ----
+  // reads a .glb: its parts as { name, geo }, positions in metres
+  async function loadGlb(url) {
+    const buf = await bytes(url), n = new DataView(buf).getUint32(12, true), j = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, n))), bin = 28 + n;
+    const read = i => {
+      const a = j.accessors[i], v = j.bufferViews[a.bufferView], k = { SCALAR: 1, VEC3: 3, VEC4: 4 }[a.type], at = bin + (v.byteOffset || 0) + (a.byteOffset || 0);
+      const [A, max] = { 5120: [Int8Array, 127], 5121: [Uint8Array, 255], 5123: [Uint16Array, 65535], 5125: [Uint32Array, 1], 5126: [Float32Array, 1] }[a.componentType];
+      const step = v.byteStride ? v.byteStride / A.BYTES_PER_ELEMENT : k, raw = new A(buf.slice(at, at + v.byteLength - (a.byteOffset || 0)));
+      if (k === 1) return new T3.BufferAttribute(raw.subarray(0, a.count), 1);
+      const f = new Float32Array(a.count * k); for (let q = 0; q < a.count; q++) for (let c = 0; c < k; c++) f[q * k + c] = a.normalized ? raw[q * step + c] / max : raw[q * step + c];
+      return new T3.BufferAttribute(f, k);
+    };
+    return j.nodes.flatMap(nd => j.meshes[nd.mesh].primitives.map(p => {
+      const geo = new T3.BufferGeometry(); geo.setAttribute("position", read(p.attributes.POSITION)); geo.setAttribute("normal", read(p.attributes.NORMAL)); geo.setIndex(read(p.indices));
+      if (p.attributes.COLOR_0 !== undefined) geo.setAttribute("color", read(p.attributes.COLOR_0));
+      if (nd.scale) geo.scale(...nd.scale); if (nd.translation) geo.translate(...nd.translation);
+      return { name: nd.name, geo }; }));
+  }
+  // adds a model's parts to `to`, each in the material its kind calls for; ready when it's in
+  const model = (file, to, kinds, fit) => arrive(loadGlb(file + ".glb")).then(parts => {
+    const g = new T3.Group();
+    for (const p of parts) { const m = new T3.Mesh(p.geo, kinds[p.name] || mat.dark); m.name = p.name; m.castShadow = m.receiveShadow = true; g.add(m); }
+    if (fit) fit(g); dimEnv(g); to.add(g); wake(); return g;
+  });
+  const dimmed = new Set(), dimEnv = o => o.traverse(m => { if (m.isMesh && m.material && m.material.envMapIntensity !== undefined && !dimmed.has(m.material)) { dimmed.add(m.material); m.material.envMapIntensity *= 0.6; } });
 
   function buildPhone(p) {
     const root = new T3.Group(), lean = new T3.Group(); root.add(lean);
-    const tilt = 0.2, y0 = p.h / 2 * Math.cos(tilt) + 0.003;
-    lean.position.set(0, y0, 0.006); lean.rotation.x = -tilt;
-    const body = new T3.Mesh(slab(p.w, p.h, p.d, p.r, p.edge), (mat[p.body])(p.frame)); lean.add(body);
-    // back glass, a shade off the frame colour
-    const backGlass = new T3.Mesh(plate(p.w - p.edge * 1.6, p.h - p.edge * 1.6, p.r - p.edge * 0.8), mat.gloss(new T3.Color(p.frame).multiplyScalar(0.75)));
-    backGlass.position.z = -p.d / 2 - 0.00005; backGlass.rotation.y = Math.PI; lean.add(backGlass);
-    // the cameras on the back, at the top (+x) end, each model laid out its own way
-    const zb = -p.d / 2 - 0.0001, top = p.w / 2, side = p.h / 2;
-    const ringM = p.body === "plastic" ? mat.plastic(0x1e1f21) : (mat[p.body])(new T3.Color(p.frame).multiplyScalar(0.8));
-    const bump = (cx, cy, bw, bh, r, t, m) => { const b = new T3.Mesh(slab(bw, bh, t, r, Math.min(t * 0.45, 0.0006)), m || mat.gloss(new T3.Color(p.frame).multiplyScalar(0.9))); b.position.set(cx, cy, zb - t / 2); lean.add(b); return zb - t; };
-    const lens = (cx, cy, r, z0) => {
-      const ringG = new T3.CylinderGeometry(r * 1.22, r * 1.3, 0.0014, 28); ringG.rotateX(Math.PI / 2);
-      const rg = new T3.Mesh(ringG, ringM); rg.position.set(cx, cy, z0 - 0.0007); lean.add(rg);
-      const gl = new T3.Mesh(new T3.CircleGeometry(r, 28), mat.lens); gl.rotation.y = Math.PI; gl.position.set(cx, cy, z0 - 0.00142); lean.add(gl);
-    };
-    const flash = (cx, cy, z0, r) => { const f = new T3.Mesh(new T3.CircleGeometry(r || 0.0017, 16), mat.flash); f.rotation.y = Math.PI; f.position.set(cx, cy, z0 - 0.00005); lean.add(f); };
-    if (p.style === "se") { lens(top - 0.0095, side - 0.0095, 0.0032, zb); flash(top - 0.0095, side - 0.019, zb); }
-    else if (p.style === "notch") {
-      const s = 0.031, cx = top - 0.0045 - s / 2, cy = side - 0.0045 - s / 2, z0 = bump(cx, cy, s, s, 0.0075, 0.0011);
-      if (/11/.test(p.name)) { lens(cx + 0.0072, cy + 0.0072, 0.0052, z0); lens(cx - 0.0072, cy + 0.0072, 0.0052, z0); flash(cx + 0.0072, cy - 0.0078, z0); }
-      else { lens(cx + 0.0072, cy + 0.0072, 0.0052, z0); lens(cx - 0.0072, cy - 0.0072, 0.0052, z0); flash(cx + 0.0075, cy - 0.0075, z0); }
-    } else if (p.style === "island") {
-      const s = 0.036, cx = top - 0.004 - s / 2, cy = side - 0.004 - s / 2, z0 = bump(cx, cy, s, s, 0.0085, 0.0014);
-      lens(cx + 0.0083, cy + 0.0083, 0.0062, z0); lens(cx - 0.0083, cy + 0.0083, 0.0062, z0); lens(cx, cy - 0.0083, 0.0062, z0); flash(cx + 0.0085, cy - 0.0088, z0, 0.0019);
-    } else if (p.style === "punch") {   // a bar across the back, as on some Android phones
-      const z0 = bump(top - 0.028, 0, 0.017, p.h - 0.006, 0.0075, 0.0022, mat.gloss(0x111214));
-      lens(top - 0.028, side - 0.016, 0.0048, z0); lens(top - 0.028, side - 0.031, 0.0048, z0); flash(top - 0.028, -side + 0.02, z0);
-    } else if (p.style === "chin") {   // a small raised strip with three little lenses
-      const cx = top - 0.021, cy = side - 0.012, z0 = bump(cx, cy, 0.03, 0.0115, 0.0055, 0.0012, mat.plastic(0x18191b));
-      lens(cx + 0.0085, cy, 0.0034, z0); lens(cx, cy, 0.0025, z0); lens(cx - 0.0075, cy, 0.0022, z0); flash(cx - 0.0125, cy, z0, 0.0013);
-    }
-    // the antenna lines across a metal frame, near each corner
-    if (p.body !== "plastic") {
-      const lineG = new T3.BoxGeometry(0.0008, 0.0003, p.d * 0.62), lineM = mat.plastic(new T3.Color(p.frame).multiplyScalar(p.body === "titanium" ? 0.7 : 0.82));
-      for (const sx of [-1, 1]) for (const sy of [-1, 1]) { const l = new T3.Mesh(lineG, lineM); l.position.set(sx * (p.w / 2 - 0.016), sy * (p.h / 2 + 0.00002), 0); lean.add(l); }
-    }
-    // front: glass carrying the picture
-    const scr = display(p.w - p.edge * 1.2, p.h - p.edge * 1.2, p.r - p.edge * 0.6, 1024);
-    scr.mesh.position.z = p.d / 2 + 0.00006; lean.add(scr.mesh);
-    // buttons on the top edge (volume) and the bottom edge (power), toward the camera end
-    const btn = (len, x, top) => { const b = new T3.Mesh(slab(len, 0.0022, 0.0025, 0.0009, 0.0008), (mat[p.body])(p.frame));
-      b.rotation.x = Math.PI / 2; b.position.set(x, top ? p.h / 2 + 0.0004 : -p.h / 2 - 0.0004, 0); lean.add(b); };
-    btn(0.0105, p.w / 2 - 0.042, true); btn(0.0105, p.w / 2 - 0.056, true); if (p.style === "island") btn(0.006, p.w / 2 - 0.028, true);
-    btn(0.016, p.w / 2 - 0.05, false);
-    // the bottom speaker's holes and the charging port on the left end
-    const holeG = new T3.CylinderGeometry(0.0006, 0.0006, 0.002, 10); holeG.rotateZ(Math.PI / 2);
-    for (const sy of [-1, 1]) for (let k = 0; k < (p.style === "se" ? 6 : 5); k++) {
-      const h = new T3.Mesh(holeG, mat.hole); h.position.set(-p.w / 2 + 0.0004, sy * (0.0085 + k * 0.0019), 0); lean.add(h); }
-    const port = new T3.Mesh(slab(0.002, 0.0085, 0.0028, 0.0012, 0.0006), mat.hole); port.rotation.y = Math.PI / 2; port.position.set(-p.w / 2 + 0.0004, 0, 0); lean.add(port);
+    const tilt = 0.2;
+    lean.position.set(0, p.hb * Math.cos(tilt) + 0.0035, 0.006); lean.rotation.x = -tilt;
+    const c = k => new T3.Color(p.frame).multiplyScalar(k), metal = p.body !== "plastic";
+    model(p.file, lean, {
+      frame: (mat[p.body])(p.frame), line: mat.plastic(c(0.72)), back: metal ? mat.gloss(c(0.75)) : mat.plastic(c(0.9)), bump: mat.gloss(c(0.85)),
+      glass: mat.gloss(0x050506), lens: mat.lens, flash: mat.flash, dark: mat.dark, steel: mat.alu(0x8e9094)
+    }, g => { if (p.zs) g.scale.z = p.zs; });
+    // the picture, on the model's own glass
+    const [x0, y0, x1, y1, r] = p.scr, scr = display(x1 - x0, y1 - y0, r, 1024);
+    scr.mesh.position.set((x0 + x1) / 2, (y0 + y1) / 2, p.front * (p.zs || 1) + 0.00012); lean.add(scr.mesh);
     // an acrylic stand behind
     const acrylic = new T3.MeshPhysicalMaterial({ color: 0xdfe8f0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.16, clearcoat: 1, envMapIntensity: 1.6, depthWrite: false });
     const st = new T3.Mesh(slab(0.07, 0.055, 0.004, 0.004, 0.0015), acrylic); st.position.set(0, 0.026, -0.02); st.rotation.x = -tilt - 0.12; root.add(st);
     const lip = new T3.Mesh(slab(0.07, 0.006, 0.012, 0.002, 0.001), acrylic); lip.rotation.x = Math.PI / 2; lip.position.set(0, 0.003, 0.012); root.add(lip);
     shadowed(root); st.castShadow = false; lip.castShadow = false;
-    const local = (x, y, z) => () => { const v = new T3.Vector3(x, y, z); return lean.localToWorld(v); };
+    const local = (x, y, z) => () => lean.localToWorld(new T3.Vector3(x, y, z));
     return { root, screen: scr, emit: [local(-p.w / 2, 0, 0), local(p.w / 2 - 0.004, 0, p.d / 2)] };
   }
 
   function buildLaptop(p) {
     const root = new T3.Group(), alu = mat.alu(p.frame);
-    const w = 0.304, dd = 0.215, t = 0.0155;
-    const base = new T3.Mesh(slab(w, dd, t, 0.012, 0.0035), alu); base.rotation.x = -Math.PI / 2; base.position.y = t / 2; root.add(base);
-    // keyboard: real keys in a slightly darker well
-    // (the well glows faintly between the keys: the backlight)
-    const well = new T3.Mesh(plate(0.272, 0.112, 0.006), new T3.MeshStandardMaterial({ color: 0x2e3034, metalness: 0.6, roughness: 0.5, emissive: 0xffb36b, emissiveIntensity: 0.07 }));
-    well.rotation.x = -Math.PI / 2; well.position.set(0, t + 0.00005, -dd / 2 + 0.071); root.add(well);
-    const keyG = slab(0.0155, 0.0155, 0.0012, 0.002, 0.0005); keyG.rotateX(-Math.PI / 2);
-    const keyM = new T3.MeshStandardMaterial({ color: 0x0d0d0f, roughness: 0.55, metalness: 0.1 });
-    const keys = []; const pitch = 0.0188;
-    for (let row = 0; row < 6; row++) {
-      const z = -dd / 2 + 0.024 + row * pitch * (row === 0 ? 0.6 : 1) + (row ? -pitch * 0.4 : 0);
-      if (row === 5) { for (const [x, wd] of [[-0.118, 1], [-0.099, 1], [-0.08, 1], [-0.058, 1.2], [0, 4.6], [0.058, 1.2], [0.08, 1], [0.104, 1], [0.123, 1]]) keys.push([x, z, wd, row]); continue; }
-      const n = 14; for (let k = 0; k < n; k++) keys.push([-0.122 + k * pitch, z, 1, row]);
-    }
-    const inst = new T3.InstancedMesh(keyG, keyM, keys.length); const m4 = new T3.Matrix4();
-    keys.forEach(([x, z, wd, row], i) => { m4.makeScale(wd, 1, row === 0 ? 0.6 : 1); m4.setPosition(x, t + 0.0006, z); inst.setMatrixAt(i, m4); });
-    root.add(inst);
-    // the trackpad: glass a shade off the aluminium, set in a hairline gap
-    const gap = new T3.Mesh(plate(0.1312, 0.0812, 0.0064), mat.hole); gap.rotation.x = -Math.PI / 2; gap.position.set(0, t + 0.00004, dd / 2 - 0.05); root.add(gap);
-    const pad = new T3.Mesh(plate(0.13, 0.08, 0.006), new T3.MeshStandardMaterial({ color: new T3.Color(p.frame).multiplyScalar(0.8), roughness: 0.4, metalness: 0.85 }));
-    pad.rotation.x = -Math.PI / 2; pad.position.set(0, t + 0.00009, dd / 2 - 0.05); root.add(pad);
-    // the scoop in the front edge for lifting the lid, and the ports down the sides
-    const scoopG = new T3.CircleGeometry(0.0105, 24, 0, Math.PI); scoopG.rotateX(-Math.PI / 2);   // the half toward the keyboard
-    const scoop = new T3.Mesh(scoopG, new T3.MeshStandardMaterial({ color: new T3.Color(p.frame).multiplyScalar(0.55), metalness: 0.8, roughness: 0.35 })); scoop.position.set(0, t + 0.00006, dd / 2 - 0.0012); root.add(scoop);
-    const port = (x, z, len) => { const s = new T3.Mesh(slab(len, 0.0032, 0.0012, 0.0014, 0.0004), mat.hole); s.rotation.y = Math.PI / 2; s.position.set(x, t / 2, z); root.add(s); };
-    port(-w / 2, -0.06, 0.0086); port(-w / 2, -0.042, 0.0086);
-    { const jk = new T3.Mesh(new T3.CircleGeometry(0.0018, 16), mat.hole); jk.rotation.y = Math.PI / 2; jk.position.set(w / 2 + 0.0002, t / 2, -0.05); root.add(jk); }
-    // speaker grilles either side of the keyboard
-    const dotG = new T3.CylinderGeometry(0.00055, 0.00055, 0.0004, 8);
-    const dots = []; for (const sx of [-1, 1]) for (let r = 0; r < 22; r++) for (let c = 0; c < 4; c++) dots.push([sx * (0.1395 + c * 0.0024 * sx * 0 + c * 0.0024 - 0.0036), -dd / 2 + 0.018 + r * 0.0048]);
-    const grill = new T3.InstancedMesh(dotG, mat.hole, dots.length);
-    dots.forEach(([x, z], i) => { m4.makeTranslation(x, t + 0.00005, z); grill.setMatrixAt(i, m4); }); root.add(grill);
-    // lid on its hinge, opened past upright
-    const hinge = new T3.Group(); hinge.position.set(0, t, -dd / 2 + 0.004); hinge.rotation.x = -0.3; root.add(hinge);
-    const lidH = 0.205, lid = new T3.Mesh(slab(w, lidH, 0.0055, 0.012, 0.0022), alu); lid.position.set(0, lidH / 2, -0.0028); hinge.add(lid);
-    const scr = display(w - 0.006, lidH - 0.006, 0.01, 1400); scr.mesh.position.set(0, lidH / 2, 0.00008); hinge.add(scr.mesh);
-    const barrel = new T3.Mesh(new T3.CylinderGeometry(0.004, 0.004, w * 0.82, 20), new T3.MeshStandardMaterial({ color: 0x2a2b2e, metalness: 0.7, roughness: 0.4 }));
-    barrel.rotation.z = Math.PI / 2; barrel.position.set(0, t + 0.001, -dd / 2 + 0.003); root.add(barrel);
-    shadowed(root); grill.castShadow = false;
-    const at = (x, z) => () => root.localToWorld(new T3.Vector3(x, t, z));
-    return { root, screen: scr, emit: [at(-0.142, -dd / 2 + 0.07), at(0.142, -dd / 2 + 0.07)], laptop: true };
-  }
-
-  // ---- shapes as signed distances (millimetres), blended smoothly, then wrapped in a surface ----
-  const len3 = (x, y, z) => Math.sqrt(x * x + y * y + z * z), len2 = (x, y) => Math.sqrt(x * x + y * y);
-  const smin = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
-  const smax = (a, b, k) => { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.max(a, b) + h * h * k * 0.25; };
-  const ellipsoid = (x, y, z, a, b, c) => { const k0 = len3(x / a, y / b, z / c), k1 = len3(x / (a * a), y / (b * b), z / (c * c));
-    return k1 ? k0 * (k0 - 1) / k1 : -Math.min(a, b, c); };
-  const ball = (x, y, z, c, r) => len3(x - c[0], y - c[1], z - c[2]) - r;
-  // a rod from a to b whose radius goes from ra to rb; sq < 1 makes its section an oval, narrower across x
-  function rod(x, y, z, a, b, ra, rb, sq) {
-    const bx = b[0] - a[0], by = b[1] - a[1], bz = b[2] - a[2], px = x - a[0], py = y - a[1], pz = z - a[2];
-    const h = Math.max(0, Math.min(1, (px * bx + py * by + pz * bz) / (bx * bx + by * by + bz * bz)));
-    return len3((px - bx * h) / (sq || 1), py - by * h, pz - bz * h) - (ra + (rb - ra) * h);
-  }
-  const along = (a, u, s) => [a[0] + u[0] * s, a[1] + u[1] * s, a[2] + u[2] * s];
-  const unit = a => { const l = len3(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; };
-  // where a ray from inside the shape leaves it
-  function exitPoint(f, o, u) {
-    let t1 = 0; while (f(...along(o, u, t1)) < 0 && t1 < 40) t1 += 0.1;
-    let t0 = Math.max(0, t1 - 0.1);
-    for (let n = 0; n < 30; n++) { const m = (t0 + t1) / 2; if (f(...along(o, u, m)) < 0) t0 = m; else t1 = m; }
-    return along(o, u, (t0 + t1) / 2);
-  }
-  // the surface where f crosses zero inside the box lo..hi (mm), sampled every `step` mm (naive surface nets).
-  // part(x, y, z), if given, picks each triangle's material index (0..parts-1); shade(x, y, z), if given, returns
-  // each point's colour [r, g, b] (it multiplies the material's). Returns geometry in metres.
-  const EDGE_A = [0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3], EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
-  function surface(f, lo, hi, step, part, parts, shade) {
-    // a coarse grid first; only the coarse cells the surface could pass through are sampled finely
-    // (the fields here change no faster than distance does, so a cell whose corners are all far from zero holds no surface)
-    const K = 4, cnx = Math.ceil((hi[0] - lo[0]) / step / K), cny = Math.ceil((hi[1] - lo[1]) / step / K), cnz = Math.ceil((hi[2] - lo[2]) / step / K);
-    const nx = cnx * K, ny = cny * K, nz = cnz * K, sx = nx + 1, sxy = sx * (ny + 1), v = new Float32Array(sxy * (nz + 1));
-    const csx = cnx + 1, csxy = csx * (cny + 1), cg = new Float32Array(csxy * (cnz + 1)), margin = 0.8 * Math.sqrt(3) * K * step;
-    for (let k = 0, o = 0; k <= cnz; k++) for (let j = 0; j <= cny; j++) for (let i = 0; i <= cnx; i++) cg[o++] = f(lo[0] + i * K * step, lo[1] + j * K * step, lo[2] + k * K * step);
-    // every fine point starts with its coarse cell's sign, then the near cells are sampled exactly
-    for (let k = 0, o = 0; k <= nz; k++) for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) v[o++] = cg[Math.min(cnx, Math.round(i / K)) + Math.min(cny, Math.round(j / K)) * csx + Math.min(cnz, Math.round(k / K)) * csxy] < 0 ? -margin : margin;
-    const near = [];
-    for (let ck = 0; ck < cnz; ck++) for (let cj = 0; cj < cny; cj++) for (let ci = 0; ci < cnx; ci++) {
-      let closest = Infinity, neg = 0;
-      for (let c = 0; c < 8; c++) { const q = cg[ci + (c & 1) + (cj + (c >> 1 & 1)) * csx + (ck + (c >> 2)) * csxy]; if (Math.abs(q) < closest) closest = Math.abs(q); if (q < 0) neg++; }
-      if (closest < margin || (neg > 0 && neg < 8)) near.push(ci, cj, ck);
-    }
-    const sampled = new Uint8Array(v.length);
-    for (let n = 0; n < near.length; n += 3)
-      for (let k = near[n + 2] * K; k <= near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j <= near[n + 1] * K + K; j++) for (let i = near[n] * K; i <= near[n] * K + K; i++) {
-        const o = i + j * sx + k * sxy; if (!sampled[o]) { v[o] = f(lo[0] + i * step, lo[1] + j * step, lo[2] + k * step); sampled[o] = 1; }
-      }
-    // one vertex per fine cell the surface crosses, where its edges cross zero on average
-    const cells = new Int32Array(nx * ny * nz).fill(-1), cv = new Float32Array(8); let pos = new Float32Array(3 * 4096), np = 0;
-    for (let n = 0; n < near.length; n += 3)
-      for (let k = near[n + 2] * K; k < near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j < near[n + 1] * K + K; j++) for (let i = near[n] * K; i < near[n] * K + K; i++) {
-        const o = i + j * sx + k * sxy;
-        cv[0] = v[o]; cv[1] = v[o + 1]; cv[2] = v[o + sx]; cv[3] = v[o + sx + 1]; cv[4] = v[o + sxy]; cv[5] = v[o + sxy + 1]; cv[6] = v[o + sxy + sx]; cv[7] = v[o + sxy + sx + 1];
-        let inside = 0; for (let c = 0; c < 8; c++) if (cv[c] < 0) inside++;
-        if (inside === 0 || inside === 8) continue;
-        let ax = 0, ay = 0, az = 0, cnt = 0;
-        for (let e = 0; e < 12; e++) { const a = EDGE_A[e], b = EDGE_B[e]; if ((cv[a] < 0) === (cv[b] < 0)) continue;
-          const t = cv[a] / (cv[a] - cv[b]);
-          ax += (a & 1) + ((b & 1) - (a & 1)) * t; ay += (a >> 1 & 1) + ((b >> 1 & 1) - (a >> 1 & 1)) * t; az += (a >> 2) + ((b >> 2) - (a >> 2)) * t; cnt++; }
-        if (np + 3 > pos.length) { const grown = new Float32Array(pos.length * 2); grown.set(pos); pos = grown; }
-        cells[i + j * nx + k * nx * ny] = np / 3;
-        pos[np++] = lo[0] + (i + ax / cnt) * step; pos[np++] = lo[1] + (j + ay / cnt) * step; pos[np++] = lo[2] + (k + az / cnt) * step;
-      }
-    pos = pos.subarray(0, np);
-    // a quad across every grid edge the surface crosses, joining the four cells around it
-    const cxy = nx * ny; let tris = new Uint32Array(6 * 4096), nt = 0;
-    const quad = (a, b, c, d) => { if (a < 0 || b < 0 || c < 0 || d < 0) return;
-      if (nt + 6 > tris.length) { const grown = new Uint32Array(tris.length * 2); grown.set(tris); tris = grown; }
-      tris[nt++] = a; tris[nt++] = b; tris[nt++] = c; tris[nt++] = a; tris[nt++] = c; tris[nt++] = d; };
-    for (let n = 0; n < near.length; n += 3)
-      for (let k = near[n + 2] * K; k < near[n + 2] * K + K; k++) for (let j = near[n + 1] * K; j < near[n + 1] * K + K; j++) for (let i = near[n] * K; i < near[n] * K + K; i++) {
-        const o = i + j * sx + k * sxy, a = v[o] < 0, c0 = i + j * nx + k * cxy;
-        if (j > 0 && k > 0 && a !== (v[o + 1] < 0)) quad(cells[c0 - nx - cxy], cells[c0 - cxy], cells[c0], cells[c0 - nx]);
-        if (i > 0 && k > 0 && a !== (v[o + sx] < 0)) quad(cells[c0 - 1 - cxy], cells[c0 - cxy], cells[c0], cells[c0 - 1]);
-        if (i > 0 && j > 0 && a !== (v[o + sxy] < 0)) quad(cells[c0 - 1 - nx], cells[c0 - nx], cells[c0], cells[c0 - 1]);
-      }
-    tris = tris.subarray(0, nt);
-    // normals from the field itself, so the surface reads smooth however coarse the grid
-    const nrm = new Float32Array(np), e = step * 0.5;
-    for (let q = 0; q < np; q += 3) {
-      const x = pos[q], y = pos[q + 1], z = pos[q + 2];
-      const gx = f(x + e, y, z) - f(x - e, y, z), gy = f(x, y + e, z) - f(x, y - e, z), gz = f(x, y, z + e) - f(x, y, z - e), l = len3(gx, gy, gz) || 1;
-      nrm[q] = gx / l; nrm[q + 1] = gy / l; nrm[q + 2] = gz / l;
-    }
-    // wind every triangle outward, and sort them by material
-    const which = new Uint8Array(nt / 3), counts = new Uint32Array(parts);
-    for (let t = 0; t < nt; t += 3) {
-      const A = tris[t] * 3, B = tris[t + 1] * 3, C = tris[t + 2] * 3;
-      const ux = pos[B] - pos[A], uy = pos[B + 1] - pos[A + 1], uz = pos[B + 2] - pos[A + 2], wx = pos[C] - pos[A], wy = pos[C + 1] - pos[A + 1], wz = pos[C + 2] - pos[A + 2];
-      if ((uy * wz - uz * wy) * (nrm[A] + nrm[B] + nrm[C]) + (uz * wx - ux * wz) * (nrm[A + 1] + nrm[B + 1] + nrm[C + 1]) + (ux * wy - uy * wx) * (nrm[A + 2] + nrm[B + 2] + nrm[C + 2]) < 0) {
-        const s = tris[t + 1]; tris[t + 1] = tris[t + 2]; tris[t + 2] = s; }
-      const m = part ? part((pos[A] + pos[B] + pos[C]) / 3, (pos[A + 1] + pos[B + 1] + pos[C + 1]) / 3, (pos[A + 2] + pos[B + 2] + pos[C + 2]) / 3) : 0;
-      which[t / 3] = m; counts[m]++;
-    }
-    const geo = new T3.BufferGeometry(), index = new Uint32Array(nt), start = new Uint32Array(parts);
-    for (let m = 1; m < parts; m++) start[m] = start[m - 1] + counts[m - 1] * 3;
-    for (let m = 0; m < parts; m++) if (counts[m]) geo.addGroup(start[m], counts[m] * 3, m);
-    const fillAt = start.slice();
-    for (let t = 0; t < nt; t += 3) { const m = which[t / 3], at = fillAt[m]; index[at] = tris[t]; index[at + 1] = tris[t + 1]; index[at + 2] = tris[t + 2]; fillAt[m] += 3; }
-    geo.setAttribute("position", new T3.BufferAttribute(pos, 3));
-    geo.setAttribute("normal", new T3.BufferAttribute(nrm, 3));
-    if (shade) { const col = new Float32Array(np); for (let q = 0; q < np; q += 3) col.set(shade(pos[q], pos[q + 1], pos[q + 2]), q); geo.setAttribute("color", new T3.BufferAttribute(col, 3)); }
-    geo.setIndex(new T3.BufferAttribute(index, 1));
-    geo.scale(0.001, 0.001, 0.001); geo.computeBoundingSphere();
-    return geo;
-  }
-
-  // ---- earbuds: today's open-fit kind (a contoured head on a short stem, about 30 x 18 x 18 mm), and their case ----
-  function buildBuds(p) {
-    const root = new T3.Group();
-    // one earbud, right ear, in mm: head around the origin, the nozzle (the speaker) leaning toward +z, the stem down
-    const NA = [0, 0.4, 1.2], NB = [2.5, 2.1, 6.4], SA = [0, -3.2, -1.2], SB = [-0.3, -20.6, -2.9];
-    const nozzleDir = unit([NB[0] - NA[0], NB[1] - NA[1], NB[2] - NA[2]]), stemDir = unit([SB[0] - SA[0], SB[1] - SA[1], SB[2] - SA[2]]);
-    const stemRod = (x, y, z) => rod(x, y, z, SA, SB, 3.0, 2.4, 0.86);
-    const budBody = (x, y, z) => {
-      const xr = x * 0.978 + y * 0.208, yr = y * 0.978 - x * 0.208;   // the head is tipped a little toward the nozzle
-      let d = ellipsoid(xr, yr - 0.3, z + 0.3, 7.5, 7.1, 6.3);
-      d = smin(d, rod(x, y, z, NA, NB, 4.3, 3.4), 2.2);        // the nozzle stands out of the head
-      d = smax(d, -(z + 5.2), 2.4);                             // the outer face is flatter
-      return smin(d, smax(stemRod(x, y, z), -(y + 20.95), 0.5), 2.6);   // the stem leaves the head's underside
-    };
-    // marks on the surface, each an oval around a point where a ray from inside leaves it; w(p) is 1 inside, 0 outside, soft at the rim
-    const mark = (from, dir, ru, rv, across) => {
-      const c = exitPoint(budBody, from, dir), n = dir, u = unit([across[1] * n[2] - across[2] * n[1], across[2] * n[0] - across[0] * n[2], across[0] * n[1] - across[1] * n[0]]);
-      const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
-      return (x, y, z) => { const rx = x - c[0], ry = y - c[1], rz = z - c[2], h = rx * n[0] + ry * n[1] + rz * n[2]; if (h < -3) return 0;
-        const e = len2((rx * u[0] + ry * u[1] + rz * u[2]) / ru, (rx * v[0] + ry * v[1] + rz * v[2]) / rv);
-        return Math.max(0, Math.min(1, 0.5 + (1 - e) * Math.min(ru, rv) / 0.45)); };
-    };
-    const grille = mark(NB, nozzleDir, 2.75, 2.15, stemDir);                                  // the speaker mesh, an oval on the nozzle's face
-    const vent = mark([0, 0, 0], unit([-0.3, 0.8, -0.5]), 1.6, 0.55, [1, 0, 0]);              // a slot vent on top
-    const sensor = mark([0, 0, 0], unit([0.8, -0.4, 0.45]), 1.25, 1.05, stemDir);           // the skin sensor on the inner side
-    const nozzleTip = exitPoint(budBody, NB, nozzleDir);
-    const shell = (x, y, z) => budBody(x, y, z) + 0.24 * grille(x, y, z) + 0.16 * vent(x, y, z) + 0.05 * sensor(x, y, z);
-    const shellShade = (x, y, z) => { const g = Math.max(grille(x, y, z), vent(x, y, z)), s = sensor(x, y, z), k = 1 - 0.93 * g - 0.99 * s; return [k, k, k + 0.012 * g]; };
-    // the stem's end: a steel tip with the microphone hole
-    const tip = (x, y, z) => smax(smax(stemRod(x, y, z), y + 21.1, 0.35), -(y + 22.5), 0.6);
-    const clamp01 = t => Math.max(0, Math.min(1, t));
-    const tipShade = (x, y, z) => { const m = Math.max(clamp01((len2(x - SB[0], z - SB[2]) - 0.8) / 0.35), clamp01((y + 22.25) / 0.2)), k = 0.06 + 0.94 * m; return [k, k, k]; };
-    const shellG = surface(shell, [-9, -21.6, -6.8], [9.2, 9, 11], 0.26, null, 1, shellShade);
-    const tipG = surface(tip, [-3.4, -23.2, -6], [3, -20.4, 0.4], 0.16, null, 1, tipShade);
-    // the openings again, as a matte layer over the glossy shell: mesh and vents don't shine like the plastic
-    const openG = (() => { const p = shellG.attributes.position, ix = shellG.index.array, keep = [];
-      const wv = new Float32Array(p.count); for (let q = 0; q < p.count; q++) { const x = p.getX(q) * 1000, y = p.getY(q) * 1000, z = p.getZ(q) * 1000; wv[q] = Math.max(grille(x, y, z), vent(x, y, z), sensor(x, y, z)); }
-      const w = q => wv[q];
-      for (let t = 0; t < ix.length; t += 3) if (w(ix[t]) + w(ix[t + 1]) + w(ix[t + 2]) > 0) keep.push(ix[t], ix[t + 1], ix[t + 2]);
-      const col = new Float32Array(p.count * 4); for (let q = 0; q < p.count; q++) col.set([1, 1, 1, wv[q]], q * 4);
-      const g = new T3.BufferGeometry(); g.setAttribute("position", p); g.setAttribute("normal", shellG.attributes.normal); g.setAttribute("color", new T3.BufferAttribute(col, 4)); g.setIndex(keep); return g; })();
-    const openM = new T3.MeshStandardMaterial({ color: 0x17181b, roughness: 0.8, metalness: 0.2, vertexColors: true, transparent: true, depthWrite: false,
-      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
-
-    const budWhite = new T3.MeshPhysicalMaterial({ color: 0xf4f4f1, roughness: 0.22, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, vertexColors: true });
-    const steel = new T3.MeshStandardMaterial({ color: 0xc4c7cc, metalness: 1, roughness: 0.22, vertexColors: true });
-    const V = a => new T3.Vector3(a[0], a[1], a[2]);
-    const flip = (a, left) => left ? [-a[0], a[1], a[2]] : a;
-    // the turn that lays local direction a0 onto a1, with b0 (across it) toward b1
-    const turn = (a0, b0, a1, b1) => {
-      const frame = (a, b) => { const x = a.clone().normalize(), z = b.clone().projectOnPlane(x).normalize(); return new T3.Matrix4().makeBasis(x, new T3.Vector3().crossVectors(z, x), z); };
-      return new T3.Quaternion().setFromRotationMatrix(frame(a1, b1).multiply(frame(a0, b0).transpose()));
-    };
-    // a bud placed so its stem runs along `stemTo` and its nozzle faces toward `faceTo`; a left bud is the right one mirrored
-    const makeBud = (left, stemTo, faceTo) => {
-      const g = new T3.Group(), inner = new T3.Group(); g.add(inner); if (left) inner.scale.x = -1;
-      inner.add(new T3.Mesh(shellG, budWhite), new T3.Mesh(openG, openM), new T3.Mesh(tipG, steel));
-      g.quaternion.copy(turn(V(flip(stemDir, left)), V(flip(nozzleDir, left)), stemTo, faceTo));
-      return { g, inner };
-    };
-
-    // the case, standing, lid open; in mm, its bottom on the desk
-    const CW = 25, CH = 23.1, CD = 10.6, CR = 12.5, YS = 35.2;
-    const seats = [{ left: true, at: [-11.6, YS + 0.6, 0.3], face: [0.75, 0.55, 0.3] }, { left: false, at: [11.6, YS + 0.6, 0.3], face: [-0.75, 0.55, 0.3] }];
-    seats.forEach(s => {
-      s.q = turn(V(flip(stemDir, s.left)), V(flip(nozzleDir, s.left)), new T3.Vector3(0, -1, 0.05), V(s.face));
-      const w = a => along(s.at, V(flip(a, s.left)).applyQuaternion(s.q).toArray(), 1);
-      s.a = w(SA); s.b = w([SB[0], SB[1] - 2, SB[2]]);
+    model("laptop", root, {
+      frame: alu, steel: mat.alu(0x55575b), dark: mat.dark, glass: mat.gloss(0x050506),
+      pad: new T3.MeshStandardMaterial({ color: new T3.Color(p.frame).multiplyScalar(0.8), roughness: 0.4, metalness: 0.85 }),
+      key: new T3.MeshLambertMaterial({ color: 0x08080a }), well: new T3.MeshLambertMaterial({ color: 0x060607 }),
+      legend: new T3.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 0.6, emissive: 0xffdcb0, emissiveIntensity: 0.35 })   // the keyboard's backlight
     });
-    const pocket = (x, y, z, s) => Math.min(ball(x, y, z, s.at, 9.1), rod(x, y, z, s.a, s.b, 3.45, 3.45));
-    // a pebble: a rounded square seen from the front, every edge softened deeply
-    const outer = (x, y, z) => {
-      const qx = Math.abs(x) - CW + CR, qy = Math.abs(y - CH) - CH + CR;
-      const a = len2(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - CR + 8.4, b = Math.abs(z) - CD + 8.4;
-      return len2(Math.max(a, 0), Math.max(b, 0)) + Math.min(Math.max(a, b), 0) - 8.4;
+    // the speakers' holes either side of the keyboard
+    const dotG = new T3.CylinderGeometry(0.00055, 0.00055, 0.0003, 8), m4 = new T3.Matrix4(), dots = [];
+    for (const sx of [-1, 1]) for (let r = 0; r < 46; r++) for (let c = 0; c < 6; c++) dots.push([sx * (0.1422 + c * 0.0022 + (r % 2) * 0.0011), -0.0925 + r * 0.0022]);
+    const grill = new T3.InstancedMesh(dotG, mat.hole, dots.length); dots.forEach(([x, z], i) => { m4.makeTranslation(x, 0.013, z); grill.setMatrixAt(i, m4); }); root.add(grill);
+    // the lid's screen
+    const W = 0.3015, H = 0.1947, up = new T3.Vector3(0, 0.94024, -0.34051), scr = display(W, H, 0.004, 1400), X1 = new T3.Vector3(1, 0, 0), N = new T3.Vector3().crossVectors(X1, up);
+    scr.mesh.position.set(0, 0.11428, -0.15586).addScaledVector(N, 0.0003); scr.mesh.quaternion.setFromRotationMatrix(new T3.Matrix4().makeBasis(X1, up, N)); root.add(scr.mesh);
+    const at3 = (x, z) => () => root.localToWorld(new T3.Vector3(x, 0.013, z));
+    return { root, screen: scr, emit: [at3(-0.149, -0.04), at3(0.149, -0.04)], laptop: true };
+  }
+
+  // ---- earbuds: a real model (earbuds.glb, CC BY; see Resources/models), not shapes put together here ----
+  function buildBuds(meshes) {
+    const root = new T3.Group(), UP = new T3.Vector3(0, 1, 0);
+    // the model: head at the origin, stem down (-y), the speaker's opening facing +z (metres)
+    const STEM = { x: 0.00561, z: -0.00599, end: -0.03158 }, MOUTH = new T3.Vector3(-0.0006, 0.0002, 0.0086), RELIEF = 0.0052;
+    const white = new T3.MeshPhysicalMaterial({ color: 0x8f8f8b, roughness: 0.38, metalness: 0, clearcoat: 0.4, clearcoatRoughness: 0.25 });
+    const soft = new T3.MeshStandardMaterial({ color: 0x7e7f7d, roughness: 0.6, metalness: 0 });   // the cable's rubber, a shade greyer
+    const dark = new T3.MeshLambertMaterial({ color: 0x050506, side: T3.DoubleSide });
+    // the strain relief between stem and cable
+    const CR = 0.00098, reliefG = new T3.LatheGeometry([[0, -RELIEF], [0.0013, -RELIEF], [0.0016, -RELIEF + 0.0001], [0.00172, -RELIEF + 0.0005], [0.00172, 0.0004], [0, 0.0004]].map(p => new T3.Vector2(p[0], p[1])), 28);
+    reliefG.translate(STEM.x, STEM.end, STEM.z);
+    const all = meshes.map(m => m.geo.attributes.position);
+    const tail = []; for (let k = 0; k < 12; k++) tail.push(new T3.Vector3(STEM.x + 0.0017 * Math.cos(k * Math.PI / 6), STEM.end - RELIEF, STEM.z + 0.0017 * Math.sin(k * Math.PI / 6)));
+    const v = new T3.Vector3();
+    // a bud lying on the desk: its stem points along `yaw` (0 = right, +90 deg = away), the speaker is rolled from straight up by `roll`;
+    // it's tipped until the head and the stem's end both touch the wood
+    const place = (left, x, z, yaw, roll) => {
+      const g = new T3.Group(), inner = new T3.Group(); g.add(inner); if (left) inner.scale.x = -1;
+      for (const m of meshes) inner.add(new T3.Mesh(m.geo, m.name === "shell" ? white : dark));
+      inner.add(new T3.Mesh(reliefG, soft));
+      const s = new T3.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), side = new T3.Vector3().crossVectors(UP, s);
+      const pose = tip => {
+        const down = s.clone().applyAxisAngle(side, tip), up = new T3.Vector3().crossVectors(down, side).normalize(); if (up.y < 0) up.negate();
+        const mouth = up.multiplyScalar(Math.cos(roll)).addScaledVector(side, Math.sin(roll)), yAxis = down.negate();
+        g.quaternion.setFromRotationMatrix(new T3.Matrix4().makeBasis(new T3.Vector3().crossVectors(yAxis, mouth), yAxis, mouth)); g.updateMatrixWorld(true);
+        let head = Infinity, end = Infinity;
+        for (const a of all) for (let q = 0; q < a.count; q += 2) { v.fromBufferAttribute(a, q); if (v.y > -0.014) head = Math.min(head, v.applyMatrix4(inner.matrixWorld).y); }
+        for (const t of tail) end = Math.min(end, v.copy(t).applyMatrix4(inner.matrixWorld).y);
+        return { gap: end - head, low: Math.min(head, end) };
+      };
+      let a = -0.9, b = 0.9, r, sa = Math.sign(pose(a).gap);
+      for (let k = 0; k < 18; k++) { const m = (a + b) / 2; r = pose(m); if (Math.sign(r.gap) === sa) a = m; else b = m; }
+      g.position.set(x, -r.low, z); root.add(g); g.updateMatrixWorld(true);
+      const w = (px, py, pz) => inner.localToWorld(new T3.Vector3(px, py, pz));
+      const end = w(STEM.x, STEM.end - RELIEF, STEM.z), out = end.clone().sub(w(STEM.x, STEM.end, STEM.z)).normalize();
+      return { g, mouth: () => inner.localToWorld(MOUTH.clone()), end, out };
     };
-    const caseBody = (x, y, z) => { let d = smax(outer(x, y, z), y - YS, 0.6); for (const s of seats) d = smax(d, -pocket(x, y, z, s), 0.7); return d; };
-    const caseLid = (x, y, z) => { let d = smax(outer(x, y, z), YS + 0.3 - y, 0.6); for (const s of seats) d = smax(d, -ball(x, y, z, s.at, 9.1), 0.7); return d; };
-    const bodyPart = (x, y, z) => YS - y < 0.5 || seats.some(s => pocket(x, y, z, s) < 0.35) ? 1 : 0;
-    const lidPart = (x, y, z) => y - YS < 0.8 || seats.some(s => ball(x, y, z, s.at, 9.1) < 0.35) ? 1 : 0;
-    const caseWhite = new T3.MeshPhysicalMaterial({ color: 0xf1f1ee, roughness: 0.3, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.12 });
-    const caseMatte = new T3.MeshStandardMaterial({ color: 0xdcdcd8, roughness: 0.7, metalness: 0 });
-    const caseMats = [caseWhite, caseMatte];
-    const box = new T3.Group(); box.position.set(-0.012, 0, -0.004); box.rotation.y = 0.18; root.add(box);
-    box.add(new T3.Mesh(surface(caseBody, [-26, -0.6, -11.6], [26, YS + 0.8, 11.6], 0.5, bodyPart, 2), caseMats));
-    const hinge = new T3.Group(); hinge.position.set(0, YS * 0.001, -CD * 0.001); hinge.rotation.x = -1.85; box.add(hinge);
-    const lidG = surface(caseLid, [-26, YS - 0.4, -11.6], [26, CH * 2 + 0.6, 11.6], 0.5, lidPart, 2); lidG.translate(0, -YS * 0.001, CD * 0.001);
-    const lid = new T3.Mesh(lidG, caseMats); hinge.add(lid);
-    const pin = new T3.Mesh(new T3.CylinderGeometry(0.0011, 0.0011, 0.011, 16), steel); pin.rotation.z = Math.PI / 2; hinge.add(pin);
-    // the status light on the front
-    const led = new T3.Mesh(new T3.CircleGeometry(0.0006, 20), new T3.MeshBasicMaterial({ color: 0x9dffbf })); led.position.set(0, 0.024, CD * 0.001 + 0.00004); box.add(led);
-
-    const emit = [];
-    // one bud resting in its seat
-    const seated = makeBud(true, new T3.Vector3(0, -1, 0.05), V(seats[0].face));
-    seated.g.position.copy(V(seats[0].at).multiplyScalar(0.001)); box.add(seated.g);
-    emit.push(() => seated.inner.localToWorld(V(nozzleTip).multiplyScalar(0.001)));
-    // the other out on the desk, on its side, the speaker turned up
-    const loose = makeBud(false, new T3.Vector3(0.62, -0.06, 0.78), new T3.Vector3(-0.15, 0.95, -0.2));
-    loose.g.position.set(0.03, 0, 0.016); root.add(loose.g); loose.g.updateMatrixWorld(true);
-    // rest it on the desk: its lowest vertex, exactly (a bounding box turned with it would leave it hovering)
-    let lowest = Infinity; const pv = new T3.Vector3();
-    loose.inner.children.forEach(m => { const a = m.geometry.attributes.position; for (let q = 0; q < a.count; q++) lowest = Math.min(lowest, pv.fromBufferAttribute(a, q).applyMatrix4(m.matrixWorld).y); });
-    loose.g.position.y -= lowest - 0.00005; loose.g.updateMatrixWorld(true);
-    emit.push(() => loose.inner.localToWorld(V(nozzleTip).multiplyScalar(0.001)));
-
+    const A = place(true, -0.022, 0.009, 1.12, -0.2), B = place(false, 0.0, 0.026, 0.5, 1.4);
+    // the leads run away over the desk and out of the picture, meeting far behind
+    const D = (x, z) => new T3.Vector3(x, CR, z);
+    const lead = (b, ...pts) => {
+      const c = new T3.CatmullRomCurve3([b.end.clone().addScaledVector(b.out, -0.002), b.end, b.end.clone().addScaledVector(b.out, 0.008).setY(Math.max(CR, b.end.y * 0.75)), ...pts], false, "centripetal");
+      root.add(new T3.Mesh(new T3.TubeGeometry(c, 160, CR, 10, false), soft));
+    };
+    const J = D(0.05, -0.36);
+    lead(A, D(0.012, -0.05), D(0.004, -0.066), D(-0.018, -0.084), D(-0.03, -0.105), D(-0.028, -0.15), D(0.0, -0.26), J);
+    lead(B, D(0.056, -0.004), D(0.07, -0.028), D(0.064, -0.056), D(0.044, -0.082), D(0.034, -0.12), D(0.05, -0.22), J);
+    root.add(new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3([J, D(0.12, -0.42), D(0.3, -0.36), D(0.7, -0.4)]), 60, CR * 1.25, 8, false), soft));
     // soft contact shadows, so nothing floats over the wood
     const blobTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
       const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(0,0,0,0.7)"); r.addColorStop(0.5, "rgba(0,0,0,0.28)"); r.addColorStop(1, "rgba(0,0,0,0)");
       g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new T3.CanvasTexture(c); })();
-    const blob = (x, z, sx, sz, rot) => { const m = new T3.Mesh(new T3.PlaneGeometry(1, 1), new T3.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
-      m.rotation.set(-Math.PI / 2, 0, rot || 0); m.scale.set(sx, sz, 1); m.position.set(x, 0.0003, z); m.renderOrder = 1; root.add(m); return m; };
-    shadowed(root); lid.receiveShadow = false;   // its hollows face the lamp edge-on and would streak
-    blob(-0.012, -0.004, 0.066, 0.034, -0.18);
-    const lc = new T3.Box3().setFromObject(loose.g).getCenter(new T3.Vector3()); blob(lc.x, lc.z, 0.03, 0.022, -0.66);
-    return { root, screen: null, emit };
+    shadowed(root);
+    for (const b of [A, B]) {
+      const blob = new T3.Mesh(new T3.PlaneGeometry(0.026, 0.024), new T3.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
+      blob.rotation.x = -Math.PI / 2; blob.position.set(b.g.position.x, 0.0003, b.g.position.z); blob.renderOrder = 1; root.add(blob);
+    }
+    return { root, emit: [A.mouth, B.mouth] };
   }
 
-  const dimEnv = o => o.traverse(m => { if (m.isMesh && m.material && m.material.envMapIntensity !== undefined && m.material !== deskMat) m.material.envMapIntensity *= 0.6; });
   const devices = P.map((p, i) => {
-    // the earbuds take a few hundred ms to carve, so they come just after the first picture (below)
+    // the earbuds' model is a file of its own: it comes just after the first picture (below)
     const d = p.kind === "phone" ? buildPhone(p) : p.kind === "laptop" ? buildLaptop(p) : { root: new T3.Group(), screen: null, emit: [], later: true };
     d.root.position.x = xs[i]; dimEnv(d.root); front.add(d.root); d.lastDraw = -1; return d;
   });
-  requestAnimationFrame(() => setTimeout(() => devices.forEach((d, i) => {
+  arrive(loadGlb("earbuds.glb")).then(meshes => devices.forEach(d => {
     if (!d.later) return;
-    const b = buildBuds(P[i]);
+    const b = buildBuds(meshes);
     dimEnv(b.root); d.root.add(b.root); d.emit.push(...b.emit); d.later = false; wake();
-  }), 30));
+  }));
+
+  // ---- the first place on the desk: a slim tablet on an aluminium stand, showing the code to scan ----
+  function buildAir() {
+    const root = new T3.Group(), alu = mat.alu(0xa9abaf), dark = mat.alu(0x3a3b3e);
+    // the stand: a thin foot the tablet's edge rests in, and an arm up its back
+    const base = new T3.Mesh(slab(0.118, 0.084, 0.005, 0.012, 0.002), alu); base.rotation.x = -Math.PI / 2; base.position.set(0, 0.0025, -0.006); root.add(base);
+    const TH = 0.1347, TD = 0.0085, tilt = 0.2, SW = 0.1776, SH = 0.1175;
+    const lean = new T3.Group(); lean.position.set(0, 0.0045, 0.026); lean.rotation.x = -tilt; root.add(lean);
+    model("tablet", lean, { frame: alu, line: mat.plastic(0x77797d), glass: mat.gloss(0x050506), lens: mat.lens, flash: mat.flash, dark: mat.dark }, g => { g.position.y = TH / 2; });
+    const scr = display(SW, SH, 0.0042, 1400); scr.mat.envMapIntensity = 0.3; scr.mesh.position.set(-0.0003, TH / 2, 0.00426 + 0.00012); lean.add(scr.mesh);
+    // the arm, from the back of the foot to the middle of the tablet's back
+    lean.updateMatrix();
+    const A = new T3.Vector3(0, 0.005, -0.038), B = new T3.Vector3(0, TH * 0.5, -TD / 2 - 0.002).applyMatrix4(lean.matrix);
+    const len = A.distanceTo(B), arm = new T3.Mesh(slab(0.05, len, 0.0045, 0.004, 0.0015), alu);
+    arm.position.copy(A).add(B).multiplyScalar(0.5); arm.rotation.x = Math.atan2(B.z - A.z, B.y - A.y); root.add(arm);
+    const hingeG = new T3.CylinderGeometry(0.0042, 0.0042, 0.05, 24); hingeG.rotateZ(Math.PI / 2);
+    const hinge = new T3.Mesh(hingeG, dark); hinge.position.copy(B); root.add(hinge);
+    shadowed(root); scr.mesh.castShadow = false;
+    // where the code sits on the screen (drawAir lays it out the same way)
+    const codeBox = () => { const q = 0.8 * SH, m = 0.1 * SH; return { x0: SW / 2 - m - q, x1: SW / 2 - m, y0: -q / 2, y1: q / 2 }; };
+    const codeCorners = () => { const b = codeBox(); return [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(([x, y]) => scr.mesh.localToWorld(new T3.Vector3(x, y, 0))); };
+    return { root, screen: scr, codeCorners, key: "" };
+  }
+  const air = buildAir(); air.root.position.x = X(-1); dimEnv(air.root); front.add(air.root);
+  // lines of text wrapped to maxW (at spaces, or anywhere in Japanese); dry: only count them
+  const wrapText = (g, text, x, y, maxW, lh, maxLines, dry) => {
+    const parts = /\s/.test(text) ? text.split(/(\s+)/) : [...text]; let line = "", n = 0;
+    const out = s => { if (!dry && n < (maxLines || 99)) g.fillText(s.trim(), x, y + n * lh); n++; };
+    for (const p of parts) { const t = line + p; if (g.measureText(t.trim()).width > maxW && line.trim()) { out(line); line = p.trimStart(); } else line = t; }
+    if (line.trim()) out(line);
+    return y + Math.min(n, maxLines || 99) * lh;
+  };
+  function countText(L) {
+    if (!L.on) return "";
+    if (L.example) return ja ? "\u30d7\u30e9\u30b0\u30a4\u30f3\u3067\u306f\u3001\u540c\u3058Wi-Fi\u306e\u30b9\u30de\u30db\u3067\u3053\u306e\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u53d6\u3063\u3066\u8074\u304d\u307e\u3059" : "In the plugin, phones on the same Wi-Fi scan this code to listen";
+    return ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3092\u5f85\u3063\u3066\u3044\u307e\u3059")
+              : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Waiting for a phone");
+  }
+  function drawAir() {
+    const L = S.live, onAir = S.mode === "live", key = [onAir, L.on, L.failed, L.listeners, L.example, L.qr, document.fonts ? document.fonts.status : ""].join("|");
+    if (key === air.key) return; air.key = key;
+    const { g, canvas: c, tex } = air.screen, w = c.width, h = c.height;
+    // a quiet graphite wallpaper, as on the phones
+    const bg = g.createLinearGradient(0, 0, w, h); bg.addColorStop(0, "#15161a"); bg.addColorStop(1, "#08080a"); g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    for (const [gx, gy, r, col] of [[0.05, 0.0, 0.7, "rgba(80,100,160,0.16)"], [0.4, 1.05, 0.6, "rgba(255,150,80,0.07)"]]) {
+      const rg = g.createRadialGradient(w * gx, h * gy, 0, w * gx, h * gy, w * r); rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = rg; g.fillRect(0, 0, w, h);
+    }
+    // the code on a white tile, on the right (codeBox in buildAir says where)
+    const q = Math.round(h * 0.8), qx = Math.round(w - h * 0.1 - q), qy = Math.round((h - q) / 2), rr = q * 0.045;
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(qx, qy, q, q, rr) : g.rect(qx, qy, q, q); g.clip();
+    if (L.on && L.qr) { drawQr(g, q, L.qr, L.qrSize, qx, qy); if (L.example) markExample(g, qx, qy, q); }
+    else { g.fillStyle = "rgba(255,255,255,0.05)"; g.fillRect(qx, qy, q, q); }
+    g.restore();
+    // the words, on the left
+    const tx = h * 0.1, tw = qx - tx - h * 0.08, y = h * 0.16;
+    g.textAlign = "left"; g.textBaseline = "alphabetic";
+    // a small status line, as a phone shows it
+    g.fillStyle = L.on ? "#ff5a3c" : "rgba(238,231,220,0.3)"; g.beginPath(); g.arc(tx + h * 0.011, y - h * 0.014, h * 0.011, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(238,231,220,0.55)"; g.font = `600 ${Math.round(h * 0.034)}px Barlow, sans-serif`; if ("letterSpacing" in g) g.letterSpacing = `${Math.round(h * 0.006)}px`;
+    g.fillText(L.on ? "LIVE" : L.failed ? "NOT CONNECTED" : "OFF", tx + h * 0.036, y); if ("letterSpacing" in g) g.letterSpacing = "0px";
+    // the note sits at the bottom; the rest runs down from the top, a size smaller until it all fits above the note
+    g.fillStyle = "rgba(238,231,220,0.38)"; g.font = `500 ${Math.round(h * 0.032)}px Barlow, sans-serif`;
+    const noteLines = wrapText(g, AIRTXT.note, 0, 0, tw, 1, 3, true), noteY = h - h * 0.1 - (noteLines - 1) * h * 0.046;
+    wrapText(g, AIRTXT.note, tx, noteY, tw, h * 0.046, 3);
+    const body = L.failed ? AIRTXT.err : onAir ? AIRTXT.how : AIRTXT.off, count = L.example ? "" : countText(L), y0 = y + h * 0.13;
+    const words = (k, dry) => {
+      let yy = y0;
+      g.fillStyle = "#f2efe9"; g.font = `600 ${Math.round(h * 0.082 * k)}px Barlow, sans-serif`;
+      yy = wrapText(g, AIRTXT.title, tx, yy, tw, h * 0.092 * k, 3, dry) + h * 0.03 * k;
+      g.fillStyle = L.failed ? "#ff6a4d" : "rgba(238,231,220,0.6)"; g.font = `500 ${Math.round(h * 0.04 * k)}px Barlow, sans-serif`;
+      yy = wrapText(g, body, tx, yy, tw, h * 0.058 * k, 9, dry);
+      if (count) { g.fillStyle = "#f2efe9"; g.font = `600 ${Math.round(h * 0.042 * k)}px Barlow, sans-serif`; yy = wrapText(g, count, tx, yy + h * 0.045 * k, tw, h * 0.058 * k, 2, dry); }
+      return yy;
+    };
+    let k = 1; while (k > 0.6 && words(k, true) > noteY - h * 0.08) k -= 0.05;
+    words(k, false);
+    tex.needsUpdate = true;
+  }
 
   // ---- studio monitors (back layer) ----
   const studio = new T3.Group(); back.add(studio);
   const cones = [];
   {
-    const cab = new T3.MeshStandardMaterial({ color: 0x1d1b19, roughness: 0.62, metalness: 0.05, envMapIntensity: 0.6 });
-    const rubber = new T3.MeshStandardMaterial({ color: 0x0b0b0b, roughness: 0.9 });
-    const paper = new T3.MeshStandardMaterial({ color: 0x3a3836, roughness: 0.95, side: T3.DoubleSide });
-    const silk = new T3.MeshStandardMaterial({ color: 0x8a847a, roughness: 0.8 });
-    const metalRing = new T3.MeshStandardMaterial({ color: 0x55524d, metalness: 0.8, roughness: 0.35 });
+    const skin = r => new T3.MeshStandardMaterial({ vertexColors: true, color: 0xffffff, roughness: r, metalness: 0.05, envMapIntensity: 0.6 });
     for (const side of [-1, 1]) {
-      const m = new T3.Group(); m.position.set(side * 0.42, 0, 0); m.rotation.y = -side * 0.22; studio.add(m);
-      const W0 = 0.19, H0 = 0.31, D0 = 0.25;
-      const box = new T3.Mesh(slab(W0, H0, D0, 0.014, 0.008), cab); box.position.set(0, H0 / 2 + 0.012, -D0 / 2); m.add(box);
-      for (const px of [-1, 1]) { const pad = new T3.Mesh(new T3.CylinderGeometry(0.012, 0.012, 0.012, 20), rubber); pad.position.set(px * 0.06, 0.006, -D0 / 2); m.add(pad); }
-      // woofer: surround, cone, dust cap
-      const wy = 0.012 + H0 * 0.34, wr = 0.066;
-      const ring = new T3.Mesh(new T3.TorusGeometry(wr + 0.008, 0.004, 12, 48), metalRing); ring.position.set(0, wy, 0.0005); m.add(ring);
-      const sur = new T3.Mesh(new T3.TorusGeometry(wr, 0.0055, 12, 48), rubber); sur.position.set(0, wy, -0.002); m.add(sur);
-      const coneG = new T3.LatheGeometry([new T3.Vector2(0.018, -0.022), new T3.Vector2(0.04, -0.012), new T3.Vector2(wr - 0.002, -0.003)], 48); coneG.rotateX(Math.PI / 2);
-      const cone = new T3.Group(); cone.position.set(0, wy, 0); m.add(cone);
-      cone.add(new T3.Mesh(coneG, paper));
-      const cap = new T3.Mesh(new T3.SphereGeometry(0.02, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), paper); cap.rotation.x = Math.PI / 2; cap.position.z = -0.022; cap.scale.set(1, 0.6, 1); cone.add(cap);
-      cones.push(cone);
-      // tweeter in a shallow waveguide
-      const ty = 0.012 + H0 * 0.78;
-      const guide = new T3.LatheGeometry([new T3.Vector2(0.012, -0.006), new T3.Vector2(0.026, -0.003), new T3.Vector2(0.04, 0)], 48); guide.rotateX(Math.PI / 2);
-      const g1 = new T3.Mesh(guide, new T3.MeshStandardMaterial({ color: 0x141312, roughness: 0.4, metalness: 0.3, side: T3.DoubleSide })); g1.position.set(0, ty, 0); m.add(g1);
-      const dome = new T3.Mesh(new T3.SphereGeometry(0.0125, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), silk); dome.rotation.x = Math.PI / 2; dome.position.set(0, ty, -0.006); m.add(dome);
-      const lampDot = new T3.Mesh(new T3.CircleGeometry(0.002, 16), new T3.MeshBasicMaterial({ color: 0x8fd7ff })); lampDot.position.set(0, 0.012 + H0 * 0.08, 0.0005); m.add(lampDot);
+      const m = new T3.Group(); m.position.set(side * 0.42, 0, 0); m.rotation.y = -side * 0.22; m.scale.setScalar(1.12); studio.add(m);
+      model("monitor", m, { case: skin(0.6), woofer: skin(0.7) }, g => {
+        g.position.z = -0.111;
+        // the colours, lifted a little so black speakers read in a dark room
+        g.children.forEach(x => { const c = x.geo || x.geometry.attributes.color; for (let q = 0; q < c.array.length; q++) if (q % 4 < 3) c.array[q] = x.name === "woofer" ? 0.62 : Math.min(0.06, Math.pow(c.array[q], 2.2)) * 2.2 + 0.008; c.needsUpdate = true; });
+        const w = g.children.find(x => x.name === "woofer"); if (w) cones.push(w);
+      });
     }
     shadowed(studio);
   }
@@ -810,26 +672,15 @@
     const { g, canvas: c } = d.screen, w = c.width, h = c.height;
     g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
     // the lit area inside the bezel
-    const bz = p.style === "se" ? [0.13, 0.05] : p.style === "chin" ? [0.06, 0.05] : p.kind === "laptop" ? [0.03, 0.05] : [0.022, 0.045];
+    const bz = p.bare || p.kind === "laptop" ? [0, 0] : p.style === "chin" ? [0.06, 0.05] : p.kind === "laptop" ? [0.03, 0.05] : [0.022, 0.045];
     const sx = w * bz[0], sy = h * bz[1], sw = w - sx * (p.style === "chin" ? 1.6 : 2), sh = h - sy * 2;
-    const bg = g.createLinearGradient(sx, sy, sx + sw, sy + sh); bg.addColorStop(0, "#1c1511"); bg.addColorStop(1, "#060507");
-    g.save(); g.beginPath(); g.roundRect ? g.roundRect(sx, sy, sw, sh, p.style === "se" || p.kind === "laptop" ? 4 : h * 0.13) : g.rect(sx, sy, sw, sh); g.clip();
+    const bg = g.createLinearGradient(sx, sy, sx + sw, sy + sh); // the wallpaper is the body's own colour, falling away into black like paper under a lamp
+    const tone = k => { const f = p.frame, c = [f >> 16, f >> 8 & 255, f & 255], grey = (c[0] + c[1] + c[2]) / 3, v = c.map(x => Math.max(0, x / grey - 1) * 1.6 + Math.min(1, x / grey) - 0.02), top = Math.max(...v); return "rgb(" + v.map((x, q) => Math.round(255 * k * x / top)).join() + ")"; };
+    bg.addColorStop(0, tone(0.17)); bg.addColorStop(0.5, tone(0.13)); bg.addColorStop(1, tone(0.06));
+    g.save(); g.beginPath(); g.roundRect ? g.roundRect(sx, sy, sw, sh, p.bare ? 0 : p.kind === "laptop" ? 14 : h * 0.13) : g.rect(sx, sy, sw, sh); g.clip();
     g.fillStyle = bg; g.fillRect(sx, sy, sw, sh);
-    // a quiet wallpaper glow, so the black cut-outs read against the glass as they do on a real screen
-    for (const [gx, gy, r, col] of [[0.86, 0.15, 0.75, "rgba(70,96,190,0.20)"], [0.12, 0.95, 0.7, "rgba(255,138,60,0.15)"]]) {
-      const rg = g.createRadialGradient(sx + sw * gx, sy + sh * gy, 0, sx + sw * gx, sy + sh * gy, sw * r); rg.addColorStop(0, col); rg.addColorStop(1, "rgba(0,0,0,0)");
-      g.fillStyle = rg; g.fillRect(sx, sy, sw, sh);
-    }
-    if (S.live.on && S.live.qr && p.kind !== "buds") {
-      // ON AIR: the screen shows the code to scan
-      const q = Math.min(sh * 0.86, sw * 0.42), qx0 = sx + sw - q - sw * 0.06, qy0 = sy + (sh - q) / 2;
-      g.fillStyle = "#ff5a3c"; g.font = `700 ${Math.round(sh * 0.11)}px "Barlow Condensed", sans-serif`; g.fillText("ON AIR", sx + sw * 0.08, sy + sh * 0.3);
-      g.fillStyle = "rgba(238,231,220,0.8)"; g.font = `500 ${Math.round(sh * 0.07)}px Barlow, sans-serif`;
-      g.fillText(S.live.listeners ? `${S.live.listeners} listening` : "Scan to listen", sx + sw * 0.08, sy + sh * 0.45);
-      drawQr(g, q, S.live.qr, S.live.qrSize, qx0, qy0);
-      if (S.live.example) markExample(g, qx0, qy0, q);
-      g.restore(); d.screen.tex.needsUpdate = true; return;
-    }
+    { const lx = sx + sw * 0.72, ly = sy - sh * 0.15, rg = g.createRadialGradient(lx, ly, 0, lx, ly, sw * 0.75); rg.addColorStop(0, tone(0.66)); rg.addColorStop(0.5, tone(0.3)); rg.addColorStop(1, "rgba(0,0,0,0)");
+      g.globalCompositeOperation = "lighten"; g.fillStyle = rg; g.fillRect(sx, sy, sw, sh); g.globalCompositeOperation = "source-over"; }
     const n = 30, lo = Math.log(60), hi = Math.log(18000), bw = sw * 0.78 / n;
     for (let k = 0; k < n; k++) {
       const fhz = Math.exp(lo + (hi - lo) * (k + 0.5) / n), inBand = fhz >= p.hp * 0.8 && fhz <= p.lp * 1.1;
@@ -854,8 +705,8 @@
       g.fillStyle = "#1d1f22"; g.beginPath(); g.roundRect ? g.roundRect(cxp - w * 0.012, h / 2 - h * 0.08, w * 0.006, h * 0.16, w * 0.003) : 0; g.fill(); g.fillStyle = "#000";
       eye(cxp - w * 0.03, h / 2 + h * 0.17, h * 0.03); }
     if (p.style === "punch" || p.style === "chin") { g.beginPath(); g.arc(cxp - w * 0.035, h / 2, h * 0.035, 0, Math.PI * 2); g.fill(); eye(cxp - w * 0.035, h / 2, h * 0.024); }
-    if (p.kind === "phone") { g.fillStyle = "#151515"; g.beginPath(); g.roundRect ? g.roundRect(w - w * 0.012, h / 2 - h * 0.13, w * 0.004, h * 0.26, 3) : 0; g.fill(); }
-    if (p.style === "se") { g.strokeStyle = "#3a3a3a"; g.lineWidth = w * 0.004; g.beginPath(); g.arc(w * 0.065, h / 2, h * 0.11, 0, Math.PI * 2); g.stroke();
+    if (p.kind === "phone" && !p.bare) { g.fillStyle = "#151515"; g.beginPath(); g.roundRect ? g.roundRect(w - w * 0.012, h / 2 - h * 0.13, w * 0.004, h * 0.26, 3) : 0; g.fill(); }
+    if (p.style === "se" && !p.bare) { g.strokeStyle = "#3a3a3a"; g.lineWidth = w * 0.004; g.beginPath(); g.arc(w * 0.065, h / 2, h * 0.11, 0, Math.PI * 2); g.stroke();
       g.fillStyle = "#1b1b1b"; g.beginPath(); g.arc(w - w * 0.065, h / 2 - h * 0.25, h * 0.03, 0, Math.PI * 2); g.fill(); }
     if (p.kind === "laptop") { g.fillStyle = "#000"; g.beginPath(); g.roundRect ? g.roundRect(w / 2 - w * 0.04, 0, w * 0.08, h * 0.035, 8) : 0; g.fill(); eye(w / 2, h * 0.016, h * 0.007); }
     d.screen.tex.needsUpdate = true;
@@ -864,7 +715,7 @@
   const PITCH = 0.13;
   // Render resolution follows the machine: on a slow GPU (or none) the room is drawn at
   // fewer pixels and with a smaller shadow map, so it stays fluid; it climbs back when fast.
-  let quality = 1;
+  let quality = 1, paused = 0;   // paused: the resolution it was moving at, while a still picture is shown at the full one
   function resize() {
     DPR = Math.min(2, window.devicePixelRatio || 1); W = stage.clientWidth; H = stage.clientHeight;
     for (const r of [rBack, rDev]) { r.setPixelRatio(DPR * quality); r.setSize(W, H, false); }
@@ -875,6 +726,7 @@
   new ResizeObserver(resize).observe(stage); resize();
   const frameMs = [];
   function adaptQuality(ms) {
+    if (S.p === LO || paused) { frameMs.length = 0; return; }   // the code stays sharp (see tick)
     frameMs.push(ms);
     if (frameMs.length < 24) return;
     frameMs.sort((a, b) => a - b);
@@ -896,12 +748,12 @@
     // how far back the camera stands so the speaker fills about half the frame's width (more on a narrow screen)
     const frac = camera.aspect < 0.9 ? 0.78 : 0.48;
     const span = 2 * Math.tan(T3.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    return P[i].w / (frac * span) * (P[i].kind === "laptop" ? 0.92 : 1);
+    return at(i).w / (frac * span) * (at(i).kind === "laptop" ? 0.92 : 1);
   }
   function setCamera() {
-    const lo = Math.max(0, Math.min(P.length - 1, Math.floor(S.p))), hi = Math.min(P.length - 1, lo + 1), f = Math.max(-0.3, Math.min(1.3, S.p - lo));
+    const lo = Math.max(LO, Math.min(HI, Math.floor(S.p))), hi = Math.min(HI, lo + 1), f = Math.max(-0.3, Math.min(1.3, S.p - lo));
     const L = (a, b) => a + (b - a) * f;
-    cam.x = L(xs[lo], xs[hi]); cam.dist = L(distFor(lo), distFor(hi)); cam.aim = L(aimOf(lo), aimOf(hi)); const pitch = L(pitchOf(lo), pitchOf(hi));
+    cam.x = L(X(lo), X(hi)); cam.dist = L(distFor(lo), distFor(hi)); cam.aim = L(aimOf(lo), aimOf(hi)); const pitch = L(pitchOf(lo), pitchOf(hi));
     camera.position.set(cam.x, cam.aim + cam.dist * Math.sin(pitch), cam.dist * Math.cos(pitch));
     camera.lookAt(cam.x, cam.aim, 0);
     // the lamp hangs above and in front of whatever the camera looks at
@@ -911,7 +763,8 @@
     lamp.distance = 0; lamp.shadow.camera.far = 4 * s;
     rim.position.set(cam.x - 0.6 * s, 0.35 * s, -0.8 * s); rim.target.position.set(cam.x, 0.03, 0); rim.intensity = 0.15 + 0.5 * S.mix;
     // the front desk: the part near the devices; it fades into the far desk behind
-    deskFront.scale.set(40, cam.dist * 2.2, 1); deskFront.position.set(cam.x, 0, cam.dist * 0.75 - cam.dist * 1.1 + cam.dist * 0.35);
+    const dh = cam.dist * 2.2; deskFront.scale.set(40, dh, 1); deskFront.position.set(cam.x, 0, 0);
+    WOOD.map.repeat.set(40 / TILE, dh / TILE); WOOD.map.offset.set((cam.x - 20) / TILE, -dh / 2 / TILE);
     // the studio sits at the far end of the desk, sized to stay in frame
     const ss = cam.dist / 0.85;
     studio.scale.setScalar(ss); studio.position.set(cam.x * 0.97 + (xs[3] * 0.03), 0, -cam.dist * 1.3);
@@ -924,14 +777,12 @@
   // ---- focus: the camera's focus pull IS the mix ----
   let lastBlur = "";
   function applyFocus() {
-    const live = S.mode === "live";
-    const near = live ? 7 : (1 - S.mix) * 7, far = live ? 10 : 0.6 + S.mix * 5;
-    const key = near.toFixed(1) + "/" + far.toFixed(1) + live;
+    // (on the air S.mix heads for 1: the stand on the desk is sharp, the studio behind soft)
+    const near = (1 - S.mix) * 7, far = 0.6 + S.mix * 5;
+    const key = near.toFixed(1) + "/" + far.toFixed(1);
     if (key === lastBlur) return; lastBlur = key;
-    // on the air the room steps back behind the code, out of focus and dimmed
-    const dim = live ? " brightness(0.78)" : "";
-    const nf = near > 0.15 ? `blur(${near.toFixed(1)}px)${dim}` : "none";
-    devC.style.filter = nf; fxC.style.filter = nf; backC.style.filter = `blur(${far.toFixed(1)}px)${dim}`;
+    const nf = near > 0.15 ? `blur(${near.toFixed(1)}px)` : "none";
+    devC.style.filter = nf; fxC.style.filter = nf; backC.style.filter = `blur(${far.toFixed(1)}px)`;
   }
 
   // ---- sound you can see: rings from the speakers in the light ----
@@ -957,29 +808,48 @@
     }
   }
   // ---- controls ----
-  const S = { p: 3, pTarget: 3, pVel: 0, mix: 1, mixUser: 1, mono: 0, monoT: 0, out: 1, bypass: false, dragging: false,
+  const start = backend ? LO : 3;   // the plugin opens on the air; the browser demo on a phone
+  const S = { p: start, pTarget: start, pVel: 0, mix: 1, mixUser: 1, mono: 0, monoT: 0, out: 1, bypass: false, dragging: false,
               device: 3, sentDevice: -1, mixBusy: false, outBusy: false, level: 0, dry: 0, bands: null,
-              userMove: false, selfTest: false, mode: backend ? "live" : "emulate",
+              userMove: false, selfTest: false, mode: backend ? "live" : "emulate", asked: null, hold: 0,
               live: { on: false, failed: false, url: "", listeners: 0, password: "", code: "", qr: "", qrSize: 0 } };
   let haveState = false;
   document.body.classList.toggle("live", S.mode === "live");
+  // how big the code on the stand is on screen, in CSS pixels (0 when the camera isn't at the stand)
+  function codePx() {
+    if (Math.abs(S.p - LO) > 0.05) return 0;
+    const c = air.codeCorners().map(v => toScreen(v));
+    return Math.round(Math.min(Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y), Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y)));
+  }
   // read-only view for the page's tests
   window.__ptRoom = { get p() { return S.p; }, get userMove() { return S.userMove; }, get level() { return S.level; },
-                      get mix() { return S.mixUser; }, get bands() { return S.bands; } };
+                      get mix() { return S.mixUser; }, get bands() { return S.bands; }, get mode() { return S.mode; }, get codePx() { return codePx(); } };
   const chips = document.getElementById("chips");
-  P.forEach((p, i) => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = short[i];
-    b.setAttribute("aria-pressed", i === 3 ? "true" : "false"); b.addEventListener("click", () => { pick(i); hint(); }); chips.appendChild(b); });
+  [AIR, ...P].forEach((p, k) => { const i = k - 1, b = document.createElement("button"); b.type = "button";
+    b.className = i < 0 ? "chip air-chip" : "chip"; b.textContent = i < 0 ? AIR.name : short[i];
+    b.setAttribute("aria-pressed", i === start ? "true" : "false"); b.addEventListener("click", () => { pick(i); hint(); }); chips.appendChild(b); });
   const nameEl = document.getElementById("name"), specEl = document.getElementById("spec");
   const mixIn = document.getElementById("mix"), volIn = document.getElementById("vol");
   const mixOut = document.getElementById("mixOut"), volOut = document.getElementById("volOut");
   const monoB = document.getElementById("mono"), bypB = document.getElementById("bypass");
-  const toLiveB = document.getElementById("toLive"), toEmulateB = document.getElementById("toEmulate"), retryB = document.getElementById("retry");
-  const listenEl = document.getElementById("listen"), sendLevel = document.getElementById("sendLevel");
+  const retryB = document.getElementById("retry"), sendLevel = document.getElementById("sendLevel");
   let hinted = false; function hint() { if (!hinted) { hinted = true; document.getElementById("hint").classList.add("gone"); } }
 
   // A move the user makes (drag, model key, arrow) carries the sound with the camera:
   // the plugin blends the speakers either side of the position until it settles.
-  function pick(i) { S.pTarget = i; S.userMove = true; sendDevice(i); }
+  // Stopping at the stand (-1) puts the plugin on the air; stopping at a speaker takes it off.
+  function askMode(live) {
+    S.asked = live ? "live" : "emulate"; S.hold = performance.now() + 800;
+    if (S.mode !== S.asked) { S.mode = S.asked; document.body.classList.toggle("live", live); wake(); }
+    send({ type: "mode", live });
+  }
+  function pick(i) {
+    S.pTarget = i; S.hold = performance.now() + 800;
+    if (i < 0) { if (S.userMove) { send({ type: "morph", end: true }); S.userMove = false; } if (S.mode !== "live") askMode(true); return; }
+    S.userMove = true;
+    sendDevice(i);
+    if (S.mode === "live") askMode(false);
+  }
   function sendDevice(i) { if (i === S.sentDevice) return; S.sentDevice = i; gesture("device", true); setParam("device", i); gesture("device", false); }
 
   // sliders: a gesture for the whole drag, so a host records one automation move
@@ -999,10 +869,7 @@
   const toggle = (id, on) => { gesture(id, true); setParam(id, on ? 1 : 0); gesture(id, false); };
   monoB.addEventListener("click", () => { S.monoT = S.monoT ? 0 : 1; monoB.setAttribute("aria-pressed", S.monoT ? "true" : "false"); toggle("monoSum", !!S.monoT); });
   bypB.addEventListener("click", () => { S.bypass = !S.bypass; bypB.setAttribute("aria-pressed", S.bypass ? "true" : "false"); toggle("bypass", S.bypass); });
-  // one mode at a time: phones (Live) or the speaker emulation
-  toLiveB.addEventListener("click", () => send({ type: "mode", live: true }));
-  toEmulateB.addEventListener("click", () => send({ type: "mode", live: false }));
-  retryB.addEventListener("click", () => send({ type: "mode", live: true }));
+  retryB.addEventListener("click", () => askMode(true));
   const pw = document.getElementById("pw");
   pw.addEventListener("input", () => send({ type: "password", value: pw.value.trim() }));
 
@@ -1010,26 +877,26 @@
   // drag up or down: pull focus between the speaker and the studio monitors (the mix)
   let drag = null;
   stage.addEventListener("pointerdown", e => {
-    if (S.mode === "live" || (e.target.closest && e.target.closest(".listen"))) return;
     stage.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, p: S.p, m: S.mixUser, axis: null }; S.dragging = true; hint();
   });
   stage.addEventListener("pointermove", e => {
     if (!drag) return;
     const ddx = e.clientX - drag.x, ddy = e.clientY - drag.y;
     if (!drag.axis && Math.hypot(ddx, ddy) > 6) {
-      drag.axis = Math.abs(ddx) > Math.abs(ddy) ? "x" : "y";
-      if (drag.axis === "x") S.userMove = true;
+      // (on the air there's no mix to pull: up and down do nothing)
+      drag.axis = Math.abs(ddx) > Math.abs(ddy) ? "x" : S.mode === "live" ? "none" : "y";
+      if (drag.axis === "x" && S.mode !== "live") S.userMove = true;
       if (drag.axis === "y") { S.mixBusy = true; gesture("mix", true); }
     }
     if (drag.axis === "x") {
-      S.p = Math.max(-0.25, Math.min(P.length - 0.75, drag.p - ddx / (W * 0.45))); S.pTarget = S.p;
-      sendDevice(Math.max(0, Math.min(P.length - 1, Math.round(S.p))));
+      S.p = Math.max(LO - 0.25, Math.min(HI + 0.25, drag.p - ddx / (W * 0.45))); S.pTarget = S.p;
+      if (S.mode !== "live" && S.p > -0.5) sendDevice(Math.max(0, Math.min(HI, Math.round(S.p))));
     }
     if (drag.axis === "y") { S.mixUser = Math.max(0, Math.min(1, drag.m - ddy / (H * 0.6))); mixIn.value = (S.mixUser * 100).toFixed(1); setParam("mix", S.mixUser * 100); }
   });
   const endDrag = () => {
     if (!drag) return;
-    if (drag.axis === "x") { const i = Math.max(0, Math.min(P.length - 1, Math.round(S.p - S.pVel * 6))); S.pTarget = i; sendDevice(i); }
+    if (drag.axis === "x") pick(Math.max(LO, Math.min(HI, Math.round(S.p - S.pVel * 6))));
     if (drag.axis === "y") { S.mixBusy = false; gesture("mix", false); }
     drag = null; S.dragging = false;
   };
@@ -1054,8 +921,8 @@
       if (!ownsKey(e) && passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
       return;
     }
-    if (S.mode !== "live" && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
-      pick(Math.max(0, Math.min(P.length - 1, Math.round(S.pTarget) + (e.key === "ArrowRight" ? 1 : -1)))); hint(); e.preventDefault(); return;
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      pick(Math.max(LO, Math.min(HI, Math.round(S.pTarget) + (e.key === "ArrowRight" ? 1 : -1)))); hint(); e.preventDefault(); return;
     }
     if (S.mode !== "live" && (e.key === "ArrowUp" || e.key === "ArrowDown")) { nudgeMix(e.key === "ArrowUp" ? 5 : -5); hint(); e.preventDefault(); return; }
     if (passKeysOn) { passedOn.add(e.keyCode); send({ type: "key", keyCode: e.keyCode, down: true }); e.preventDefault(); }
@@ -1071,8 +938,6 @@
   }, true);
 
   // the plugin's state: follow the host (automation, presets) whenever the user isn't touching that control
-  const qrC = document.getElementById("qr"), qx = qrC.getContext("2d");
-  let qrShown = "";
   function markExample(g, x0, y0, size) {
     // the stand-in's code isn't a real one: say so across it
     g.save(); g.fillStyle = "rgba(13,12,11,0.82)"; g.fillRect(x0, y0 + size * 0.4, size, size * 0.2);
@@ -1087,13 +952,21 @@
   }
   onState(st => {
     if (!st) return;
-    haveState = true;
+    const first = !haveState; haveState = true;
     if (st.selfTest && !S.selfTest) { S.selfTest = true; wake(); }
-    const mode = st.mode || (st.live.on ? "live" : "emulate");
-    if (mode !== S.mode || st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || st.device !== S.device || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
-    if (mode !== S.mode) { S.mode = mode; document.body.classList.toggle("live", mode === "live"); }
-    if (!S.dragging && st.device !== S.device) { S.device = st.device; S.sentDevice = st.device; S.pTarget = st.device; }
+    let mode = st.mode || (st.live.on ? "live" : "emulate");
+    // just after the user asked to go on or off the air, the plugin's answer may still be on its way
+    const holding = performance.now() < S.hold;
+    if (holding && S.asked && mode !== S.asked) mode = S.asked;
+    const modeChanged = mode !== S.mode, deviceChanged = st.device !== S.device;
+    if (modeChanged || st.live.on !== S.live.on || st.live.listeners !== S.live.listeners || deviceChanged || st.mono !== !!S.monoT || st.bypass !== S.bypass) wake();
+    if (modeChanged) { S.mode = mode; document.body.classList.toggle("live", mode === "live"); }
+    if (!S.dragging && deviceChanged) S.sentDevice = st.device;
     S.device = st.device;
+    // the camera goes where the plugin went (the host may move it): to the stand on the air, else to its speaker
+    const want = mode === "live" ? LO : st.device;
+    if (first) { S.p = S.pTarget = want; S.pVel = 0; }
+    else if (!S.dragging && !holding && (modeChanged || deviceChanged)) S.pTarget = want;
     if (!S.mixBusy && !(drag && drag.axis === "y")) { S.mixUser = st.mix / 100; mixIn.value = st.mix; }
     if (!S.outBusy) { S.outT = st.output / 100; volIn.value = st.output; }
     volOut.textContent = Math.round(st.output) + "%";
@@ -1103,26 +976,17 @@
     const L = st.live;
     if (L.qr === undefined) { L.qr = S.live.qr; L.qrSize = S.live.qrSize; } // sent only when it changes
     if (!L.on) { L.qr = ""; L.qrSize = 0; }
+    if (L.qr !== S.live.qr || !!L.failed !== !!S.live.failed || !!L.example !== !!S.live.example) wake();
     S.live = L;
-    listenEl.hidden = S.mode !== "live";
     document.getElementById("onair").hidden = !L.on;
     document.getElementById("liveErr").hidden = !L.failed;
     retryB.hidden = !L.failed;
     sendLevel.style.width = (L.on ? Math.min(100, Math.round(S.level * 140)) : 0) + "%";
-    document.getElementById("liveErr").textContent = ja ? "\u3053\u306ePC\u3067\u53d7\u4fe1\u3092\u958b\u59cb\u3067\u304d\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u30d5\u30a1\u30a4\u30a2\u30a6\u30a9\u30fc\u30eb\u306e\u8a2d\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002" : "Couldn't start listening on this computer. Check the firewall settings.";
-    qrC.hidden = !L.on;
+    document.getElementById("liveErr").textContent = AIRTXT.err;
     document.getElementById("liveUrl").textContent = L.url;
-    document.getElementById("liveCount").textContent = !L.on ? "" : L.example
-      ? (ja ? "\u30d7\u30e9\u30b0\u30a4\u30f3\u3067\u306f\u3001\u540c\u3058Wi-Fi\u306e\u30b9\u30de\u30db\u3067\u3053\u306e\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u53d6\u3063\u3066\u8074\u304d\u307e\u3059" : "In the plugin, phones on the same Wi-Fi scan this code to listen")
-      : ja ? (L.listeners ? `${L.listeners}\u53f0\u3067\u518d\u751f\u4e2d` : "\u30b9\u30de\u30db\u3092\u5f85\u3063\u3066\u3044\u307e\u3059") : (L.listeners === 1 ? "1 phone listening" : L.listeners ? `${L.listeners} phones listening` : "Waiting for a phone");
+    document.getElementById("liveCount").textContent = countText(L);
     if (document.activeElement !== pw && pw.value !== L.password) pw.value = L.password;
     pw.placeholder = L.code ? (ja ? `\u81ea\u52d5: ${L.code}` : `auto: ${L.code}`) : "";
-    if (L.on && L.qr && L.qr !== qrShown) {
-      qrShown = L.qr; drawQr(qx, qrC.width, L.qr, L.qrSize, 0, 0);
-      if (L.example) markExample(qx, 0, 0, qrC.width);
-      devices.forEach(d => d.lastDraw = -1); wake();
-    }
-    if (!L.on && qrShown) { qrShown = ""; devices.forEach(d => d.lastDraw = -1); wake(); }
   });
   send({ type: "ready" });
 
@@ -1152,9 +1016,7 @@
     const g = c.getContext("2d");
     g.fillStyle = "#0d0c0b"; g.fillRect(0, 0, c.width, c.height);
     for (const layer of [backC, devC, fxC]) g.drawImage(layer, 0, 0, c.width, c.height);
-    const qrBox = qrC.getBoundingClientRect(), stageBox = stage.getBoundingClientRect(), k = c.width / Math.max(1, W);
-    const qrShownNow = !listenEl.hidden && !qrC.hidden && qrBox.width > 0;
-    if (qrShownNow) g.drawImage(qrC, (qrBox.left - stageBox.left) * k, (qrBox.top - stageBox.top) * k, qrBox.width * k, qrBox.height * k);
+    const qrPx = codePx(), qrShownNow = S.mode === "live" && !!S.live.on && !!S.live.qr && qrPx > 0;
     const d = g.getImageData(0, 0, c.width, c.height).data, count = d.length / 4;
     let sum = 0, sum2 = 0, lit = 0;
     for (let i = 0; i < d.length; i += 4) { const y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; sum += y; sum2 += y * y; if (y > 40) lit++; }
@@ -1167,15 +1029,15 @@
     try { const gl = rDev.getContext(), ext = gl.getExtension("WEBGL_debug_renderer_info"); renderer = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) {}
     send({ type: "diag", kind: "rendered", webgl: renderer, fonts: document.fonts.check('600 20px "Barlow Condensed"'),
            size: [W, H, DPR], meanLuma: +mean.toFixed(1), lumaSpread: +sd.toFixed(1), litShare: +(lit / count).toFixed(3),
-           speakerCover: +(covered / 4096).toFixed(3), model: P[Math.max(0, Math.min(P.length - 1, Math.round(S.p)))].name,
-           screen: S.mode, onAir: !!S.live.on, qr: { shown: qrShownNow, modules: S.live.qrSize || 0, px: Math.round(qrBox.width) },
+           speakerCover: +(covered / 4096).toFixed(3), model: at(Math.max(LO, Math.min(HI, Math.round(S.p)))).name,
+           screen: S.mode, onAir: !!S.live.on, qr: { shown: qrShownNow, modules: S.live.qrSize || 0, px: qrPx },
            url: S.live.url || "" });
     send({ type: "snapshot", png: c.toDataURL("image/png") });
   }
 
   // ---- one clock for the picture ----
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let prev = performance.now(), shown = -1, frameNo = 0;
+  let prev = performance.now(), shown = -2, shownSpec = "", frameNo = 0;
   let lastRendered = 0;
   function tick(now) {
     const realDt = Math.min(0.25, Math.max(0, (now - prev) / 1000)), dt = Math.min(0.05, realDt); prev = now; frameNo++;
@@ -1189,28 +1051,41 @@
       if (Math.abs(S.pTarget - S.p) < 0.0005 && Math.abs(S.pVel) < 0.001) { S.p = S.pTarget; S.pVel = 0; }
     } else S.pVel = 0;
     const ease = (v, t, r) => v + (t - v) * Math.min(1, realDt * r);
-    S.mix = ease(S.mix, S.bypass ? 0 : S.mixUser, 7);
+    const onAir = S.mode === "live", mixTo = onAir ? 1 : S.bypass ? 0 : S.mixUser;
+    S.mix = ease(S.mix, mixTo, 7);
     S.mono = ease(S.mono, S.monoT, 7);
     S.out = ease(S.out, S.outT, 12);
     if (S.userMove) {
       // the sound follows the camera while the user's move plays out, then settles on the model
       if (!S.dragging && S.p === S.pTarget && S.pVel === 0) { send({ type: "morph", end: true }); S.userMove = false; }
-      else send({ type: "morph", pos: Math.max(0, Math.min(P.length - 1, S.p)) });
+      else send({ type: "morph", pos: Math.max(0, Math.min(HI, S.p)) });
     }
     // Inside a DAW the room shouldn't cost anything while nothing moves: draw only
     // while something animates, sound is playing, or the state just changed.
+    // (On the air the stand doesn't move with the sound, so playing alone doesn't redraw it.)
     const moving = S.dragging || Math.abs(S.pTarget - S.p) > 1e-4 || Math.abs(S.pVel) > 1e-4
-      || Math.abs(S.mix - (S.bypass ? 0 : S.mixUser)) > 1e-3 || Math.abs(S.mono - S.monoT) > 1e-3 || Math.abs(S.out - S.outT) > 1e-3
-      || rings.length > 0 || S.level > 0.002 || S.dry > 0.002 || (S.selfTest && !reported);
+      || Math.abs(S.mix - mixTo) > 1e-3 || Math.abs(S.mono - S.monoT) > 1e-3 || Math.abs(S.out - S.outT) > 1e-3
+      || rings.length > 0 || (!onAir && (S.level > 0.002 || S.dry > 0.002)) || (S.selfTest && !reported);
     if (moving) redraw = Math.max(redraw, 2);
+    if (moving && paused) { quality = paused; paused = 0; frameMs.length = 0; resize(); }
+    if (redraw <= 0 && quality < 1) { paused = quality; quality = 1; frameMs.length = 0; resize(); redraw = 1; lastRendered = 0; }
     if (redraw <= 0) { lastRendered = 0; requestAnimationFrame(tick); return; }
     redraw--;
+    // at the stand the code is drawn at the full resolution, so a phone can read it
+    if (S.p === LO && quality < 1) { quality = 1; frameMs.length = 0; resize(); }
     setCamera(); applyFocus();
-    let best = 1e9, focus = 0;
+    drawAir();
+    {
+      const off = (X(LO) - cam.x) / cam.dist, lit = Math.exp(-off * off * 3);
+      air.root.visible = Math.abs(off) < 1.8;
+      air.root.rotation.y = -0.04 - Math.max(-0.5, Math.min(0.5, off * 0.35));
+      air.screen.mat.emissiveIntensity = 0.15 + 0.85 * lit;
+    }
+    let best = Math.abs((X(LO) - cam.x) / cam.dist), focus = LO;
     devices.forEach((d, i) => {
       const off = (xs[i] - cam.x) / cam.dist;
       d.root.visible = Math.abs(off) < 1.8;
-      d.root.rotation.y = -0.16 - Math.max(-0.5, Math.min(0.5, off * 0.35));
+      d.root.rotation.y = (P[i].kind === "phone" ? -0.38 : -0.16) - Math.max(-0.5, Math.min(0.5, off * 0.35));
       if (Math.abs(off) < best) { best = Math.abs(off); focus = i; }
       if (d.screen) {
         const lit = Math.exp(-off * off * 3);
@@ -1223,15 +1098,17 @@
     rBack.render(back, camera); rDev.render(front, camera);
     if (lastRendered && now - lastRendered < 250) adaptQuality(now - lastRendered);
     lastRendered = now;
-    if (!reduce && S.mode !== "live") emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now);
+    if (!reduce && !onAir && focus >= 0) emit(devices[focus].emit.map(f => toScreen(f())), S.bypass ? 0 : S.level * 0.35, now);
     drawRings(now);
-    if (S.selfTest && !reported && frameNo > 30) { reported = true; selfTestReport(); }
-    const near = Math.max(0, Math.min(P.length - 1, Math.round(S.p)));
-    if (near !== shown) {
-      shown = near; const p = P[near];
-      nameEl.textContent = p.name; specEl.innerHTML = `${fmtHz(p.hp)} \u2013 ${fmtHz(p.lp)}<br>drive ${p.drive.toFixed(1)} dB`;
-      [...chips.children].forEach((b, i) => b.setAttribute("aria-pressed", i === near ? "true" : "false"));
-      chips.children[near].scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (S.selfTest && !reported && frameNo > 30 && (!loading || frameNo > 600)) { reported = true; selfTestReport(); }
+    const near = Math.max(LO, Math.min(HI, Math.round(S.p)));
+    const spec = near < 0 ? (S.live.failed ? (ja ? "\u30aa\u30d5\u30a8\u30a2" : "off air") : S.live.example ? "" : countText(S.live)) : "";
+    if (near !== shown || (near < 0 && spec !== shownSpec)) {
+      shown = near; shownSpec = spec; const p = at(near);
+      nameEl.textContent = p.name;
+      if (near < 0) specEl.textContent = spec; else specEl.innerHTML = `${fmtHz(p.hp)} \u2013 ${fmtHz(p.lp)}<br>drive ${p.drive.toFixed(1)} dB`;
+      [...chips.children].forEach((b, k) => b.setAttribute("aria-pressed", k === near + 1 ? "true" : "false"));
+      chips.children[near + 1].scrollIntoView({ block: "nearest", inline: "nearest" });
     }
     const m = Math.round((S.bypass ? 0 : S.mixUser) * 100);
     mixOut.textContent = S.bypass ? "Bypass" : m >= 100 ? "Phone 100%" : m <= 0 ? "Studio 100%" : `Phone ${m}%`;

@@ -15,13 +15,14 @@ const resources = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".ttf": "font/ttf",
                 ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav", ".ogg": "audio/ogg" };
 
-/** Serves the page at /, three.js and the fonts beside it, and `song` as /song.mp3. */
+/** Serves the page at /, three.js, the models and the fonts beside it, and `song` as /song.mp3. */
 export function createRoomServer({ song = null } = {}) {
   return http.createServer((req, res) => {
     const url = decodeURIComponent((req.url || "/").split("?")[0]);
     let file = null;
     if (url === "/" || url === "/index.html") file = path.join(resources, "room.html");
     else if (url === "/three.min.js") file = path.join(resources, "thirdparty", "three.min.js");
+    else if (/^\/[\w-]+\.(glb|jpg|hdr)$/.test(url)) file = path.join(resources, "models", url.slice(1));
     else if (url.startsWith("/fonts/")) file = path.join(resources, "fonts", path.basename(url));
     else if (url === "/song.mp3" && song) file = song;
 

@@ -40,6 +40,7 @@ private:
     void handleUi (const juce::var&);
     void releaseKeyboardToPlugin();
     void goLive();
+    void leaveLive();
     juce::String unavailableText() const;
     void forwardKeyToHost (const juce::var&);
     void stepParameter (const juce::String& id, double delta);

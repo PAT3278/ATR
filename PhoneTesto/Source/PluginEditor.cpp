@@ -46,6 +46,8 @@ namespace
         if (file.endsWithIgnoreCase (".js"))   return "text/javascript; charset=utf-8";
         if (file.endsWithIgnoreCase (".ttf"))  return "font/ttf";
         if (file.endsWithIgnoreCase (".css"))  return "text/css";
+        if (file.endsWithIgnoreCase (".glb"))  return "model/gltf-binary";
+        if (file.endsWithIgnoreCase (".jpg"))  return "image/jpeg";
         return "application/octet-stream";
     }
 }
@@ -217,12 +219,7 @@ void PhoneTestoAudioProcessorEditor::handleUi (const juce::var& v)
         if ((bool) v["live"])
             goLive();
         else
-        {
-            processor.endMorph();
-            processor.setLiveMode (false);
-            processor.stopLiveMonitor(); // phones wait, and reconnect when it's back
-            liveStartFailed = false;
-        }
+            leaveLive();
     }
     else if (type == "password")
         processor.setLivePassword (v["value"].toString().trim().substring (0, 32));
@@ -301,13 +298,39 @@ void PhoneTestoAudioProcessorEditor::goLive()
         selfTestLog (liveStartFailed ? "Live: the server didn't start" : "Live: sending on port " + juce::String (processor.getLiveMonitorPort()));
 }
 
+void PhoneTestoAudioProcessorEditor::leaveLive()
+{
+    processor.endMorph();
+    processor.setLiveMode (false);
+    processor.stopLiveMonitor(); // phones wait, and reconnect when it's back
+    liveStartFailed = false;
+}
+
 bool PhoneTestoAudioProcessorEditor::keyPressed (const juce::KeyPress& key)
 {
-    // On the air the room isn't in use: every key is the host's.
+    // The room's own keys: arrows move along the desk and pull focus (mix).
+    // Listening on the phone is the first place on the desk, left of the
+    // first speaker: on the air the right arrow goes on to that speaker.
     if (processor.isLiveMode())
-        return false;
+    {
+        if (key == juce::KeyPress::rightKey)
+        {
+            leaveLive();
+            gesture (PhoneTestoAudioProcessor::deviceParamId, true);
+            setParameter (PhoneTestoAudioProcessor::deviceParamId, 0.0);
+            gesture (PhoneTestoAudioProcessor::deviceParamId, false);
+            return true;
+        }
+        return key == juce::KeyPress::leftKey; // nothing further left; the rest is the host's (no mix on air)
+    }
 
-    // The room's own keys: arrows move along the desk (model) and pull focus (mix).
+    if (key == juce::KeyPress::leftKey && (int) processor.apvts.getRawParameterValue (PhoneTestoAudioProcessor::deviceParamId)->load() <= 0)
+    {
+        processor.endMorph();
+        goLive();
+        return true;
+    }
+
     if (key == juce::KeyPress::leftKey)  { stepParameter (PhoneTestoAudioProcessor::deviceParamId, -1.0); return true; }
     if (key == juce::KeyPress::rightKey) { stepParameter (PhoneTestoAudioProcessor::deviceParamId, 1.0);  return true; }
     if (key == juce::KeyPress::upKey)    { stepParameter (PhoneTestoAudioProcessor::mixParamId, 5.0);     return true; } // as dragging up: nearer the phone

@@ -1,6 +1,6 @@
 // Reads what the stand-alone app's editor self-test wrote (PHONETESTO_EDITOR_SELFTEST)
 // and fails unless the window really came up: the web view was there, it opened on the
-// air with the code to scan, WebGL drew the room behind it, the fonts loaded, no script
+// air at the stand with the code to scan, WebGL drew the room, the fonts loaded, no script
 // errors, and a snapshot was saved.
 //
 //   node Tests/check_editor_selftest.mjs <folder>

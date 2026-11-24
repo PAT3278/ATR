@@ -4,12 +4,13 @@
 //    three.js and fonts, a song plays through the page's sketch of the
 //    emulation, a drag along the desk moves through the speakers and settles.
 // 2. As the plugin's editor, against a stand-in for JUCE's bridge: it opens on
-//    the air with the code to scan and no emulation controls; then what the page
-//    sends the plugin -- the switch to the emulation, the morph while the user
+//    the air, at the stand with the code to scan (the first place on the desk),
+//    without the emulation's controls; then what the page sends the plugin --
+//    the switch to the emulation (the right arrow, to the first speaker), the morph while the user
 //    moves and its end, model and mix changes, keyboard focus handed back after
 //    mouse use, unused keys passed on to the host (Windows), nothing taken from
 //    the password field.
-// 3. Layout of the Live screen at a small, the default and a large window.
+// 3. The stand with the code at a small, the default and a large window.
 //
 //   node Tests/browser/room_test.mjs [screenshot-dir]
 
@@ -56,7 +57,7 @@ async function open(viewport, init) {
   page.on("response", r => { if (r.status() >= 400) missing.push(r.url()); });
   if (init) await page.addInitScript(init);
   await page.goto(base);
-  await page.waitForFunction(() => window.THREE && document.querySelectorAll(".chip").length === 8);
+  await page.waitForFunction(() => window.THREE && document.querySelectorAll(".chip").length === 9);
   await page.waitForTimeout(2500);
   return { page, errors, missing };
 }
@@ -97,24 +98,24 @@ try {
     check(during > 3.2 && Number.isInteger(settled.p) && settled.p > 3 && !settled.move,
           `a drag along the desk moves through the speakers and settles on one (at ${during.toFixed(2)} during, ${settled.name} after)`);
 
-    await page.click(".chip >> nth=6");
+    await page.click(".chip >> nth=7");
     await page.waitForFunction(() => document.getElementById("name").textContent === "Laptop Speakers");
-    check(await page.evaluate(() => document.querySelector(".chip:nth-child(7)").getAttribute("aria-pressed")) === "true", "a model key moves the room to that speaker and marks it");
+    check(await page.evaluate(() => document.querySelector(".chip:nth-child(8)").getAttribute("aria-pressed")) === "true", "a model key moves the room to that speaker and marks it");
 
     await page.click("#mono");
     await page.waitForTimeout(400);
     check(await page.evaluate(() => document.getElementById("mono").getAttribute("aria-pressed")) === "true", "MONO latches");
 
-    check(await page.evaluate(() => document.getElementById("listen").hidden), "the demo opens on the room (there's no network to play to)");
-    await page.click("#toLive");
-    await page.waitForFunction(() => !document.getElementById("listen").hidden);
-    const live = await page.evaluate(() => ({ text: document.getElementById("liveCount").textContent, qr: !document.getElementById("qr").hidden,
-                                              chips: getComputedStyle(document.getElementById("chips")).display }));
-    check(live.qr && /plugin/i.test(live.text) && live.chips === "none",
-          `LISTEN ON PHONE shows the code screen (marked as an example here) without the emulation's controls ("${live.text}")`);
-    await page.click("#toEmulate");
-    await page.waitForFunction(() => document.getElementById("listen").hidden);
-    check(true, "SPEAKER EMULATION goes back to the room");
+    check(await page.evaluate(() => window.__ptRoom.mode === "emulate"), "the demo opens on a speaker (there's no network to play to)");
+    await page.click(".air-chip");
+    await page.waitForFunction(() => window.__ptRoom.mode === "live" && window.__ptRoom.p === -1, null, { timeout: 60000 });
+    const live = await page.evaluate(() => ({ text: document.getElementById("liveCount").textContent, code: window.__ptRoom.codePx,
+                                              chips: getComputedStyle(document.getElementById("chips")).display, mix: document.getElementById("mix").getBoundingClientRect().width }));
+    check(live.code >= 140 && /plugin/i.test(live.text) && live.chips !== "none" && live.mix === 0,
+          `the first place on the desk is the stand with the code (${live.code} px, marked as an example here), without the emulation's controls ("${live.text}")`);
+    await page.click(".chip >> nth=1");
+    await page.waitForFunction(() => window.__ptRoom.mode === "emulate" && window.__ptRoom.p === 0, null, { timeout: 60000 });
+    check(true, "a speaker's key takes it off the air, to that speaker");
     await page.close();
   }
 
@@ -139,29 +140,28 @@ try {
     check((await page.evaluate(() => window.__sent.some(m => m.type === "ready"))), "it tells the plugin it's ready");
     check(await page.evaluate(() => document.getElementById("demo").hidden), "no song controls inside the plugin");
 
-    // the first screen: the code to scan
+    // the first screen: the stand with the code to scan
     const first = await page.evaluate(() => {
       const shown = id => { const e = document.getElementById(id); return !e.hidden && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().width > 0; };
-      return { listen: shown("listen"), qr: Math.round(document.getElementById("qr").getBoundingClientRect().width), chips: shown("chips"),
-               mix: shown("mix"), toEmulate: shown("toEmulate"), count: document.getElementById("liveCount").textContent,
-               url: document.getElementById("liveUrl").textContent };
+      return { p: window.__ptRoom.p, code: window.__ptRoom.codePx, chips: shown("chips"), air: document.querySelector(".air-chip").getAttribute("aria-pressed"),
+               mix: shown("mix"), pw: shown("pw"), count: document.getElementById("liveCount").textContent, url: document.getElementById("liveUrl").textContent };
     });
-    check(first.listen && first.qr >= 200 && !first.chips && !first.mix && first.toEmulate && first.count === "Waiting for a phone" && first.url.startsWith("http://"),
-          `it opens on the air: the code (${first.qr} px), "${first.count}", the address; no emulation controls`);
-    await sent();
-    await page.keyboard.press("ArrowRight");
-    let onAirKeys = await sent();
-    check(!of(onAirKeys, "param").length && of(onAirKeys, "key").some(k => k.keyCode === 39), "on the air the arrows aren't the room's: they go on to the host");
+    check(first.p === -1 && first.code >= 200 && first.chips && first.air === "true" && !first.mix && first.pw && first.count === "Waiting for a phone" && first.url.startsWith("http://"),
+          `it opens on the air, at the stand: the code (${first.code} px), "${first.count}", the address, the password; no emulation controls`);
     await page.evaluate(() => { window.__state.live.listeners = 2; });
     await page.waitForFunction(() => document.getElementById("liveCount").textContent === "2 phones listening");
     check(true, "the count follows the phones listening");
-
-    await page.click("#toEmulate");
-    onAirKeys = await sent();
-    check(of(onAirKeys, "mode").some(m => m.live === false), "SPEAKER EMULATION asks the plugin to switch over");
-    await page.evaluate(() => { window.__state.mode = "emulate"; window.__state.live = { on: false, failed: false, url: "", listeners: 0, password: "", code: "abc23def" }; });
-    await page.waitForFunction(() => document.getElementById("listen").hidden && getComputedStyle(document.getElementById("chips")).display !== "none");
-    check(true, "and the room comes back with its controls when it has");
+    await sent();
+    await page.keyboard.press("ArrowRight");
+    let onAirKeys = await sent();
+    check(of(onAirKeys, "mode").some(m => m.live === false) && of(onAirKeys, "param").some(m => m.id === "device" && m.value === 0) && !of(onAirKeys, "key").length,
+          "on the air the right arrow goes on to the first speaker: off the air, model 0");
+    await page.evaluate(() => { window.__state.mode = "emulate"; window.__state.device = 0; window.__state.live = { on: false, failed: false, url: "", listeners: 0, password: "", code: "abc23def" }; });
+    await page.waitForFunction(() => !document.body.classList.contains("live") && document.getElementById("mix").getBoundingClientRect().width > 0 && window.__ptRoom.p === 0, null, { timeout: 60000 });
+    check(true, "and the room shows the speaker with its controls when it has");
+    await page.click(".chip >> nth=4");
+    await page.evaluate(() => { window.__state.device = 3; });
+    await page.waitForFunction(() => !window.__ptRoom.userMove && window.__ptRoom.p === 3, null, { timeout: 60000 });
     await page.waitForTimeout(500);
     await sent();
 
@@ -193,12 +193,12 @@ try {
     check(keys.some(k => k.keyCode === 32 && k.down) && keys.some(k => k.keyCode === 32 && !k.down) && keys.some(k => k.keyCode === 83),
           `keys the room doesn't use go on to the host (${keys.map(k => k.keyCode + (k.down ? "v" : "^")).join(" ")})`);
 
-    await page.click("#toLive");
+    await page.click(".air-chip");
     list = await sent();
-    check(of(list, "mode").some(m => m.live === true), "LISTEN ON PHONE asks the plugin to go back on the air");
+    check(of(list, "mode").some(m => m.live === true), "the stand's key asks the plugin to go back on the air");
     await page.evaluate(() => { window.__state.mode = "live"; window.__state.live = { on: true, failed: false, url: "http://192.168.1.20:51813/?k=abc23def", listeners: 0,
                                                         password: "", code: "abc23def", qr: "1".repeat(625), qrSize: 25 }; });
-    await page.waitForFunction(() => !document.getElementById("listen").hidden);
+    await page.waitForFunction(() => document.body.classList.contains("live") && window.__ptRoom.p === -1, null, { timeout: 60000 });
     await page.evaluate(() => { window.__state.live.failed = true; window.__state.live.on = false; });
     await page.waitForFunction(() => !document.getElementById("retry").hidden);
     await page.click("#retry");
@@ -217,24 +217,20 @@ try {
   }
 
   // ---------------------------------------------------------------------
-  console.log("Layout of the Live screen");
+  console.log("The stand with the code");
   for (const [w, h] of [[720, 480], [1000, 660], [1600, 1000]]) {
     const { page } = await open({ width: w, height: h });
-    await page.click("#toLive");
-    await page.waitForFunction(() => !document.getElementById("listen").hidden);
+    await page.click(".air-chip");
+    await page.waitForFunction(() => window.__ptRoom.mode === "live" && window.__ptRoom.p === -1, null, { timeout: 60000 });
     await page.waitForTimeout(800);
     const box = await page.evaluate(() => {
       const r = el => el.getBoundingClientRect();
-      const stage = r(document.getElementById("stage")), card = r(document.querySelector(".listen-card")), qr = r(document.getElementById("qr"));
-      const pw = r(document.getElementById("pw")), row = r(document.querySelector(".row")), air = r(document.getElementById("toEmulate"));
-      const inside = [...document.querySelectorAll(".listen-text > *, #pw")].filter(e => !e.hidden)
-        .every(e => { const b = r(e); return (b.width === 0 && b.height === 0) || (b.right <= card.right + 0.5 && b.left >= card.left - 0.5); });
-      return { cardFits: card.bottom <= stage.bottom + 0.5 && pw.bottom <= card.bottom + 0.5 && card.right <= window.innerWidth && inside, qr: Math.round(qr.width),
-               noSideScroll: document.documentElement.scrollWidth <= window.innerWidth, rowLines: Math.round(row.height / air.height),
-               stageH: Math.round(stage.height) };
+      const stage = r(document.getElementById("stage")), pw = r(document.getElementById("pw"));
+      return { code: window.__ptRoom.codePx, fits: pw.right <= window.innerWidth + 0.5 && pw.bottom <= window.innerHeight + 0.5 && pw.width >= 100,
+               noSideScroll: document.documentElement.scrollWidth <= window.innerWidth, stageH: Math.round(stage.height) };
     });
-    check(box.cardFits && box.noSideScroll && box.qr >= 140 && box.stageH > h * 0.6,
-          `${w}x${h}: the card fits (code ${box.qr} px), ${box.stageH} px above the strip, its controls on ${box.rowLines} line(s), no sideways scroll`);
+    check(box.fits && box.noSideScroll && box.code >= 140 && box.stageH > h * 0.6,
+          `${w}x${h}: the code ${box.code} px on screen, ${box.stageH} px above the strip, the password field in view, no sideways scroll`);
     if (shots) { fs.mkdirSync(shots, { recursive: true }); await page.screenshot({ path: path.join(shots, `room-${w}x${h}.png`) }); }
     await page.close();
   }
