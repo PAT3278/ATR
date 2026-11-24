@@ -716,6 +716,22 @@
       const meshes = counts.map((c) => { const im = new THREE.InstancedMesh(bake(look(r)), crowdM, Math.max(1, c)); im.count = c; im.castShadow = true; im.frustumCulled = false; group.add(im); return im; });
       return { group, set(i, m4) { const [v, k] = slot[i]; meshes[v].setMatrixAt(k, m4); }, done() { meshes.forEach((im) => (im.instanceMatrix.needsUpdate = true)); } };
     }
+    // Real people (src/people.js: Quaternius's low-poly men and women, recoloured per part from these palettes' kind of
+    // range) once their models are in; the hand-built figures above otherwise. Same calls either way, plus:
+    //   crowd(n, r, nv, { pose, t })   what the crowd is doing ('Walk' by default; 'Idle' for people standing about)
+    //   real                           true when these are the real people
+    const PE = SW.People && SW.People.ready ? SW.People : null;
+    if (PE) {
+      const skinned = mat('#ffffff', { rough: 0.8 }, true); skinned.vertexColors = true; skinned.skinning = true;
+      const plain = mat('#ffffff', { rough: 0.8 }, true); plain.vertexColors = true;
+      const crowdR = (n, r, nv = 10, o = {}) => {
+        const group = new THREE.Group(), slot = [], counts = new Array(nv).fill(0);
+        for (let i = 0; i < n; i++) { const v = Math.floor(r() * nv); slot.push([v, counts[v]++]); }
+        const meshes = counts.map((c) => { const im = new THREE.InstancedMesh(PE.bake(PE.look(r, { pose: o.pose || 'Walk', t: o.t })), plain, Math.max(1, c)); im.count = c; im.castShadow = true; im.frustumCulled = false; group.add(im); return im; });
+        return { group, set(i, m4) { const [v, k] = slot[i]; meshes[v].setMatrixAt(k, m4); }, done() { meshes.forEach((im) => (im.instanceMatrix.needsUpdate = true)); } };
+      };
+      return { C, look: (r, o) => PE.look(r, o), dress: (r, L) => PE.dress(L || PE.look(r), skinned), bake: (L) => PE.bake(L), crowd: crowdR, real: true };
+    }
     return { C, look, dress: (r, L, lo) => dress(r, L || look(r), lo), bake, crowd };
   })();
   const swag = { locs, cornrows, capGeos, maskGeo, bandanaGeo, shadesGeo, chainGeo, hightopGeo, stackGeo, pufferGeo, mergeGeos, compact, uvs, jewel, studio: studioTex };

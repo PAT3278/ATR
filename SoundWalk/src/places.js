@@ -1035,8 +1035,9 @@
           const spots = []; for (let k = 0; k < 5; k++) spots.push([19.2, -76.5 - k * 1.1]); for (let k = 0; k < 4; k++) spots.push([-18.5 + (k % 2) * 0.6, -83.5 - k * 0.9]); for (let k = 0; k < 9; k++) spots.push([-10 + xr() * 20, -92.5 - xr() * 2.5]);
           const NB = spots.length, bI = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.26, 1.15, 8).translate(0, 0.72, 0), bodyM, NB), hI = new THREE.InstancedMesh(new THREE.SphereGeometry(0.15, 10, 8).translate(0, 1.47, 0), E.mat('#ffffff', { rough: 0.6 }), NB);
           const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-          spots.forEach(([x, z], i) => { m4.compose(new THREE.Vector3(x, 0.04, z), q.setFromAxisAngle(up, xr() * 6.28), new THREE.Vector3(1, 1, 1)); bI.setMatrixAt(i, m4); hI.setMatrixAt(i, m4); bI.setColorAt(i, E.lin(coats[Math.floor(xr() * coats.length)])); hI.setColorAt(i, E.lin(skins[Math.floor(xr() * skins.length)])); p.addCircle(x, z, 0.3); });
-          bI.castShadow = true; ext.add(bI, hI); }
+          const folk = E.npc.real ? E.npc.crowd(NB, E.rng(1039), 8, { pose: 'Idle' }) : null;   // the real people when they are in (xr is drawn the same either way, so what comes after stays put)
+          spots.forEach(([x, z], i) => { m4.compose(new THREE.Vector3(x, 0.04, z), q.setFromAxisAngle(up, xr() * 6.28), new THREE.Vector3(1, 1, 1)); bI.setMatrixAt(i, m4); hI.setMatrixAt(i, m4); if (folk) folk.set(i, m4); bI.setColorAt(i, E.lin(coats[Math.floor(xr() * coats.length)])); hI.setColorAt(i, E.lin(skins[Math.floor(xr() * skins.length)])); p.addCircle(x, z, 0.3); });
+          bI.castShadow = true; if (folk) { folk.done(); ext.add(folk.group); } else ext.add(bI, hI); }
         // the terminal: a granite hall with three tall arched windows, a clock and its name, and a canopy over the doors
         { const TZ = TF - 8, granite = E.mat('#8d877c', { map: E.tex('concrete', 4, 2), rough: 0.85 }), dark = E.mat('#3a3630', { rough: 0.8 });
           mb(46, 22, 16, 0, 11, TZ, granite); mb(48, 1.4, 17, 0, 22.5, TZ, dark); mb(20, 6, 12, 0, 26, TZ, granite);   // the hall, its cornice and the attic
@@ -1847,7 +1848,9 @@
       const n = cells.length, bodies = new THREE.InstancedMesh(bodyGeo, E.mat('#ffffff', { rough: 0.7 }), n), heads = new THREE.InstancedMesh(headGeo, E.mat('#ffffff', { rough: 0.6 }), n);
       const clothes = ['#2b2f3a', '#7a2f2a', '#3a5a40', '#c9c2b0', '#1e1f22', '#4a6a8a', '#8a6a3a', '#5a3a5a', '#d8d2c0', '#2f4a5a'], skins = ['#e1b18c', '#c8946a', '#8a5a3c', '#f0c8a8', '#6a4430'];
       cells.forEach((c, i) => { bodies.setColorAt(i, E.lin(clothes[Math.floor(r() * clothes.length)])); heads.setColorAt(i, E.lin(skins[Math.floor(r() * skins.length)])); c.h = 0.9 + r() * 0.2; });
-      bodies.castShadow = heads.castShadow = true; g.add(bodies, heads);
+      bodies.castShadow = heads.castShadow = true;
+      const folk = E.npc.real ? E.npc.crowd(n, E.rng(1851), 10, { pose: 'Idle' }) : null;   // the real people when they are in
+      if (folk) g.add(folk.group); else g.add(bodies, heads);
       columns((x, z) => Math.hypot(x, z - CZ) < 8.5 || (Math.abs(x - WX) < 12 && Math.abs(z - WZ) < 3.5) || Math.hypot(x - DX, z - DZ) < 4 || Math.hypot(x - SWX, z - SWZ) < 9 || Math.hypot(x - TCX, z - TCZ) < 6 || (Math.abs(x - BCX) < 7.2 && Math.abs(z - BCZ) < 5)
         || Object.values(gateAt).some(([gx, gz]) => Math.hypot(x - gx, z - gz) < 2.4) || cells.some((c) => Math.hypot(x - c.x, z - c.z) < 1.4) || stallAt.some(([sx, sz]) => Math.hypot(x - sx, z - sz) < 3) || (Math.abs(x) < 3.5 && z > CZ));   // the coaster's columns (above)
       // ---- the harbour in the crater ----
@@ -1996,8 +1999,8 @@
       const cm4 = new THREE.Matrix4();
       p.update = (t, dt, f) => {
         const bob = f.pulse * 0.12;
-        cells.forEach((c, i) => { ps.set(c.x, bob * ((i % 3) / 2), c.z); sc.set(1, c.h * (1 + band(f, c.col * 3 + 2, 24) * 0.08), 1); q.setFromAxisAngle(up, Math.sin(t * 0.5 + i) * 0.4); m4.compose(ps, q, sc); bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
-        bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
+        cells.forEach((c, i) => { ps.set(c.x, bob * ((i % 3) / 2), c.z); if (folk) sc.set(c.h, c.h * (1 + band(f, c.col * 3 + 2, 24) * 0.025), c.h); else sc.set(1, c.h * (1 + band(f, c.col * 3 + 2, 24) * 0.08), 1); q.setFromAxisAngle(up, Math.sin(t * 0.5 + i) * 0.4); m4.compose(ps, q, sc); if (folk) { folk.set(i, m4); return; } bodies.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
+        if (folk) folk.done(); else bodies.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
         // carousel: turns faster with the level; the horses rise and fall in turn on the beat
         { const tgt = carHold ? 0 : 0.35 + (f.level || 0) * 0.5; carSpin += (tgt - carSpin) * Math.min(1, dt * (carHold ? 1.6 : 0.8)); if (carHold && carSpin < 0.02) carSpin = 0; car.rotation.y -= dt * carSpin; }   // clockwise seen from above, the way the horses face
         horses.forEach((o) => { o.h.position.y = 1.6 + Math.sin(t * 2.6 + o.s * 1.4) * 0.25 + (o.s % 2 ? f.pulse : f.bass) * 0.18; });

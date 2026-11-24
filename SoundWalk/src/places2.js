@@ -95,7 +95,7 @@
         const cr = E.rng(212), X = 6.6; var mapP = (v) => v, neonM = null, neighbourhood = [], wedge = null, wedgeIn = () => false, streetLife = null;
         const trimM = E.mat('#4a342a'), stepM = E.mat('#6b4c3c', { rough: 0.95 }), ironM = E.mat('#0f0e10', { metal: 0.6, rough: 0.5 }), doorM = E.mat('#24160f'), winDark = E.mat('#12141a', { rough: 0.2, metal: 0.5 }), winLit = new THREE.MeshBasicMaterial({ color: '#ffc980' });
         const BB = E.batch(g), bx = BB.box;   // static boxes, drawn instanced after BB.flush()
-        const figR = E.rng(6060), fig = () => { const d = E.npc.dress(figR); return { f: d.f, arms: d.arms, torso: d.torso, head: d.head }; };   // the neighbours: everyday clothes from the shared decks (E.npc)
+        const figR = E.rng(6060), fig = () => { const d = E.npc.dress(figR); return { f: d.f, arms: d.arms, torso: d.torso, head: d.head, pose: d.pose }; };   // the neighbours: everyday clothes from the shared decks (E.npc)
         // The two performers, modelled in detail. stvn: red puffer with a hood, cuffed beanie, chain. vas: white track jacket with a stripe, blue cap, lighter jeans.
         // Same handles as fig() (f, arms, torso, head), so the performance code drives both.
         const figPro = (o) => {
@@ -364,7 +364,8 @@
           shopFront(13 + 1 * 6.2, 'BARBER SHOP', '#9ff3ff', true); shopFront(13 + 6 * 6.2, 'LAUNDROMAT  24H', '#cfe6ff', false);
           // the neighbours: on their stoops, chatting on the sidewalk, kids with a ball, someone with a dog
           const folk = [['#2a2c30', '#141416'], ['#7a2f2a', '#2a4a8a'], ['#3a5a40', '#141416'], ['#c9c2b0', '#6a3a2a'], ['#4a6a8a', '#d9b24a'], ['#8a6a3a', '#141416'], ['#2f4a5a', '#c9c2b0']];
-          const person = (x, z, ry, k, sit, s = 1) => { const m = fig(); m.f.position.set(x, sit ? sit : 0.16, z); m.f.rotation.y = ry; m.f.scale.setScalar(s); if (sit) { m.f.scale.y = s * 0.78; } g.add(m.f); neighbours.push({ m, k, base: m.f.position.y }); p.addCircle(x, z, 0.35 * s); return m; };
+          const person = (x, z, ry, k, sit, s = 1) => { const m = fig(); m.f.position.set(x, sit ? sit : 0.16, z); m.f.rotation.y = ry; m.f.scale.setScalar(s); if (sit) { if (m.pose) { m.pose('Sitting', 1); m.f.position.y = sit - 0.38 * s; } else m.f.scale.y = s * 0.78; } g.add(m.f);   // a real person sits on the step (feet on the one below); a hand-built figure is squashed to look seated
+ neighbours.push({ m, k, base: m.f.position.y }); p.addCircle(x, z, 0.35 * s); return m; };
           const neighbours = [];
           person(FRONT_W + 2.0, 13 + 5 * 6.2 - 1.6, Math.PI / 2, 0, 0.9); person(FRONT_W + 1.6, 13 + 5 * 6.2 - 1.2, Math.PI / 2, 1, 0.68);    // two on a stoop across the way
           person(FRONT_W + 2.6, 13 + 7 * 6.2 - 1.6, Math.PI / 2, 2, 0.6);                                                                  // one on a stoop at the far end of the row

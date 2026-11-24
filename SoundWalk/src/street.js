@@ -420,7 +420,7 @@
 
     // the people: someone at the desk, a mechanic by the lift, a customer looking round a car on the lot
     if (E.npc && E.npc.crowd) {
-      const folk = E.npc.crowd(3, E.rng(7377), 3), o3 = new THREE.Object3D();
+      const folk = E.npc.crowd(3, E.rng(7377), 3, { pose: 'Idle' }), o3 = new THREE.Object3D();
       [[show.desk[0], SH.y, show.desk[1] + 0.75, Math.PI], [(GA.x0 + (GA.x0 + GA.x1) / 2) / 2 + 2.25, GA.y, (GA.z0 + GA.z1) / 2 - 1.6, -Math.PI / 2], [LT.x0 + 4.1, LT.y, (LT.z0 + LT.z1) / 2 - 0.5, Math.PI / 2 + 0.4]].forEach(([x, y, z, yaw], i) => {
         o3.position.set(x, y, z); o3.rotation.set(0, yaw, 0); o3.updateMatrix(); folk.set(i, o3.matrix); lcirc(x, z, 0.3);
       });
